@@ -13,4 +13,12 @@ var Migrations = []migration.Migration{
 			migration.DropTable{Table: "post"},
 		},
 	},
+	{App: "authors", Name: "0002_auto", Reversible: true,
+		Up: []migration.Step{
+			migration.CreateTable{Table: "author", Columns: []migration.Column{migration.Column{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, migration.Column{Name: "name", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "email", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}}},
+		},
+		Down: []migration.Step{
+			migration.DropTable{Table: "author"},
+		},
+	},
 }

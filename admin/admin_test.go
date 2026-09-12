@@ -22,6 +22,42 @@ type adminShellPost struct {
 	Title string
 }
 
+func TestAdminIndexRedirectsToFirstRegisteredModel(t *testing.T) {
+	handler := buildAdminHandler(t)
+
+	response := performAdminRequest(handler, http.MethodGet, "/admin/", true)
+
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+	}
+	if got := response.Header().Get("Location"); got != "/admin/admin_shell_user/" {
+		t.Fatalf("Location = %q, want %q", got, "/admin/admin_shell_user/")
+	}
+}
+
+func TestAdminIndexWithoutTrailingSlashAlsoRedirects(t *testing.T) {
+	handler := buildAdminHandler(t)
+
+	response := performAdminRequest(handler, http.MethodGet, "/admin", true)
+
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+	}
+	if got := response.Header().Get("Location"); got != "/admin/admin_shell_user/" {
+		t.Fatalf("Location = %q, want %q", got, "/admin/admin_shell_user/")
+	}
+}
+
+func TestAdminIndexRequiresCredentials(t *testing.T) {
+	handler := buildAdminHandler(t)
+
+	response := performAdminRequest(handler, http.MethodGet, "/admin/", false)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestAdminMountsRoutesForRegisteredModel(t *testing.T) {
 	handler := buildAdminHandler(t)
 

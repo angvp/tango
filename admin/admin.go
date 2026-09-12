@@ -2,6 +2,7 @@ package admin
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
@@ -31,21 +32,42 @@ func New(store *db.Store, credentials Credentials) tango.App {
 	return tango.NewApp("admin", func(registry *tango.Registry) error {
 		registry.SetStore(store)
 
-		var routes tango.URLs
-		for _, registration := range registry.Admin().Registrations() {
+		registrations := registry.Admin().Registrations()
+		sort.Slice(registrations, func(i, j int) bool {
+			return registrations[i].Model.Name < registrations[j].Model.Name
+		})
+
+		nav := make([]navItem, len(registrations))
+		for i, registration := range registrations {
+			nav[i] = navItem{
+				Name: registration.Model.Name,
+				Path: "/admin/" + db.ColumnName(registration.Model.Name) + "/",
+			}
+		}
+
+		index := protectedView(credentials, indexView(nav))
+		routes := tango.URLs{
+			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index")),
+			// Also match "/admin" (no trailing slash) directly, rather than
+			// relying on a redirect: chi treats the two as distinct routes,
+			// and Include's own slash-normalization only applies to prefixes
+			// passed to Include, not to a literal pattern like this one.
+			tango.Path(http.MethodGet, "/admin", index),
+		}
+		for _, registration := range registrations {
 			modelPath := "/admin/" + db.ColumnName(registration.Model.Name) + "/"
-			routes = append(routes, modelRoutes(modelPath, credentials, store, registration)...)
+			routes = append(routes, modelRoutes(modelPath, credentials, store, registration, nav)...)
 		}
 
 		return registry.Routes().Include("/", routes)
 	})
 }
 
-func modelRoutes(modelPath string, credentials Credentials, store *db.Store, registration ModelRegistration) tango.URLs {
-	list := protectedView(credentials, listView(store, registration))
-	create := protectedView(credentials, createView(store, registration))
-	edit := protectedView(credentials, editView(store, registration))
-	del := protectedView(credentials, deleteView(store, registration))
+func modelRoutes(modelPath string, credentials Credentials, store *db.Store, registration ModelRegistration, nav []navItem) tango.URLs {
+	list := protectedView(credentials, listView(store, registration, nav))
+	create := protectedView(credentials, createView(store, registration, nav))
+	edit := protectedView(credentials, editView(store, registration, nav))
+	del := protectedView(credentials, deleteView(store, registration, nav))
 
 	return tango.URLs{
 		tango.Path(http.MethodGet, modelPath, list),

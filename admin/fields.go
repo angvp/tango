@@ -4,12 +4,35 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/angvp/tango/model"
 )
 
 const dateTimeLayout = "2006-01-02T15:04"
+
+// humanizeFieldName splits a Go field name's words apart for display, e.g.
+// "CreatedAt" -> "Created At", "UserID" -> "User ID". Consecutive uppercase
+// letters (acronyms) are kept together.
+func humanizeFieldName(name string) string {
+	runes := []rune(name)
+	var b strings.Builder
+	for i, r := range runes {
+		if i > 0 && unicode.IsUpper(r) {
+			prev := runes[i-1]
+			switch {
+			case unicode.IsLower(prev) || unicode.IsDigit(prev):
+				b.WriteByte(' ')
+			case unicode.IsUpper(prev) && i+1 < len(runes) && unicode.IsLower(runes[i+1]):
+				b.WriteByte(' ')
+			}
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
 
 // inputTypeForKind returns the HTML input type for a supported Go kind.
 func inputTypeForKind(t reflect.Type) string {
@@ -40,7 +63,7 @@ func buildFormFields(meta model.ModelMeta, instance reflect.Value) []formField {
 
 		f := formField{
 			Name:      field.Name,
-			Label:     field.Name,
+			Label:     humanizeFieldName(field.Name),
 			InputType: inputTypeForKind(field.Type),
 		}
 

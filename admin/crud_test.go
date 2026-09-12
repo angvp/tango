@@ -167,6 +167,45 @@ func TestListViewPaginatesResults(t *testing.T) {
 	}
 }
 
+func TestListViewExactPageSizeShowsNoPhantomNextPage(t *testing.T) {
+	handler, sqlDB := buildProductAdmin(t)
+	for i := 1; i <= 25; i++ {
+		seedProduct(t, sqlDB, fmt.Sprintf("Item%02d", i), float64(i))
+	}
+
+	response := doRequest(t, handler, http.MethodGet, crudBasePath+"?page=1", nil)
+	body := response.Body.String()
+
+	if !strings.Contains(body, "25 results") {
+		t.Fatalf("body does not report the true total count:\n%s", body)
+	}
+	if strings.Contains(body, "Next page") {
+		t.Fatalf("body offers a next page when all 25 rows already fit on page 1:\n%s", body)
+	}
+}
+
+func TestListViewManyPagesShowsPageLinksAndTotalCount(t *testing.T) {
+	handler, sqlDB := buildProductAdmin(t)
+	for i := 1; i <= 100; i++ {
+		seedProduct(t, sqlDB, fmt.Sprintf("Item%03d", i), float64(i))
+	}
+
+	response := doRequest(t, handler, http.MethodGet, crudBasePath+"?page=1", nil)
+	body := response.Body.String()
+
+	if !strings.Contains(body, "100 results") {
+		t.Fatalf("body does not report the true total count:\n%s", body)
+	}
+	if !strings.Contains(body, "Next page") {
+		t.Fatalf("page 1 of 4 should offer a next page:\n%s", body)
+	}
+	for _, page := range []string{"?page=2", "?page=3", "?page=4"} {
+		if !strings.Contains(body, page) {
+			t.Fatalf("expected a link to %s among the page links:\n%s", page, body)
+		}
+	}
+}
+
 func TestListViewDefaultsToPageOne(t *testing.T) {
 	handler, sqlDB := buildProductAdmin(t)
 	seedProduct(t, sqlDB, "Solo", 1)
@@ -431,7 +470,7 @@ func TestDeleteViewGetRendersConfirmationWithoutDeleting(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	if !strings.Contains(body, fmt.Sprintf("Delete crudProduct %d?", id)) {
+	if !strings.Contains(body, "Delete crudProduct") || !strings.Contains(body, fmt.Sprintf("crudProduct %d", id)) {
 		t.Fatalf("body missing delete confirmation: %s", body)
 	}
 	if !productExists(t, sqlDB, id) {

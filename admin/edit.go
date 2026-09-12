@@ -9,10 +9,11 @@ import (
 	"github.com/angvp/tango/db"
 )
 
-func editView(store *db.Store, registration ModelRegistration) tango.View {
+func editView(store *db.Store, registration ModelRegistration, nav []navItem) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
 	title := "Edit " + meta.Name
+	pageChrome := chrome{Nav: nav, Active: meta.Name}
 
 	return func(ctx *tango.Context) error {
 		pkField, err := primaryKeyField(meta)
@@ -36,7 +37,7 @@ func editView(store *db.Store, registration ModelRegistration) tango.View {
 			}
 
 			fields := buildFormFields(meta, instancePtr.Elem())
-			return render(ctx, http.StatusOK, formTemplate, formPageData{Title: title, Fields: fields})
+			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: pageChrome, Title: title, Fields: fields})
 
 		case http.MethodPost:
 			existingPtr := reflect.New(meta.Type)
@@ -55,6 +56,7 @@ func editView(store *db.Store, registration ModelRegistration) tango.View {
 			if err := populateFromForm(instancePtr.Elem(), meta, ctx.Request().PostForm); err != nil {
 				fields := buildFormFields(meta, instancePtr.Elem())
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
+					chrome: pageChrome,
 					Title:  title,
 					Error:  err.Error(),
 					Fields: fields,

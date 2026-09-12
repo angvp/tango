@@ -37,13 +37,13 @@ func TestBaseLayoutProducesValidHTMLStructure(t *testing.T) {
 	}
 
 	output := buf.String()
-	for _, want := range []string{"<html>", "<head>", "<body>", "</html>"} {
+	for _, want := range []string{"<html", "<head>", "<body>", "</html>"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("layout output missing %q: %s", want, output)
 		}
 	}
 
-	if strings.Count(output, "<html>") != 1 || strings.Count(output, "</html>") != 1 {
+	if strings.Count(output, "<html") != 1 || strings.Count(output, "</html>") != 1 {
 		t.Fatalf("layout output does not have exactly one <html>/</html> pair: %s", output)
 	}
 }

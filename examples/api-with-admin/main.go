@@ -14,6 +14,7 @@ import (
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
 
+	"api-with-admin/apps/authors"
 	"api-with-admin/apps/posts"
 	"api-with-admin/migrations"
 
@@ -47,6 +48,7 @@ func run() int {
 	config := tango.Config{
 		InstalledApps: []tango.App{
 			posts.New(store),
+			authors.New(),
 			admin.New(store, admin.Credentials{
 				Username: "admin",
 				Password: "change-me",
