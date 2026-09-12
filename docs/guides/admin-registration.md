@@ -51,4 +51,27 @@ Once registered, a model at `/admin/<table>/` gets:
 - `GET`/`POST /admin/<table>/{pk}/` — edit.
 - `GET`/`POST /admin/<table>/{pk}/delete/` — delete confirmation.
 
+`GET /admin/` (and `/admin`, without the trailing slash) redirects to the first registered model, sorted alphabetically by name — there's no separate "admin home" page to build. With nothing registered yet, it renders a minimal empty state instead of 404ing.
+
 All of it runs against the same table your migrations created — there's no separate admin-specific schema.
+
+## Navigation and multiple models
+
+Every model registered with the admin appears in a sidebar, sorted alphabetically, with the current model highlighted — you don't wire this up yourself; `admin.New` builds it once from `registry.Admin().Registrations()` and threads it through every page. Registering a second model is exactly the same call shown above, from a different app if you like:
+
+```go
+if err := registry.Models().Register(Author{}); err != nil {
+	return err
+}
+if err := registry.Admin().Register(Author{}, admin.Options{
+	ListDisplay: []string{"Name", "Email"},
+}); err != nil {
+	return err
+}
+```
+
+Both `Post` and `Author` now show up in the sidebar, and `/admin/` redirects to `/admin/author/` (alphabetically first).
+
+## List page display
+
+List and form field labels are humanized for display — `CreatedAt` renders as "Created At", `UserID` as "User ID" — without you naming anything twice; the underlying field name (used for sorting, search, and form submission) is untouched. The list page also reports a true total row count and a paginator with page-number links, using the same truncated-range presentation Django's admin uses once there are many pages (`1 2 … 7 8 9 10 … 19 20`).

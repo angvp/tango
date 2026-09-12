@@ -52,10 +52,12 @@ See [persistence CRUD and raw SQL](guides/persistence-crud-and-raw-sql.md) and [
 
 | Symbol | What it's for |
 |---|---|
-| `func New(store *db.Store, credentials Credentials) tango.App` | Constructs the admin app. Add it to `InstalledApps` after every app registering models with it. |
+| `func New(store *db.Store, credentials Credentials) tango.App` | Constructs the admin app. Add it to `InstalledApps` after every app registering models with it. Mounts `/admin/` and `/admin` (redirecting to the first registered model) alongside each model's routes. |
 | `type Credentials struct{ Username, Password string }` | HTTP Basic Auth credentials for admin routes. |
 | `type Options struct{ ListDisplay, Search, Ordering []string }` | Per-model admin configuration, validated against the model's actual fields at registration time. |
 | `type Registry`, `func NewRegistry(models *model.Registry) *Registry`, `func (*Registry) Register(value any, opts Options) error` | The admin sub-registry, reached via `tango.Registry.Admin()`. |
+
+The default admin theme (sidebar navigation across every registered model, humanized field labels, a Django-admin-style truncated paginator with a true total count) is applied automatically — there's nothing to opt into or configure beyond `Options`.
 
 See [admin registration](guides/admin-registration.md).
 
