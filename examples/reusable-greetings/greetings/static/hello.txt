@@ -1,0 +1,1 @@
+Hello from the greetings reusable app's own embedded assets.
