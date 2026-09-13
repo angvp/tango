@@ -31,14 +31,20 @@ type fkPost struct {
 // buildProductAdminWithOptions in crud_test.go. authorOptions lets a test
 // omit Label to exercise the raw-PK fallback.
 func buildAuthorPostAdmin(t *testing.T, authorOptions admin.Options) (http.Handler, *sql.DB) {
+	return buildAuthorPostAdminWithOptions(t, authorOptions, true)
+}
+
+func buildAuthorPostAdminWithOptions(t *testing.T, authorOptions admin.Options, registerAuthorAdmin bool) (http.Handler, *sql.DB) {
 	t.Helper()
 
 	registry := tango.NewRegistry()
 	if err := registry.Models().Register(fkAuthor{}); err != nil {
 		t.Fatalf("register fkAuthor: %v", err)
 	}
-	if err := registry.Admin().Register(fkAuthor{}, authorOptions); err != nil {
-		t.Fatalf("register admin fkAuthor: %v", err)
+	if registerAuthorAdmin {
+		if err := registry.Admin().Register(fkAuthor{}, authorOptions); err != nil {
+			t.Fatalf("register admin fkAuthor: %v", err)
+		}
 	}
 	if err := registry.Models().Register(fkPost{}); err != nil {
 		t.Fatalf("register fkPost: %v", err)
@@ -58,7 +64,7 @@ func buildAuthorPostAdmin(t *testing.T, authorOptions admin.Options) (http.Handl
 	for _, stmt := range []string{
 		`CREATE TABLE fk_author (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`,
 		`CREATE TABLE fk_post (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, author_id INTEGER NOT NULL)`,
-		`CREATE TABLE admin_user (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, active BOOLEAN NOT NULL, created_at TIMESTAMP NOT NULL)`,
+		`CREATE TABLE admin_user (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, active BOOLEAN NOT NULL, is_staff BOOLEAN NOT NULL, is_superuser BOOLEAN NOT NULL, created_at TIMESTAMP NOT NULL)`,
 		`CREATE TABLE admin_session (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, user_id INTEGER NOT NULL, expires_at TIMESTAMP NOT NULL)`,
 	} {
 		if _, err := sqlDB.Exec(stmt); err != nil {
@@ -132,6 +138,102 @@ func TestCreateViewRendersForeignKeyAsSelectWithRelatedLabel(t *testing.T) {
 	wantOption := `value="` + itoa(authorID) + `"`
 	if !strings.Contains(body, wantOption) || !strings.Contains(body, "Jane Doe") {
 		t.Fatalf("body does not contain the author's option (value=%d, label %q):\n%s", authorID, "Jane Doe", body)
+	}
+}
+
+func TestCreateViewRendersForeignKeyQuickCreateLinkForAdminRegisteredTarget(t *testing.T) {
+	handler, _ := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+
+	response := doRequest(t, handler, http.MethodGet, "/admin/fk_post/new/", nil)
+	body := response.Body.String()
+
+	if !strings.Contains(body, `href="/admin/fk_author/new/?`) || !strings.Contains(body, `next=%2Fadmin%2Ffk_post%2Fnew%2F`) {
+		t.Fatalf("body does not contain a quick-create link back to the originating form:\n%s", body)
+	}
+}
+
+func TestCreateViewOmitsForeignKeyQuickCreateLinkForNonAdminRegisteredTarget(t *testing.T) {
+	handler, _ := buildAuthorPostAdminWithOptions(t, admin.Options{Label: "Name"}, false)
+
+	response := doRequest(t, handler, http.MethodGet, "/admin/fk_post/new/", nil)
+	body := response.Body.String()
+
+	if strings.Contains(body, `/admin/fk_author/new/`) {
+		t.Fatalf("body unexpectedly contains a quick-create link for a non-admin-registered target:\n%s", body)
+	}
+}
+
+func TestCreateViewQuickCreateRoundTripRedirectsBackToOriginatingForm(t *testing.T) {
+	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+
+	response := doRequest(t, handler, http.MethodPost, "/admin/fk_author/new/?next=%2Fadmin%2Ffk_post%2Fnew%2F", url.Values{
+		"Name": {"Ursula"},
+	})
+
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302, body:\n%s", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get("Location"); got != "/admin/fk_post/new/" {
+		t.Fatalf("Location = %q, want /admin/fk_post/new/", got)
+	}
+	var count int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM fk_author WHERE name = ?`, "Ursula").Scan(&count); err != nil {
+		t.Fatalf("query author: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("created authors = %d, want 1", count)
+	}
+}
+
+func TestCreateViewQuickCreateRejectsUnsafeNext(t *testing.T) {
+	handler, _ := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+
+	response := doRequest(t, handler, http.MethodPost, "/admin/fk_author/new/?next=https%3A%2F%2Fevil.example%2F", url.Values{
+		"Name": {"Ursula"},
+	})
+
+	if got := response.Header().Get("Location"); got != "/admin/fk_author/" {
+		t.Fatalf("Location = %q, want fallback /admin/fk_author/", got)
+	}
+}
+
+func TestCreateViewQuickCreateRoundTripPreselectsCreatedRelatedObject(t *testing.T) {
+	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+
+	response := doRequest(t, handler, http.MethodPost, "/admin/fk_author/new/?next=%2Fadmin%2Ffk_post%2Fnew%2F%3F_tango_admin_preselect_field%3DAuthorID&_tango_admin_preselect_field=AuthorID", url.Values{
+		"Name": {"Ursula"},
+	})
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302, body:\n%s", response.Code, response.Body.String())
+	}
+
+	var authorID int64
+	if err := sqlDB.QueryRow(`SELECT id FROM fk_author WHERE name = ?`, "Ursula").Scan(&authorID); err != nil {
+		t.Fatalf("query created author: %v", err)
+	}
+
+	location := response.Header().Get("Location")
+	if !strings.Contains(location, "_tango_admin_preselect_field=AuthorID") || !strings.Contains(location, "_tango_admin_preselect_value="+itoa(authorID)) {
+		t.Fatalf("Location = %q, want preselect field and created value", location)
+	}
+
+	followUp := doRequest(t, handler, http.MethodGet, location, nil)
+	body := followUp.Body.String()
+	wantSelected := `value="` + itoa(authorID) + `" selected`
+	if !strings.Contains(body, wantSelected) {
+		t.Fatalf("body does not preselect the created author:\n%s", body)
+	}
+}
+
+func TestCreateViewWithoutQuickCreatePreselectIsUnchanged(t *testing.T) {
+	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+	authorID := seedAuthor(t, sqlDB, "Jane Doe")
+
+	response := doRequest(t, handler, http.MethodGet, "/admin/fk_post/new/", nil)
+	body := response.Body.String()
+	option := `value="` + itoa(authorID) + `"`
+	if !strings.Contains(body, option) || !strings.Contains(body, "Jane Doe") || strings.Contains(body, option+` selected`) {
+		t.Fatalf("body should render the author option without preselecting it:\n%s", body)
 	}
 }
 

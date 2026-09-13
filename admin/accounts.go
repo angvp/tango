@@ -42,9 +42,10 @@ func findAdminUserByUsername(ctx context.Context, store *db.Store, username stri
 	meta, _ := adminModelMetas()
 	var rows []AdminUser
 	sqlQuery := fmt.Sprintf(
-		"SELECT %s AS ID, %s AS Username, %s AS PasswordHash, %s AS Active, %s AS CreatedAt FROM %s WHERE %s = ?",
+		"SELECT %s AS ID, %s AS Username, %s AS PasswordHash, %s AS Active, %s AS IsStaff, %s AS IsSuperuser, %s AS CreatedAt FROM %s WHERE %s = ?",
 		db.ColumnName("ID"), db.ColumnName("Username"), db.ColumnName("PasswordHash"),
-		db.ColumnName("Active"), db.ColumnName("CreatedAt"), db.ColumnName(meta.Name), db.ColumnName("Username"),
+		db.ColumnName("Active"), db.ColumnName("IsStaff"), db.ColumnName("IsSuperuser"),
+		db.ColumnName("CreatedAt"), db.ColumnName(meta.Name), db.ColumnName("Username"),
 	)
 	if err := store.Query(ctx, &rows, sqlQuery, username); err != nil {
 		return AdminUser{}, false, err
@@ -55,10 +56,30 @@ func findAdminUserByUsername(ctx context.Context, store *db.Store, username stri
 	return rows[0], true, nil
 }
 
+// AccountOption customizes a new admin account's IsStaff/IsSuperuser flags
+// at creation time. CreateAccount defaults both to true — "create an
+// immediately usable full admin account" is its long-standing behavior — so
+// these are opt-outs, not opt-ins. See ADR 0019.
+type AccountOption func(*AdminUser)
+
+// WithoutStaff creates the account with IsStaff=false instead of the
+// default true.
+func WithoutStaff() AccountOption {
+	return func(u *AdminUser) { u.IsStaff = false }
+}
+
+// WithoutSuperuser creates the account with IsSuperuser=false instead of
+// the default true.
+func WithoutSuperuser() AccountOption {
+	return func(u *AdminUser) { u.IsSuperuser = false }
+}
+
 // CreateAccount creates a new Admin account with a bcrypt-hashed password.
 // It is the only code path in tanGO that accepts a raw password and turns
 // it into a stored credential — see the "tango admin create" CLI command.
-func CreateAccount(ctx context.Context, store *db.Store, username string, password string) error {
+// The account defaults to IsStaff=true, IsSuperuser=true; pass WithoutStaff
+// and/or WithoutSuperuser to opt out of either.
+func CreateAccount(ctx context.Context, store *db.Store, username string, password string, opts ...AccountOption) error {
 	_, exists, err := findAdminUserByUsername(ctx, store, username)
 	if err != nil {
 		return err
@@ -77,7 +98,12 @@ func CreateAccount(ctx context.Context, store *db.Store, username string, passwo
 		Username:     username,
 		PasswordHash: string(hash),
 		Active:       true,
+		IsStaff:      true,
+		IsSuperuser:  true,
 		CreatedAt:    time.Now().UTC(),
+	}
+	for _, opt := range opts {
+		opt(&user)
 	}
 	return store.Create(ctx, meta, &user)
 }
@@ -123,6 +149,50 @@ func Deactivate(ctx context.Context, store *db.Store, username string) error {
 		return err
 	}
 	return invalidateSessions(ctx, store, user.ID)
+}
+
+// GrantStaff sets IsStaff=true on an existing account, leaving Active,
+// PasswordHash, and IsSuperuser untouched. Unlike Deactivate, this does not
+// invalidate existing sessions: IsStaff is checked fresh from the database
+// on every request (not cached in the session), so a revoked account is
+// denied on its very next request regardless.
+func GrantStaff(ctx context.Context, store *db.Store, username string) error {
+	return setAccountFlag(ctx, store, username, func(u *AdminUser) { u.IsStaff = true })
+}
+
+// RevokeStaff sets IsStaff=false on an existing account. See GrantStaff for
+// why this does not invalidate existing sessions.
+func RevokeStaff(ctx context.Context, store *db.Store, username string) error {
+	return setAccountFlag(ctx, store, username, func(u *AdminUser) { u.IsStaff = false })
+}
+
+// GrantSuperuser sets IsSuperuser=true on an existing account. See
+// GrantStaff for why this does not invalidate existing sessions.
+func GrantSuperuser(ctx context.Context, store *db.Store, username string) error {
+	return setAccountFlag(ctx, store, username, func(u *AdminUser) { u.IsSuperuser = true })
+}
+
+// RevokeSuperuser sets IsSuperuser=false on an existing account. See
+// GrantStaff for why this does not invalidate existing sessions.
+func RevokeSuperuser(ctx context.Context, store *db.Store, username string) error {
+	return setAccountFlag(ctx, store, username, func(u *AdminUser) { u.IsSuperuser = false })
+}
+
+// setAccountFlag loads an existing account by username, applies mutate to
+// it, and persists the result. It is the shared implementation behind
+// GrantStaff/RevokeStaff/GrantSuperuser/RevokeSuperuser.
+func setAccountFlag(ctx context.Context, store *db.Store, username string, mutate func(*AdminUser)) error {
+	user, exists, err := findAdminUserByUsername(ctx, store, username)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("%w: %q", ErrAccountNotFound, username)
+	}
+
+	mutate(&user)
+	meta, _ := adminModelMetas()
+	return store.Update(ctx, meta, &user)
 }
 
 // invalidateSessions deletes every AdminSession row belonging to userID.

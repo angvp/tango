@@ -23,7 +23,7 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 
 - **`ListDisplay`** — columns shown on the list page.
 - **`Search`** — fields a free-text search box filters against.
-- **`Ordering`** — fields the list page can be sorted by.
+- **`Ordering`** — the static default order the list page's rows are shown in (not interactive/click-to-sort). Prefix a field with `-` for descending, e.g. `"-CreatedAt"`.
 
 ## Adding the admin app
 
@@ -45,14 +45,56 @@ There's no signup form and no scaffold-generated password: an admin account is c
 tango admin create <username>
 ```
 
-It prompts for the password on stdin, so it never appears in shell history or a process listing. Two more commands manage an account afterward, both invalidating its existing sessions:
+It prompts for the password on stdin, so it never appears in shell history or a process listing. The account it creates has both `IsStaff` and `IsSuperuser` set to true — see [Staff and superuser access](#staff-and-superuser-access) below. Two more commands manage an account afterward, both invalidating its existing sessions:
 
 - `tango admin resetpassword <username>` — rotate the password.
 - `tango admin deactivate <username>` — disable the account without deleting its row (keeping audit history).
 
+Four more commands change an existing account's `IsStaff`/`IsSuperuser` flags, without touching its password or `Active` state:
+
+- `tango admin grant-staff <username>` / `tango admin revoke-staff <username>`
+- `tango admin grant-superuser <username>` / `tango admin revoke-superuser <username>`
+
+### How this actually runs
+
+`tango admin create/resetpassword/deactivate/grant-staff/revoke-staff/grant-superuser/revoke-superuser` are the `tango` CLI's own convenience commands — under the hood, each just runs your project's own binary with an app-side flag:
+
+- `-tango-admin-create=<username>` (optionally followed by `-tango-admin-no-staff` and/or `-tango-admin-no-superuser`)
+- `-tango-admin-resetpassword=<username>`
+- `-tango-admin-deactivate=<username>`
+- `-tango-admin-grant-staff=<username>` / `-tango-admin-revoke-staff=<username>`
+- `-tango-admin-grant-superuser=<username>` / `-tango-admin-revoke-superuser=<username>`
+
+`create` and `resetpassword` prompt for the new password on stdin exactly as above; the rest need no password. These flags are handled by `admin.HandleCLI(ctx, store, os.Args[1:], stdin, stdout, stderr)`, which a generated `main.go` calls **before** `flag.Parse()`/`tango.DispatchFlags` — `tango newproject`'s scaffold wires this up for you, so you'd only add it yourself in a hand-rolled `main.go` that isn't built from the scaffold:
+
+```go
+if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
+	return err
+}
+```
+
+`HandleCLI` deliberately doesn't use the `flag` package: it and `tango.DispatchFlags` both run against the same `os.Args[1:]`, and `flag.Parse()` errors out on any flag it doesn't itself define — it can't tolerate seeing the other dispatcher's flags. A manual scan lets each dispatcher recognize only its own flags and ignore the rest, which is also why `HandleCLI` must run first: it's checked before anything calls `flag.Parse()` at all. You can invoke the flag directly instead of going through `tango admin create` — useful if you're running your binary directly rather than through the `tango` CLI:
+
+```sh
+echo "your-new-password" | ./yourapp -tango-admin-create=alice -tango-admin-no-staff -tango-admin-no-superuser
+```
+
 ## Authentication
 
 Admin routes require a valid session, established by logging in at `/admin/login/` — a real form, not a browser-native Basic Auth prompt. An unauthenticated request to any admin route redirects there with a `next` parameter, landing you back where you started after a successful login. `POST /admin/logout/` ends the session. Sessions have a fixed lifetime from creation (no idle timeout, no "remember me"); every form (including login) carries a CSRF token tied to the session, and repeated failed login attempts from the same source are rate-limited. See [limitations](../limitations.md) for the exact security boundary this implies.
+
+## Staff and superuser access
+
+Once a session is valid, one more check runs before a request reaches any admin route: `AdminUser.IsStaff`. An authenticated, active account with `IsStaff=false` gets `403 Forbidden` — distinct from the unauthenticated case above, which redirects to `/admin/login/` instead. A 403 rather than a redirect is deliberate: the account is genuinely logged in, and signing in again changes nothing, so a login redirect there would be actively misleading.
+
+`IsStaff` is the only flag with real effect in v0.1. `AdminUser` also has `IsSuperuser`, which ships now but is currently equivalent to `IsStaff` — it has no distinct behavior yet. It exists as forward-compatible groundwork for a future, finer-grained permission bypass, so that a later milestone doesn't force every existing tanGO project through a second migration to add one boolean column.
+
+Both flags default to `true`, for both new accounts and existing ones:
+
+- `tango admin create <username>` with no flags produces `IsStaff=true, IsSuperuser=true` — the same "immediately usable full admin account" behavior `create` has always had. Pass `--no-staff` and/or `--no-superuser` to opt out at creation time (`-tango-admin-no-staff`/`-tango-admin-no-superuser` at the app-side flag layer).
+- Upgrading an existing project to a tanGO version with these fields backfills every pre-existing `AdminUser` row to `IsStaff=true, IsSuperuser=true` — every account that could log in and use admin before the upgrade still can, unchanged.
+
+There is no per-model, named, or object-level permission in v0.1 — `IsStaff`/`IsSuperuser` are the only tiers, and there's no `Group`/`Role` model or admin-UI-driven account management; every change to these flags goes through the CLI verbs above. App-level "require a named permission" is out of scope for tanGO entirely: an application wanting role or permission checks on its own routes writes its own [View wrapper](../../CONTEXT.md) against its own User model — tanGO owns no app-level User model to hang a generic primitive on (see [ADR 0017](../adr/0017-no-app-owned-user-model.md) and [ADR 0019](../adr/0019-admin-only-boolean-tier-permissions-in-v01.md)).
 
 ## Routes
 
@@ -83,6 +125,14 @@ if err := registry.Admin().Register(Author{}, admin.Options{
 ```
 
 Both `Post` and `Author` now show up in the sidebar, and `/admin/` redirects to `/admin/author/` (alphabetically first).
+
+## Foreign key quick-create
+
+For a field tagged as a foreign key, the admin renders a `<select>` populated from the related model. If that related model is also registered with the admin, tanGO shows a small `+` link next to the select. Clicking it opens the related model's create page, then returns to the original form after save with the newly-created object already selected.
+
+For example, if `Book.AuthorID` is tagged `tango:"fk=Author"` and both `Book` and `Author` are admin-registered, the `Book` form gets a `+` beside the `Author` select. This is intentionally create-only: there is no edit link for the selected related object, no delete/remove action, no autocomplete, no many-to-many editing, and no inline formset support.
+
+This is a full-page navigation, not a popup. Any unsaved changes in the parent form are lost when you click `+`; save the parent object first if you need to preserve those values. That trade-off is deliberate for v0.1 so the feature stays small and predictable.
 
 ## List page display
 
@@ -117,7 +167,7 @@ type Widget interface {
 }
 ```
 
-`FieldContext` carries what a widget needs — field name, label, help text, current value, read-only flag, and (for a foreign key field) the related model's select options — and is passed to *both* `Render` and `Parse`, so a widget can derive its own submitted form key(s) from `FieldContext.Name` identically on both sides. A simple widget reads `form.Get(f.Name)`; a widget needing more than one HTML input for its one Go field (a date/time picker split into separate controls, say) derives extra names from `f.Name` — e.g. `f.Name + "_date"` and `f.Name + "_time"` — using the same derivation in `Render` and `Parse` so the two never drift apart.
+`FieldContext` carries what a widget needs — field name, label, help text, current value, read-only flag, and (for a foreign key field) the related model's select options plus an optional related-object create URL — and is passed to *both* `Render` and `Parse`, so a widget can derive its own submitted form key(s) from `FieldContext.Name` identically on both sides. A simple widget reads `form.Get(f.Name)`; a widget needing more than one HTML input for its one Go field (a date/time picker split into separate controls, say) derives extra names from `f.Name` — e.g. `f.Name + "_date"` and `f.Name + "_time"` — using the same derivation in `Render` and `Parse` so the two never drift apart.
 
 Set a widget per field via `Options.Widgets`:
 

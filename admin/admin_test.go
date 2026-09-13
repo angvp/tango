@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -122,6 +123,37 @@ func TestAdminRequestWithValidSessionReachesView(t *testing.T) {
 	}
 }
 
+func TestAdminRequestWithNonStaffSessionReturns403Forbidden(t *testing.T) {
+	handler, store := buildAdminHandlerWithStore(t)
+	if err := admin.CreateAccount(context.Background(), store, "guest", "secret", admin.WithoutStaff()); err != nil {
+		t.Fatalf("seed non-staff admin account: %v", err)
+	}
+	cookie := loginAndGetSessionCookie(t, handler, "guest", "secret")
+
+	response := performAdminRequest(handler, http.MethodGet, "/admin/admin_shell_user/", cookie)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (403 Forbidden)", response.Code, http.StatusForbidden)
+	}
+}
+
+func TestAdminRequestWithStaffSessionRegardlessOfSuperuserReachesView(t *testing.T) {
+	handler, store := buildAdminHandlerWithStore(t)
+	if err := admin.CreateAccount(context.Background(), store, "staffonly", "secret", admin.WithoutSuperuser()); err != nil {
+		t.Fatalf("seed staff-only admin account: %v", err)
+	}
+	cookie := loginAndGetSessionCookie(t, handler, "staffonly", "secret")
+
+	response := performAdminRequest(handler, http.MethodGet, "/admin/admin_shell_user/", cookie)
+
+	if response.Code == http.StatusForbidden {
+		t.Fatal("status = 403, want a staff account (regardless of IsSuperuser) to reach the view")
+	}
+	if response.Code == http.StatusFound {
+		t.Fatal("status = redirect, want request to reach view with a valid staff session")
+	}
+}
+
 func TestAdminUnregisteredModelHasNoRoutes(t *testing.T) {
 	handler, cookie := buildAuthenticatedAdminHandler(t)
 
@@ -132,10 +164,67 @@ func TestAdminUnregisteredModelHasNoRoutes(t *testing.T) {
 	}
 }
 
+func TestAdminWithMiddlewareWrapsOnlyAdminRoutesAfterGlobalMiddleware(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	store := db.NewStore(sqlDB, db.SQLite)
+	publicApp := tango.NewApp("public", func(registry *tango.Registry) error {
+		return registry.Routes().Include("/", tango.URLs{
+			tango.Path(http.MethodGet, "/public/", func(ctx *tango.Context) error {
+				ctx.ResponseWriter().Header().Add("X-Middleware-Order", "view")
+				return ctx.JSON(http.StatusOK, map[string]string{"ok": "true"})
+			}),
+		})
+	})
+	config := tango.Config{
+		InstalledApps: []tango.App{
+			publicApp,
+			admin.New(store, admin.WithMiddleware(headerOrderMiddleware("admin"))),
+		},
+		Middleware: []tango.Middleware{headerOrderMiddleware("global")},
+	}
+
+	registry, err := tango.BuildRegistry(config)
+	if err != nil {
+		t.Fatalf("BuildRegistry returned error: %v", err)
+	}
+	if err := registry.RunRegistration(); err != nil {
+		t.Fatalf("RunRegistration returned error: %v", err)
+	}
+	handler, err := registry.Routes().Handler()
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	adminResponse := httptest.NewRecorder()
+	handler.ServeHTTP(adminResponse, httptest.NewRequest(http.MethodGet, "/admin/login/", nil))
+	if got, want := adminResponse.Header().Values("X-Middleware-Order"), []string{"global", "admin"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("admin middleware order = %v, want %v", got, want)
+	}
+
+	publicResponse := httptest.NewRecorder()
+	handler.ServeHTTP(publicResponse, httptest.NewRequest(http.MethodGet, "/public/", nil))
+	if got, want := publicResponse.Header().Values("X-Middleware-Order"), []string{"global", "view"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("public middleware order = %v, want %v", got, want)
+	}
+}
+
 // buildAdminHandler builds a handler with one registered model
 // (adminShellUser) and one seeded Admin account ("admin"/"secret"), but
 // does not log in.
 func buildAdminHandler(t *testing.T) http.Handler {
+	t.Helper()
+	handler, _ := buildAdminHandlerWithStore(t)
+	return handler
+}
+
+// buildAdminHandlerWithStore is buildAdminHandler plus the underlying store,
+// for tests that need to seed additional accounts (e.g. a non-staff one).
+func buildAdminHandlerWithStore(t *testing.T) (http.Handler, *db.Store) {
 	t.Helper()
 
 	registry := tango.NewRegistry()
@@ -166,6 +255,8 @@ func buildAdminHandler(t *testing.T) http.Handler {
 		username TEXT NOT NULL UNIQUE,
 		password_hash TEXT NOT NULL,
 		active BOOLEAN NOT NULL,
+		is_staff BOOLEAN NOT NULL,
+		is_superuser BOOLEAN NOT NULL,
 		created_at TIMESTAMP NOT NULL
 	)`); err != nil {
 		t.Fatalf("create admin_user: %v", err)
@@ -196,7 +287,7 @@ func buildAdminHandler(t *testing.T) http.Handler {
 		t.Fatalf("build handler: %v", err)
 	}
 
-	return handler
+	return handler, store
 }
 
 // buildAuthenticatedAdminHandler is buildAdminHandler plus a real login
@@ -232,4 +323,13 @@ func performAdminRequest(handler http.Handler, method string, path string, cooki
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
+}
+
+func headerOrderMiddleware(marker string) tango.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("X-Middleware-Order", marker)
+			next.ServeHTTP(w, r)
+		})
+	}
 }

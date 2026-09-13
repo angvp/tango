@@ -31,6 +31,8 @@ func buildLoginTestHandler(t *testing.T) (http.Handler, *db.Store) {
 		username TEXT NOT NULL UNIQUE,
 		password_hash TEXT NOT NULL,
 		active BOOLEAN NOT NULL,
+		is_staff BOOLEAN NOT NULL,
+		is_superuser BOOLEAN NOT NULL,
 		created_at TIMESTAMP NOT NULL
 	)`); err != nil {
 		t.Fatalf("create admin_user: %v", err)
@@ -133,6 +135,24 @@ func TestLoginRedirectsToNextParameterOnSuccess(t *testing.T) {
 
 	if got := response.Header().Get("Location"); got != "/admin/somewhere/" {
 		t.Fatalf("Location = %q, want /admin/somewhere/", got)
+	}
+}
+
+func TestLoginRejectsUnsafeNextParameterOnSuccess(t *testing.T) {
+	handler, _ := buildLoginTestHandler(t)
+
+	for _, next := range []string{
+		"https://evil.example/phish",
+		"//evil.example/phish",
+		"/elsewhere/",
+		"/admin-evil/",
+		"/admin",
+	} {
+		response := postLogin(t, handler, url.Values{"username": {"admin"}, "password": {"correct-password"}, "next": {next}})
+
+		if got := response.Header().Get("Location"); got != "/admin/" {
+			t.Fatalf("next %q redirected to %q, want /admin/", next, got)
+		}
 	}
 }
 

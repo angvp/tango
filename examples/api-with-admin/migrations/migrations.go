@@ -7,7 +7,7 @@ import "github.com/angvp/tango/migration"
 var Migrations = []migration.Migration{
 	{App: "posts", Name: "0001_auto", Reversible: true,
 		Up: []migration.Step{
-			migration.CreateTable{Table: "post", Columns: []migration.Column{migration.Column{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, migration.Column{Name: "title", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "body", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "created_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+			migration.CreateTable{Table: "post", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "title", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "body", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "created_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
 		},
 		Down: []migration.Step{
 			migration.DropTable{Table: "post"},
@@ -15,7 +15,7 @@ var Migrations = []migration.Migration{
 	},
 	{App: "authors", Name: "0002_auto", Reversible: true,
 		Up: []migration.Step{
-			migration.CreateTable{Table: "author", Columns: []migration.Column{migration.Column{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, migration.Column{Name: "name", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "email", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}}},
+			migration.CreateTable{Table: "author", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "name", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "email", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}}},
 		},
 		Down: []migration.Step{
 			migration.DropTable{Table: "author"},
@@ -23,8 +23,8 @@ var Migrations = []migration.Migration{
 	},
 	{App: "admin", Name: "0003_auto", Reversible: true,
 		Up: []migration.Step{
-			migration.CreateTable{Table: "admin_session", Columns: []migration.Column{migration.Column{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, migration.Column{Name: "token", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, migration.Column{Name: "user_id", Type: "integer", PrimaryKey: false, Unique: false, Indexed: true}, migration.Column{Name: "expires_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
-			migration.CreateTable{Table: "admin_user", Columns: []migration.Column{migration.Column{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, migration.Column{Name: "username", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, migration.Column{Name: "password_hash", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "active", Type: "boolean", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "created_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+			migration.CreateTable{Table: "admin_session", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "token", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, {Name: "user_id", Type: "integer", PrimaryKey: false, Unique: false, Indexed: true}, {Name: "expires_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+			migration.CreateTable{Table: "admin_user", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "username", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, {Name: "password_hash", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "active", Type: "boolean", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "created_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
 		},
 		Down: []migration.Step{
 			migration.DropTable{Table: "admin_session"},
@@ -37,6 +37,16 @@ var Migrations = []migration.Migration{
 		},
 		Down: []migration.Step{
 			migration.DropColumn{Table: "post", Column: "author_id"},
+		},
+	},
+	{App: "admin", Name: "0005_add_admin_staff_and_superuser", Reversible: true,
+		Up: []migration.Step{
+			migration.AddColumn{Table: "admin_user", Column: migration.Column{Name: "is_staff", Type: "boolean", PrimaryKey: false, Unique: false, Indexed: false, Default: "TRUE"}},
+			migration.AddColumn{Table: "admin_user", Column: migration.Column{Name: "is_superuser", Type: "boolean", PrimaryKey: false, Unique: false, Indexed: false, Default: "TRUE"}},
+		},
+		Down: []migration.Step{
+			migration.DropColumn{Table: "admin_user", Column: "is_staff"},
+			migration.DropColumn{Table: "admin_user", Column: "is_superuser"},
 		},
 	},
 }

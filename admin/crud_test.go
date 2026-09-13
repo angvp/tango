@@ -61,6 +61,8 @@ func buildProductAdminWithOptions(t *testing.T, options admin.Options, adminOpts
 		username TEXT NOT NULL UNIQUE,
 		password_hash TEXT NOT NULL,
 		active BOOLEAN NOT NULL,
+		is_staff BOOLEAN NOT NULL,
+		is_superuser BOOLEAN NOT NULL,
 		created_at TIMESTAMP NOT NULL
 	)`); err != nil {
 		t.Fatalf("create admin_user: %v", err)

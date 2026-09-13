@@ -69,9 +69,10 @@ func sessionUser(ctx context.Context, store *db.Store, token string) (AdminUser,
 
 	var users []AdminUser
 	userQuery := fmt.Sprintf(
-		"SELECT %s AS ID, %s AS Username, %s AS PasswordHash, %s AS Active, %s AS CreatedAt FROM %s WHERE %s = ?",
+		"SELECT %s AS ID, %s AS Username, %s AS PasswordHash, %s AS Active, %s AS IsStaff, %s AS IsSuperuser, %s AS CreatedAt FROM %s WHERE %s = ?",
 		db.ColumnName("ID"), db.ColumnName("Username"), db.ColumnName("PasswordHash"),
-		db.ColumnName("Active"), db.ColumnName("CreatedAt"), db.ColumnName(userMeta.Name), db.ColumnName("ID"),
+		db.ColumnName("Active"), db.ColumnName("IsStaff"), db.ColumnName("IsSuperuser"),
+		db.ColumnName("CreatedAt"), db.ColumnName(userMeta.Name), db.ColumnName("ID"),
 	)
 	if err := store.Query(ctx, &users, userQuery, session.UserID); err != nil {
 		return AdminUser{}, false, err
@@ -139,10 +140,15 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// requireSession wraps next so it only runs for a request carrying a
-// valid, unexpired session for an active AdminUser. Otherwise it redirects
-// to the login page with a "next" query parameter pointing back at the
-// original request, per this milestone's Q5 decision.
+// requireSession wraps next so it only runs for a request carrying a valid,
+// unexpired session for an active, staff AdminUser. An unauthenticated
+// request (missing, invalid, expired, or deactivated-account session)
+// redirects to the login page with a "next" query parameter pointing back
+// at the original request, per this milestone's Q5 decision. An
+// authenticated, active, non-staff account instead gets 403 Forbidden — see
+// CONTEXT.md's "Staff access" entry and ADR 0019: this is a distinct case
+// from "not logged in," and a redirect there would wrongly imply signing in
+// again could help.
 func requireSession(store *db.Store, next tango.View) tango.View {
 	return func(ctx *tango.Context) error {
 		var token string
@@ -150,15 +156,29 @@ func requireSession(store *db.Store, next tango.View) tango.View {
 			token = cookie.Value
 		}
 
-		_, ok, err := sessionUser(ctx.Context(), store, token)
+		user, ok, err := sessionUser(ctx.Context(), store, token)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			target := "/admin/login/?next=" + url.QueryEscape(ctx.Request().URL.Path)
+			nextPath := safeAdminNext(ctx.Request().URL.Path, "/admin/")
+			target := "/admin/login/?next=" + url.QueryEscape(nextPath)
 			return ctx.Redirect(target)
+		}
+		if !user.IsStaff {
+			return forbidden(ctx)
 		}
 
 		return next(ctx)
 	}
+}
+
+// forbidden writes a plain 403 Forbidden response for an authenticated,
+// active account that lacks staff access.
+func forbidden(ctx *tango.Context) error {
+	w := ctx.ResponseWriter()
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusForbidden)
+	_, err := w.Write([]byte("403 Forbidden: this admin account does not have staff access.\n"))
+	return err
 }
