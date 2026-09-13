@@ -127,27 +127,67 @@ func TestApplyStepAddColumnWithDefaultBackfillsExistingRows(t *testing.T) {
 	}
 }
 
-// TestColumnDefSQLDefaultAcrossDialects checks Column.Default's generated
-// DDL directly against both dialects' columnDefSQL branch, without needing
-// a live Postgres connection (unlike TestApplyStepFullLifecyclePostgres,
+// TestAddColumnDefSQLDefaultAcrossDialects checks Column.Default's generated
+// DDL directly against both dialects' addColumnDefSQL branch, without
+// needing a live Postgres connection (unlike TestApplyStepFullLifecyclePostgres,
 // which is skipped without TANGO_TEST_POSTGRES_DSN). "TRUE"/"FALSE" are the
 // only literals this milestone uses, and both SQLite and Postgres accept
 // them for a boolean column — a bare "1"/"0" literal, by contrast, is valid
 // SQLite but rejected by Postgres for a BOOLEAN column, which is exactly
 // the portability trap this milestone's Default literals must avoid.
-func TestColumnDefSQLDefaultAcrossDialects(t *testing.T) {
+func TestAddColumnDefSQLDefaultAcrossDialects(t *testing.T) {
+	column := Column{Name: "is_staff", Type: "boolean", Default: "TRUE"}
+
+	for _, dialect := range []db.Dialect{db.SQLite, db.Postgres} {
+		got := addColumnDefSQL(dialect, column)
+		if !strings.Contains(got, "NOT NULL DEFAULT TRUE") {
+			t.Fatalf("addColumnDefSQL(%v, ...) = %q, want it to contain %q", dialect, got, "NOT NULL DEFAULT TRUE")
+		}
+	}
+
+	withoutDefault := addColumnDefSQL(db.SQLite, Column{Name: "name", Type: "text"})
+	if strings.Contains(withoutDefault, "DEFAULT") {
+		t.Fatalf("addColumnDefSQL with no Default = %q, want no DEFAULT clause", withoutDefault)
+	}
+}
+
+// TestColumnDefSQLIgnoresDefault confirms CreateTable's column generator
+// (columnDefSQL) never emits a DEFAULT clause, even when Column.Default is
+// set — Default is an AddColumn-only backfill escape hatch (see
+// addColumnDefSQL and columnDefSQL's doc comment), not a general
+// default-value system that would also apply to a freshly created table.
+func TestColumnDefSQLIgnoresDefault(t *testing.T) {
 	column := Column{Name: "is_staff", Type: "boolean", Default: "TRUE"}
 
 	for _, dialect := range []db.Dialect{db.SQLite, db.Postgres} {
 		got := columnDefSQL(dialect, column)
-		if !strings.Contains(got, "NOT NULL DEFAULT TRUE") {
-			t.Fatalf("columnDefSQL(%v, ...) = %q, want it to contain %q", dialect, got, "NOT NULL DEFAULT TRUE")
+		if strings.Contains(got, "DEFAULT") {
+			t.Fatalf("columnDefSQL(%v, ...) = %q, want no DEFAULT clause even with Column.Default set", dialect, got)
 		}
 	}
+}
 
-	withoutDefault := columnDefSQL(db.SQLite, Column{Name: "name", Type: "text"})
-	if strings.Contains(withoutDefault, "DEFAULT") {
-		t.Fatalf("columnDefSQL with no Default = %q, want no DEFAULT clause", withoutDefault)
+// TestApplyStepCreateTableIgnoresColumnDefault confirms the same at the
+// CreateTable step level: a freshly created table's column, even with
+// Default set, has no DEFAULT/NOT NULL constraint and accepts a NULL insert
+// for it — proving Default has no effect outside AddColumn.
+func TestApplyStepCreateTableIgnoresColumnDefault(t *testing.T) {
+	sqlDB := openDDLTestDB(t)
+	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{
+		{Name: "id", Type: "integer", PrimaryKey: true},
+		{Name: "is_staff", Type: "boolean", Default: "TRUE"},
+	}})
+
+	if _, err := sqlDB.Exec("INSERT INTO widget (id, is_staff) VALUES (1, NULL)"); err != nil {
+		t.Fatalf("insert explicit NULL into a Default-carrying CreateTable column: %v", err)
+	}
+
+	var isStaff sql.NullBool
+	if err := sqlDB.QueryRow("SELECT is_staff FROM widget WHERE id = 1").Scan(&isStaff); err != nil {
+		t.Fatalf("query column: %v", err)
+	}
+	if isStaff.Valid {
+		t.Fatalf("is_staff = %v, want NULL (CreateTable must ignore Column.Default)", isStaff)
 	}
 }
 

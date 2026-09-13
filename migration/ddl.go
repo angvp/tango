@@ -24,7 +24,7 @@ func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 	case DropTable:
 		return exec(ctx, sqlDB, fmt.Sprintf("DROP TABLE %s", s.Table))
 	case AddColumn:
-		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", s.Table, columnDefSQL(dialect, s.Column)))
+		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", s.Table, addColumnDefSQL(dialect, s.Column)))
 	case DropColumn:
 		if dialect == db.Postgres {
 			return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", s.Table, s.Column))
@@ -91,6 +91,14 @@ func createTableSQL(dialect db.Dialect, s CreateTable) []string {
 	return append(statements, uniqueIndexes...)
 }
 
+// columnDefSQL generates a column definition for CreateTable. It
+// deliberately ignores Column.Default: Default exists solely so AddColumn
+// (see addColumnDefSQL) can backfill an existing table's pre-existing rows
+// — a table being freshly created has no rows to backfill, and its columns
+// already get whatever value the application writes on insert, so Default
+// has nothing to do here. Keeping CreateTable Default-blind is what keeps
+// Default a narrow AddColumn-only escape hatch rather than a general
+// default-value system.
 func columnDefSQL(dialect db.Dialect, c Column) string {
 	if c.PrimaryKey && c.Type == "integer" {
 		if dialect == db.Postgres {
@@ -103,10 +111,20 @@ func columnDefSQL(dialect db.Dialect, c Column) string {
 	if c.PrimaryKey {
 		typ += " PRIMARY KEY"
 	}
-	if c.Default != "" {
-		typ += " NOT NULL DEFAULT " + c.Default
-	}
 	return c.Name + " " + typ + referencesSQL(c)
+}
+
+// addColumnDefSQL generates a column definition for AddColumn, honoring
+// Column.Default (a raw SQL literal, e.g. "TRUE") as a trailing
+// NOT NULL DEFAULT clause when set, so pre-existing rows in the table being
+// altered backfill to that value instead of going NULL. See columnDefSQL's
+// doc comment for why CreateTable does not get the same treatment.
+func addColumnDefSQL(dialect db.Dialect, c Column) string {
+	def := columnDefSQL(dialect, c)
+	if c.Default == "" {
+		return def
+	}
+	return def + " NOT NULL DEFAULT " + c.Default
 }
 
 // referencesSQL returns the inline "REFERENCES table" clause for a foreign
