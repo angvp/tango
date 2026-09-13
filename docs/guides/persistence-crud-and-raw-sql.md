@@ -1,6 +1,6 @@
 # Guide: database CRUD and raw SQL
 
-`db.Store` is tanGO's persistence boundary — metadata-driven CRUD for the common case, with raw SQL always available as an escape hatch. It is not an ORM: no lazy loading, no relationships, no query builder DSL.
+`db.Store` is tanGO's persistence boundary — metadata-driven CRUD for the common case, with raw SQL always available as an escape hatch. It is not a full ORM: no lazy loading and no query builder DSL; relationship-aware behavior is deliberately limited to foreign-key integrity, cascade delete, and admin support.
 
 ```go
 store := db.NewStore(sqlDB, db.SQLite) // or db.Postgres

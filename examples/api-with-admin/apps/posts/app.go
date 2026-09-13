@@ -14,7 +14,7 @@ func New(store *db.Store) tango.App {
 			return err
 		}
 		if err := registry.Admin().Register(Post{}, admin.Options{
-			ListDisplay: []string{"Title", "CreatedAt"},
+			ListDisplay: []string{"Title", "AuthorID", "CreatedAt"},
 			Search:      []string{"Title"},
 			Ordering:    []string{"CreatedAt"},
 		}); err != nil {

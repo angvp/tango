@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -469,5 +470,97 @@ func TestModelsRegisterFailedFieldValidationDoesNotRegisterModel(t *testing.T) {
 	}
 	if _, ok := registry.Get("SliceField"); ok {
 		t.Fatal("Get returned true for a model that failed field validation")
+	}
+}
+
+type Author struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID       int64 `tango:"pk"`
+	Title    string
+	AuthorID int64 `tango:"fk=Author,index"`
+}
+
+func TestModelsRegisterCapturesForeignKeyTagAlongsideBareFlags(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.Register(Post{}); err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+
+	meta, _ := registry.Get("Post")
+	var field FieldMeta
+	for _, f := range meta.Fields {
+		if f.Name == "AuthorID" {
+			field = f
+		}
+	}
+	if field.ForeignKey != "Author" {
+		t.Fatalf("ForeignKey = %q, want %q", field.ForeignKey, "Author")
+	}
+	if !field.Indexed {
+		t.Fatal("Indexed = false, want true — bare flags alongside fk= must still parse")
+	}
+}
+
+func TestModelsRegisterNonForeignKeyFieldLeavesForeignKeyEmpty(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.Register(User{}); err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+
+	meta, _ := registry.Get("User")
+	for _, f := range meta.Fields {
+		if f.ForeignKey != "" {
+			t.Fatalf("field %q ForeignKey = %q, want empty", f.Name, f.ForeignKey)
+		}
+	}
+}
+
+func TestValidateForeignKeysPassesWhenTargetIsRegistered(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.Register(Author{}); err != nil {
+		t.Fatalf("Register(Author) returned error: %v", err)
+	}
+	if err := registry.Register(Post{}); err != nil {
+		t.Fatalf("Register(Post) returned error: %v", err)
+	}
+
+	if err := registry.ValidateForeignKeys(); err != nil {
+		t.Fatalf("ValidateForeignKeys returned error: %v", err)
+	}
+}
+
+func TestValidateForeignKeysIgnoresRegistrationOrder(t *testing.T) {
+	// Post references Author but is registered first — ValidateForeignKeys
+	// runs once after every app has registered, so order must not matter.
+	registry := NewRegistry()
+	if err := registry.Register(Post{}); err != nil {
+		t.Fatalf("Register(Post) returned error: %v", err)
+	}
+	if err := registry.Register(Author{}); err != nil {
+		t.Fatalf("Register(Author) returned error: %v", err)
+	}
+
+	if err := registry.ValidateForeignKeys(); err != nil {
+		t.Fatalf("ValidateForeignKeys returned error: %v — InstalledApps-style order should not matter", err)
+	}
+}
+
+func TestValidateForeignKeysFailsOnDanglingTarget(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.Register(Post{}); err != nil {
+		t.Fatalf("Register(Post) returned error: %v", err)
+	}
+	// Author never registered.
+
+	err := registry.ValidateForeignKeys()
+	if !errors.Is(err, ErrUnknownForeignKeyTarget) {
+		t.Fatalf("error = %v, want it to wrap ErrUnknownForeignKeyTarget", err)
+	}
+	if !strings.Contains(err.Error(), "Post.AuthorID") || !strings.Contains(err.Error(), "Author") {
+		t.Fatalf("error = %q, want it to name the field and missing model", err.Error())
 	}
 }

@@ -17,6 +17,15 @@ import (
 // the given primary key.
 var ErrNotFound = errors.New("tango db: not found")
 
+// ErrInvalidForeignKey is returned by Create and Update when a set (non-zero)
+// foreign key field does not reference an existing row of its related model.
+// This is referential-integrity validation: a preflight SELECT, not run
+// inside a shared transaction with the write it guards, and only performed
+// when UseModels has been called — see ADR 0012. It is distinct from
+// model.ErrUnknownForeignKeyTarget, which validates that the related *model*
+// exists at all, once, at registration time.
+var ErrInvalidForeignKey = errors.New("tango db: invalid foreign key")
+
 // Query carries pagination and ordering options for List.
 type Query struct {
 	Limit   int
@@ -28,11 +37,79 @@ type Query struct {
 type Store struct {
 	db      *sql.DB
 	dialect Dialect
+	models  *model.Registry
 }
 
 // NewStore wraps sqlDB in a Store that generates SQL for dialect.
 func NewStore(sqlDB *sql.DB, dialect Dialect) *Store {
 	return &Store{db: sqlDB, dialect: dialect}
+}
+
+// UseModels attaches the model registry Delete needs to cascade: when set,
+// deleting a row also deletes, recursively, every row of every other
+// registered model that references it through a foreign key field (a
+// tango:"fk=X" tag), matching Django's ORM-level cascade — see ADR 0010.
+// Without calling UseModels, Delete only removes the target row, exactly as
+// before this method existed. tango.Registry.SetStore calls this
+// automatically with its own Models(), so apps using the standard
+// Registry/Serve flow get cascading deletes with no code change.
+func (s *Store) UseModels(models *model.Registry) {
+	s.models = models
+}
+
+// execer is the subset of *sql.DB / *sql.Tx that Delete's cascade needs, so
+// the same query-building code runs whether or not a transaction is active.
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+// validateForeignKeys checks that every set (non-zero) foreign key field on
+// structValue references an existing row of its related model, returning
+// ErrInvalidForeignKey for the first one that doesn't. A no-op unless
+// UseModels has been called. See ErrInvalidForeignKey and ADR 0012.
+func (s *Store) validateForeignKeys(ctx context.Context, meta model.ModelMeta, structValue reflect.Value) error {
+	if s.models == nil {
+		return nil
+	}
+
+	for _, field := range meta.Fields {
+		if field.ForeignKey == "" {
+			continue
+		}
+
+		fieldValue := structValue.FieldByName(field.Name)
+		if !fieldValue.IsValid() || fieldValue.IsZero() {
+			continue // zero-value foreign key fields are treated as unset — see ADR 0012
+		}
+
+		relatedMeta, ok := s.models.Get(field.ForeignKey)
+		if !ok {
+			continue // schema validation (Registry.ValidateForeignKeys) already covers an unregistered target
+		}
+		relatedPKField, err := findPrimaryKeyField(relatedMeta)
+		if err != nil {
+			continue
+		}
+
+		query := fmt.Sprintf(
+			"SELECT 1 FROM %s WHERE %s = %s",
+			ColumnName(relatedMeta.Name),
+			ColumnName(relatedPKField.Name),
+			placeholder(s.dialect, 1),
+		)
+
+		var exists int
+		err = s.db.QueryRowContext(ctx, query, fieldValue.Interface()).Scan(&exists)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: %s.%s references nonexistent %s %v", ErrInvalidForeignKey, meta.Name, field.Name, field.ForeignKey, fieldValue.Interface())
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Create inserts dest using metadata-derived table and column names.
@@ -43,6 +120,11 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 	}
 
 	structValue := value.Elem()
+
+	if err := s.validateForeignKeys(ctx, meta, structValue); err != nil {
+		return err
+	}
+
 	tableName := ColumnName(meta.Name)
 
 	var primaryKeyField model.FieldMeta
@@ -159,6 +241,10 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 	}
 	structValue := value.Elem()
 
+	if err := s.validateForeignKeys(ctx, meta, structValue); err != nil {
+		return err
+	}
+
 	primaryKeyField, err := findPrimaryKeyField(meta)
 	if err != nil {
 		return err
@@ -204,23 +290,132 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 	return nil
 }
 
-// Delete removes the row matching pk.
+// Delete removes the row matching pk. If UseModels has been called, it first
+// cascades: every row of every other registered model that references this
+// one via a foreign key field is deleted first (recursively), all inside one
+// transaction, before the target row itself is removed. See UseModels.
 func (s *Store) Delete(ctx context.Context, meta model.ModelMeta, pk any) error {
-	primaryKeyField, err := findPrimaryKeyField(meta)
+	pkField, err := findPrimaryKeyField(meta)
 	if err != nil {
 		return err
 	}
 
+	if s.models == nil {
+		return s.execDelete(ctx, s.db, meta, pkField, pk, true)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	visited := map[string]bool{cascadeKey(meta.Name, pk): true}
+	if err := s.cascadeDependents(ctx, tx, meta, pk, visited); err != nil {
+		return err
+	}
+	if err := s.execDelete(ctx, tx, meta, pkField, pk, true); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+
+	return nil
+}
+
+// cascadeDependents deletes, recursively, every row of every other
+// registered model that references (meta, pk) through a foreign key field —
+// but not (meta, pk) itself, which the caller deletes once every dependent
+// is gone. visited guards against circular or self-referential foreign keys
+// looping forever.
+func (s *Store) cascadeDependents(ctx context.Context, tx execer, meta model.ModelMeta, pk any, visited map[string]bool) error {
+	for _, other := range s.models.All() {
+		otherPKField, err := findPrimaryKeyField(other)
+		if err != nil {
+			continue // a model with no primary key can't be deleted from at all
+		}
+
+		for _, field := range other.Fields {
+			if field.ForeignKey != meta.Name {
+				continue
+			}
+
+			childPKs, err := s.referencingPrimaryKeys(ctx, tx, other, otherPKField, field, pk)
+			if err != nil {
+				return err
+			}
+
+			for _, childPK := range childPKs {
+				key := cascadeKey(other.Name, childPK)
+				if visited[key] {
+					continue
+				}
+				visited[key] = true
+
+				if err := s.cascadeDependents(ctx, tx, other, childPK, visited); err != nil {
+					return err
+				}
+				if err := s.execDelete(ctx, tx, other, otherPKField, childPK, false); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// referencingPrimaryKeys returns the primary key of every row in model other
+// whose foreign key field equals pk.
+func (s *Store) referencingPrimaryKeys(ctx context.Context, tx execer, other model.ModelMeta, otherPKField model.FieldMeta, fkField model.FieldMeta, pk any) ([]any, error) {
+	query := fmt.Sprintf(
+		"SELECT %s FROM %s WHERE %s = %s",
+		ColumnName(otherPKField.Name),
+		ColumnName(other.Name),
+		ColumnName(fkField.Name),
+		placeholder(s.dialect, 1),
+	)
+	rows, err := tx.QueryContext(ctx, query, pk)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pks []any
+	for rows.Next() {
+		var v any
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		pks = append(pks, v)
+	}
+	return pks, rows.Err()
+}
+
+// execDelete issues one DELETE statement via exec (either s.db or an active
+// transaction). When checkAffected is true, it returns ErrNotFound if no row
+// matched — used only for the caller-specified target row; cascaded rows
+// are known to exist (found by referencingPrimaryKeys) so skip the check.
+func (s *Store) execDelete(ctx context.Context, exec execer, meta model.ModelMeta, pkField model.FieldMeta, pk any, checkAffected bool) error {
 	query := fmt.Sprintf(
 		"DELETE FROM %s WHERE %s = %s",
 		ColumnName(meta.Name),
-		ColumnName(primaryKeyField.Name),
+		ColumnName(pkField.Name),
 		placeholder(s.dialect, 1),
 	)
 
-	result, err := s.db.ExecContext(ctx, query, pk)
+	result, err := exec.ExecContext(ctx, query, pk)
 	if err != nil {
 		return err
+	}
+	if !checkAffected {
+		return nil
 	}
 
 	affected, err := result.RowsAffected()
@@ -230,8 +425,11 @@ func (s *Store) Delete(ctx context.Context, meta model.ModelMeta, pk any) error 
 	if affected == 0 {
 		return fmt.Errorf("%w: %v", ErrNotFound, pk)
 	}
-
 	return nil
+}
+
+func cascadeKey(modelName string, pk any) string {
+	return modelName + ":" + fmt.Sprint(pk)
 }
 
 // List selects rows into dest (a pointer to a slice of the model struct),
