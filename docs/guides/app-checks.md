@@ -1,6 +1,6 @@
 # Guide: app checks
 
-An `App` may optionally implement one extra method to contribute advisory checks, without changing the required `App` interface (`Name() string`, `Register(*Registry) error`) at all:
+An `App` may optionally implement one extra method to contribute checks enforced by `tango check`, without changing the required `App` interface (`Name() string`, `Register(*Registry) error`) at all:
 
 ```go
 type Checker interface {
@@ -32,4 +32,4 @@ for _, c := range checks {
 }
 ```
 
-**Current status:** `Registry.Checks()` is implemented and tested, but `tango check` / `tango.Check(config)` do **not** yet call it automatically — `-check` today only validates registration and route compilation. If you want app checks enforced by `tango check`, call `registry.Checks()` yourself in your `main.go`'s `-check` handling, after `RunRegistration`, and fail on any non-nil `Err`. Automatic aggregation into `tango check`'s pass/fail output is expected in a future milestone; this guide will be updated when it ships.
+`tango.Check(config)` and the generated `-check` flag both enforce app checks automatically. If any check returns a non-nil `Err`, `tango.Check` returns one aggregated error listing every failing check's `Description`; passing checks and apps that don't implement `Checker` do not affect the result. This means `tango check` validates registration, route compilation, and installed-app checks in one pass.

@@ -11,7 +11,9 @@ import (
 
 var timeType = reflect.TypeOf(time.Time{})
 
-// Model is the SQL-relevant model shape makemigrations needs from an app.
+// Model is the SQL-relevant model shape makemigrations needs from an app. It
+// is exported so tango's app-side "-tango-dump-models" JSON payload and CLI can
+// share a type; do not treat it as a hand-authored application API.
 type Model struct {
 	App     string
 	Name    string
@@ -40,18 +42,24 @@ func isFloatKind(k reflect.Kind) bool {
 }
 
 func desiredColumn(field model.FieldMeta) Column {
+	var references string
+	if field.ForeignKey != "" {
+		references = db.ColumnName(field.ForeignKey)
+	}
 	return Column{
 		Name:       db.ColumnName(field.Name),
 		Type:       sqlType(field.Type),
 		PrimaryKey: field.PrimaryKey,
 		Unique:     field.Unique,
 		Indexed:    field.Indexed,
+		References: references,
 	}
 }
 
 // ModelsFromMeta converts registered model metadata into the dialect- and
 // reflect-free Model shape the CLI works with (e.g. to serialize as JSON for
 // the "-tango-dump-models" flag convention `tango makemigrations` relies on).
+// It is exported only for tango's CLI/app-side convention.
 func ModelsFromMeta(models []model.ModelMeta) []Model {
 	migrationModels := make([]Model, len(models))
 	for i, meta := range models {
@@ -72,12 +80,13 @@ func ModelsFromMeta(models []model.ModelMeta) []Model {
 // replayed result of existing migrations) and returns one Migration per app
 // with detected changes, keyed by ModelMeta.App. A model whose App is empty
 // is grouped under the empty-string key. Returns no migrations if nothing
-// changed.
+// changed. It is exported only for the tango CLI's makemigrations machinery.
 func Diff(models []model.ModelMeta, state SchemaState) []Migration {
 	return DiffModels(ModelsFromMeta(models), state)
 }
 
 // DiffModels compares desired model shapes against a replayed migration state.
+// It is exported only for the tango CLI's makemigrations machinery.
 func DiffModels(models []Model, state SchemaState) []Migration {
 	byApp := make(map[string]*Migration)
 

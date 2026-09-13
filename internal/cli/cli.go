@@ -56,11 +56,7 @@ func Run(ctx context.Context, args []string, dir string, stdout io.Writer, stder
 	case "makemigrations":
 		return makeMigrations(ctx, runner, dir, stdout, stderr)
 	case "newproject":
-		if len(args) < 2 {
-			fmt.Fprintln(stderr, "tango newproject: a project name is required")
-			return 2
-		}
-		return newProject(ctx, runner, dir, args[1], stdout, stderr)
+		return newProject(ctx, runner, dir, args[1:], stdout, stderr)
 	case "newapp":
 		if len(args) < 2 {
 			fmt.Fprintln(stderr, "tango newapp: an app name is required")
@@ -77,6 +73,8 @@ func Run(ctx context.Context, args []string, dir string, stdout io.Writer, stder
 			return runGo(ctx, runner, dir, stdout, stderr, append([]string{"run", ".", "-migrate", "-down"}, args[2:]...))
 		}
 		return runGo(ctx, runner, dir, stdout, stderr, append([]string{"run", ".", "-migrate"}, args[1:]...))
+	case "admin":
+		return adminCommand(ctx, runner, dir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n\n", args[0])
 		printUsage(stderr)
@@ -104,11 +102,38 @@ func printUsage(w io.Writer) {
   tango makemigrations     Generate a migration from current model metadata
   tango migrate            Apply pending migrations (go run . -migrate)
   tango migrate down       Roll back the last applied migration
-  tango newproject <name>  Scaffold a new runnable, SQLite-wired project
+  tango newproject [--dialect=sqlite|postgres] [--no-admin] <name>
+                           Scaffold a new runnable project
   tango newapp <name>      Scaffold a new app stub in the current project
   tango tui                Open a status dashboard (falls back to plain text)
   tango shell              Not implemented; Yaegi is the intended direction
+  tango admin create <username>          Create an admin account (password via stdin)
+  tango admin resetpassword <username>   Reset an admin account's password (via stdin)
+  tango admin deactivate <username>      Deactivate an admin account
 `)
+}
+
+func adminCommand(ctx context.Context, runner Runner, dir string, args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) < 2 {
+		fmt.Fprintln(stderr, "tango admin: usage: tango admin <create|resetpassword|deactivate> <username>")
+		return 2
+	}
+
+	verb, username := args[0], args[1]
+	var flagName string
+	switch verb {
+	case "create":
+		flagName = "-tango-admin-create"
+	case "resetpassword":
+		flagName = "-tango-admin-resetpassword"
+	case "deactivate":
+		flagName = "-tango-admin-deactivate"
+	default:
+		fmt.Fprintf(stderr, "tango admin: unknown subcommand %q (want create, resetpassword, or deactivate)\n", verb)
+		return 2
+	}
+
+	return runGo(ctx, runner, dir, stdout, stderr, []string{"run", ".", flagName + "=" + username})
 }
 
 func makeMigrations(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer) int {
@@ -367,5 +392,9 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 }
 
 func writeColumnLiteral(builder *strings.Builder, c migration.Column) {
-	fmt.Fprintf(builder, "migration.Column{Name: %q, Type: %q, PrimaryKey: %t, Unique: %t, Indexed: %t},", c.Name, c.Type, c.PrimaryKey, c.Unique, c.Indexed)
+	fmt.Fprintf(builder, "migration.Column{Name: %q, Type: %q, PrimaryKey: %t, Unique: %t, Indexed: %t", c.Name, c.Type, c.PrimaryKey, c.Unique, c.Indexed)
+	if c.References != "" {
+		fmt.Fprintf(builder, ", References: %q", c.References)
+	}
+	builder.WriteString("},")
 }

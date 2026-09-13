@@ -18,9 +18,20 @@ type Config struct {
 func LoadConfigFromEnv() Config
 ```
 
-Returns a `Config` with `Addr` read from the `TANGO_ADDR` environment variable, defaulting to `:8000` if unset. This is the only environment-driven configuration in v0.1 — no `.env` file parsing, and `InstalledApps` is never populated from the environment. If you need more configuration (database DSN, feature flags, etc.), read it yourself in `main.go` the same way you would in any Go program; tanGO doesn't get in the way.
+Returns a `Config` with `Addr` read from the `TANGO_ADDR` environment variable, defaulting to `:8000` if unset. `InstalledApps` is never populated from the environment; your project composition stays visible in Go.
 
 ```go
 config := tango.LoadConfigFromEnv()
 config.InstalledApps = []tango.App{posts.New(store)}
 ```
+
+## Database env helpers
+
+The scaffold also uses small standalone helpers, not a separate config language:
+
+- `TANGO_DB_DSN` via `tango.LoadDBDSNFromEnv()`.
+- `TANGO_DB_DIALECT` via `tango.LoadDBDialectFromEnv()`, defaulting to SQLite.
+
+Admin credentials don't go through an env var at all — accounts live in the database, managed by the `tango admin` CLI (see [admin registration](admin-registration.md)).
+
+`tango.LoadEnvFile(".env")` can load simple `KEY=VALUE` lines before those helpers run. Variables already set in the process environment win over `.env`, so deployment config can override local defaults.

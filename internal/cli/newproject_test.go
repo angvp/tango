@@ -23,7 +23,7 @@ func (r *multiRecordingRunner) Run(ctx context.Context, dir string, name string,
 	return r.err
 }
 
-func TestNewProjectCreatesRunnableSQLiteWiredProject(t *testing.T) {
+func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 	dir := t.TempDir()
 	runner := &multiRecordingRunner{}
 
@@ -57,17 +57,15 @@ func TestNewProjectCreatesRunnableSQLiteWiredProject(t *testing.T) {
 
 	for _, want := range []string{
 		`"github.com/angvp/tango"`,
+		`"github.com/angvp/tango/admin"`,
 		`"github.com/angvp/tango/db"`,
-		`"github.com/angvp/tango/migration"`,
 		`"myapp/migrations"`,
 		`_ "modernc.org/sqlite"`,
-		`sql.Open("sqlite", "app.db")`,
-		`flag.Bool("check"`,
-		`flag.Bool("tango-dump-models"`,
-		`flag.Bool("tango-status"`,
-		`flag.Bool("migrate"`,
-		`flag.Bool("down"`,
-		"InstalledApps: []tango.App{}",
+		`dsn = "app.db"`,
+		`tango.DispatchFlags(config, sqlDB, db.SQLite, migrations.Migrations)`,
+		`tango.Serve(config, sqlDB, db.SQLite)`,
+		`admin.New(store)`,
+		`admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)`,
 	} {
 		if !strings.Contains(mainSource, want) {
 			t.Fatalf("main.go does not contain %q:\n%s", want, mainSource)
@@ -80,6 +78,83 @@ func TestNewProjectCreatesRunnableSQLiteWiredProject(t *testing.T) {
 	}
 	if !strings.Contains(string(migrationsGo), "var Migrations = []migration.Migration{}") {
 		t.Fatalf("migrations.go does not declare empty Migrations slice:\n%s", migrationsGo)
+	}
+
+	gitignore, err := os.ReadFile(filepath.Join(projectDir, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gitignore), ".env") {
+		t.Fatalf(".gitignore does not ignore .env:\n%s", gitignore)
+	}
+	if !strings.Contains(stdout.String(), "tango admin create") {
+		t.Fatalf("stdout does not point to `tango admin create`:\n%s", stdout.String())
+	}
+}
+
+func TestNewProjectNoAdminSkipsCredentials(t *testing.T) {
+	dir := t.TempDir()
+	runner := &multiRecordingRunner{}
+
+	var stdout, stderr strings.Builder
+	code := Run(context.Background(), []string{"newproject", "--no-admin", "myapp"}, dir, &stdout, &stderr, runner)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+
+	projectDir := filepath.Join(dir, "myapp")
+	mainGo, err := os.ReadFile(filepath.Join(projectDir, "main.go"))
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	if strings.Contains(string(mainGo), "admin.New") {
+		t.Fatalf("main.go contains admin wiring with --no-admin:\n%s", mainGo)
+	}
+	if _, err := os.Stat(filepath.Join(projectDir, ".env")); !os.IsNotExist(err) {
+		t.Fatalf(".env stat = %v, want not exist", err)
+	}
+}
+
+func TestNewProjectPostgresDialect(t *testing.T) {
+	dir := t.TempDir()
+	runner := &multiRecordingRunner{}
+
+	var stdout, stderr strings.Builder
+	code := Run(context.Background(), []string{"newproject", "--dialect=postgres", "myapp"}, dir, &stdout, &stderr, runner)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+
+	mainGo, err := os.ReadFile(filepath.Join(dir, "myapp", "main.go"))
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(mainGo)
+	for _, want := range []string{
+		`_ "github.com/jackc/pgx/v5/stdlib"`,
+		`os.Setenv("TANGO_DB_DIALECT", "postgres")`,
+		`dsn = "postgres://postgres:postgres@localhost:5432/myapp"`,
+		`sql.Open("pgx", dsn)`,
+		`tango.DispatchFlags(config, sqlDB, db.Postgres, migrations.Migrations)`,
+		`tango.Serve(config, sqlDB, db.Postgres)`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("main.go does not contain %q:\n%s", want, source)
+		}
+	}
+}
+
+func TestNewProjectRejectsUnknownDialect(t *testing.T) {
+	dir := t.TempDir()
+	runner := &multiRecordingRunner{}
+
+	var stderr strings.Builder
+	code := Run(context.Background(), []string{"newproject", "--dialect=oracle", "myapp"}, dir, io.Discard, &stderr, runner)
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unsupported dialect") {
+		t.Fatalf("stderr = %q, want unsupported dialect", stderr.String())
 	}
 }
 

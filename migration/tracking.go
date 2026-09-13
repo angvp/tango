@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/angvp/tango/db"
@@ -49,6 +50,18 @@ func AppliedMigrations(ctx context.Context, sqlDB *sql.DB) (map[MigrationKey]boo
 		applied[key] = true
 	}
 	return applied, rows.Err()
+}
+
+// IsMissingTrackingTable reports whether err means the tango_migrations table
+// does not exist yet. Status uses this to stay read-only: creating the tracking
+// table remains ApplyPending's responsibility.
+func IsMissingTrackingTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "no such table") ||
+		strings.Contains(message, `relation "tango_migrations" does not exist`)
 }
 
 // touchedApps returns the distinct, non-empty apps a migration's steps
