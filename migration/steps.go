@@ -21,6 +21,13 @@ type Column struct {
 	// constraint is always RESTRICT/NO ACTION — see ADR 0010: cascade
 	// delete is implemented by Store.Delete, never by the database itself.
 	References string
+	// Default is a raw SQL literal (e.g. "TRUE") the column is given as a
+	// NOT NULL DEFAULT when adding it to an existing table, so pre-existing
+	// rows backfill to that value instead of NULL. Empty means no default:
+	// the column is added exactly as before this field existed. There is no
+	// struct-tag-driven way to set this — it is only ever hand-authored on a
+	// specific generated migration where an existing model needs it.
+	Default string
 }
 
 // CreateTable creates a table with the provided columns. It is exported for

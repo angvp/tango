@@ -97,6 +97,35 @@ func TestApplyStepAddColumn(t *testing.T) {
 	}
 }
 
+func TestApplyStepAddColumnWithDefaultBackfillsExistingRows(t *testing.T) {
+	sqlDB := openDDLTestDB(t)
+	ctx := context.Background()
+	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
+	if _, err := sqlDB.Exec("INSERT INTO widget (id) VALUES (1)"); err != nil {
+		t.Fatalf("seed existing row: %v", err)
+	}
+
+	mustApply(t, sqlDB, AddColumn{Table: "widget", Column: Column{Name: "is_staff", Type: "boolean", Default: "TRUE"}})
+
+	var isStaff bool
+	if err := sqlDB.QueryRowContext(ctx, "SELECT is_staff FROM widget WHERE id = 1").Scan(&isStaff); err != nil {
+		t.Fatalf("query backfilled column: %v", err)
+	}
+	if !isStaff {
+		t.Fatal("existing row's is_staff = false, want true (backfilled from Default)")
+	}
+
+	if _, err := sqlDB.Exec("INSERT INTO widget (id) VALUES (2)"); err != nil {
+		t.Fatalf("insert new row without specifying is_staff: %v", err)
+	}
+	if err := sqlDB.QueryRowContext(ctx, "SELECT is_staff FROM widget WHERE id = 2").Scan(&isStaff); err != nil {
+		t.Fatalf("query new row's default column: %v", err)
+	}
+	if !isStaff {
+		t.Fatal("new row's is_staff = false, want true (DEFAULT applies to new inserts too)")
+	}
+}
+
 func TestApplyStepDropColumnRebuildsTableAndPreservesData(t *testing.T) {
 	sqlDB := openDDLTestDB(t)
 	ctx := context.Background()

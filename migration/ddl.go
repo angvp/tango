@@ -103,6 +103,9 @@ func columnDefSQL(dialect db.Dialect, c Column) string {
 	if c.PrimaryKey {
 		typ += " PRIMARY KEY"
 	}
+	if c.Default != "" {
+		typ += " NOT NULL DEFAULT " + c.Default
+	}
 	return c.Name + " " + typ + referencesSQL(c)
 }
 
