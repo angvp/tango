@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/angvp/tango/db"
@@ -123,6 +124,30 @@ func TestApplyStepAddColumnWithDefaultBackfillsExistingRows(t *testing.T) {
 	}
 	if !isStaff {
 		t.Fatal("new row's is_staff = false, want true (DEFAULT applies to new inserts too)")
+	}
+}
+
+// TestColumnDefSQLDefaultAcrossDialects checks Column.Default's generated
+// DDL directly against both dialects' columnDefSQL branch, without needing
+// a live Postgres connection (unlike TestApplyStepFullLifecyclePostgres,
+// which is skipped without TANGO_TEST_POSTGRES_DSN). "TRUE"/"FALSE" are the
+// only literals this milestone uses, and both SQLite and Postgres accept
+// them for a boolean column — a bare "1"/"0" literal, by contrast, is valid
+// SQLite but rejected by Postgres for a BOOLEAN column, which is exactly
+// the portability trap this milestone's Default literals must avoid.
+func TestColumnDefSQLDefaultAcrossDialects(t *testing.T) {
+	column := Column{Name: "is_staff", Type: "boolean", Default: "TRUE"}
+
+	for _, dialect := range []db.Dialect{db.SQLite, db.Postgres} {
+		got := columnDefSQL(dialect, column)
+		if !strings.Contains(got, "NOT NULL DEFAULT TRUE") {
+			t.Fatalf("columnDefSQL(%v, ...) = %q, want it to contain %q", dialect, got, "NOT NULL DEFAULT TRUE")
+		}
+	}
+
+	withoutDefault := columnDefSQL(db.SQLite, Column{Name: "name", Type: "text"})
+	if strings.Contains(withoutDefault, "DEFAULT") {
+		t.Fatalf("columnDefSQL with no Default = %q, want no DEFAULT clause", withoutDefault)
 	}
 }
 
@@ -264,5 +289,36 @@ func TestApplyStepFullLifecyclePostgres(t *testing.T) {
 		if err := ApplyStep(ctx, sqlDB, db.Postgres, step); err != nil {
 			t.Fatalf("ApplyStep(%T) returned error: %v", step, err)
 		}
+	}
+}
+
+// TestApplyStepAddColumnWithDefaultBackfillsExistingRowsPostgres is the
+// Postgres counterpart to the SQLite-backed
+// TestApplyStepAddColumnWithDefaultBackfillsExistingRows: it exercises the
+// live NOT NULL DEFAULT TRUE DDL against a real Postgres connection when
+// TANGO_TEST_POSTGRES_DSN is set, skipped otherwise.
+func TestApplyStepAddColumnWithDefaultBackfillsExistingRowsPostgres(t *testing.T) {
+	sqlDB := openPostgresDDLTestDB(t)
+	ctx := context.Background()
+
+	if err := ApplyStep(ctx, sqlDB, db.Postgres, CreateTable{Table: "ddl_widget", Columns: []Column{
+		{Name: "id", Type: "integer", PrimaryKey: true},
+	}}); err != nil {
+		t.Fatalf("ApplyStep(CreateTable) returned error: %v", err)
+	}
+	if _, err := sqlDB.ExecContext(ctx, "INSERT INTO ddl_widget (id) VALUES (1)"); err != nil {
+		t.Fatalf("seed existing row: %v", err)
+	}
+
+	if err := ApplyStep(ctx, sqlDB, db.Postgres, AddColumn{Table: "ddl_widget", Column: Column{Name: "is_staff", Type: "boolean", Default: "TRUE"}}); err != nil {
+		t.Fatalf("ApplyStep(AddColumn) returned error: %v", err)
+	}
+
+	var isStaff bool
+	if err := sqlDB.QueryRowContext(ctx, "SELECT is_staff FROM ddl_widget WHERE id = 1").Scan(&isStaff); err != nil {
+		t.Fatalf("query backfilled column: %v", err)
+	}
+	if !isStaff {
+		t.Fatal("existing row's is_staff = false, want true (backfilled from Default)")
 	}
 }
