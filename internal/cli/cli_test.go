@@ -249,6 +249,22 @@ func TestAdminGrantAndRevokeStaffAndSuperuserVerbsRunAppWithMatchingFlag(t *test
 	}
 }
 
+func TestAdminGrantStaffWithUnexpectedExtraArgumentFails(t *testing.T) {
+	runner := &recordingRunner{}
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"admin", "grant-staff", "alice", "--no-staff"}, "/app", io.Discard, &stderr, runner)
+
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unexpected arguments") {
+		t.Fatalf("stderr = %q, want unexpected arguments message", stderr.String())
+	}
+	if !reflect.DeepEqual(runner.command, recordedCommand{}) {
+		t.Fatalf("runner was invoked = %#v, want no invocation on argument error", runner.command)
+	}
+}
+
 func TestAdminUnknownSubcommandFails(t *testing.T) {
 	runner := &recordingRunner{}
 	var stderr bytes.Buffer

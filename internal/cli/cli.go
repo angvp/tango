@@ -164,6 +164,11 @@ func adminCommand(ctx context.Context, runner Runner, dir string, args []string,
 		return 2
 	}
 
+	if len(args) > 2 {
+		fmt.Fprintf(stderr, "tango admin %s: unexpected arguments: %s (only create accepts flags)\n", verb, strings.Join(args[2:], " "))
+		return 2
+	}
+
 	return runGo(ctx, runner, dir, stdout, stderr, []string{"run", ".", flagName + "=" + username})
 }
 
