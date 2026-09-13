@@ -12,6 +12,29 @@ type Options struct {
 	ListDisplay []string
 	Search      []string
 	Ordering    []string
+	// Label names one of this model's own fields to display whenever it is
+	// shown as a related object elsewhere (e.g. on a Post's admin page for
+	// a Post.AuthorID foreign key). Unset falls back to showing the raw
+	// primary key value — never a hard error.
+	Label string
+	// Labels overrides a field's humanized default display label, keyed by
+	// Go field name.
+	Labels map[string]string
+	// HelpText adds descriptive text below a field's form control, keyed by
+	// Go field name.
+	HelpText map[string]string
+	// ReadOnly lists fields that render non-editably in create/edit forms.
+	// On edit, a read-only field keeps its existing stored value regardless
+	// of submitted form data; on create, it stays at its Go zero value.
+	// Submitted data for a read-only field is always ignored, never parsed.
+	ReadOnly []string
+	// FieldOrder lists fields in the order they should render; fields not
+	// listed keep their existing default order after the ordered ones.
+	FieldOrder []string
+	// Widgets overrides how a field renders and parses in create/edit
+	// forms, keyed by Go field name. See Widget — best-effort, not a
+	// stable v0.1 contract.
+	Widgets map[string]Widget
 }
 
 // ModelRegistration is the admin metadata for a registered model.
@@ -58,6 +81,26 @@ func (r *Registry) Register(value any, opts Options) error {
 	if err := validateFields(meta, opts.Ordering, "Ordering"); err != nil {
 		return err
 	}
+	if opts.Label != "" {
+		if err := validateFields(meta, []string{opts.Label}, "Label"); err != nil {
+			return err
+		}
+	}
+	if err := validateFieldMapKeys(meta, opts.Labels, "Labels"); err != nil {
+		return err
+	}
+	if err := validateFieldMapKeys(meta, opts.HelpText, "HelpText"); err != nil {
+		return err
+	}
+	if err := validateFields(meta, opts.ReadOnly, "ReadOnly"); err != nil {
+		return err
+	}
+	if err := validateFields(meta, opts.FieldOrder, "FieldOrder"); err != nil {
+		return err
+	}
+	if err := validateFieldMapKeys(meta, opts.Widgets, "Widgets"); err != nil {
+		return err
+	}
 
 	r.registrations[name] = ModelRegistration{
 		Model:   meta,
@@ -80,6 +123,19 @@ func (r *Registry) Registrations() []ModelRegistration {
 		registrations = append(registrations, registration)
 	}
 	return registrations
+}
+
+// validateFieldMapKeys validates the keys of a field-name-keyed option map
+// (Labels, HelpText, Widgets), reusing validateFields' unknown-field error.
+func validateFieldMapKeys[V any](meta model.ModelMeta, m map[string]V, option string) error {
+	if len(m) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(m))
+	for name := range m {
+		names = append(names, name)
+	}
+	return validateFields(meta, names, option)
 }
 
 func validateFields(meta model.ModelMeta, names []string, option string) error {

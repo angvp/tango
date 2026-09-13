@@ -75,17 +75,8 @@ var formTemplate = cloneWithContent(`{{define "content"}}
     <div class="card-body">
       {{if .Error}}<div class="alert-error">{{.Error}}</div>{{end}}
       <form method="post">
-      {{range .Fields}}<div class="field-group">
-        {{if eq .InputType "checkbox"}}
-        <div class="checkbox-row">
-          <input type="checkbox" id="field-{{.Name}}" name="{{.Name}}" {{if .Checked}}checked{{end}} class="checkbox">
-          <label for="field-{{.Name}}" class="text-sm font-medium text-slate-700">{{.Label}}</label>
-        </div>
-        {{else}}
-        <label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
-        <input id="field-{{.Name}}" type="{{.InputType}}" name="{{.Name}}" value="{{.Value}}" class="input">
-        {{end}}
-      </div>
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      {{range .Fields}}<div class="field-group">{{.HTML}}</div>
       {{end}}
         <div class="flex items-center gap-2 pt-2">
           <button type="submit" class="btn-primary">Save</button>
@@ -110,6 +101,7 @@ var deleteTemplate = cloneWithContent(`{{define "content"}}
       {{if .Error}}<div class="alert-error">{{.Error}}</div>{{end}}
       <p class="text-sm text-slate-700 mb-5">Are you sure you want to delete <span class="font-medium text-slate-900">{{.ModelName}} {{.PK}}</span>? This action cannot be undone.</p>
       <form method="post" class="flex items-center gap-2">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button type="submit" class="btn-danger">Confirm delete</button>
         <a href="../" class="btn-secondary">Cancel</a>
       </form>
@@ -141,18 +133,16 @@ type listPageData struct {
 }
 
 type formField struct {
-	Name      string
-	Label     string
-	InputType string
-	Value     string
-	Checked   bool
+	Name string
+	HTML template.HTML
 }
 
 type formPageData struct {
 	chrome
-	Title  string
-	Error  string
-	Fields []formField
+	Title     string
+	Error     string
+	Fields    []formField
+	CSRFToken string
 }
 
 type deletePageData struct {
@@ -160,6 +150,7 @@ type deletePageData struct {
 	ModelName string
 	PK        string
 	Error     string
+	CSRFToken string
 }
 
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {

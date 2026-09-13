@@ -10,7 +10,7 @@ import (
 // without a specific model in the URL lands somewhere useful rather than
 // a 404: it redirects to the first registered model's list, or renders a
 // minimal empty state if no model is registered with the admin yet.
-func indexView(nav []navItem) tango.View {
+func indexView(nav []navItem, brand Branding) tango.View {
 	return func(ctx *tango.Context) error {
 		if ctx.Request().Method != http.MethodGet {
 			return methodNotAllowed(ctx)
@@ -21,7 +21,7 @@ func indexView(nav []navItem) tango.View {
 		}
 
 		return render(ctx, http.StatusOK, indexTemplate, indexPageData{
-			chrome: chrome{Nav: nav},
+			chrome: chrome{Nav: nav, Brand: brand},
 		})
 	}
 }
