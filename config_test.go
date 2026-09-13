@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/angvp/tango"
@@ -12,6 +13,17 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+type configCheckApp struct {
+	name   string
+	checks []tango.AppCheck
+}
+
+func (a configCheckApp) Name() string { return a.name }
+
+func (a configCheckApp) Register(*tango.Registry) error { return nil }
+
+func (a configCheckApp) Checks() []tango.AppCheck { return a.checks }
 
 func TestLoadConfigFromEnvDefaultsAddr(t *testing.T) {
 	t.Setenv("TANGO_ADDR", "")
@@ -79,6 +91,44 @@ func TestCheckRunsRegistrationAndCompilesRoutes(t *testing.T) {
 	}
 }
 
+func TestCheckPassesWhenAppChecksPass(t *testing.T) {
+	app := configCheckApp{
+		name: "widgets",
+		checks: []tango.AppCheck{
+			{Description: "widgets configured"},
+		},
+	}
+
+	if err := tango.Check(tango.Config{InstalledApps: []tango.App{app}}); err != nil {
+		t.Fatalf("Check returned error: %v", err)
+	}
+}
+
+func TestCheckReturnsAggregatedAppCheckFailures(t *testing.T) {
+	app := configCheckApp{
+		name: "widgets",
+		checks: []tango.AppCheck{
+			{Description: "database configured", Err: errors.New("missing DSN")},
+			{Description: "templates available"},
+			{Description: "admin credentials", Err: errors.New("missing password")},
+		},
+	}
+
+	err := tango.Check(tango.Config{InstalledApps: []tango.App{app}})
+	if err == nil {
+		t.Fatal("Check returned nil, want app check failure")
+	}
+	message := err.Error()
+	for _, want := range []string{"database configured", "missing DSN", "admin credentials", "missing password"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("error = %q, want it to contain %q", message, want)
+		}
+	}
+	if strings.Contains(message, "templates available") {
+		t.Fatalf("error = %q, passing check should not be listed", message)
+	}
+}
+
 func TestCheckReturnsRegistrationError(t *testing.T) {
 	expected := errors.New("boom")
 	app := tango.NewApp("bad", func(registry *tango.Registry) error {
@@ -89,6 +139,46 @@ func TestCheckReturnsRegistrationError(t *testing.T) {
 
 	if !errors.Is(err, expected) {
 		t.Fatalf("error = %v, want %v", err, expected)
+	}
+}
+
+type checkFKAuthor struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type checkFKPost struct {
+	ID       int64 `tango:"pk"`
+	AuthorID int64 `tango:"fk=checkFKAuthor"`
+}
+
+func TestCheckPassesWithValidForeignKeyRegardlessOfInstalledAppsOrder(t *testing.T) {
+	posts := tango.NewApp("posts", func(registry *tango.Registry) error {
+		return registry.Models().Register(checkFKPost{})
+	})
+	authors := tango.NewApp("authors", func(registry *tango.Registry) error {
+		return registry.Models().Register(checkFKAuthor{})
+	})
+
+	// posts (the referencing app) installed before authors (the referenced
+	// app) — ADR 0011 says this must still pass Check.
+	if err := tango.Check(tango.Config{InstalledApps: []tango.App{posts, authors}}); err != nil {
+		t.Fatalf("Check returned error: %v", err)
+	}
+}
+
+func TestCheckFailsOnDanglingForeignKeyTarget(t *testing.T) {
+	posts := tango.NewApp("posts", func(registry *tango.Registry) error {
+		return registry.Models().Register(checkFKPost{})
+	})
+	// checkFKAuthor is never registered by any app.
+
+	err := tango.Check(tango.Config{InstalledApps: []tango.App{posts}})
+	if err == nil {
+		t.Fatal("Check returned nil error, want an error naming the missing foreign key target")
+	}
+	if !strings.Contains(err.Error(), "checkFKAuthor") {
+		t.Fatalf("error = %q, want it to name the missing model %q", err.Error(), "checkFKAuthor")
 	}
 }
 
@@ -226,6 +316,42 @@ func TestStatusReportsDatabaseUnreachableWithoutPanicking(t *testing.T) {
 	}
 	if status.DatabaseError == "" {
 		t.Fatal("DatabaseError is empty, want the underlying error message")
+	}
+}
+
+func TestStatusIsReadOnlyWhenTrackingTableIsMissing(t *testing.T) {
+	app := tango.NewApp("widgets", func(registry *tango.Registry) error {
+		return nil
+	})
+	config := tango.Config{InstalledApps: []tango.App{app}}
+
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer sqlDB.Close()
+
+	migrations := []migration.Migration{
+		{App: "widgets", Name: "0001_auto", Reversible: true},
+		{App: "widgets", Name: "0002_auto", Reversible: true},
+	}
+
+	status := tango.Status(context.Background(), config, sqlDB, db.SQLite, migrations)
+
+	if !status.DatabaseReachable || status.DatabaseError != "" {
+		t.Fatalf("DatabaseReachable/Error = %v/%q, want true/\"\"", status.DatabaseReachable, status.DatabaseError)
+	}
+	if status.MigrationsTotal != 2 || status.MigrationsApplied != 0 || status.MigrationsPending != 2 {
+		t.Fatalf("migration counts = %+v, want total=2 applied=0 pending=2", status)
+	}
+
+	var tableName string
+	err = sqlDB.QueryRowContext(
+		context.Background(),
+		"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tango_migrations'",
+	).Scan(&tableName)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("tango_migrations table query error = %v, want sql.ErrNoRows", err)
 	}
 }
 

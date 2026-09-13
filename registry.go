@@ -73,7 +73,11 @@ func (r *Registry) Models() *model.Registry {
 }
 
 // SetStore stores the persistence store for apps that need database access.
+// It also wires this Registry's model registry into store (store.UseModels),
+// so Delete cascades across every registered model's foreign keys with no
+// extra call needed by app code — see db.Store.UseModels.
 func (r *Registry) SetStore(store *db.Store) {
+	store.UseModels(r.Models())
 	r.store = store
 }
 
