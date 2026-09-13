@@ -69,6 +69,44 @@ func TestMakeMigrationsCreatesFirstMigrationFile(t *testing.T) {
 	}
 }
 
+func TestMakeMigrationsGeneratedFileIncludesForeignKeyReference(t *testing.T) {
+	dir := t.TempDir()
+	runner := dumpModelsRunner{models: []migration.Model{
+		{App: "authors", Name: "author", Columns: []migration.Column{
+			{Name: "id", Type: "integer", PrimaryKey: true},
+		}},
+		{App: "posts", Name: "post", Columns: []migration.Column{
+			{Name: "id", Type: "integer", PrimaryKey: true},
+			{Name: "author_id", Type: "integer", References: "author"},
+		}},
+	}}
+
+	var stdout, stderr strings.Builder
+	code := Run(context.Background(), []string{"makemigrations"}, dir, &stdout, &stderr, runner)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+
+	files, err := filepath.Glob(filepath.Join(dir, "migrations", "[0-9][0-9][0-9][0-9]_*.go"))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+
+	var found bool
+	for _, f := range files {
+		content, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if strings.Contains(string(content), `References: "author"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no generated migration file's Go literal contains References: \"author\" — the foreign key constraint would silently not be created when applied")
+	}
+}
+
 func TestMakeMigrationsSecondRunOnlyAddsIncrementalChanges(t *testing.T) {
 	dir := t.TempDir()
 

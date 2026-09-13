@@ -26,13 +26,6 @@ func main() {
 }
 
 func run() int {
-	check := flag.Bool("check", false, "validate app registration and exit")
-	dumpModels := flag.Bool("tango-dump-models", false, "print registered models as JSON and exit")
-	status := flag.Bool("tango-status", false, "print project status as JSON and exit")
-	migrateFlag := flag.Bool("migrate", false, "apply pending migrations and exit")
-	down := flag.Bool("down", false, "roll back the last applied migration (with -migrate)")
-	flag.Parse()
-
 	// sql.Open only validates the DSN; it doesn't dial the database, so it's
 	// safe to construct the store here and share it across every flag path
 	// (including -check/-tango-dump-models, which never touch it).
@@ -45,14 +38,30 @@ func run() int {
 
 	store := db.NewStore(sqlDB, db.SQLite)
 
+	// admin.HandleCLI scans os.Args itself and reports handled=false when
+	// none of its own flags (-tango-admin-create/-resetpassword/-deactivate)
+	// are present, so it's safe to check before flag.Parse() below — which
+	// would otherwise exit on any flag it doesn't recognize.
+	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		return 0
+	}
+
+	check := flag.Bool("check", false, "validate app registration and exit")
+	dumpModels := flag.Bool("tango-dump-models", false, "print registered models as JSON and exit")
+	status := flag.Bool("tango-status", false, "print project status as JSON and exit")
+	migrateFlag := flag.Bool("migrate", false, "apply pending migrations and exit")
+	down := flag.Bool("down", false, "roll back the last applied migration (with -migrate)")
+	flag.Parse()
+
 	config := tango.Config{
 		InstalledApps: []tango.App{
 			posts.New(store),
 			authors.New(),
-			admin.New(store, admin.Credentials{
-				Username: "admin",
-				Password: "change-me",
-			}),
+			admin.New(store),
 		},
 		Addr: ":8000",
 	}

@@ -16,6 +16,10 @@ func New() tango.App {
 			ListDisplay: []string{"Name", "Email"},
 			Search:      []string{"Name", "Email"},
 			Ordering:    []string{"Name"},
+			// Label lets admin show "Jane Doe" wherever an Author is
+			// referenced elsewhere (e.g. posts.Post.AuthorID) instead of a
+			// raw row ID — see Milestone 14.
+			Label: "Name",
 		})
 	})
 }

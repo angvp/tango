@@ -21,4 +21,22 @@ var Migrations = []migration.Migration{
 			migration.DropTable{Table: "author"},
 		},
 	},
+	{App: "admin", Name: "0003_auto", Reversible: true,
+		Up: []migration.Step{
+			migration.CreateTable{Table: "admin_session", Columns: []migration.Column{migration.Column{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, migration.Column{Name: "token", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, migration.Column{Name: "user_id", Type: "integer", PrimaryKey: false, Unique: false, Indexed: true}, migration.Column{Name: "expires_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+			migration.CreateTable{Table: "admin_user", Columns: []migration.Column{migration.Column{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, migration.Column{Name: "username", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, migration.Column{Name: "password_hash", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "active", Type: "boolean", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "created_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+		},
+		Down: []migration.Step{
+			migration.DropTable{Table: "admin_session"},
+			migration.DropTable{Table: "admin_user"},
+		},
+	},
+	{App: "posts", Name: "0004_auto", Reversible: true,
+		Up: []migration.Step{
+			migration.AddColumn{Table: "post", Column: migration.Column{Name: "author_id", Type: "integer", PrimaryKey: false, Unique: false, Indexed: false, References: "author"}},
+		},
+		Down: []migration.Step{
+			migration.DropColumn{Table: "post", Column: "author_id"},
+		},
+	},
 }

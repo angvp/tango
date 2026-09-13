@@ -30,6 +30,11 @@ var ErrUnsupportedField = errors.New("tango: unsupported field type")
 // flattened, in v0.1.
 var ErrEmbeddedField = errors.New("tango: embedded fields are not supported")
 
+// ErrUnknownForeignKeyTarget is returned by ValidateForeignKeys when a
+// field's tango:"fk=X" tag names a model X that no installed app ever
+// registered.
+var ErrUnknownForeignKeyTarget = errors.New("tango: foreign key targets an unregistered model")
+
 var timeType = reflect.TypeOf(time.Time{})
 
 // ModelMeta describes a registered Go struct model.
@@ -48,6 +53,7 @@ type FieldMeta struct {
 	Unique     bool
 	Indexed    bool
 	Editable   bool
+	ForeignKey string // target model name from tango:"fk=<Name>"; "" if not a foreign key
 }
 
 // Registry stores model metadata by Go type name.
@@ -115,6 +121,8 @@ func (r *Registry) Register(value any) error {
 			primaryKeyFields = append(primaryKeyFields, field.Name)
 		}
 
+		fk, _ := tagValue(tag, "fk")
+
 		meta.Fields = append(meta.Fields, FieldMeta{
 			Name:       field.Name,
 			Type:       field.Type,
@@ -122,6 +130,7 @@ func (r *Registry) Register(value any) error {
 			Unique:     hasTagOption(tag, "unique"),
 			Indexed:    hasTagOption(tag, "index"),
 			Editable:   !primaryKey,
+			ForeignKey: fk,
 		})
 	}
 
@@ -180,4 +189,39 @@ func hasTagOption(tag string, option string) bool {
 		}
 	}
 	return false
+}
+
+// tagValue returns the value of a "key=value" pair in a comma-separated
+// tango tag (e.g. tagValue(`fk=Author,index`, "fk") returns ("Author",
+// true)), alongside the existing bare-flag options like "pk"/"unique". A
+// bare flag with the given name (no "=") does not count as a value.
+func tagValue(tag string, key string) (string, bool) {
+	for _, part := range strings.Split(tag, ",") {
+		part = strings.TrimSpace(part)
+		name, value, ok := strings.Cut(part, "=")
+		if ok && strings.TrimSpace(name) == key {
+			return strings.TrimSpace(value), true
+		}
+	}
+	return "", false
+}
+
+// ValidateForeignKeys checks that every registered field's tango:"fk=X" tag
+// names a model X that is also registered in this same Registry. It is
+// intended to run once, after every installed app has finished registering
+// (e.g. from tango.Check), not per-model at Register time — so InstalledApps
+// order never constrains which app may declare a foreign key relative to
+// the app that registers its target. See ADR 0011.
+func (r *Registry) ValidateForeignKeys() error {
+	for _, meta := range r.All() {
+		for _, field := range meta.Fields {
+			if field.ForeignKey == "" {
+				continue
+			}
+			if _, exists := r.models[field.ForeignKey]; !exists {
+				return fmt.Errorf("%w: %s.%s references %q", ErrUnknownForeignKeyTarget, meta.Name, field.Name, field.ForeignKey)
+			}
+		}
+	}
+	return nil
 }
