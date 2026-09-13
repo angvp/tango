@@ -27,7 +27,7 @@ A generated file's `var M####Xxx = []migration.Migration{...}` is for human read
 tango migrate
 ```
 
-Runs every not-yet-applied migration's `Up` steps in order, translating each dialect-agnostic step into real DDL for your configured `Dialect` (SQLite uses a table-rebuild pattern for anything it can't `ALTER TABLE` directly, like `DropColumn`; Postgres steps map straight to `ALTER TABLE`/`CREATE INDEX`). Applied migrations are tracked in a `tango_migrations` table — `(app, name, applied_at)`, primary keyed on `(app, name)` — deliberately mirroring Django's `django_migrations`.
+Runs every not-yet-applied migration's `Up` steps in order, translating each dialect-agnostic step into real DDL for your configured `Dialect` (SQLite uses a table-rebuild pattern for anything it can't `ALTER TABLE` directly, like `DropColumn`; Postgres steps map straight to `ALTER TABLE`/`CREATE INDEX`). Applied migrations are tracked in a `tango_migrations` table — `(app, name, applied_at)`, primary keyed on `(app, name)` — deliberately Django-inspired, like `django_migrations`.
 
 ## Rolling back
 
