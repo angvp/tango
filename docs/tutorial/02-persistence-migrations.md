@@ -115,7 +115,7 @@ tango migrate
 # migrations applied
 ```
 
-This records one row per applied migration in a `tango_migrations` table (`app`, `name`, `applied_at`), mirroring Django's `django_migrations`. Run `tango check` again to confirm registration still passes, then exercise the new routes:
+This records one row per applied migration in a `tango_migrations` table (`app`, `name`, `applied_at`), Django-inspired like `django_migrations`. Run `tango check` again to confirm registration still passes, then exercise the new routes:
 
 ```sh
 go run .
