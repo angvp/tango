@@ -87,14 +87,14 @@ Admin routes require a valid session, established by logging in at `/admin/login
 
 Once a session is valid, one more check runs before a request reaches any admin route: `AdminUser.IsStaff`. An authenticated, active account with `IsStaff=false` gets `403 Forbidden` — distinct from the unauthenticated case above, which redirects to `/admin/login/` instead. A 403 rather than a redirect is deliberate: the account is genuinely logged in, and signing in again changes nothing, so a login redirect there would be actively misleading.
 
-`IsStaff` is the only flag with real effect in v0.1. `AdminUser` also has `IsSuperuser`, which ships now but is currently equivalent to `IsStaff` — it has no distinct behavior yet. It exists as forward-compatible groundwork for a future, finer-grained permission bypass, so that a later milestone doesn't force every existing tanGO project through a second migration to add one boolean column.
+`IsStaff` is the only flag with real effect in v0.1. `AdminUser` also has `IsSuperuser`, but it is currently ignored: it has no distinct behavior, and it does not bypass `IsStaff` — a non-staff account with `IsSuperuser=true` still gets `403 Forbidden`, exactly like any other non-staff account. It exists purely as forward-compatible groundwork for a future, finer-grained permission bypass, so that a later milestone doesn't force every existing tanGO project through a second migration to add one boolean column.
 
 Both flags default to `true`, for both new accounts and existing ones:
 
 - `tango admin create <username>` with no flags produces `IsStaff=true, IsSuperuser=true` — the same "immediately usable full admin account" behavior `create` has always had. Pass `--no-staff` and/or `--no-superuser` to opt out at creation time (`-tango-admin-no-staff`/`-tango-admin-no-superuser` at the app-side flag layer).
 - Upgrading an existing project to a tanGO version with these fields backfills every pre-existing `AdminUser` row to `IsStaff=true, IsSuperuser=true` — every account that could log in and use admin before the upgrade still can, unchanged.
 
-There is no per-model, named, or object-level permission in v0.1 — `IsStaff`/`IsSuperuser` are the only tiers, and there's no `Group`/`Role` model or admin-UI-driven account management; every change to these flags goes through the CLI verbs above. App-level "require a named permission" is out of scope for tanGO entirely: an application wanting role or permission checks on its own routes writes its own [View wrapper](../../CONTEXT.md) against its own User model — tanGO owns no app-level User model to hang a generic primitive on (see [ADR 0017](../adr/0017-no-app-owned-user-model.md) and [ADR 0019](../adr/0019-admin-only-boolean-tier-permissions-in-v01.md)).
+There is no per-model, named, or object-level permission in v0.1 — `IsStaff`/`IsSuperuser` are the only tiers, and there's no `Group`/`Role` model or admin-UI-driven account management; every change to these flags goes through the CLI verbs above. App-level "require a named permission" is out of scope for tanGO entirely: an application wanting role or permission checks on its own routes wraps its own view the same way [`auth.RequireLogin`](application-auth.md#protecting-routes) does, against its own User model — tanGO owns no app-level User model to hang a generic primitive on.
 
 ## Routes
 

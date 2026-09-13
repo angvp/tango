@@ -145,10 +145,10 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 // request (missing, invalid, expired, or deactivated-account session)
 // redirects to the login page with a "next" query parameter pointing back
 // at the original request, per this milestone's Q5 decision. An
-// authenticated, active, non-staff account instead gets 403 Forbidden — see
-// CONTEXT.md's "Staff access" entry and ADR 0019: this is a distinct case
-// from "not logged in," and a redirect there would wrongly imply signing in
-// again could help.
+// authenticated, active, non-staff account instead gets 403 Forbidden: this
+// is a distinct case from "not logged in," and a redirect there would
+// wrongly imply signing in again could help. Only IsStaff is checked here;
+// IsSuperuser has no effect on this decision.
 func requireSession(store *db.Store, next tango.View) tango.View {
 	return func(ctx *tango.Context) error {
 		var token string

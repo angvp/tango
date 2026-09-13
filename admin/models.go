@@ -19,13 +19,15 @@ type AdminUser struct {
 	// access the admin panel at all. Checked by requireSession alongside
 	// (not instead of) the existing session-validity check. Independent of
 	// Active: Active is checked at login, IsStaff only on an already-valid
-	// session. See CONTEXT.md's "Staff access" entry and ADR 0019.
+	// session. It is the only one of these two flags with real effect in
+	// v0.1.
 	IsStaff bool
-	// IsSuperuser is reserved for a future finer-grained permission bypass.
-	// It has no distinct behavior in v0.1 (equivalent to IsStaff) — it ships
-	// now, inert, so a later milestone doesn't force a second migration for
-	// one boolean column. See CONTEXT.md's "Superuser access" entry and ADR
-	// 0019.
+	// IsSuperuser is currently ignored: it has no distinct behavior in v0.1
+	// and does not bypass IsStaff — a non-staff superuser still gets 403,
+	// same as any other non-staff account. It exists only as forward-
+	// compatible groundwork for a future, finer-grained permission bypass,
+	// so that a later milestone doesn't force a second migration for one
+	// boolean column.
 	IsSuperuser bool
 	CreatedAt   time.Time
 }
