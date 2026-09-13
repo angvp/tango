@@ -1,6 +1,6 @@
 # Guide: SQLite and PostgreSQL setup
 
-There is exactly one place a tanGO project states which dialect it's using: the `db.Dialect` argument passed to `db.NewStore` (see [ADR 0004](../adr/0004-explicit-dialect-for-postgresql-support.md)). There is no config-driven dialect selection and no driver auto-detection — the driver import, the connection string, and the `Dialect` value are all written together, by hand, at the same call site, so they can't silently drift apart.
+There is exactly one place a tanGO project states which dialect it's using: the `db.Dialect` argument passed to `db.NewStore`. There is no config-driven dialect selection and no driver auto-detection — the driver import, the connection string, and the `Dialect` value are all written together, by hand, at the same call site, so they can't silently drift apart.
 
 ## SQLite (the default)
 
