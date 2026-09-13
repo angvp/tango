@@ -1,5 +1,7 @@
 package admin
 
+import "github.com/angvp/tango"
+
 // Branding lets an app replace admin's generic sidebar title with its own
 // name and logo — the only two named customization slots admin exposes
 // beyond field-level Widgets (see ADR 0014: best-effort, not a stable v0.1
@@ -17,7 +19,8 @@ type Branding struct {
 type Option func(*adminConfig)
 
 type adminConfig struct {
-	branding Branding
+	branding   Branding
+	middleware []tango.Middleware
 }
 
 // WithBranding sets the admin's brand name and logo. Omitting it — calling
@@ -25,4 +28,13 @@ type adminConfig struct {
 // sidebar showing tanGO's generic default, unchanged.
 func WithBranding(b Branding) Option {
 	return func(c *adminConfig) { c.branding = b }
+}
+
+// WithMiddleware wraps every admin route with host-provided Middleware.
+// It is scoped to admin's internal /admin/ route group; global
+// tango.Config.Middleware still wraps outside it.
+func WithMiddleware(middleware ...tango.Middleware) Option {
+	return func(c *adminConfig) {
+		c.middleware = append(c.middleware, middleware...)
+	}
 }

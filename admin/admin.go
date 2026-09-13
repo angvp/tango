@@ -26,8 +26,8 @@ var NewRegistry = adminregistry.NewRegistry
 // based, against Admin accounts managed by the "tango admin" CLI family
 // (create/resetpassword/deactivate) — there is no static credential value
 // to pass in here. opts configures optional admin-wide behavior, currently
-// only WithBranding; admin.New(store) with no options is unchanged from
-// before Option existed.
+// WithBranding and WithMiddleware; admin.New(store) with no options is
+// unchanged from before Option existed.
 func New(store *db.Store, opts ...Option) tango.App {
 	cfg := adminConfig{}
 	for _, opt := range opts {
@@ -75,7 +75,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding)...)
 		}
 
-		return registry.Routes().Include("/", routes)
+		return registry.Routes().Include("/", routes, tango.WithMiddleware(cfg.middleware...))
 	})
 }
 

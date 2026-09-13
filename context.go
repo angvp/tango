@@ -1,8 +1,10 @@
 package tango
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"html/template"
 	"net/http"
 )
 
@@ -49,6 +51,26 @@ func (c *Context) JSON(status int, payload any) error {
 	c.writer.Header().Set("Content-Type", "application/json")
 	c.writer.WriteHeader(status)
 	return json.NewEncoder(c.writer).Encode(payload)
+}
+
+// HTML renders the named template within tmpl (via tmpl.ExecuteTemplate)
+// against data, writing it as an HTML response with the given status code.
+// The render is buffered: nothing is written to the response until
+// execution fully succeeds, so a template error is returned like any other
+// view error (a clean framework-generated 500) instead of a response that
+// already committed status and headers followed by a truncated or
+// malformed body — see ADR 0015. tmpl must already be parsed; HTML has no
+// opinion on template parsing, caching, or file layout.
+func (c *Context) HTML(status int, tmpl *template.Template, name string, data any) error {
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+		return err
+	}
+
+	c.writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+	c.writer.WriteHeader(status)
+	_, err := buf.WriteTo(c.writer)
+	return err
 }
 
 // Redirect writes an HTTP redirect response to url.

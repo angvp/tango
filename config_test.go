@@ -3,11 +3,16 @@ package tango_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
 
@@ -74,6 +79,111 @@ func TestBuildRegistryDuplicateAppFails(t *testing.T) {
 
 	if !errors.Is(err, tango.ErrDuplicateApp) {
 		t.Fatalf("error = %v, want ErrDuplicateApp", err)
+	}
+}
+
+func TestConfigMiddlewareWrapsBuiltRegistryRoutes(t *testing.T) {
+	type orderKey struct{}
+	record := func(marker string) tango.Middleware {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				current, _ := r.Context().Value(orderKey{}).([]string)
+				current = append(append([]string(nil), current...), marker)
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), orderKey{}, current)))
+			})
+		}
+	}
+
+	app := tango.NewApp("users", func(registry *tango.Registry) error {
+		return registry.Routes().Include("/users/", tango.URLs{
+			tango.Path("GET", "/", func(ctx *tango.Context) error {
+				order := append(ctx.Request().Context().Value(orderKey{}).([]string), "view")
+				return ctx.JSON(http.StatusOK, map[string][]string{"order": order})
+			}),
+		})
+	})
+
+	registry, err := tango.BuildRegistry(tango.Config{
+		InstalledApps: []tango.App{app},
+		Middleware:    []tango.Middleware{record("global")},
+	})
+	if err != nil {
+		t.Fatalf("BuildRegistry returned error: %v", err)
+	}
+	if err := registry.RunRegistration(); err != nil {
+		t.Fatalf("RunRegistration returned error: %v", err)
+	}
+	handler, err := registry.Routes().Handler()
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/users/", nil))
+
+	var body map[string][]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response body did not decode as JSON: %v", err)
+	}
+	want := []string{"global", "view"}
+	if !reflect.DeepEqual(body["order"], want) {
+		t.Fatalf("order = %v, want %v", body["order"], want)
+	}
+}
+
+func TestMiddlewareComposesAcrossAppAndAdminTiers(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	store := db.NewStore(sqlDB, db.SQLite)
+
+	headerOrder := func(marker string) tango.Middleware {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Add("X-Middleware-Order", marker)
+				next.ServeHTTP(w, r)
+			})
+		}
+	}
+	publicApp := tango.NewApp("public", func(registry *tango.Registry) error {
+		return registry.Routes().Include("/public/", tango.URLs{
+			tango.Path(http.MethodGet, "/", func(ctx *tango.Context) error {
+				ctx.ResponseWriter().Header().Add("X-Middleware-Order", "view")
+				return ctx.JSON(http.StatusOK, map[string]string{"ok": "true"})
+			}, tango.Use(headerOrder("route"))),
+		}, tango.WithMiddleware(headerOrder("group")))
+	})
+
+	registry, err := tango.BuildRegistry(tango.Config{
+		InstalledApps: []tango.App{
+			publicApp,
+			admin.New(store, admin.WithMiddleware(headerOrder("admin"))),
+		},
+		Middleware: []tango.Middleware{headerOrder("global")},
+	})
+	if err != nil {
+		t.Fatalf("BuildRegistry returned error: %v", err)
+	}
+	if err := registry.RunRegistration(); err != nil {
+		t.Fatalf("RunRegistration returned error: %v", err)
+	}
+	handler, err := registry.Routes().Handler()
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	publicResponse := httptest.NewRecorder()
+	handler.ServeHTTP(publicResponse, httptest.NewRequest(http.MethodGet, "/public/", nil))
+	if got, want := publicResponse.Header().Values("X-Middleware-Order"), []string{"global", "group", "route", "view"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("public middleware order = %v, want %v", got, want)
+	}
+
+	adminResponse := httptest.NewRecorder()
+	handler.ServeHTTP(adminResponse, httptest.NewRequest(http.MethodGet, "/admin/login/", nil))
+	if got, want := adminResponse.Header().Values("X-Middleware-Order"), []string{"global", "admin"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("admin middleware order = %v, want %v", got, want)
 	}
 }
 

@@ -1,7 +1,6 @@
 package tango
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -30,13 +29,31 @@ type includedRoute struct {
 	pattern       string
 	view          View
 	qualifiedName string
+	middleware    []Middleware
 }
 
 // RouteRegistry is the Milestone 2 sub-registry apps contribute routes to,
 // mirroring the shape of Milestone 1's Registry sub-APIs.
 type RouteRegistry struct {
-	registry *Registry
-	included []includedRoute
+	registry   *Registry
+	included   []includedRoute
+	middleware []Middleware
+}
+
+// IncludeOption customizes one Include call.
+type IncludeOption func(*includeConfig)
+
+type includeConfig struct {
+	middleware []Middleware
+}
+
+// WithMiddleware attaches Middleware to every Route mounted by one Include
+// call. Middleware runs before *Context is constructed; the first middleware
+// passed is outermost.
+func WithMiddleware(middleware ...Middleware) IncludeOption {
+	return func(config *includeConfig) {
+		config.middleware = append(config.middleware, middleware...)
+	}
 }
 
 // Routes returns the route sub-registry, creating it on first use.
@@ -53,7 +70,11 @@ func (r *Registry) Routes() *RouteRegistry {
 // pattern or a duplicate fully-qualified name within this call's routes,
 // registering none of them in that case. Cross-call duplicate detection is
 // deferred to Handler/Reverser compile time.
-func (rr *RouteRegistry) Include(prefix string, routes []Route) error {
+func (rr *RouteRegistry) Include(prefix string, routes []Route, opts ...IncludeOption) error {
+	config := includeConfig{}
+	for _, opt := range opts {
+		opt(&config)
+	}
 	namespace := strings.Trim(prefix, "/")
 
 	resolved := make([]includedRoute, 0, len(routes))
@@ -83,6 +104,7 @@ func (rr *RouteRegistry) Include(prefix string, routes []Route) error {
 			pattern:       joinPath(prefix, route.Pattern()),
 			view:          route.View(),
 			qualifiedName: qualifiedName,
+			middleware:    append(append([]Middleware(nil), config.middleware...), route.Middleware()...),
 		})
 	}
 
@@ -115,7 +137,7 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 		}
 
 		view := route.view
-		mux.Method(route.method, route.pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		terminal := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			params := make(map[string]string)
 			if chiCtx := chi.RouteContext(r.Context()); chiCtx != nil {
 				for i, key := range chiCtx.URLParams.Keys {
@@ -126,14 +148,19 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 			ctx := newContext(w, r, params)
 			if err := view(ctx); err != nil {
 				log.Printf("tango: view error: %v", err)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusInternalServerError)
-				_ = json.NewEncoder(w).Encode(map[string]string{"error": "internal error"})
+				writeInternalError(w)
 			}
-		}))
+		})
+
+		handler := applyMiddleware(terminal, append(append([]Middleware(nil), rr.middleware...), route.middleware...))
+		mux.Method(route.method, route.pattern, handler)
 	}
 
 	return &compiled{handler: mux, patterns: patterns}, nil
+}
+
+func (rr *RouteRegistry) setMiddleware(middleware []Middleware) {
+	rr.middleware = append([]Middleware(nil), middleware...)
 }
 
 // Handler compiles the full route tree, contributed by every app's Include

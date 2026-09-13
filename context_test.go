@@ -3,6 +3,7 @@ package tango
 import (
 	"context"
 	"encoding/json"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -114,6 +115,55 @@ func TestContextRedirectWritesRedirectResponse(t *testing.T) {
 	}
 	if loc := rec.Header().Get("Location"); loc != "/elsewhere" {
 		t.Fatalf("Location = %q, want %q", loc, "/elsewhere")
+	}
+}
+
+func TestContextHTMLWritesStatusAndRenderedBody(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	ctx := newContext(rec, r, nil)
+
+	tmpl := template.Must(template.New("page").Parse(`{{define "page"}}<h1>Hello, {{.Name}}</h1>{{end}}`))
+	err := ctx.HTML(http.StatusCreated, tmpl, "page", struct{ Name string }{Name: "Ada"})
+	if err != nil {
+		t.Fatalf("HTML returned error: %v", err)
+	}
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", ct, "text/html; charset=utf-8")
+	}
+	if got := rec.Body.String(); got != "<h1>Hello, Ada</h1>" {
+		t.Fatalf("body = %q, want %q", got, "<h1>Hello, Ada</h1>")
+	}
+}
+
+// TestContextHTMLWritesNothingOnTemplateExecutionError proves the render is
+// buffered: a template execution failure must not leave a status code or
+// partial body already committed to the response (see ADR 0015) — the
+// caller's returned error is expected to become an ordinary framework 500,
+// exactly like any other view error, rather than a truncated 200 page.
+func TestContextHTMLWritesNothingOnTemplateExecutionError(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	ctx := newContext(rec, r, nil)
+
+	// Referencing a field the data value doesn't have is a real
+	// html/template execution-time error (not a parse-time one), which is
+	// exactly the failure mode this buffering guards against.
+	tmpl := template.Must(template.New("page").Parse(`{{define "page"}}<h1>{{.NoSuchField}}</h1>{{end}}`))
+	err := ctx.HTML(http.StatusOK, tmpl, "page", struct{ Name string }{Name: "Ada"})
+	if err == nil {
+		t.Fatal("HTML returned nil error for a template referencing a nonexistent field, want non-nil")
+	}
+
+	if rec.Body.Len() != 0 {
+		t.Fatalf("body = %q, want empty — nothing should be written on a failed render", rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "" {
+		t.Fatalf("Content-Type = %q, want unset — headers must not be committed on a failed render", ct)
 	}
 }
 

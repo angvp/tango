@@ -15,6 +15,47 @@ registry.Routes().Include("/posts/", tango.URLs{
 
 `Include("/posts/", ...)` and `Include("/posts", ...)` behave identically; trailing slashes are normalized.
 
+## Middleware vs View wrappers
+
+tanGO has two wrapper mechanisms at different layers.
+
+`Middleware` is the standard Go shape:
+
+```go
+type Middleware func(http.Handler) http.Handler
+```
+
+It runs at the raw `net/http` layer before `*tango.Context` exists. Use it for cross-cutting HTTP concerns that do not need tanGO's `Context`: panic recovery, request IDs, access logging, CORS, compression, security headers, rate limiting, and similar behavior. Middleware can pass data forward with Go's standard request context (`r.WithContext(...)`), and a View can read it back through `ctx.Request().Context()`.
+
+Middleware can be attached at three tiers:
+
+```go
+config := tango.Config{
+	Middleware: []tango.Middleware{
+		tango.Recoverer(),
+		myAccessLogger,
+	},
+}
+
+registry.Routes().Include("/admin/", adminURLs,
+	tango.WithMiddleware(adminHeaders),
+)
+
+tango.Path("GET", "/checkout/", checkout,
+	tango.Use(rateLimitCheckout),
+)
+```
+
+Composition order is always outer to inner:
+
+```text
+Config.Middleware -> Include WithMiddleware -> Path Use -> View
+```
+
+`tango.Recoverer()` is the only built-in middleware in v0.1. It is opt-in, catches downstream panics, logs them server-side, and returns the same generic JSON `500` response shape tanGO uses when a View returns an error.
+
+A **View wrapper** is different: it is a `func(tango.View) tango.View` that runs after `*tango.Context` exists. Use View wrappers for Context-aware behavior such as auth, permissions, current-user lookup, redirects, and admin session checks. `auth.RequireLogin(...)` is a View wrapper, not middleware. Middleware and View wrappers permanently coexist; neither replaces the other.
+
 ## Namespace-qualified names
 
 A route's name is always qualified by its `Include` prefix: the routes above are `posts:list` and `posts:detail`, not `list`/`detail`. There is no shorthand/local-name form — every reverse lookup uses the fully-qualified name. This means two different apps can each have a route named `list` without colliding: `posts:list` and `comments:list` are distinct.

@@ -22,6 +22,7 @@ const defaultAddr = ":8000"
 type Config struct {
 	InstalledApps []App
 	Addr          string
+	Middleware    []Middleware
 }
 
 // LoadConfigFromEnv returns a Config populated from environment variables.
@@ -94,6 +95,7 @@ func LoadEnvFile(path string) error {
 // BuildRegistry registers Config.InstalledApps into a new Registry.
 func BuildRegistry(config Config) (*Registry, error) {
 	registry := NewRegistry()
+	registry.Routes().setMiddleware(config.Middleware)
 
 	for _, app := range config.InstalledApps {
 		if err := registry.Register(app); err != nil {
