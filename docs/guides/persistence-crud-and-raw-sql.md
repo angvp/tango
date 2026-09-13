@@ -25,9 +25,23 @@ When the CRUD surface isn't enough, `Store` exposes two raw-SQL methods that reu
 - **`QueryRow(ctx, dest any, sql string, args ...any) error`** — one row into `dest`.
 - **`Query(ctx, dest *[]T, sql string, args ...any) error`** — every row appended into `dest`, matching columns to struct fields by name (case-insensitively).
 
+A returned column matches a destination field if it case-insensitively equals *either* the Go field name directly (`title` matches `Title`) *or* `db.ColumnName(field.Name)` — the same snake_case derivation `Store`'s own generated schema uses (`author_id` matches `AuthorID`). This means a raw query selecting tanGO's own generated column names scans straight into the matching Go-named struct with no aliasing required:
+
 ```go
-var count int
-err := store.QueryRow(ctx, &count, "SELECT COUNT(*) AS count FROM post WHERE title LIKE ?", "%tango%")
+var books []struct {
+	AuthorID int64
+	Title    string
+}
+err := store.Query(ctx, &books, "SELECT author_id, title FROM book WHERE author_id = ?", authorID)
+```
+
+An `AS` alias is still how you name a column that isn't itself a real column — a computed/aggregate value (`COUNT(*) AS count`) or a joined table's column you want under a different destination field name:
+
+```go
+var result struct {
+	Count int
+}
+err := store.QueryRow(ctx, &result, "SELECT COUNT(*) AS count FROM post WHERE title LIKE ?", "%tango%")
 ```
 
 `sql` must already use the placeholder syntax matching the `Store`'s configured `Dialect` (`?` for SQLite, `$1`/`$2`/... for Postgres) — neither method translates or validates placeholder syntax between dialects. See the [SQLite/PostgreSQL setup guide](sqlite-and-postgresql-setup.md) for where that dialect is selected.

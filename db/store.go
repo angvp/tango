@@ -659,11 +659,19 @@ func scanColumnsInto(rows *sql.Rows, structValue reflect.Value) error {
 }
 
 // findFieldByColumn locates the struct field matching column, comparing
-// names case-insensitively.
+// column against each exported field's Go name and its ColumnName-derived
+// snake_case form, both case-insensitively — so a raw query selecting
+// tanGO's own generated column names (e.g. session_key) matches the
+// corresponding Go field (SessionKey) without requiring an "AS FieldName"
+// alias, while a query that already aliases to (or happens to match) the
+// bare Go field name keeps working exactly as before.
 func findFieldByColumn(structValue reflect.Value, structType reflect.Type, column string) (reflect.Value, error) {
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
-		if field.IsExported() && strings.EqualFold(field.Name, column) {
+		if !field.IsExported() {
+			continue
+		}
+		if strings.EqualFold(field.Name, column) || strings.EqualFold(ColumnName(field.Name), column) {
 			return structValue.Field(i), nil
 		}
 	}

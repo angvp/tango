@@ -3,6 +3,7 @@ package adminregistry
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/angvp/tango/model"
 )
@@ -78,7 +79,7 @@ func (r *Registry) Register(value any, opts Options) error {
 	if err := validateFields(meta, opts.Search, "Search"); err != nil {
 		return err
 	}
-	if err := validateFields(meta, opts.Ordering, "Ordering"); err != nil {
+	if err := validateOrderingFields(meta, opts.Ordering); err != nil {
 		return err
 	}
 	if opts.Label != "" {
@@ -136,6 +137,18 @@ func validateFieldMapKeys[V any](meta model.ModelMeta, m map[string]V, option st
 		names = append(names, name)
 	}
 	return validateFields(meta, names, option)
+}
+
+// validateOrderingFields validates Ordering the same way validateFields
+// validates every other field-name option, except it strips a leading "-"
+// (the db.Query.OrderBy descending-order convention) before checking the
+// name against the model's fields.
+func validateOrderingFields(meta model.ModelMeta, names []string) error {
+	stripped := make([]string, len(names))
+	for i, name := range names {
+		stripped[i] = strings.TrimPrefix(name, "-")
+	}
+	return validateFields(meta, stripped, "Ordering")
 }
 
 func validateFields(meta model.ModelMeta, names []string, option string) error {

@@ -87,9 +87,12 @@ func (checkboxWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value
 
 var selectWidgetTemplate = template.Must(template.New("selectWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
-<select id="field-{{.Name}}" name="{{.Name}}" class="input">
-  {{range .SelectOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Text}}</option>{{end}}
-</select>`))
+<div class="flex items-center gap-2">
+  <select id="field-{{.Name}}" name="{{.Name}}" class="input">
+    {{range .SelectOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Text}}</option>{{end}}
+  </select>
+  {{if .RelatedCreateURL}}<a href="{{.RelatedCreateURL}}" class="btn-secondary" aria-label="Add {{.Label}}">+</a>{{end}}
+</div>`))
 
 // foreignKeySelectWidget is the built-in foreign key field: a <select>
 // populated from every row of the related model (Milestone 14). Parsing is

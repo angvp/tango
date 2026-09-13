@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -111,7 +112,13 @@ func contains(names []string, name string) bool {
 // plain numeric input when it didn't; it does not distinguish that from a
 // registered-but-empty related table, which still gets a real (empty)
 // select.
-func buildFieldContext(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, opts adminregistry.Options, instance reflect.Value) (FieldContext, bool) {
+type formContextOptions struct {
+	CurrentURL     string
+	PreselectField string
+	PreselectValue string
+}
+
+func buildFieldContext(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, opts adminregistry.Options, instance reflect.Value, formOpts formContextOptions) (FieldContext, bool) {
 	fc := FieldContext{
 		Name:     field.Name,
 		Label:    humanizeFieldName(field.Name),
@@ -131,6 +138,9 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 			fc.Checked = fieldValue.Bool()
 		}
 	}
+	if formOpts.PreselectField == field.Name {
+		fc.Value = formOpts.PreselectValue
+	}
 
 	if field.ForeignKey == "" {
 		return fc, true
@@ -141,7 +151,22 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 	}
 	options, ok := relatedSelectOptions(ctx, store, models, adminReg, field.ForeignKey, fc.Value)
 	fc.SelectOptions = options
+	if _, adminRegistered := adminReg.Get(field.ForeignKey); adminRegistered && formOpts.CurrentURL != "" {
+		fc.RelatedCreateURL = relatedCreateURL(field.ForeignKey, adminReg, formOpts.CurrentURL, field.Name)
+	}
 	return fc, ok
+}
+
+func relatedCreateURL(targetName string, adminReg *adminregistry.Registry, currentURL string, fieldName string) string {
+	registration, ok := adminReg.Get(targetName)
+	if !ok {
+		return ""
+	}
+	next := appendQuery(currentURL, adminPreselectFieldParam, fieldName)
+	values := url.Values{}
+	values.Set("next", next)
+	values.Set(adminPreselectFieldParam, fieldName)
+	return "/admin/" + db.ColumnName(registration.Model.Name) + "/new/?" + values.Encode()
 }
 
 // widgetForField picks field's effective Widget: the generic read-only
@@ -167,11 +192,11 @@ func widgetForField(field model.FieldMeta, opts adminregistry.Options, fc FieldC
 // is the zero reflect.Value). Each field is rendered by its Widget, backed
 // by store/models/adminReg for foreign-key fields (Milestone 14) — pass
 // nil for all three from a caller that never registers foreign keys.
-func buildFormFields(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, meta model.ModelMeta, opts adminregistry.Options, instance reflect.Value) []formField {
+func buildFormFields(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, meta model.ModelMeta, opts adminregistry.Options, instance reflect.Value, formOpts formContextOptions) []formField {
 	var fields []formField
 
 	for _, field := range orderedEditableFields(meta, opts.FieldOrder) {
-		fc, fkResolved := buildFieldContext(ctx, store, models, adminReg, field, opts, instance)
+		fc, fkResolved := buildFieldContext(ctx, store, models, adminReg, field, opts, instance, formOpts)
 		widget := widgetForField(field, opts, fc, fkResolved)
 		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(fc)})
 	}
@@ -215,7 +240,7 @@ func populateFromForm(ctx context.Context, store *db.Store, models *model.Regist
 			continue
 		}
 
-		fc, fkResolved := buildFieldContext(ctx, store, models, adminReg, field, opts, existing)
+		fc, fkResolved := buildFieldContext(ctx, store, models, adminReg, field, opts, existing, formContextOptions{})
 		widget := widgetForField(field, opts, fc, fkResolved)
 
 		if err := widget.Parse(fc, form, fieldValue); err != nil {

@@ -12,6 +12,30 @@ Every `View` is `func(*tango.Context) error`. `Context` wraps one request/respon
 
 - **`JSON(status int, payload any) error`** — sets `Content-Type: application/json`, writes `status`, and JSON-encodes `payload`.
 - **`Redirect(url string) error`** — writes an HTTP redirect (`302 Found`) to `url`.
+- **`HTML(status int, tmpl *template.Template, name string, data any) error`** — renders `tmpl`'s named template `name` (via `tmpl.ExecuteTemplate`) against `data` and writes it as `text/html; charset=utf-8`. The render is buffered: nothing reaches the response unless execution fully succeeds, so a template error comes back as an ordinary returned `error` — the same fixed-500 path any other view's error takes — rather than a response that already committed a status code followed by a truncated or malformed body.
+
+## Server-rendered HTML apps
+
+`HTML` has no opinion on where templates come from or how they're parsed — that's ordinary Go, not a tanGO concern. A typical shape: embed templates once at package init, parse them into one `*template.Template`, and call `ctx.HTML` per request with whichever named template that request needs:
+
+```go
+//go:embed templates/*.gohtml
+var templatesFS embed.FS
+
+var tmpl = template.Must(template.ParseFS(templatesFS, "templates/*.gohtml"))
+
+func bookDetail(store *db.Store, meta model.ModelMeta) tango.View {
+	return func(ctx *tango.Context) error {
+		var book Book
+		if err := store.Get(ctx.Context(), meta, ctx.Param("id"), &book); err != nil {
+			return err
+		}
+		return ctx.HTML(http.StatusOK, tmpl, "book_detail", book)
+	}
+}
+```
+
+A shared base layout composes the same way any `html/template` set does — a `{{define "layout"}}...{{end}}` template that other defined templates invoke via `{{template "layout" .}}`, all parsed together into the one `*template.Template` passed to every `ctx.HTML` call.
 
 ## Escape hatches
 

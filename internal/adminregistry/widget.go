@@ -46,6 +46,10 @@ type FieldContext struct {
 	// pair, populated only for a foreign key field whose related model is
 	// registered — nil otherwise.
 	SelectOptions []SelectOption
+	// RelatedCreateURL links to the related model's admin create page for
+	// foreign-key fields whose related model is also admin-registered.
+	// Empty means no quick-create affordance should render.
+	RelatedCreateURL string
 }
 
 // FieldValues is the whole submitted form, so a Widget's Parse can read

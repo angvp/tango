@@ -69,6 +69,35 @@ func TestAdminRegisterUnknownOrderingFieldFails(t *testing.T) {
 	}
 }
 
+func TestAdminRegisterAcceptsDescendingOrderingSyntax(t *testing.T) {
+	registry := NewRegistry(model.NewRegistry())
+
+	err := registry.Register(widget{}, Options{Ordering: []string{"-Name"}})
+	if err != nil {
+		t.Fatalf("Register returned error for \"-Name\", want nil (descending Ordering, matching db.Query.OrderBy): %v", err)
+	}
+
+	registration, ok := registry.Get("widget")
+	if !ok {
+		t.Fatal("Get returned false after Register")
+	}
+	if len(registration.Options.Ordering) != 1 || registration.Options.Ordering[0] != "-Name" {
+		t.Fatalf("Ordering = %v, want [\"-Name\"] preserved verbatim", registration.Options.Ordering)
+	}
+}
+
+func TestAdminRegisterUnknownDescendingOrderingFieldFails(t *testing.T) {
+	registry := NewRegistry(model.NewRegistry())
+
+	err := registry.Register(widget{}, Options{Ordering: []string{"-NoSuchField"}})
+	if err == nil {
+		t.Fatal("Register returned nil error for unknown descending Ordering field, want non-nil")
+	}
+	if _, ok := registry.Get("widget"); ok {
+		t.Fatal("Get returned true after a failed Register")
+	}
+}
+
 func TestAdminRegisterStoresValidLabel(t *testing.T) {
 	registry := NewRegistry(model.NewRegistry())
 

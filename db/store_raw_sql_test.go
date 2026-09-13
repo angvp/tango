@@ -19,6 +19,11 @@ type rawAuthorBookCount struct {
 	BookCount int
 }
 
+type rawBook struct {
+	AuthorID int64
+	Title    string
+}
+
 func TestStoreQueryRowScansSingleResult(t *testing.T) {
 	sqlDB := openRawSQLTestDB(t)
 	store := NewStore(sqlDB, SQLite)
@@ -85,6 +90,57 @@ func TestStoreQueryNoResultsReturnsEmptySliceNotError(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("Query returned %d rows, want 0", len(results))
+	}
+}
+
+// TestStoreQueryMatchesGeneratedSnakeCaseColumnsWithoutAliasing proves a raw
+// query selecting tanGO's own generated column names (author_id, no "AS")
+// scans straight into the corresponding Go field (AuthorID) — the fix for
+// the gap the bookstore dogfooding app hit twice as a runtime failure.
+func TestStoreQueryMatchesGeneratedSnakeCaseColumnsWithoutAliasing(t *testing.T) {
+	sqlDB := openRawSQLTestDB(t)
+	store := NewStore(sqlDB, SQLite)
+
+	var results []rawBook
+	err := store.Query(context.Background(), &results, "SELECT author_id, title FROM books ORDER BY title")
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("Query returned %d rows, want 3", len(results))
+	}
+	if results[0].Title != "COBOL Reflections" || results[0].AuthorID != 2 {
+		t.Fatalf("Query[0] = %+v, want Title=COBOL Reflections AuthorID=2", results[0])
+	}
+}
+
+// TestStoreQueryRowMatchesGeneratedSnakeCaseColumnWithoutAliasing is
+// QueryRow's equivalent of the Query case above.
+func TestStoreQueryRowMatchesGeneratedSnakeCaseColumnWithoutAliasing(t *testing.T) {
+	sqlDB := openRawSQLTestDB(t)
+	store := NewStore(sqlDB, SQLite)
+
+	var result rawBook
+	err := store.QueryRow(context.Background(), &result, "SELECT author_id, title FROM books WHERE title = ?", "Notes")
+	if err != nil {
+		t.Fatalf("QueryRow returned error: %v", err)
+	}
+	if result.AuthorID != 1 {
+		t.Fatalf("AuthorID = %d, want 1", result.AuthorID)
+	}
+}
+
+func TestStoreQueryStillMatchesExactFieldNameAliases(t *testing.T) {
+	sqlDB := openRawSQLTestDB(t)
+	store := NewStore(sqlDB, SQLite)
+
+	var results []rawBook
+	err := store.Query(context.Background(), &results, `SELECT author_id AS AuthorID, title AS Title FROM books ORDER BY title`)
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("Query returned %d rows, want 3", len(results))
 	}
 }
 

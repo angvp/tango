@@ -154,9 +154,7 @@ type deletePageData struct {
 }
 
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {
-	ctx.ResponseWriter().Header().Set("Content-Type", "text/html; charset=utf-8")
-	ctx.ResponseWriter().WriteHeader(status)
-	return tmpl.ExecuteTemplate(ctx.ResponseWriter(), "layout", data)
+	return ctx.HTML(status, tmpl, "layout", data)
 }
 
 func notFound(ctx *tango.Context) error {

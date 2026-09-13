@@ -1,12 +1,11 @@
 package admin
 
 import (
-	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/hex"
 	"net/http"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/internal/security"
 )
 
 // csrfFieldName is the hidden form field every admin form (login included)
@@ -25,8 +24,7 @@ const loginCSRFCookieName = "tango_admin_login_csrf"
 // doesn't directly hand over a hijackable session credential the way
 // rendering the session token verbatim would.
 func sessionCSRFToken(sessionToken string) string {
-	sum := sha256.Sum256([]byte(sessionToken))
-	return hex.EncodeToString(sum[:])
+	return security.DeriveCSRFToken(sessionToken)
 }
 
 // csrfTokenFromRequest returns the CSRF token to render into a form for
@@ -49,8 +47,7 @@ func verifySessionCSRF(ctx *tango.Context) bool {
 		return false
 	}
 	submitted := ctx.Request().PostFormValue(csrfFieldName)
-	expected := sessionCSRFToken(cookie.Value)
-	return submitted != "" && subtle.ConstantTimeCompare([]byte(submitted), []byte(expected)) == 1
+	return security.VerifyCSRFToken(submitted, cookie.Value)
 }
 
 // forbiddenCSRF writes a generic 403 for a rejected CSRF token — never a

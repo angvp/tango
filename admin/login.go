@@ -52,7 +52,7 @@ func loginView(store *db.Store, limiter *loginRateLimiter) tango.View {
 			if err != nil {
 				return err
 			}
-			return render(ctx, http.StatusOK, loginTemplate, loginPageData{Next: ctx.Query("next"), CSRFToken: token})
+			return render(ctx, http.StatusOK, loginTemplate, loginPageData{Next: safeAdminNext(ctx.Query("next"), ""), CSRFToken: token})
 
 		case http.MethodPost:
 			if err := ctx.Request().ParseForm(); err != nil {
@@ -96,9 +96,7 @@ func loginView(store *db.Store, limiter *loginRateLimiter) tango.View {
 			setSessionCookie(ctx.ResponseWriter(), ctx.Request(), token, expiresAt)
 
 			target := "/admin/"
-			if next != "" {
-				target = next
-			}
+			target = safeAdminNext(next, target)
 			return ctx.Redirect(target)
 
 		default:

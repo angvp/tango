@@ -28,7 +28,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 		// Fetch one extra row beyond the page size so HasNext reflects
 		// whether a next page actually has rows, rather than assuming one
 		// exists whenever this page happens to be exactly full.
-		query := db.Query{Limit: pageSize + 1, Offset: (page - 1) * pageSize}
+		query := db.Query{Limit: pageSize + 1, Offset: (page - 1) * pageSize, OrderBy: registration.Options.Ordering}
 
 		sliceType := reflect.SliceOf(meta.Type)
 		destPtr := reflect.New(sliceType)
@@ -141,6 +141,19 @@ func searchList(ctx context.Context, store *db.Store, meta model.ModelMeta, sear
 	sqlQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectColumns, ", "), db.ColumnName(meta.Name))
 	if len(likeClauses) > 0 {
 		sqlQuery += " WHERE " + strings.Join(likeClauses, " OR ")
+	}
+	if len(query.OrderBy) > 0 {
+		orderClauses := make([]string, len(query.OrderBy))
+		for i, entry := range query.OrderBy {
+			fieldName := entry
+			direction := "ASC"
+			if strings.HasPrefix(entry, "-") {
+				fieldName = entry[1:]
+				direction = "DESC"
+			}
+			orderClauses[i] = db.ColumnName(fieldName) + " " + direction
+		}
+		sqlQuery += " ORDER BY " + strings.Join(orderClauses, ", ")
 	}
 	sqlQuery += fmt.Sprintf(" LIMIT %d OFFSET %d", query.Limit, query.Offset)
 

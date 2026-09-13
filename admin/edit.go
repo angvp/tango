@@ -38,7 +38,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				return err
 			}
 
-			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem())
+			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOptionsFromRequest(ctx))
 			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: pageChrome, Title: title, Fields: fields, CSRFToken: csrfTokenFromRequest(ctx.Request())})
 
 		case http.MethodPost:
@@ -59,7 +59,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 
 			instancePtr := reflect.New(meta.Type)
 			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, ctx.Request().PostForm, existingPtr.Elem()); err != nil {
-				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem())
+				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOptionsFromRequest(ctx))
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
 					chrome:    pageChrome,
 					Title:     title,
