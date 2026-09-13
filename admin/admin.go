@@ -7,6 +7,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/internal/adminregistry"
+	"github.com/angvp/tango/model"
 )
 
 // Options controls how a model appears in the admin.
@@ -21,16 +22,27 @@ type Registry = adminregistry.Registry
 // NewRegistry returns an empty, ready-to-use admin Registry.
 var NewRegistry = adminregistry.NewRegistry
 
-// Credentials are the HTTP Basic Auth credentials for admin routes.
-type Credentials struct {
-	Username string
-	Password string
-}
+// New constructs the admin application. Authentication is session-cookie
+// based, against Admin accounts managed by the "tango admin" CLI family
+// (create/resetpassword/deactivate) — there is no static credential value
+// to pass in here. opts configures optional admin-wide behavior, currently
+// only WithBranding; admin.New(store) with no options is unchanged from
+// before Option existed.
+func New(store *db.Store, opts ...Option) tango.App {
+	cfg := adminConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 
-// New constructs the admin application.
-func New(store *db.Store, credentials Credentials) tango.App {
 	return tango.NewApp("admin", func(registry *tango.Registry) error {
 		registry.SetStore(store)
+
+		if err := registry.Models().Register(AdminUser{}); err != nil {
+			return err
+		}
+		if err := registry.Models().Register(AdminSession{}); err != nil {
+			return err
+		}
 
 		registrations := registry.Admin().Registrations()
 		sort.Slice(registrations, func(i, j int) bool {
@@ -45,7 +57,8 @@ func New(store *db.Store, credentials Credentials) tango.App {
 			}
 		}
 
-		index := protectedView(credentials, indexView(nav))
+		limiter := newLoginRateLimiter()
+		index := requireSession(store, indexView(nav, cfg.branding))
 		routes := tango.URLs{
 			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index")),
 			// Also match "/admin" (no trailing slash) directly, rather than
@@ -53,21 +66,24 @@ func New(store *db.Store, credentials Credentials) tango.App {
 			// and Include's own slash-normalization only applies to prefixes
 			// passed to Include, not to a literal pattern like this one.
 			tango.Path(http.MethodGet, "/admin", index),
+			tango.Path(http.MethodGet, "/admin/login/", loginView(store, limiter), tango.Name("login")),
+			tango.Path(http.MethodPost, "/admin/login/", loginView(store, limiter)),
+			tango.Path(http.MethodPost, "/admin/logout/", logoutView(store), tango.Name("logout")),
 		}
 		for _, registration := range registrations {
 			modelPath := "/admin/" + db.ColumnName(registration.Model.Name) + "/"
-			routes = append(routes, modelRoutes(modelPath, credentials, store, registration, nav)...)
+			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding)...)
 		}
 
 		return registry.Routes().Include("/", routes)
 	})
 }
 
-func modelRoutes(modelPath string, credentials Credentials, store *db.Store, registration ModelRegistration, nav []navItem) tango.URLs {
-	list := protectedView(credentials, listView(store, registration, nav))
-	create := protectedView(credentials, createView(store, registration, nav))
-	edit := protectedView(credentials, editView(store, registration, nav))
-	del := protectedView(credentials, deleteView(store, registration, nav))
+func modelRoutes(modelPath string, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.URLs {
+	list := requireSession(store, listView(store, models, adminReg, registration, nav, brand))
+	create := requireSession(store, createView(store, models, adminReg, registration, nav, brand))
+	edit := requireSession(store, editView(store, models, adminReg, registration, nav, brand))
+	del := requireSession(store, deleteView(store, registration, nav, brand))
 
 	return tango.URLs{
 		tango.Path(http.MethodGet, modelPath, list),
@@ -77,19 +93,5 @@ func modelRoutes(modelPath string, credentials Credentials, store *db.Store, reg
 		tango.Path(http.MethodPost, modelPath+"{pk}/", edit),
 		tango.Path(http.MethodGet, modelPath+"{pk}/delete/", del),
 		tango.Path(http.MethodPost, modelPath+"{pk}/delete/", del),
-	}
-}
-
-func protectedView(credentials Credentials, next tango.View) tango.View {
-	return func(ctx *tango.Context) error {
-		username, password, ok := ctx.Request().BasicAuth()
-		if !ok || username != credentials.Username || password != credentials.Password {
-			ctx.ResponseWriter().Header().Set("WWW-Authenticate", `Basic realm="tanGO admin"`)
-			return ctx.JSON(http.StatusUnauthorized, map[string]string{
-				"error": "unauthorized",
-			})
-		}
-
-		return next(ctx)
 	}
 }

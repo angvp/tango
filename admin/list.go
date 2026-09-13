@@ -10,10 +10,11 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/adminregistry"
 	"github.com/angvp/tango/model"
 )
 
-func listView(store *db.Store, registration ModelRegistration, nav []navItem) tango.View {
+func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
 
@@ -42,7 +43,7 @@ func listView(store *db.Store, registration ModelRegistration, nav []navItem) ta
 			return err
 		}
 
-		rows, err := buildRows(destPtr.Elem(), meta, registration.Options.ListDisplay)
+		rows, err := buildRows(ctx.Context(), store, models, adminReg, destPtr.Elem(), meta, registration.Options.ListDisplay)
 		if err != nil {
 			return err
 		}
@@ -70,7 +71,7 @@ func listView(store *db.Store, registration ModelRegistration, nav []navItem) ta
 		}
 
 		data := listPageData{
-			chrome:      chrome{Nav: nav, Active: meta.Name},
+			chrome:      chrome{Nav: nav, Active: meta.Name, Brand: brand},
 			ModelName:   meta.Name,
 			BasePath:    basePath,
 			Columns:     columns,
@@ -90,10 +91,17 @@ func listView(store *db.Store, registration ModelRegistration, nav []navItem) ta
 	}
 }
 
-func buildRows(sliceValue reflect.Value, meta model.ModelMeta, columns []string) ([]listRow, error) {
+func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, sliceValue reflect.Value, meta model.ModelMeta, columns []string) ([]listRow, error) {
 	pkField, err := primaryKeyField(meta)
 	if err != nil {
 		return nil, err
+	}
+
+	columnFK := make(map[string]string, len(meta.Fields))
+	for _, field := range meta.Fields {
+		if field.ForeignKey != "" {
+			columnFK[field.Name] = field.ForeignKey
+		}
 	}
 
 	rows := make([]listRow, 0, sliceValue.Len())
@@ -104,7 +112,12 @@ func buildRows(sliceValue reflect.Value, meta model.ModelMeta, columns []string)
 			Values: make([]string, len(columns)),
 		}
 		for j, column := range columns {
-			row.Values[j] = formatFieldValue(elem.FieldByName(column))
+			fieldValue := elem.FieldByName(column)
+			if target, ok := columnFK[column]; ok {
+				row.Values[j] = relatedLabel(ctx, store, models, adminReg, target, fieldValue.Interface())
+				continue
+			}
+			row.Values[j] = formatFieldValue(fieldValue)
 		}
 		rows = append(rows, row)
 	}

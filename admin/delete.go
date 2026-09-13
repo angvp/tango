@@ -10,10 +10,10 @@ import (
 	"github.com/angvp/tango/db"
 )
 
-func deleteView(store *db.Store, registration ModelRegistration, nav []navItem) tango.View {
+func deleteView(store *db.Store, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
-	pageChrome := chrome{Nav: nav, Active: meta.Name}
+	pageChrome := chrome{Nav: nav, Active: meta.Name, Brand: brand}
 
 	return func(ctx *tango.Context) error {
 		pkField, err := primaryKeyField(meta)
@@ -40,9 +40,16 @@ func deleteView(store *db.Store, registration ModelRegistration, nav []navItem) 
 				chrome:    pageChrome,
 				ModelName: meta.Name,
 				PK:        fmt.Sprint(pkValue),
+				CSRFToken: csrfTokenFromRequest(ctx.Request()),
 			})
 
 		case http.MethodPost:
+			if err := ctx.Request().ParseForm(); err != nil {
+				return err
+			}
+			if !verifySessionCSRF(ctx) {
+				return forbiddenCSRF(ctx)
+			}
 			if err := store.Delete(ctx.Context(), meta, pkValue); err != nil {
 				if errors.Is(err, db.ErrNotFound) {
 					return notFound(ctx)

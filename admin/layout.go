@@ -13,11 +13,13 @@ type navItem struct {
 	Path string
 }
 
-// chrome is the data every admin page shares: the sidebar's contents and
-// which entry is current. Page-specific data structs embed it.
+// chrome is the data every admin page shares: the sidebar's contents, which
+// entry is current, and the admin's branding. Page-specific data structs
+// embed it.
 type chrome struct {
 	Nav    []navItem
 	Active string
+	Brand  Branding
 }
 
 // layoutTemplate is the shared base layout every admin page renders into.
@@ -119,8 +121,8 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="tangoAdminNav.close()"></div>
 <aside id="sidebar" class="sidebar">
   <div class="sidebar-brand">
-    <span class="sidebar-brand-mark">t</span>
-    <span class="sidebar-brand-text">tanGO Admin</span>
+    {{if .Brand.LogoURL}}<img src="{{.Brand.LogoURL}}" alt="" class="h-7 w-7 rounded-md object-cover">{{else}}<span class="sidebar-brand-mark">t</span>{{end}}
+    <span class="sidebar-brand-text">{{if .Brand.Name}}{{.Brand.Name}}{{else}}tanGO Admin{{end}}</span>
   </div>
   <div class="sidebar-nav">
     <div class="sidebar-section-label">Models</div>

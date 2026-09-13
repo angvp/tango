@@ -7,13 +7,15 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/adminregistry"
+	"github.com/angvp/tango/model"
 )
 
-func editView(store *db.Store, registration ModelRegistration, nav []navItem) tango.View {
+func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
 	title := "Edit " + meta.Name
-	pageChrome := chrome{Nav: nav, Active: meta.Name}
+	pageChrome := chrome{Nav: nav, Active: meta.Name, Brand: brand}
 
 	return func(ctx *tango.Context) error {
 		pkField, err := primaryKeyField(meta)
@@ -36,8 +38,8 @@ func editView(store *db.Store, registration ModelRegistration, nav []navItem) ta
 				return err
 			}
 
-			fields := buildFormFields(meta, instancePtr.Elem())
-			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: pageChrome, Title: title, Fields: fields})
+			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem())
+			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: pageChrome, Title: title, Fields: fields, CSRFToken: csrfTokenFromRequest(ctx.Request())})
 
 		case http.MethodPost:
 			existingPtr := reflect.New(meta.Type)
@@ -51,15 +53,19 @@ func editView(store *db.Store, registration ModelRegistration, nav []navItem) ta
 			if err := ctx.Request().ParseForm(); err != nil {
 				return err
 			}
+			if !verifySessionCSRF(ctx) {
+				return forbiddenCSRF(ctx)
+			}
 
 			instancePtr := reflect.New(meta.Type)
-			if err := populateFromForm(instancePtr.Elem(), meta, ctx.Request().PostForm); err != nil {
-				fields := buildFormFields(meta, instancePtr.Elem())
+			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, ctx.Request().PostForm, existingPtr.Elem()); err != nil {
+				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem())
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
-					chrome: pageChrome,
-					Title:  title,
-					Error:  err.Error(),
-					Fields: fields,
+					chrome:    pageChrome,
+					Title:     title,
+					Error:     err.Error(),
+					Fields:    fields,
+					CSRFToken: csrfTokenFromRequest(ctx.Request()),
 				})
 			}
 

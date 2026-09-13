@@ -1,13 +1,17 @@
 package admin_test
 
 import (
+	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
@@ -33,7 +37,7 @@ func buildProductAdmin(t *testing.T) (http.Handler, *sql.DB) {
 	})
 }
 
-func buildProductAdminWithOptions(t *testing.T, options admin.Options) (http.Handler, *sql.DB) {
+func buildProductAdminWithOptions(t *testing.T, options admin.Options, adminOpts ...admin.Option) (http.Handler, *sql.DB) {
 	t.Helper()
 
 	registry := tango.NewRegistry()
@@ -52,9 +56,35 @@ func buildProductAdminWithOptions(t *testing.T, options admin.Options) (http.Han
 	if _, err := sqlDB.Exec(`CREATE TABLE crud_product (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL)`); err != nil {
 		t.Fatalf("create table: %v", err)
 	}
+	if _, err := sqlDB.Exec(`CREATE TABLE admin_user (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username TEXT NOT NULL UNIQUE,
+		password_hash TEXT NOT NULL,
+		active BOOLEAN NOT NULL,
+		created_at TIMESTAMP NOT NULL
+	)`); err != nil {
+		t.Fatalf("create admin_user: %v", err)
+	}
+	if _, err := sqlDB.Exec(`CREATE TABLE admin_session (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		token TEXT NOT NULL UNIQUE,
+		user_id INTEGER NOT NULL,
+		expires_at TIMESTAMP NOT NULL
+	)`); err != nil {
+		t.Fatalf("create admin_session: %v", err)
+	}
 
 	store := db.NewStore(sqlDB, db.SQLite)
-	if err := registry.Register(admin.New(store, admin.Credentials{Username: "admin", Password: "secret"})); err != nil {
+	if err := admin.CreateAccount(context.Background(), store, "admin", "secret"); err != nil {
+		t.Fatalf("seed admin account: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO admin_session (token, user_id, expires_at) SELECT ?, id, ? FROM admin_user WHERE username = ?`,
+		testSessionToken, time.Now().Add(time.Hour).UTC(), "admin",
+	); err != nil {
+		t.Fatalf("seed admin session: %v", err)
+	}
+	if err := registry.Register(admin.New(store, adminOpts...)); err != nil {
 		t.Fatalf("register admin app: %v", err)
 	}
 	if err := registry.RunRegistration(); err != nil {
@@ -117,20 +147,37 @@ func doRequest(t *testing.T, handler http.Handler, method, path string, form url
 	t.Helper()
 
 	var body *strings.Reader
-	if form != nil {
-		body = strings.NewReader(form.Encode())
+	sendsForm := form != nil || method == http.MethodPost
+	if sendsForm {
+		submitted := url.Values{}
+		for key, values := range form {
+			submitted[key] = values
+		}
+		submitted.Set("csrf_token", testSessionCSRFToken)
+		body = strings.NewReader(submitted.Encode())
 	} else {
 		body = strings.NewReader("")
 	}
 	request := httptest.NewRequest(method, path, body)
-	if form != nil {
+	if sendsForm {
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
-	request.SetBasicAuth("admin", "secret")
+	request.AddCookie(&http.Cookie{Name: "tango_admin_session", Value: testSessionToken})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
 }
+
+const testSessionToken = "test-session-token"
+
+// testSessionCSRFToken is the CSRF token admin's csrf.go derives from
+// testSessionToken (sha256 hex) — computed independently here since these
+// are external (admin_test) tests with no access to admin's unexported
+// sessionCSRFToken helper.
+var testSessionCSRFToken = func() string {
+	sum := sha256.Sum256([]byte(testSessionToken))
+	return hex.EncodeToString(sum[:])
+}()
 
 // --- List view (ticket 06) ---
 
