@@ -124,6 +124,83 @@ func TestMigrateDownRunsAppWithMigrateAndDownFlags(t *testing.T) {
 	}
 }
 
+func TestAdminCreateRunsAppWithCreateFlag(t *testing.T) {
+	runner := &recordingRunner{}
+	code := Run(context.Background(), []string{"admin", "create", "alice"}, "/app", io.Discard, io.Discard, runner)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	want := recordedCommand{
+		dir:  "/app",
+		name: "go",
+		args: []string{"run", ".", "-tango-admin-create=alice"},
+	}
+	if !reflect.DeepEqual(runner.command, want) {
+		t.Fatalf("command = %#v, want %#v", runner.command, want)
+	}
+}
+
+func TestAdminResetPasswordRunsAppWithResetPasswordFlag(t *testing.T) {
+	runner := &recordingRunner{}
+	code := Run(context.Background(), []string{"admin", "resetpassword", "alice"}, "/app", io.Discard, io.Discard, runner)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	want := recordedCommand{
+		dir:  "/app",
+		name: "go",
+		args: []string{"run", ".", "-tango-admin-resetpassword=alice"},
+	}
+	if !reflect.DeepEqual(runner.command, want) {
+		t.Fatalf("command = %#v, want %#v", runner.command, want)
+	}
+}
+
+func TestAdminDeactivateRunsAppWithDeactivateFlag(t *testing.T) {
+	runner := &recordingRunner{}
+	code := Run(context.Background(), []string{"admin", "deactivate", "alice"}, "/app", io.Discard, io.Discard, runner)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	want := recordedCommand{
+		dir:  "/app",
+		name: "go",
+		args: []string{"run", ".", "-tango-admin-deactivate=alice"},
+	}
+	if !reflect.DeepEqual(runner.command, want) {
+		t.Fatalf("command = %#v, want %#v", runner.command, want)
+	}
+}
+
+func TestAdminUnknownSubcommandFails(t *testing.T) {
+	runner := &recordingRunner{}
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"admin", "bogus", "alice"}, "/app", io.Discard, &stderr, runner)
+
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unknown subcommand") {
+		t.Fatalf("stderr = %q, want unknown subcommand", stderr.String())
+	}
+}
+
+func TestAdminMissingUsernameFails(t *testing.T) {
+	runner := &recordingRunner{}
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"admin", "create"}, "/app", io.Discard, &stderr, runner)
+
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "usage") {
+		t.Fatalf("stderr = %q, want usage message", stderr.String())
+	}
+}
+
 func TestRunnerErrorReturnsFailure(t *testing.T) {
 	var stderr bytes.Buffer
 	runner := &recordingRunner{err: errors.New("go missing")}

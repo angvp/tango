@@ -2,16 +2,19 @@ package migration
 
 import "fmt"
 
-// ColumnState is a column's shape as reconstructed by Replay.
+// ColumnState is a column's shape as reconstructed by Replay. It is exported
+// only for the tango CLI's migration replay/diff machinery.
 type ColumnState struct {
 	Name       string
 	Type       string
 	PrimaryKey bool
 	Unique     bool
 	Indexed    bool
+	References string
 }
 
-// TableState is a table's shape as reconstructed by Replay.
+// TableState is a table's shape as reconstructed by Replay. It is exported
+// only for the tango CLI's migration replay/diff machinery.
 type TableState struct {
 	Name    string
 	App     string
@@ -19,13 +22,15 @@ type TableState struct {
 }
 
 // SchemaState is the reconstructed shape of every table after replaying a
-// sequence of migrations.
+// sequence of migrations. It is exported only for the tango CLI's
+// migration replay/diff machinery.
 type SchemaState struct {
 	Tables map[string]TableState
 }
 
 // Replay applies every migration's Up steps, in order, starting from an
-// empty schema, and returns the resulting state.
+// empty schema, and returns the resulting state. It is exported only for the
+// tango CLI's makemigrations machinery.
 func Replay(migrations []Migration) (SchemaState, error) {
 	state := SchemaState{Tables: make(map[string]TableState)}
 
@@ -48,7 +53,7 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		}
 		columns := make([]ColumnState, len(s.Columns))
 		for i, c := range s.Columns {
-			columns[i] = ColumnState{Name: c.Name, Type: c.Type, PrimaryKey: c.PrimaryKey, Unique: c.Unique, Indexed: c.Indexed}
+			columns[i] = ColumnState{Name: c.Name, Type: c.Type, PrimaryKey: c.PrimaryKey, Unique: c.Unique, Indexed: c.Indexed, References: c.References}
 		}
 		state.Tables[s.Table] = TableState{Name: s.Table, App: app, Columns: columns}
 
@@ -68,7 +73,7 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		}
 		table.Columns = append(table.Columns, ColumnState{
 			Name: s.Column.Name, Type: s.Column.Type, PrimaryKey: s.Column.PrimaryKey,
-			Unique: s.Column.Unique, Indexed: s.Column.Indexed,
+			Unique: s.Column.Unique, Indexed: s.Column.Indexed, References: s.Column.References,
 		})
 		state.Tables[s.Table] = table
 

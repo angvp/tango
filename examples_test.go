@@ -54,6 +54,7 @@ func TestExamplesAreIndependentModulesThatCompile(t *testing.T) {
 
 		checkCmd := exec.Command("go", "run", ".", "-check")
 		checkCmd.Dir = exampleDir
+		checkCmd.Env = append(os.Environ(), "TANGO_ADMIN_PASSWORD=test-password")
 		var checkOut strings.Builder
 		checkCmd.Stdout = &checkOut
 		checkCmd.Stderr = &checkOut

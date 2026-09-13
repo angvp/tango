@@ -14,6 +14,9 @@ import (
 // ALTER TABLE (DropColumn, AlterColumnUnique) are applied via the standard
 // table-rebuild pattern: create a new table with the desired shape, copy
 // data across, drop the old table, and rename the new one into place.
+// It is exported so ApplyPending and the tango CLI can share DDL translation;
+// application code should use tango migrate rather than calling ApplyStep
+// directly.
 func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step) error {
 	switch s := step.(type) {
 	case CreateTable:
@@ -91,16 +94,27 @@ func createTableSQL(dialect db.Dialect, s CreateTable) []string {
 func columnDefSQL(dialect db.Dialect, c Column) string {
 	if c.PrimaryKey && c.Type == "integer" {
 		if dialect == db.Postgres {
-			return c.Name + " BIGSERIAL PRIMARY KEY"
+			return c.Name + " BIGSERIAL PRIMARY KEY" + referencesSQL(c)
 		}
-		return c.Name + " INTEGER PRIMARY KEY AUTOINCREMENT"
+		return c.Name + " INTEGER PRIMARY KEY AUTOINCREMENT" + referencesSQL(c)
 	}
 
 	typ := baseTypeSQL(dialect, c.Type)
 	if c.PrimaryKey {
 		typ += " PRIMARY KEY"
 	}
-	return c.Name + " " + typ
+	return c.Name + " " + typ + referencesSQL(c)
+}
+
+// referencesSQL returns the inline "REFERENCES table" clause for a foreign
+// key column, or "" for an ordinary column. The clause carries no ON DELETE
+// action, so it defaults to RESTRICT/NO ACTION on both dialects — cascade
+// delete is implemented by Store.Delete, never by the database (ADR 0010).
+func referencesSQL(c Column) string {
+	if c.References == "" {
+		return ""
+	}
+	return " REFERENCES " + c.References
 }
 
 func baseTypeSQL(dialect db.Dialect, columnType string) string {

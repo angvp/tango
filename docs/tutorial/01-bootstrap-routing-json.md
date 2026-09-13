@@ -9,7 +9,7 @@ tango newproject board
 cd board
 ```
 
-This creates a new Go module (`board`) with a `main.go` pre-wired for SQLite: it opens `app.db`, constructs a `db.Store`, and implements the flag-dispatch convention every tanGO app's `main.go` follows (`-check`, `-tango-dump-models`, `-tango-status`, `-migrate[-down]`). No app is registered yet — `InstalledApps` starts empty. Confirm it runs:
+This creates a new Go module (`board`) with a `main.go` pre-wired for SQLite and the admin app. Admin accounts live in the database rather than a generated file — you'll create one with `tango admin create` in part 3, once the admin's own tables exist. The generated `main.go` stays small: it opens the database, builds `Config`, calls `tango.DispatchFlags`, then calls `tango.Serve`. Confirm it runs:
 
 ```sh
 go run . -check
@@ -36,10 +36,12 @@ tango newapp posts
 This writes `apps/posts/app.go` with a stub `Name()`/`Register()`. It does **not** edit `main.go` for you — wiring a new app in is always one line you write yourself, so nothing about your project's composition is hidden:
 
 ```go
-// main.go
 config := tango.Config{
-	InstalledApps: []tango.App{posts.App{}},
-	Addr:          ":8000",
+	InstalledApps: []tango.App{
+		posts.App{},
+		// keep the generated admin.New(...) entry after your apps
+	},
+	Addr: ":8000",
 }
 ```
 
