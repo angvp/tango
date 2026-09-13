@@ -123,8 +123,35 @@ func TestAdminRequestWithValidSessionReachesView(t *testing.T) {
 	}
 }
 
+func TestAdminRequestWithValidSessionForNowInactiveAccountRedirectsNotForbidden(t *testing.T) {
+	handler, store, sqlDB := buildAdminHandlerWithStore(t)
+	if err := admin.CreateAccount(context.Background(), store, "wasactive", "secret"); err != nil {
+		t.Fatalf("seed admin account: %v", err)
+	}
+	cookie := loginAndGetSessionCookie(t, handler, "wasactive", "secret")
+
+	// Flip Active directly (bypassing the CLI's Deactivate, which would also
+	// invalidate the session) to isolate exactly what an inactive-but-still-
+	// session-holding account gets: a login redirect, the same as no session
+	// at all — never 403, which is reserved for an active-but-non-staff
+	// account. sessionUser's existing !Active check runs before requireSession
+	// ever looks at IsStaff, so this also confirms that ordering.
+	if _, err := sqlDB.Exec("UPDATE admin_user SET active = 0 WHERE username = 'wasactive'"); err != nil {
+		t.Fatalf("deactivate row directly: %v", err)
+	}
+
+	response := performAdminRequest(handler, http.MethodGet, "/admin/admin_shell_user/", cookie)
+
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d (redirect to login, not 403)", response.Code, http.StatusFound)
+	}
+	if got := response.Header().Get("Location"); !strings.HasPrefix(got, "/admin/login/") {
+		t.Fatalf("Location = %q, want redirect to /admin/login/", got)
+	}
+}
+
 func TestAdminRequestWithNonStaffSessionReturns403Forbidden(t *testing.T) {
-	handler, store := buildAdminHandlerWithStore(t)
+	handler, store, _ := buildAdminHandlerWithStore(t)
 	if err := admin.CreateAccount(context.Background(), store, "guest", "secret", admin.WithoutStaff()); err != nil {
 		t.Fatalf("seed non-staff admin account: %v", err)
 	}
@@ -138,7 +165,7 @@ func TestAdminRequestWithNonStaffSessionReturns403Forbidden(t *testing.T) {
 }
 
 func TestAdminRequestWithStaffSessionRegardlessOfSuperuserReachesView(t *testing.T) {
-	handler, store := buildAdminHandlerWithStore(t)
+	handler, store, _ := buildAdminHandlerWithStore(t)
 	if err := admin.CreateAccount(context.Background(), store, "staffonly", "secret", admin.WithoutSuperuser()); err != nil {
 		t.Fatalf("seed staff-only admin account: %v", err)
 	}
@@ -218,13 +245,15 @@ func TestAdminWithMiddlewareWrapsOnlyAdminRoutesAfterGlobalMiddleware(t *testing
 // does not log in.
 func buildAdminHandler(t *testing.T) http.Handler {
 	t.Helper()
-	handler, _ := buildAdminHandlerWithStore(t)
+	handler, _, _ := buildAdminHandlerWithStore(t)
 	return handler
 }
 
-// buildAdminHandlerWithStore is buildAdminHandler plus the underlying store,
-// for tests that need to seed additional accounts (e.g. a non-staff one).
-func buildAdminHandlerWithStore(t *testing.T) (http.Handler, *db.Store) {
+// buildAdminHandlerWithStore is buildAdminHandler plus the underlying store
+// and raw *sql.DB, for tests that need to seed additional accounts (e.g. a
+// non-staff one) or reach state Store's typed API doesn't expose (e.g.
+// flipping Active directly, bypassing Deactivate's session invalidation).
+func buildAdminHandlerWithStore(t *testing.T) (http.Handler, *db.Store, *sql.DB) {
 	t.Helper()
 
 	registry := tango.NewRegistry()
@@ -287,7 +316,7 @@ func buildAdminHandlerWithStore(t *testing.T) (http.Handler, *db.Store) {
 		t.Fatalf("build handler: %v", err)
 	}
 
-	return handler, store
+	return handler, store, sqlDB
 }
 
 // buildAuthenticatedAdminHandler is buildAdminHandler plus a real login
