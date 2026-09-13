@@ -7,7 +7,7 @@ import "github.com/angvp/tango/migration"
 var Migrations = []migration.Migration{
 	{App: "greetings", Name: "0001_auto", Reversible: true,
 		Up: []migration.Step{
-			migration.CreateTable{Table: "greeting", Columns: []migration.Column{migration.Column{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, migration.Column{Name: "name", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, migration.Column{Name: "created_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+			migration.CreateTable{Table: "greeting", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "name", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "created_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
 		},
 		Down: []migration.Step{
 			migration.DropTable{Table: "greeting"},

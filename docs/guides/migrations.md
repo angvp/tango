@@ -8,7 +8,7 @@ tanGO's schema migrations are generated Go source, not a separate DSL, and are d
 tango makemigrations
 ```
 
-This reconstructs "the last known schema" by replaying every existing migration file's typed steps in order (no database connection needed), diffs that against your currently registered models, and writes one file per app with detected changes — sequentially numbered (`0001_auto.go`, `0002_auto.go`, ...). If two apps both have changes in the same run, they get two separate files, never one file bundling both.
+This reconstructs "the last known schema" by replaying every existing migration file's typed steps in order (no database connection needed), diffs that against your currently registered models, and writes one file per app with detected changes — sequentially numbered with a UTC timestamp (`0001_auto_20260913124812.go`, `0002_auto_20260913124903.go`, ...). If two apps both have changes in the same run, they get two separate files, never one file bundling both.
 
 Each generated file expresses a small, dialect-agnostic step vocabulary:
 
@@ -20,6 +20,22 @@ Each generated file expresses a small, dialect-agnostic step vocabulary:
 There's no rename step and no column-type-change step — both are indistinguishable from a drop+add given what model metadata currently tracks; a rename shows up as a migration dropping the old column and adding the new one.
 
 A generated file's `var M####Xxx = []migration.Migration{...}` is for human readability of the diff — the file an app's `main.go` actually imports is `migrations/migrations.go`, whose `Migrations` slice is regenerated (aggregating every file) on each `tango makemigrations` run. Never hand-edit `migrations.go`.
+
+## Naming migrations
+
+By default, tanGO combines the next sequence number with `auto` and the current UTC timestamp:
+
+```text
+0002_auto_20260913124812.go
+```
+
+Use `--name` when a short description will make the migration easier to understand later:
+
+```sh
+tango makemigrations --name add-author-indexes
+```
+
+That produces `0002_add_author_indexes.go`; the filename and the migration's `Name` are always identical. Names are lowercased, spaces and hyphens become underscores, and repeated or surrounding underscores are cleaned up. Other characters and empty names are rejected. Existing migration files are never overwritten.
 
 ## Applying
 
@@ -39,4 +55,4 @@ Runs the most recently applied migration's `Down` steps and removes its `tango_m
 
 ## Migration identity
 
-A migration's identity is always the pair `(App, Name)`, never `Name` alone — even though today's sequential numbering happens to make `Name` globally unique in practice. Applied-state tracking, `tango migrate`, and `tango migrate down` all key on the full pair, so two migrations that happened to share a `Name` under different apps would still apply and roll back independently and correctly.
+A migration's identity is always the pair `(App, Name)`, never `Name` alone. Applied-state tracking, `tango migrate`, and `tango migrate down` all key on the full pair, so two migrations generated with the same explicit name under different apps still apply and roll back independently and correctly.

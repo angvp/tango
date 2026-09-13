@@ -77,6 +77,18 @@ func TestUnknownCommandReturnsUsageError(t *testing.T) {
 	}
 }
 
+func TestUsageDocumentsMakeMigrationsNameFlag(t *testing.T) {
+	var stdout bytes.Buffer
+	code := Run(context.Background(), []string{"help"}, "/app", &stdout, io.Discard, &recordingRunner{})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if !strings.Contains(stdout.String(), "tango makemigrations [--name <name>]") {
+		t.Fatalf("usage = %q, want makemigrations --name documentation", stdout.String())
+	}
+}
+
 func TestShellDocumentsDeferredImplementation(t *testing.T) {
 	var stderr bytes.Buffer
 
@@ -172,6 +184,68 @@ func TestAdminDeactivateRunsAppWithDeactivateFlag(t *testing.T) {
 	}
 	if !reflect.DeepEqual(runner.command, want) {
 		t.Fatalf("command = %#v, want %#v", runner.command, want)
+	}
+}
+
+func TestAdminCreateWithNoStaffAndNoSuperuserFlags(t *testing.T) {
+	runner := &recordingRunner{}
+	code := Run(context.Background(), []string{"admin", "create", "alice", "--no-staff", "--no-superuser"}, "/app", io.Discard, io.Discard, runner)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	want := recordedCommand{
+		dir:  "/app",
+		name: "go",
+		args: []string{"run", ".", "-tango-admin-create=alice", "-tango-admin-no-staff", "-tango-admin-no-superuser"},
+	}
+	if !reflect.DeepEqual(runner.command, want) {
+		t.Fatalf("command = %#v, want %#v", runner.command, want)
+	}
+}
+
+func TestAdminCreateWithUnknownFlagFails(t *testing.T) {
+	runner := &recordingRunner{}
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"admin", "create", "alice", "--bogus"}, "/app", io.Discard, &stderr, runner)
+
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unknown flag") {
+		t.Fatalf("stderr = %q, want unknown flag message", stderr.String())
+	}
+	if !reflect.DeepEqual(runner.command, recordedCommand{}) {
+		t.Fatalf("runner was invoked = %#v, want no invocation on flag error", runner.command)
+	}
+}
+
+func TestAdminGrantAndRevokeStaffAndSuperuserVerbsRunAppWithMatchingFlag(t *testing.T) {
+	for _, tc := range []struct {
+		verb string
+		flag string
+	}{
+		{"grant-staff", "-tango-admin-grant-staff"},
+		{"revoke-staff", "-tango-admin-revoke-staff"},
+		{"grant-superuser", "-tango-admin-grant-superuser"},
+		{"revoke-superuser", "-tango-admin-revoke-superuser"},
+	} {
+		t.Run(tc.verb, func(t *testing.T) {
+			runner := &recordingRunner{}
+			code := Run(context.Background(), []string{"admin", tc.verb, "alice"}, "/app", io.Discard, io.Discard, runner)
+
+			if code != 0 {
+				t.Fatalf("exit code = %d, want 0", code)
+			}
+			want := recordedCommand{
+				dir:  "/app",
+				name: "go",
+				args: []string{"run", ".", tc.flag + "=alice"},
+			}
+			if !reflect.DeepEqual(runner.command, want) {
+				t.Fatalf("command = %#v, want %#v", runner.command, want)
+			}
+		})
 	}
 }
 
