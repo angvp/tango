@@ -78,3 +78,7 @@ go test ./...
 ```
 
 `TestExamplesAreIndependentModulesThatCompile` (at the repository root) builds every `examples/*` module and runs its generated `-check` flag; the migration-generation tests in `internal/cli` similarly `go build` a real generated `migrations` package rather than only inspecting its source text.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
