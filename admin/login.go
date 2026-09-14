@@ -7,6 +7,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/security"
 )
 
 var loginTemplate = cloneWithContent(`{{define "content"}}
@@ -44,7 +45,7 @@ type loginPageData struct {
 // loginView handles GET (render the login form) and POST (verify
 // credentials, create a session, redirect) for /admin/login/. limiter
 // throttles repeated failed attempts from the same source IP.
-func loginView(store *db.Store, limiter *loginRateLimiter) tango.View {
+func loginView(store *db.Store, limiter *security.RateLimiter) tango.View {
 	return func(ctx *tango.Context) error {
 		switch ctx.Request().Method {
 		case http.MethodGet:

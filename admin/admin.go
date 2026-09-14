@@ -7,6 +7,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/internal/adminregistry"
+	"github.com/angvp/tango/internal/security"
 	"github.com/angvp/tango/model"
 )
 
@@ -57,7 +58,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 			}
 		}
 
-		limiter := newLoginRateLimiter()
+		limiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 		index := requireSession(store, indexView(nav, cfg.branding))
 		routes := tango.URLs{
 			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index")),

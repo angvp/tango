@@ -263,7 +263,7 @@ func TestMakeMigrationsPreservesColumnDefaultAcrossAggregateRegeneration(t *test
 		t.Fatalf("read migrations.go: %v", err)
 	}
 	if !strings.Contains(string(aggregate), `Default: "TRUE"`) {
-		t.Fatalf("regenerated migrations.go dropped the Default field from an earlier migration's AddColumn/CreateTable:\n%s", aggregate)
+		t.Fatalf("regenerated migrations.go dropped the Default field from an earlier AddColumn migration:\n%s", aggregate)
 	}
 }
 

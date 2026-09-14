@@ -3,7 +3,6 @@ package admin
 import (
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/angvp/tango"
@@ -19,44 +18,6 @@ const (
 	loginRateLimitAttempts = 5
 	loginRateLimitWindow   = time.Minute
 )
-
-// loginRateLimiter tracks recent failed login attempts per key (source
-// IP) so repeated brute-force attempts get throttled without needing an
-// account-lockout state machine.
-type loginRateLimiter struct {
-	mu       sync.Mutex
-	attempts map[string][]time.Time
-}
-
-func newLoginRateLimiter() *loginRateLimiter {
-	return &loginRateLimiter{attempts: make(map[string][]time.Time)}
-}
-
-// Allow reports whether key is currently under the failed-attempt
-// threshold within the rate-limit window, pruning older attempts as it
-// goes.
-func (l *loginRateLimiter) Allow(key string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	cutoff := time.Now().Add(-loginRateLimitWindow)
-	kept := l.attempts[key][:0]
-	for _, at := range l.attempts[key] {
-		if at.After(cutoff) {
-			kept = append(kept, at)
-		}
-	}
-	l.attempts[key] = kept
-
-	return len(kept) < loginRateLimitAttempts
-}
-
-// RecordFailure records a failed login attempt for key.
-func (l *loginRateLimiter) RecordFailure(key string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.attempts[key] = append(l.attempts[key], time.Now())
-}
 
 // rateLimitKey derives the rate-limit key (source IP, port stripped) for
 // a request.
