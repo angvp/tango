@@ -15,9 +15,12 @@ import (
 // See ADR 0021.
 const defaultSessionDuration = 30 * 24 * time.Hour
 
-// defaultSessionCookieName is the session cookie's default name, override
-// via WithSessionCookieName.
-const defaultSessionCookieName = "tango_account_session"
+// DefaultSessionCookieName is the session cookie's default name, override
+// via WithSessionCookieName. Exported so a host calling RequireLogin or
+// CurrentAccountID/CurrentAccount can reference it instead of
+// hardcoding the string when accounts.New was installed with no
+// session-cookie-name option.
+const DefaultSessionCookieName = "tango_account_session"
 
 // defaultPostLoginRedirect is where a login or registration redirects when
 // no safe next value is present.

@@ -65,7 +65,7 @@ func WithSessionCookieName(name string) Option {
 func New(store *db.Store, opts ...Option) tango.App {
 	cfg := accountsConfig{
 		sessionDuration:   defaultSessionDuration,
-		sessionCookieName: defaultSessionCookieName,
+		sessionCookieName: DefaultSessionCookieName,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
