@@ -88,6 +88,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 			tango.Path(http.MethodPost, "/accounts/register/", registerView(store, cfg, registerLimiter)),
 			tango.Path(http.MethodGet, "/accounts/login/", loginView(store, cfg, loginLimiter)),
 			tango.Path(http.MethodPost, "/accounts/login/", loginView(store, cfg, loginLimiter)),
+			tango.Path(http.MethodPost, "/accounts/logout/", logoutView(store, cfg)),
 		}
 
 		return registry.Routes().Include("/", routes)

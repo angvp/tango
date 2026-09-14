@@ -61,12 +61,7 @@ func accountFromToken(ctx context.Context, store *db.Store, token string) (Accou
 // (DefaultSessionCookieName if using the default).
 func RequireLogin(store *db.Store, cookieName string, loginPath string, next tango.View) tango.View {
 	return func(ctx *tango.Context) error {
-		var token string
-		if cookie, err := ctx.Request().Cookie(cookieName); err == nil {
-			token = cookie.Value
-		}
-
-		_, ok, err := accountFromToken(ctx.Context(), store, token)
+		_, ok, err := currentAccount(ctx, store, cookieName)
 		if err != nil {
 			return err
 		}
