@@ -1,11 +1,10 @@
 package tango_test
 
-// This file enforces Milestone 13's app-owned templates/static-assets
-// convention: a reusable app serves its own embed.FS via an ordinary route,
-// reachable once installed into a host project, with no framework-level
-// asset-serving mechanism involved. See "App-owned templates and static
-// assets" in docs/guides/reusable-apps.md and ticket 04 in
-// .scratch/reusable-apps/issues.
+// This file enforces the app-owned templates/static-assets convention: a
+// reusable app serves its own embed.FS via an ordinary route, reachable
+// once installed into a host project, with no framework-level asset-serving
+// mechanism involved. See "App-owned templates and static assets" in
+// docs/guides/reusable-apps.md.
 
 import (
 	"context"

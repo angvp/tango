@@ -6,9 +6,9 @@ import "strings"
 // "_foreign_keys=on" query parameter to a SQLite DSN, so every connection
 // the driver opens for it enforces FOREIGN KEY constraints (SQLite treats
 // this as a per-connection setting, off by default). This is a plain string
-// helper — it never imports the driver itself, keeping db driver-agnostic
-// per ADR 0004 — so it composes with any DSN shape (a file path, ":memory:",
-// or one that already carries other query parameters).
+// helper — it never imports the driver itself, keeping db driver-agnostic —
+// so it composes with any DSN shape (a file path, ":memory:", or one that
+// already carries other query parameters).
 //
 // tanGO's generated project scaffold uses this when building its SQLite
 // DSN; anyone opening their own *sql.DB with driver "sqlite" (as opposed to

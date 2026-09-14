@@ -433,8 +433,8 @@ func writeMigrationFile(filename string, varName string, migrations []migration.
 }
 
 // migrationVarName derives a unique, exported Go identifier for name (a
-// migration file stem like "0001_auto"), in pure UpperCamelCase per
-// AI_COLLABORATION.md.
+// migration file stem like "0001_auto"), in pure UpperCamelCase — never
+// mixed with snake_case — so it reads as an ordinary Go export.
 func migrationVarName(name string) string {
 	var builder strings.Builder
 	builder.WriteByte('M')

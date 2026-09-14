@@ -271,7 +271,9 @@ func TestCheckPassesWithValidForeignKeyRegardlessOfInstalledAppsOrder(t *testing
 	})
 
 	// posts (the referencing app) installed before authors (the referenced
-	// app) — ADR 0011 says this must still pass Check.
+	// app): foreign-key targets are validated once after every app has
+	// finished registering, not at Register time, so InstalledApps order
+	// must not affect whether Check passes.
 	if err := tango.Check(tango.Config{InstalledApps: []tango.App{posts, authors}}); err != nil {
 		t.Fatalf("Check returned error: %v", err)
 	}

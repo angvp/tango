@@ -7,8 +7,8 @@ import (
 	"github.com/angvp/tango/i18n"
 )
 
-// tailwindScriptTag loads Tailwind's Play CDN, per ADR 0003 in the harness
-// docs: no Node/npm build step, JIT-compiled utility classes at runtime.
+// tailwindScriptTag loads Tailwind's Play CDN: no Node/npm build step,
+// JIT-compiled utility classes at runtime.
 const tailwindScriptTag = `<script src="https://cdn.tailwindcss.com"></script>`
 
 // navItem is one entry in the admin's sidebar navigation: every registered

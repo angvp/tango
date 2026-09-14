@@ -142,9 +142,9 @@ func TestContextHTMLWritesStatusAndRenderedBody(t *testing.T) {
 
 // TestContextHTMLWritesNothingOnTemplateExecutionError proves the render is
 // buffered: a template execution failure must not leave a status code or
-// partial body already committed to the response (see ADR 0015) — the
-// caller's returned error is expected to become an ordinary framework 500,
-// exactly like any other view error, rather than a truncated 200 page.
+// partial body already committed to the response — the caller's returned
+// error is expected to become an ordinary framework 500, exactly like any
+// other view error, rather than a truncated 200 page.
 func TestContextHTMLWritesNothingOnTemplateExecutionError(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()

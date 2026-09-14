@@ -120,8 +120,8 @@ func TestCustomWidgetReplacesDefaultRenderingAndParsing(t *testing.T) {
 
 // contextCapturingWidget records the FieldContext its Parse was called
 // with, so a test can assert Parse receives the same populated context
-// Render would have — not just a bare field name (see ADR 0013 and the
-// shared buildFieldContext helper in admin/fields.go).
+// Render would have — not just a bare field name (see the shared
+// buildFieldContext helper in admin/fields.go).
 type contextCapturingWidget struct {
 	parsedWith *admin.FieldContext
 }

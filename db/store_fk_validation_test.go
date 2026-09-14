@@ -91,7 +91,7 @@ func TestStoreCreateSkipsForeignKeyValidationForZeroValue(t *testing.T) {
 	store.UseModels(registry)
 
 	// ManagerID left at its zero value: treated as "unset," not a reference
-	// to primary key 0 — see ADR 0012.
+	// to primary key 0.
 	employee := cascadeEmployee{Name: "Solo contributor"}
 	if err := store.Create(context.Background(), employeeMeta, &employee); err != nil {
 		t.Fatalf("Create with zero-value foreign key returned error: %v", err)

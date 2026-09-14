@@ -21,7 +21,7 @@ var ErrNotFound = errors.New("tango db: not found")
 // foreign key field does not reference an existing row of its related model.
 // This is referential-integrity validation: a preflight SELECT, not run
 // inside a shared transaction with the write it guards, and only performed
-// when UseModels has been called — see ADR 0012. It is distinct from
+// when UseModels has been called. It is distinct from
 // model.ErrUnknownForeignKeyTarget, which validates that the related *model*
 // exists at all, once, at registration time.
 var ErrInvalidForeignKey = errors.New("tango db: invalid foreign key")
@@ -48,7 +48,8 @@ func NewStore(sqlDB *sql.DB, dialect Dialect) *Store {
 // UseModels attaches the model registry Delete needs to cascade: when set,
 // deleting a row also deletes, recursively, every row of every other
 // registered model that references it through a foreign key field (a
-// tango:"fk=X" tag), matching Django's ORM-level cascade — see ADR 0010.
+// tango:"fk=X" tag), matching Django's ORM-level cascade. This is
+// application-level cascade, not a database ON DELETE CASCADE constraint.
 // Without calling UseModels, Delete only removes the target row, exactly as
 // before this method existed. tango.Registry.SetStore calls this
 // automatically with its own Models(), so apps using the standard
@@ -67,7 +68,7 @@ type execer interface {
 // validateForeignKeys checks that every set (non-zero) foreign key field on
 // structValue references an existing row of its related model, returning
 // ErrInvalidForeignKey for the first one that doesn't. A no-op unless
-// UseModels has been called. See ErrInvalidForeignKey and ADR 0012.
+// UseModels has been called. See ErrInvalidForeignKey.
 func (s *Store) validateForeignKeys(ctx context.Context, meta model.ModelMeta, structValue reflect.Value) error {
 	if s.models == nil {
 		return nil
@@ -80,7 +81,7 @@ func (s *Store) validateForeignKeys(ctx context.Context, meta model.ModelMeta, s
 
 		fieldValue := structValue.FieldByName(field.Name)
 		if !fieldValue.IsValid() || fieldValue.IsZero() {
-			continue // zero-value foreign key fields are treated as unset — see ADR 0012
+			continue // zero-value foreign key fields are treated as unset, not a reference to PK 0
 		}
 
 		relatedMeta, ok := s.models.Get(field.ForeignKey)

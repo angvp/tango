@@ -59,8 +59,8 @@ func (c *Context) JSON(status int, payload any) error {
 // execution fully succeeds, so a template error is returned like any other
 // view error (a clean framework-generated 500) instead of a response that
 // already committed status and headers followed by a truncated or
-// malformed body — see ADR 0015. tmpl must already be parsed; HTML has no
-// opinion on template parsing, caching, or file layout.
+// malformed body. tmpl must already be parsed; HTML has no opinion on
+// template parsing, caching, or file layout.
 func (c *Context) HTML(status int, tmpl *template.Template, name string, data any) error {
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {

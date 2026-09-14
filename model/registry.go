@@ -211,7 +211,7 @@ func tagValue(tag string, key string) (string, bool) {
 // intended to run once, after every installed app has finished registering
 // (e.g. from tango.Check), not per-model at Register time — so InstalledApps
 // order never constrains which app may declare a foreign key relative to
-// the app that registers its target. See ADR 0011.
+// the app that registers its target.
 func (r *Registry) ValidateForeignKeys() error {
 	for _, meta := range r.All() {
 		for _, field := range meta.Fields {

@@ -59,7 +59,7 @@ func findAdminUserByUsername(ctx context.Context, store *db.Store, username stri
 // AccountOption customizes a new admin account's IsStaff/IsSuperuser flags
 // at creation time. CreateAccount defaults both to true — "create an
 // immediately usable full admin account" is its long-standing behavior — so
-// these are opt-outs, not opt-ins. See ADR 0019.
+// these are opt-outs, not opt-ins.
 type AccountOption func(*AdminUser)
 
 // WithoutStaff creates the account with IsStaff=false instead of the

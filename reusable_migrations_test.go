@@ -1,10 +1,9 @@
 package tango_test
 
-// This file enforces Milestone 13's contributed-migrations decision: a
-// reusable app ships its own Migrations var, generated via a throwaway
+// This file enforces the contributed-migrations decision: a reusable app
+// ships its own Migrations var, generated via a throwaway generation
 // harness inside its own repo, and the host's main.go concatenates it with
-// its own migrations before applying — see docs/guides/reusable-apps.md
-// and ticket 03 in .scratch/reusable-apps/issues.
+// its own migrations before applying — see docs/guides/reusable-apps.md.
 
 import (
 	"database/sql"

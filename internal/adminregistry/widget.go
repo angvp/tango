@@ -71,7 +71,7 @@ type FieldValues interface {
 //
 // This interface, tanGO's built-in widgets, and Options' Widgets/Labels/
 // HelpText/ReadOnly/FieldOrder fields are best-effort, not a stable v0.1
-// contract — see ADR 0013, ADR 0014, and docs/limitations.md. A widget's
+// contract — see docs/limitations.md. A widget's
 // Render output may include its own <link>/<script> tags for CSS/JS
 // (served via its owning app's own embed.FS route, per the convention
 // reusable apps already use for static assets); since there is no shared

@@ -33,7 +33,7 @@ var projectDialects = map[string]projectDialect{
 		DefaultDSN:   "app.db",
 		// Enables foreign key constraint enforcement on every connection
 		// the driver opens — SQLite treats this as off by default and
-		// per-connection, not a database-wide setting. See ADR 0010/0011.
+		// per-connection, not a database-wide setting.
 		OpenDSNExpr: "db.SQLiteForeignKeysDSN(dsn)",
 	},
 	"postgres": {

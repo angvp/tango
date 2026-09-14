@@ -130,7 +130,8 @@ func addColumnDefSQL(dialect db.Dialect, c Column) string {
 // referencesSQL returns the inline "REFERENCES table" clause for a foreign
 // key column, or "" for an ordinary column. The clause carries no ON DELETE
 // action, so it defaults to RESTRICT/NO ACTION on both dialects — cascade
-// delete is implemented by Store.Delete, never by the database (ADR 0010).
+// delete is implemented in application code by Store.Delete, never by the
+// database.
 func referencesSQL(c Column) string {
 	if c.References == "" {
 		return ""

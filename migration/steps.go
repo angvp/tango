@@ -18,8 +18,9 @@ type Column struct {
 	Indexed    bool
 	// References is the target table name for a foreign key column (from a
 	// tango:"fk=X" tag), or "" for an ordinary column. The generated
-	// constraint is always RESTRICT/NO ACTION — see ADR 0010: cascade
-	// delete is implemented by Store.Delete, never by the database itself.
+	// constraint is always RESTRICT/NO ACTION: cascade delete is
+	// implemented in application code by Store.Delete, never by the
+	// database itself.
 	References string
 	// Default is a raw SQL literal (e.g. "TRUE") the column is given as a
 	// NOT NULL DEFAULT when adding it to an existing table, so pre-existing
