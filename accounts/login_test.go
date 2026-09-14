@@ -171,6 +171,11 @@ func TestLoginRedirectsToSafeNextAndIgnoresUnsafeNext(t *testing.T) {
 	if got := safe.Header().Get("Location"); got != "/dashboard/" {
 		t.Fatalf("Location = %q, want %q", got, "/dashboard/")
 	}
+
+	unsafe := postLogin(t, handler, url.Values{"email": {"oscar@example.com"}, "password": {"correct-password"}, "next": {"https://evil.example.com/"}})
+	if got := unsafe.Header().Get("Location"); got != "/" {
+		t.Fatalf("Location = %q, want %q (unsafe next ignored)", got, "/")
+	}
 }
 
 func TestLoginMissingCSRFTokenIsRejected(t *testing.T) {
