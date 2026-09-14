@@ -1,6 +1,10 @@
 package accounts
 
-import "time"
+import (
+	"time"
+
+	"github.com/angvp/tango/model"
+)
 
 // Account is the accounts app's own Application user model — a plain
 // identity, credential, activity state, and timestamp. It deliberately
@@ -32,4 +36,21 @@ type AccountSession struct {
 	Token     string `tango:"unique"`
 	UserID    int64  `tango:"fk=Account,index"`
 	ExpiresAt time.Time
+}
+
+// accountModelMetas returns Account/AccountSession's model metadata,
+// independent of any project's own model registry — accounts's own views
+// operate directly against store, without depending on the host project's
+// full registration having already run, mirroring admin's own
+// adminModelMetas.
+func accountModelMetas() (accountMeta model.ModelMeta, sessionMeta model.ModelMeta) {
+	registry := model.NewRegistry()
+	// Account and AccountSession are known-good models (accounts.New
+	// registers them the same way at app registration time), so these
+	// errors cannot occur here in practice.
+	_ = registry.Register(Account{})
+	_ = registry.Register(AccountSession{})
+	accountMeta, _ = registry.Get("Account")
+	sessionMeta, _ = registry.Get("AccountSession")
+	return accountMeta, sessionMeta
 }
