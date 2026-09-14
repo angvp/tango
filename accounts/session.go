@@ -12,7 +12,6 @@ import (
 // defaultSessionDuration is deliberately much longer than admin's fixed
 // 24-hour session — a public user of an ordinary web app commonly expects
 // to stay signed in across visits in a way an admin operator does not.
-// See ADR 0021.
 const defaultSessionDuration = 30 * 24 * time.Hour
 
 // DefaultSessionCookieName is the session cookie's default name, override

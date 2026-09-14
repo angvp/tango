@@ -15,7 +15,7 @@ import (
 // user ID and has no notion of Active at all), this looks up the full
 // Account row and checks Active fresh on every call — deactivating an
 // Account invalidates its standing sessions immediately, not just its
-// ability to log in again. See ADR 0021.
+// ability to log in again.
 func accountFromToken(ctx context.Context, store *db.Store, token string) (Account, bool, error) {
 	if token == "" {
 		return Account{}, false, nil

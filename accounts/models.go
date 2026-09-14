@@ -7,15 +7,15 @@ import (
 )
 
 // Account is the accounts app's own Application user model — a plain
-// identity, credential, activity state, and timestamp. It deliberately
-// carries no permission-shaped field (no IsStaff, Role, Group, or
+// identity, credential, activity state, and timestamp. v0.1 deliberately
+// ships no permission-shaped field (no IsStaff, Role, Group, or
 // Permission): an app wanting roles or permissions writes its own View
 // wrapper against its own domain data, including Account itself if this
-// app is installed. See ADR 0020.
+// app is installed. See docs/guides/accounts.md.
 //
 // Active gates both a fresh login and every subsequent request through an
 // already-valid session — not just login, unlike auth.SessionUser, which
-// has no notion of Active at all. See ADR 0021.
+// has no notion of Active at all.
 type Account struct {
 	ID           int64  `tango:"pk"`
 	Email        string `tango:"unique"`

@@ -27,7 +27,7 @@ type AccountSession struct {
 }
 ```
 
-`Account` is deliberately bare: identity, credential, activity state, a timestamp. There is no `IsStaff`, `Role`, `Group`, or `Permission`-shaped field, and none is planned. An app that needs roles or permissions queries `Account` itself (if installed) or its own domain data, from its own [View wrapper](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
+`Account` is deliberately bare: identity, credential, activity state, a timestamp. v0.1 deliberately ships no `IsStaff`, `Role`, `Group`, or `Permission`-shaped field. An app that needs roles or permissions today queries `Account` itself (if installed) or its own domain data, from its own [View wrapper](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
 
 `Email` is always stored lowercased and trimmed, and every lookup normalizes the same way — `Alice@Example.com` and `alice@example.com` are always the same `Account`.
 

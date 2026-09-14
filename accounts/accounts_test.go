@@ -15,9 +15,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// TestAccountHasNoPermissionShapedField locks in ADR 0020's boundary: Account
-// carries exactly identity, credential, activity state, and a timestamp,
-// nothing that looks like IsStaff/Role/Group/Permission.
+// TestAccountHasNoPermissionShapedField locks in this milestone's boundary:
+// Account carries exactly identity, credential, activity state, and a
+// timestamp, nothing that looks like IsStaff/Role/Group/Permission.
 func TestAccountHasNoPermissionShapedField(t *testing.T) {
 	fieldNames := make([]string, 0)
 	typ := reflect.TypeOf(accounts.Account{})

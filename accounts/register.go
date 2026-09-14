@@ -16,7 +16,7 @@ import (
 
 // minPasswordLength is the baseline minimum for public self-service
 // registration — a different trust boundary than admin's operator-run
-// CLI, which enforces no minimum at all. See ADR 0021.
+// CLI, which enforces no minimum at all.
 const minPasswordLength = 8
 
 // normalizeEmail lowercases and trims raw, so Alice@Example.com and
