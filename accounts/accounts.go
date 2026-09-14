@@ -30,11 +30,11 @@ const (
 // Option configures accounts.New.
 type Option func(*accountsConfig)
 
-// accountsConfig holds accounts.New's optional configuration. Later
-// tickets add fields for session duration and the session cookie name,
-// each via its own Option constructor, without changing New's signature.
+// accountsConfig holds accounts.New's optional configuration.
 type accountsConfig struct {
-	signupDisabled bool
+	signupDisabled    bool
+	sessionDuration   time.Duration
+	sessionCookieName string
 }
 
 // WithSignupDisabled opts an installation out of self-service registration.
@@ -45,12 +45,28 @@ func WithSignupDisabled() Option {
 	return func(c *accountsConfig) { c.signupDisabled = true }
 }
 
+// WithSessionDuration sets how long a created AccountSession stays valid,
+// overriding the default (30 days — deliberately longer than admin's fixed
+// 24-hour session, since public-user and operator expectations differ).
+func WithSessionDuration(d time.Duration) Option {
+	return func(c *accountsConfig) { c.sessionDuration = d }
+}
+
+// WithSessionCookieName overrides the session cookie's name, which
+// defaults to "tango_account_session".
+func WithSessionCookieName(name string) Option {
+	return func(c *accountsConfig) { c.sessionCookieName = name }
+}
+
 // New constructs the accounts application. opts configures optional
 // accounts-wide behavior; accounts.New(store) with no options is the
 // baseline this milestone establishes and stays valid as later options are
 // added.
 func New(store *db.Store, opts ...Option) tango.App {
-	cfg := accountsConfig{}
+	cfg := accountsConfig{
+		sessionDuration:   defaultSessionDuration,
+		sessionCookieName: defaultSessionCookieName,
+	}
 	for _, opt := range opts {
 		opt(&cfg)
 	}

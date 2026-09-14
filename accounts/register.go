@@ -136,9 +136,10 @@ func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLim
 				return err
 			}
 
-			// Ticket 05 replaces this with real session creation and a
-			// redirect to the post-login destination.
-			return ctx.Redirect(safeAccountsNext(next, "/accounts/login/"))
+			if err := createAccountSession(ctx.Context(), store, cfg, ctx.ResponseWriter(), ctx.Request(), account.ID); err != nil {
+				return err
+			}
+			return ctx.Redirect(safeAccountsNext(next, defaultPostLoginRedirect))
 
 		default:
 			return methodNotAllowed(ctx)
