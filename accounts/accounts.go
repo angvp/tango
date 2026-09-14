@@ -82,9 +82,12 @@ func New(store *db.Store, opts ...Option) tango.App {
 		}
 
 		registerLimiter := security.NewRateLimiter(registerRateLimitAttempts, registerRateLimitWindow)
+		loginLimiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 		routes := tango.URLs{
 			tango.Path(http.MethodGet, "/accounts/register/", registerView(store, cfg, registerLimiter)),
 			tango.Path(http.MethodPost, "/accounts/register/", registerView(store, cfg, registerLimiter)),
+			tango.Path(http.MethodGet, "/accounts/login/", loginView(store, cfg, loginLimiter)),
+			tango.Path(http.MethodPost, "/accounts/login/", loginView(store, cfg, loginLimiter)),
 		}
 
 		return registry.Routes().Include("/", routes)
