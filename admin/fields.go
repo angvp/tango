@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/adminregistry"
 	"github.com/angvp/tango/model"
 )
@@ -153,6 +154,7 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 	fc.SelectOptions = options
 	if _, adminRegistered := adminReg.Get(field.ForeignKey); adminRegistered && formOpts.CurrentURL != "" {
 		fc.RelatedCreateURL = relatedCreateURL(field.ForeignKey, adminReg, formOpts.CurrentURL, field.Name)
+		fc.RelatedCreateLabel = i18n.T(ctx, "admin.fk.add_related", "Add %s", fc.Label)
 	}
 	return fc, ok
 }

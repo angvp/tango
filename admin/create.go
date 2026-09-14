@@ -7,6 +7,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/adminregistry"
 	"github.com/angvp/tango/model"
 )
@@ -14,14 +15,14 @@ import (
 func createView(store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
-	title := "New " + meta.Name
 	pageChrome := chrome{Nav: nav, Active: meta.Name, Brand: brand}
 
 	return func(ctx *tango.Context) error {
+		title := i18n.T(ctx.Context(), "admin.create.title", "New %s", meta.Name)
 		switch ctx.Request().Method {
 		case http.MethodGet:
 			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, reflect.Value{}, formOptionsFromRequest(ctx))
-			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: pageChrome, Title: title, Fields: fields, CSRFToken: csrfTokenFromRequest(ctx.Request())})
+			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: pageChrome.withContext(ctx.Context()), Title: title, Fields: fields, CSRFToken: csrfTokenFromRequest(ctx.Request())})
 
 		case http.MethodPost:
 			if err := ctx.Request().ParseForm(); err != nil {
@@ -35,7 +36,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, ctx.Request().PostForm, reflect.Value{}); err != nil {
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOptionsFromRequest(ctx))
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
-					chrome:    pageChrome,
+					chrome:    pageChrome.withContext(ctx.Context()),
 					Title:     title,
 					Error:     err.Error(),
 					Fields:    fields,

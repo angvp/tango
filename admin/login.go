@@ -7,6 +7,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/security"
 )
 
@@ -14,20 +15,20 @@ var loginTemplate = cloneWithContent(`{{define "content"}}
 <div class="content-body">
   <div class="card max-w-md mx-auto">
     <div class="card-body">
-      <h1 class="topbar-title mb-4">tanGO Admin</h1>
+      <h1 class="topbar-title mb-4">{{.T "admin.login.title" "tanGO Admin"}}</h1>
       {{if .Error}}<div class="alert-error">{{.Error}}</div>{{end}}
       <form method="post">
         <input type="hidden" name="next" value="{{.Next}}">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="field-group">
-          <label for="field-username" class="field-label">Username</label>
+          <label for="field-username" class="field-label">{{.T "admin.login.username" "Username"}}</label>
           <input id="field-username" type="text" name="username" value="{{.Username}}" class="input" autofocus>
         </div>
         <div class="field-group">
-          <label for="field-password" class="field-label">Password</label>
+          <label for="field-password" class="field-label">{{.T "admin.login.password" "Password"}}</label>
           <input id="field-password" type="password" name="password" class="input">
         </div>
-        <button type="submit" class="btn-primary w-full">Log in</button>
+        <button type="submit" class="btn-primary w-full">{{.T "admin.login.submit" "Log in"}}</button>
       </form>
     </div>
   </div>
@@ -53,7 +54,7 @@ func loginView(store *db.Store, limiter *security.RateLimiter) tango.View {
 			if err != nil {
 				return err
 			}
-			return render(ctx, http.StatusOK, loginTemplate, loginPageData{Next: safeAdminNext(ctx.Query("next"), ""), CSRFToken: token})
+			return render(ctx, http.StatusOK, loginTemplate, loginPageData{chrome: chrome{}.withContext(ctx.Context()), Next: safeAdminNext(ctx.Query("next"), ""), CSRFToken: token})
 
 		case http.MethodPost:
 			if err := ctx.Request().ParseForm(); err != nil {
@@ -85,7 +86,8 @@ func loginView(store *db.Store, limiter *security.RateLimiter) tango.View {
 				return render(ctx, http.StatusUnauthorized, loginTemplate, loginPageData{
 					Next:      next,
 					Username:  username,
-					Error:     "Invalid username or password.",
+					chrome:    chrome{}.withContext(ctx.Context()),
+					Error:     i18n.T(ctx.Context(), "admin.login.invalid", "Invalid username or password."),
 					CSRFToken: csrfToken.Value,
 				})
 			}

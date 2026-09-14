@@ -71,7 +71,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 		}
 
 		data := listPageData{
-			chrome:      chrome{Nav: nav, Active: meta.Name, Brand: brand},
+			chrome:      chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()),
 			ModelName:   meta.Name,
 			BasePath:    basePath,
 			Columns:     columns,

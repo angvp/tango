@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/security"
 )
 
@@ -53,7 +54,7 @@ func verifySessionCSRF(ctx *tango.Context) bool {
 // forbiddenCSRF writes a generic 403 for a rejected CSRF token — never a
 // silent no-op, per this milestone's ticket 04.
 func forbiddenCSRF(ctx *tango.Context) error {
-	return ctx.JSON(http.StatusForbidden, map[string]string{"error": "invalid or missing CSRF token"})
+	return ctx.JSON(http.StatusForbidden, map[string]string{"error": i18n.T(ctx.Context(), "admin.error.csrf", "invalid or missing CSRF token")})
 }
 
 // ensureLoginCSRFCookie returns the current login-CSRF cookie's value,

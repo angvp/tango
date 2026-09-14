@@ -11,6 +11,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 )
 
 // sessionCookieName is the cookie carrying an AdminSession's token.
@@ -179,6 +180,6 @@ func forbidden(ctx *tango.Context) error {
 	w := ctx.ResponseWriter()
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusForbidden)
-	_, err := w.Write([]byte("403 Forbidden: this admin account does not have staff access.\n"))
+	_, err := w.Write([]byte(i18n.T(ctx.Context(), "admin.error.not_staff", "403 Forbidden: this admin account does not have staff access.") + "\n"))
 	return err
 }

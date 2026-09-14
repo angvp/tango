@@ -21,7 +21,7 @@ func indexView(nav []navItem, brand Branding) tango.View {
 		}
 
 		return render(ctx, http.StatusOK, indexTemplate, indexPageData{
-			chrome: chrome{Nav: nav, Brand: brand},
+			chrome: chrome{Nav: nav, Brand: brand}.withContext(ctx.Context()),
 		})
 	}
 }
@@ -33,15 +33,15 @@ type indexPageData struct {
 var indexTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
   <div class="flex items-center gap-2">
-    {{template "menuBtn"}}
-    <h1 class="topbar-title">tanGO Admin</h1>
+    {{template "menuBtn" .}}
+    <h1 class="topbar-title">{{.T "admin.layout.title" "tanGO Admin"}}</h1>
   </div>
 </header>
 <div class="content-body">
   <div class="card">
     <div class="empty-state">
-      <p class="empty-state-title">No models registered yet</p>
-      <p class="empty-state-body">Register a model with the admin (registry.Admin().Register) to see it here.</p>
+      <p class="empty-state-title">{{.T "admin.index.empty_title" "No models registered yet"}}</p>
+      <p class="empty-state-body">{{.T "admin.index.empty_body" "Register a model with the admin (registry.Admin().Register) to see it here."}}</p>
     </div>
   </div>
 </div>

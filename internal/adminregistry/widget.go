@@ -50,6 +50,9 @@ type FieldContext struct {
 	// foreign-key fields whose related model is also admin-registered.
 	// Empty means no quick-create affordance should render.
 	RelatedCreateURL string
+	// RelatedCreateLabel is the accessible label for RelatedCreateURL.
+	// Empty means widgets may fall back to their own default.
+	RelatedCreateLabel string
 }
 
 // FieldValues is the whole submitted form, so a Widget's Parse can read

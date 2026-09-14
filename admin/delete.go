@@ -37,7 +37,7 @@ func deleteView(store *db.Store, registration ModelRegistration, nav []navItem, 
 			}
 
 			return render(ctx, http.StatusOK, deleteTemplate, deletePageData{
-				chrome:    pageChrome,
+				chrome:    pageChrome.withContext(ctx.Context()),
 				ModelName: meta.Name,
 				PK:        fmt.Sprint(pkValue),
 				CSRFToken: csrfTokenFromRequest(ctx.Request()),

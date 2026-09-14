@@ -1,6 +1,6 @@
 # API reference
 
-The supported v0.1 public surface: the root package, `model`, `db`, `auth`, `accounts`, and `admin` in full; `migration` primarily through its CLI workflow. Anything not listed here that happens to be exported should be treated as an implementation detail that may change without notice. Generated package documentation (`go doc ./...` locally, or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published) complements this page with full doc comments, but this page is the map of what's actually meant for you to use.
+The supported v0.1 public surface: the root package, `model`, `db`, `auth`, `accounts`, `i18n`, and `admin` in full; `migration` primarily through its CLI workflow. Anything not listed here that happens to be exported should be treated as an implementation detail that may change without notice. Generated package documentation (`go doc ./...` locally, or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published) complements this page with full doc comments, but this page is the map of what's actually meant for you to use.
 
 ## Root package (`github.com/angvp/tango`)
 
@@ -85,6 +85,19 @@ See [application auth](guides/application-auth.md). This package is primitives-o
 | `func CurrentAccountID(ctx *tango.Context, store *db.Store, cookieName string) (int64, bool, error)`, `func CurrentAccount(...) (Account, bool, error)` | Thin, `Active`-aware sugar over `auth.CurrentUserID`, for a host's own Views. Not a route — there is no `/accounts/me/` page in v0.1. |
 
 See [the accounts guide](guides/accounts.md). Built entirely by composing `auth`'s primitives — no new primitives added to `auth` itself; HTML-only, no JSON auth endpoints, no CLI, no template-override hook.
+
+## `i18n` (`github.com/angvp/tango/i18n`)
+
+| Symbol | What it's for |
+|---|---|
+| `func T(ctx context.Context, key, fallback string, args ...any) string` | Looks up a symbolic translation key using the locale carried by `ctx`, falling back to the inline English fallback. If `args` are present, formats the chosen string with `fmt.Sprintf`. |
+| `func RegisterCatalog(locale string, catalog map[string]string)` | Merges a Go-source catalog into the named locale. Multiple calls for one locale merge per key; later values win on key collision. |
+| `type LocaleResolver func(*http.Request) string` | Host-provided per-request locale selection hook. |
+| `func DefaultLocaleResolver(r *http.Request) string` | Parses `Accept-Language` and returns the best registered locale using tanGO's simplified exact-then-base-language matching. |
+| `func Middleware(resolver LocaleResolver) tango.Middleware` | Resolves the locale once per request and stores it on the standard request `context.Context`; pass `nil` to use `DefaultLocaleResolver`. |
+| `func WithLocale(ctx context.Context, locale string) context.Context`, `func Locale(ctx context.Context) string` | Low-level context helpers used by the middleware and useful in tests or custom middleware. |
+
+See [i18n and l10n](guides/i18n.md). Admin is converted to call `i18n.T`, but no first-party app wires the middleware automatically — translation is always a host-level opt-in.
 
 ## `admin` (`github.com/angvp/tango/admin`)
 

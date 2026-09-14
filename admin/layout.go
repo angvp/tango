@@ -1,6 +1,11 @@
 package admin
 
-import "html/template"
+import (
+	"context"
+	"html/template"
+
+	"github.com/angvp/tango/i18n"
+)
 
 // tailwindScriptTag loads Tailwind's Play CDN, per ADR 0003 in the harness
 // docs: no Node/npm build step, JIT-compiled utility classes at runtime.
@@ -20,6 +25,16 @@ type chrome struct {
 	Nav    []navItem
 	Active string
 	Brand  Branding
+	ctx    context.Context
+}
+
+func (c chrome) withContext(ctx context.Context) chrome {
+	c.ctx = ctx
+	return c
+}
+
+func (c chrome) T(key, fallback string, args ...any) string {
+	return i18n.T(c.ctx, key, fallback, args...)
 }
 
 // layoutTemplate is the shared base layout every admin page renders into.
@@ -32,7 +47,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tanGO Admin</title>
+<title>{{.T "admin.layout.title" "tanGO Admin"}}</title>
 ` + tailwindScriptTag + `
 <style type="text/tailwindcss">
 @layer base {
@@ -112,7 +127,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 }
 </style>
 
-{{define "menuBtn"}}<button type="button" class="menu-btn" onclick="tangoAdminNav.open()" aria-label="Open menu">
+{{define "menuBtn"}}<button type="button" class="menu-btn" onclick="tangoAdminNav.open()" aria-label="{{.T "admin.layout.open_menu" "Open menu"}}">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
 </button>{{end}}
 </head>
@@ -122,10 +137,10 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 <aside id="sidebar" class="sidebar">
   <div class="sidebar-brand">
     {{if .Brand.LogoURL}}<img src="{{.Brand.LogoURL}}" alt="" class="h-7 w-7 rounded-md object-cover">{{else}}<span class="sidebar-brand-mark">t</span>{{end}}
-    <span class="sidebar-brand-text">{{if .Brand.Name}}{{.Brand.Name}}{{else}}tanGO Admin{{end}}</span>
+    <span class="sidebar-brand-text">{{if .Brand.Name}}{{.Brand.Name}}{{else}}{{.T "admin.layout.brand" "tanGO Admin"}}{{end}}</span>
   </div>
   <div class="sidebar-nav">
-    <div class="sidebar-section-label">Models</div>
+    <div class="sidebar-section-label">{{.T "admin.layout.models" "Models"}}</div>
     {{$active := .Active}}
     {{range .Nav}}
     <a href="{{.Path}}" class="sidebar-link group{{if eq .Name $active}} sidebar-link-active{{end}}">
@@ -134,7 +149,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
     </a>
     {{end}}
   </div>
-  <div class="sidebar-footer">Signed in over Basic Auth</div>
+  <div class="sidebar-footer">{{.T "admin.layout.signed_in" "Signed in over Basic Auth"}}</div>
 </aside>
 <div class="content">
 {{block "content" .}}{{end}}

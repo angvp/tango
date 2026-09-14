@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/i18n"
 )
 
 // loginRateLimitAttempts and loginRateLimitWindow bound how many failed
@@ -33,5 +34,5 @@ func rateLimitKey(r *http.Request) string {
 // login attempt.
 func tooManyLoginAttempts(ctx *tango.Context) error {
 	ctx.ResponseWriter().Header().Set("Retry-After", "60")
-	return ctx.JSON(http.StatusTooManyRequests, map[string]string{"error": "too many login attempts, try again later"})
+	return ctx.JSON(http.StatusTooManyRequests, map[string]string{"error": i18n.T(ctx.Context(), "admin.error.too_many_login_attempts", "too many login attempts, try again later")})
 }
