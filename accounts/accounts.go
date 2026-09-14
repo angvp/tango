@@ -6,7 +6,7 @@
 // conventional account system without hand-rolling one. Installing it is
 // optional and purely additive — a project with custom identity needs
 // keeps using auth primitives directly and simply doesn't install this
-// package. See CONTEXT.md's "Accounts app" entry.
+// package. See docs/guides/accounts.md.
 package accounts
 
 import (

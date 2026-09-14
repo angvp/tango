@@ -1,6 +1,6 @@
 # API reference
 
-The supported v0.1 public surface: the root package, `model`, `db`, `auth`, and `admin` in full; `migration` primarily through its CLI workflow. Anything not listed here that happens to be exported should be treated as an implementation detail that may change without notice. Generated package documentation (`go doc ./...` locally, or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published) complements this page with full doc comments, but this page is the map of what's actually meant for you to use.
+The supported v0.1 public surface: the root package, `model`, `db`, `auth`, `accounts`, and `admin` in full; `migration` primarily through its CLI workflow. Anything not listed here that happens to be exported should be treated as an implementation detail that may change without notice. Generated package documentation (`go doc ./...` locally, or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published) complements this page with full doc comments, but this page is the map of what's actually meant for you to use.
 
 ## Root package (`github.com/angvp/tango`)
 
@@ -71,6 +71,20 @@ See [persistence CRUD and raw SQL](guides/persistence-crud-and-raw-sql.md) and [
 | `ErrInvalidSessionModel` | Sentinel for an app session model that does not match auth's fixed convention. |
 
 See [application auth](guides/application-auth.md). This package is primitives-only: no default `User` model, no signup view, no login view, and no sharing with admin auth.
+
+## `accounts` (`github.com/angvp/tango/accounts`)
+
+| Symbol | What it's for |
+|---|---|
+| `func New(store *db.Store, opts ...Option) tango.App` | Constructs the accounts application, installable via `InstalledApps` like any reusable app. Mounts a fixed `/accounts/register/`, `/accounts/login/`, `/accounts/logout/`. `New(store)` with no options defaults to signup enabled, a 30-day session in a `tango_account_session` cookie. |
+| `type Account struct{ ID, Email, PasswordHash, Active, CreatedAt }`, `type AccountSession struct{ ID, Token, UserID, ExpiresAt }` | The Application user/session model pair `New` registers. Deliberately no permission-shaped field on `Account` — see [the accounts guide](guides/accounts.md). |
+| `func WithSignupDisabled() Option` | Closes self-service registration; `/accounts/register/` still returns a clear closed-registration response, never 404. Signup is enabled by default. |
+| `func WithSessionDuration(d time.Duration) Option` | Overrides the default 30-day session duration. |
+| `func WithSessionCookieName(name string) Option`, `DefaultSessionCookieName` | Overrides (or names) the session cookie, default `"tango_account_session"`. |
+| `func RequireLogin(store *db.Store, cookieName, loginPath string, next tango.View) tango.View` | View wrapper for a host's own routes, mirroring `auth.RequireLogin`'s shape. `Active` is re-checked on every request through an already-valid session, not just at login. |
+| `func CurrentAccountID(ctx *tango.Context, store *db.Store, cookieName string) (int64, bool, error)`, `func CurrentAccount(...) (Account, bool, error)` | Thin, `Active`-aware sugar over `auth.CurrentUserID`, for a host's own Views. Not a route — there is no `/accounts/me/` page in v0.1. |
+
+See [the accounts guide](guides/accounts.md). Built entirely by composing `auth`'s primitives — no new primitives added to `auth` itself; HTML-only, no JSON auth endpoints, no CLI, no template-override hook.
 
 ## `admin` (`github.com/angvp/tango/admin`)
 

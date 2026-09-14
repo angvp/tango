@@ -27,7 +27,7 @@ type AccountSession struct {
 }
 ```
 
-`Account` is deliberately bare: identity, credential, activity state, a timestamp. There is no `IsStaff`, `Role`, `Group`, or `Permission`-shaped field, and none is planned — see [ADR 0020](../adr/0020-accounts-is-a-conventional-identity-app-not-an-app-permissions-framework.md). An app that needs roles or permissions queries `Account` itself (if installed) or its own domain data, from its own [View wrapper](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
+`Account` is deliberately bare: identity, credential, activity state, a timestamp. There is no `IsStaff`, `Role`, `Group`, or `Permission`-shaped field, and none is planned. An app that needs roles or permissions queries `Account` itself (if installed) or its own domain data, from its own [View wrapper](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
 
 `Email` is always stored lowercased and trimmed, and every lookup normalizes the same way — `Alice@Example.com` and `alice@example.com` are always the same `Account`.
 
@@ -57,7 +57,7 @@ config := tango.Config{
 `accounts` mounts a fixed prefix, like every other reusable app in tanGO (`admin` owns `/admin/`, the `greetings` example owns `/greetings/`) — there is no host-configurable mount prefix in v0.1:
 
 - `GET`/`POST /accounts/register/` — registration. On success, creates the `Account` (`Active=true` immediately — there's no email verification step yet), creates a session, and redirects straight to the post-login destination. No separate login step is needed after signing up.
-- `GET`/`POST /accounts/login/` — login. Any failure (unknown email, wrong password, or an inactive account) produces the exact same generic error — none of those cases are distinguishable from the response, so a failed attempt never reveals whether a given email is even registered. This is deliberately asymmetric with registration's specific "this email is already registered" error — see [ADR 0021](../adr/0021-accounts-security-defaults-differ-from-admin-where-the-trust-boundary-differs.md).
+- `GET`/`POST /accounts/login/` — login. Any failure (unknown email, wrong password, or an inactive account) produces the exact same generic error — none of those cases are distinguishable from the response, so a failed attempt never reveals whether a given email is even registered. This is deliberately asymmetric with registration's specific "this email is already registered" error: login is a credential check, where a generic error closes off an oracle for identifying registered emails; registration is a self-service form where a genuine user needs to know why their signup didn't go through, and an email address isn't a secret the way a password is.
 - `POST /accounts/logout/` — deletes only the current session; any other session belonging to the same account is untouched. No `GET` route.
 
 Both `register` and `login` accept a `next` query parameter/form value, validated against any same-origin path (not restricted to `/accounts/`, since accounts's login can be reached from protecting any page across your site) — an off-site or malformed `next` falls back to `/`.
