@@ -2,6 +2,8 @@
 
 The supported v0.1 public surface: the root package, `model`, `db`, `auth`, `accounts`, `i18n`, and `admin` in full; `migration` primarily through its CLI workflow. Anything not listed here that happens to be exported should be treated as an implementation detail that may change without notice. Generated package documentation (`go doc ./...` locally, or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published) complements this page with full doc comments, but this page is the map of what's actually meant for you to use.
 
+For coding-agent-oriented recipes, see the root `AGENTS.md` and `docs/agents/`. Those files are compact task checklists and pointers to canonical examples, not a separate API surface.
+
 ## Root package (`github.com/angvp/tango`)
 
 | Symbol | What it's for | See also |
