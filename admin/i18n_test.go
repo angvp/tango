@@ -24,49 +24,66 @@ func adminI18NMiddleware() tango.Middleware {
 	return i18n.Middleware(func(*http.Request) string { return adminI18NLocale })
 }
 
-func TestAdminLoginFallsBackWithoutI18nMiddleware(t *testing.T) {
-	handler, _ := buildLoginTestHandler(t)
-	i18n.RegisterCatalog(adminI18NLocale, map[string]string{
-		"admin.login.username": "Usuario",
-	})
-
-	response := performAdminRequest(handler, http.MethodGet, "/admin/login/", nil)
-
-	if !strings.Contains(response.Body.String(), "Username") {
-		t.Fatalf("login did not render English fallback without middleware:\n%s", response.Body.String())
+// TestAdminLoginI18NFallback covers the login page's locale handling: no
+// i18n middleware installed, an installed middleware with a registered
+// locale (translated strings render), and an installed middleware whose
+// resolved locale has no registered catalog (falls back to English).
+func TestAdminLoginI18NFallback(t *testing.T) {
+	tests := []struct {
+		name          string
+		buildHandler  func(t *testing.T) http.Handler
+		catalog       map[string]string
+		wantContained []string
+	}{
+		{
+			name: "no i18n middleware falls back to English",
+			buildHandler: func(t *testing.T) http.Handler {
+				handler, _ := buildLoginTestHandler(t)
+				return handler
+			},
+			catalog:       map[string]string{"admin.login.username": "Usuario"},
+			wantContained: []string{"Username"},
+		},
+		{
+			name: "i18n middleware with a registered locale translates the page",
+			buildHandler: func(t *testing.T) http.Handler {
+				handler, _ := buildLoginI18NTestHandler(t)
+				return handler
+			},
+			catalog: map[string]string{
+				"admin.login.title":      "Administración tanGO",
+				"admin.login.username":   "Usuario",
+				"admin.login.password":   "Contraseña",
+				"admin.login.submit":     "Entrar",
+				"admin.layout.open_menu": "Abrir menú",
+			},
+			wantContained: []string{"Administración tanGO", "Usuario", "Contraseña", "Entrar"},
+		},
+		{
+			name: "i18n middleware resolving an unregistered locale falls back to English",
+			buildHandler: func(t *testing.T) http.Handler {
+				handler, _ := buildLoginTestHandlerWithMiddleware(t, i18n.Middleware(func(*http.Request) string { return "zz-missing-locale" }))
+				return handler
+			},
+			catalog:       map[string]string{"admin.login.username": "Usuario"},
+			wantContained: []string{"Username"},
+		},
 	}
-}
 
-func TestAdminLoginTranslatesWithI18nMiddleware(t *testing.T) {
-	handler, _ := buildLoginI18NTestHandler(t)
-	i18n.RegisterCatalog(adminI18NLocale, map[string]string{
-		"admin.login.title":      "Administración tanGO",
-		"admin.login.username":   "Usuario",
-		"admin.login.password":   "Contraseña",
-		"admin.login.submit":     "Entrar",
-		"admin.layout.open_menu": "Abrir menú",
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := tt.buildHandler(t)
+			i18n.RegisterCatalog(adminI18NLocale, tt.catalog)
 
-	response := performAdminRequest(handler, http.MethodGet, "/admin/login/", nil)
-	body := response.Body.String()
+			response := performAdminRequest(handler, http.MethodGet, "/admin/login/", nil)
+			body := response.Body.String()
 
-	for _, want := range []string{"Administración tanGO", "Usuario", "Contraseña", "Entrar"} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("login body missing translated text %q:\n%s", want, body)
-		}
-	}
-}
-
-func TestAdminLoginFallsBackForUnregisteredLocale(t *testing.T) {
-	handler, _ := buildLoginTestHandlerWithMiddleware(t, i18n.Middleware(func(*http.Request) string { return "zz-missing-locale" }))
-	i18n.RegisterCatalog(adminI18NLocale, map[string]string{
-		"admin.login.username": "Usuario",
-	})
-
-	response := performAdminRequest(handler, http.MethodGet, "/admin/login/", nil)
-
-	if !strings.Contains(response.Body.String(), "Username") {
-		t.Fatalf("login did not render English fallback for unregistered locale:\n%s", response.Body.String())
+			for _, want := range tt.wantContained {
+				if !strings.Contains(body, want) {
+					t.Fatalf("login body missing expected text %q:\n%s", want, body)
+				}
+			}
+		})
 	}
 }
 

@@ -112,95 +112,138 @@ func performWhoamiID(handler http.Handler, cookie *http.Cookie) *httptest.Respon
 	return response
 }
 
-func TestCurrentAccountReturnsIdentityForValidSession(t *testing.T) {
-	handler, _ := buildWhoamiTestHandler(t)
-	registerAccount(t, handler, "tara@example.com", "correct-password")
-
-	loginResponse := postLogin(t, handler, url.Values{"email": {"tara@example.com"}, "password": {"correct-password"}})
-	sessionCookie := sessionCookieFrom(t, loginResponse)
-
-	request := httptest.NewRequest(http.MethodGet, "/whoami/", nil)
-	request.AddCookie(sessionCookie)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body: %s", response.Code, http.StatusOK, response.Body.String())
+// TestCurrentAccountIdentityLookup covers accounts.CurrentAccount, which
+// returns the full identity (here, the email surfaced in the JSON body)
+// rather than just an ok/not-ok signal.
+func TestCurrentAccountIdentityLookup(t *testing.T) {
+	cases := []struct {
+		name             string
+		setup            func(t *testing.T) (http.Handler, *http.Cookie)
+		wantStatus       int
+		wantBodyContains string
+	}{
+		{
+			name: "valid session returns the account's identity",
+			setup: func(t *testing.T) (http.Handler, *http.Cookie) {
+				handler, _ := buildWhoamiTestHandler(t)
+				registerAccount(t, handler, "tara@example.com", "correct-password")
+				loginResponse := postLogin(t, handler, url.Values{"email": {"tara@example.com"}, "password": {"correct-password"}})
+				return handler, sessionCookieFrom(t, loginResponse)
+			},
+			wantStatus:       http.StatusOK,
+			wantBodyContains: "tara@example.com",
+		},
+		{
+			name: "missing session reports no current account",
+			setup: func(t *testing.T) (http.Handler, *http.Cookie) {
+				handler, _ := buildWhoamiTestHandler(t)
+				return handler, nil
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
 	}
-	if !strings.Contains(response.Body.String(), "tara@example.com") {
-		t.Fatalf("body = %q, want it to contain the current account's email", response.Body.String())
-	}
-}
 
-func TestCurrentAccountReportsNoAccountForMissingSession(t *testing.T) {
-	handler, _ := buildWhoamiTestHandler(t)
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			handler, cookie := testCase.setup(t)
 
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/whoami/", nil))
+			request := httptest.NewRequest(http.MethodGet, "/whoami/", nil)
+			if cookie != nil {
+				request.AddCookie(cookie)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
 
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
-	}
-}
-
-func TestCurrentAccountIDReturnsIDForValidActiveSession(t *testing.T) {
-	handler, _ := buildWhoamiTestHandler(t)
-	registerAccount(t, handler, "uma@example.com", "correct-password")
-	loginResponse := postLogin(t, handler, url.Values{"email": {"uma@example.com"}, "password": {"correct-password"}})
-	sessionCookie := sessionCookieFrom(t, loginResponse)
-
-	response := performWhoamiID(handler, sessionCookie)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body: %s", response.Code, http.StatusOK, response.Body.String())
-	}
-	if strings.Contains(response.Body.String(), `"id":""`) {
-		t.Fatalf("body = %q, want a non-empty id", response.Body.String())
-	}
-}
-
-func TestCurrentAccountIDReportsNotOKForInvalidSessionCookie(t *testing.T) {
-	handler, _ := buildWhoamiTestHandler(t)
-
-	response := performWhoamiID(handler, &http.Cookie{Name: "tango_account_session", Value: "bogus-token"})
-
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status = %d, want %d, body: %s", response.Code, testCase.wantStatus, response.Body.String())
+			}
+			if testCase.wantBodyContains != "" && !strings.Contains(response.Body.String(), testCase.wantBodyContains) {
+				t.Fatalf("body = %q, want it to contain %q", response.Body.String(), testCase.wantBodyContains)
+			}
+		})
 	}
 }
 
-func TestCurrentAccountIDReportsNotOKAfterAccountDeactivated(t *testing.T) {
-	handler, sqlDB := buildWhoamiTestHandler(t)
-	registerAccount(t, handler, "victor@example.com", "correct-password")
-	loginResponse := postLogin(t, handler, url.Values{"email": {"victor@example.com"}, "password": {"correct-password"}})
-	sessionCookie := sessionCookieFrom(t, loginResponse)
+// TestCurrentAccountIDLookup covers accounts.CurrentAccountID across the
+// scenarios where it must report not-ok: an invalid cookie, a deactivated
+// account, and an expired session, alongside the happy path.
+func TestCurrentAccountIDLookup(t *testing.T) {
+	cases := []struct {
+		name       string
+		setup      func(t *testing.T) (http.Handler, *http.Cookie)
+		wantStatus int
+		checkBody  func(t *testing.T, body string)
+	}{
+		{
+			name: "valid active session returns a non-empty id",
+			setup: func(t *testing.T) (http.Handler, *http.Cookie) {
+				handler, _ := buildWhoamiTestHandler(t)
+				registerAccount(t, handler, "uma@example.com", "correct-password")
+				loginResponse := postLogin(t, handler, url.Values{"email": {"uma@example.com"}, "password": {"correct-password"}})
+				return handler, sessionCookieFrom(t, loginResponse)
+			},
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				if strings.Contains(body, `"id":""`) {
+					t.Fatalf("body = %q, want a non-empty id", body)
+				}
+			},
+		},
+		{
+			name: "invalid session cookie reports not ok",
+			setup: func(t *testing.T) (http.Handler, *http.Cookie) {
+				handler, _ := buildWhoamiTestHandler(t)
+				return handler, &http.Cookie{Name: "tango_account_session", Value: "bogus-token"}
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "account deactivated after login reports not ok",
+			setup: func(t *testing.T) (http.Handler, *http.Cookie) {
+				handler, sqlDB := buildWhoamiTestHandler(t)
+				registerAccount(t, handler, "victor@example.com", "correct-password")
+				loginResponse := postLogin(t, handler, url.Values{"email": {"victor@example.com"}, "password": {"correct-password"}})
+				sessionCookie := sessionCookieFrom(t, loginResponse)
 
-	if before := performWhoamiID(handler, sessionCookie); before.Code != http.StatusOK {
-		t.Fatalf("status before deactivation = %d, want %d", before.Code, http.StatusOK)
+				if before := performWhoamiID(handler, sessionCookie); before.Code != http.StatusOK {
+					t.Fatalf("status before deactivation = %d, want %d", before.Code, http.StatusOK)
+				}
+
+				if _, err := sqlDB.Exec("UPDATE account SET active = 0 WHERE email = ?", "victor@example.com"); err != nil {
+					t.Fatalf("deactivate account: %v", err)
+				}
+				return handler, sessionCookie
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "expired session reports not ok",
+			setup: func(t *testing.T) (http.Handler, *http.Cookie) {
+				// A negative session duration produces an AccountSession
+				// whose ExpiresAt is already in the past the moment it's
+				// created — the simplest way to exercise expiry without a
+				// fake clock or a sleep.
+				handler, _ := buildWhoamiTestHandler(t, accounts.WithSessionDuration(-time.Hour))
+				registerAccount(t, handler, "wendy@example.com", "correct-password")
+				loginResponse := postLogin(t, handler, url.Values{"email": {"wendy@example.com"}, "password": {"correct-password"}})
+				return handler, sessionCookieFrom(t, loginResponse)
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
 	}
 
-	if _, err := sqlDB.Exec("UPDATE account SET active = 0 WHERE email = ?", "victor@example.com"); err != nil {
-		t.Fatalf("deactivate account: %v", err)
-	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			handler, cookie := testCase.setup(t)
 
-	after := performWhoamiID(handler, sessionCookie)
-	if after.Code != http.StatusUnauthorized {
-		t.Fatalf("status after deactivation = %d, want %d — CurrentAccountID must use the same strict Active check as RequireLogin", after.Code, http.StatusUnauthorized)
-	}
-}
+			response := performWhoamiID(handler, cookie)
 
-func TestCurrentAccountIDReportsNotOKForExpiredSession(t *testing.T) {
-	// A negative session duration produces an AccountSession whose
-	// ExpiresAt is already in the past the moment it's created — the
-	// simplest way to exercise expiry without a fake clock or a sleep.
-	handler, _ := buildWhoamiTestHandler(t, accounts.WithSessionDuration(-time.Hour))
-	registerAccount(t, handler, "wendy@example.com", "correct-password")
-	loginResponse := postLogin(t, handler, url.Values{"email": {"wendy@example.com"}, "password": {"correct-password"}})
-	sessionCookie := sessionCookieFrom(t, loginResponse)
-
-	response := performWhoamiID(handler, sessionCookie)
-
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status for an already-expired session = %d, want %d", response.Code, http.StatusUnauthorized)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status = %d, want %d, body: %s", response.Code, testCase.wantStatus, response.Body.String())
+			}
+			if testCase.checkBody != nil {
+				testCase.checkBody(t, response.Body.String())
+			}
+		})
 	}
 }

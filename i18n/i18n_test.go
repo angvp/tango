@@ -9,188 +9,246 @@ import (
 	"github.com/angvp/tango"
 )
 
-func TestTFallsBackWhenNoLocaleIsSet(t *testing.T) {
-	resetCatalogsForTest()
+func TestTFallbackAndLookupBehavior(t *testing.T) {
+	cases := []struct {
+		name     string
+		catalogs map[string]map[string]string
+		locale   string
+		key      string
+		fallback string
+		args     []any
+		want     string
+	}{
+		{
+			name:     "falls back when no locale is set on context",
+			key:      "admin.login.title",
+			fallback: "Log in",
+			want:     "Log in",
+		},
+		{
+			name:     "falls back when no catalog exists for the set locale",
+			locale:   "es",
+			key:      "admin.login.title",
+			fallback: "Log in",
+			want:     "Log in",
+		},
+		{
+			name:     "uses catalog value when key exists in registered locale",
+			catalogs: map[string]map[string]string{"es": {"admin.login.title": "Iniciar sesión"}},
+			locale:   "es",
+			key:      "admin.login.title",
+			fallback: "Log in",
+			want:     "Iniciar sesión",
+		},
+		{
+			name:     "falls back when catalog exists but key is missing",
+			catalogs: map[string]map[string]string{"es": {"admin.login.title": "Iniciar sesión"}},
+			locale:   "es",
+			key:      "admin.logout.title",
+			fallback: "Log out",
+			want:     "Log out",
+		},
+		{
+			name:     "formats catalog value when args are present",
+			catalogs: map[string]map[string]string{"es": {"admin.create.title": "Nuevo %s"}},
+			locale:   "es",
+			key:      "admin.create.title",
+			fallback: "New %s",
+			args:     []any{"Post"},
+			want:     "Nuevo Post",
+		},
+		{
+			name:     "formats fallback when args are present and catalog value is absent",
+			locale:   "es",
+			key:      "admin.create.title",
+			fallback: "New %s",
+			args:     []any{"Post"},
+			want:     "New Post",
+		},
+		{
+			name:     "does not format catalog value when args are absent",
+			catalogs: map[string]map[string]string{"es": {"admin.percent": "Progress: %s"}},
+			locale:   "es",
+			key:      "admin.percent",
+			fallback: "Progress: %s",
+			want:     "Progress: %s",
+		},
+		{
+			name: "tries exact locale before base language",
+			catalogs: map[string]map[string]string{
+				"es":    {"admin.login.title": "Iniciar sesión"},
+				"es-MX": {"admin.login.title": "Entrar"},
+			},
+			locale:   "es-MX",
+			key:      "admin.login.title",
+			fallback: "Log in",
+			want:     "Entrar",
+		},
+		{
+			name:     "falls back to base language catalog when exact locale is missing",
+			catalogs: map[string]map[string]string{"es": {"admin.login.title": "Iniciar sesión"}},
+			locale:   "es-MX",
+			key:      "admin.login.title",
+			fallback: "Log in",
+			want:     "Iniciar sesión",
+		},
+	}
 
-	got := T(context.Background(), "admin.login.title", "Log in")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetCatalogsForTest()
+			for locale, catalog := range tc.catalogs {
+				RegisterCatalog(locale, catalog)
+			}
 
-	if got != "Log in" {
-		t.Fatalf("T returned %q, want fallback", got)
+			ctx := context.Background()
+			if tc.locale != "" {
+				ctx = WithLocale(ctx, tc.locale)
+			}
+
+			got := T(ctx, tc.key, tc.fallback, tc.args...)
+
+			if got != tc.want {
+				t.Errorf("case %q: T returned %q, want %q", tc.name, got, tc.want)
+			}
+		})
 	}
 }
 
-func TestTFallsBackWhenNoCatalogExistsForLocale(t *testing.T) {
-	resetCatalogsForTest()
-	ctx := WithLocale(context.Background(), "es")
-
-	got := T(ctx, "admin.login.title", "Log in")
-
-	if got != "Log in" {
-		t.Fatalf("T returned %q, want fallback", got)
-	}
-}
-
-func TestTUsesCatalogValueWhenKeyExists(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.login.title": "Iniciar sesión"})
-	ctx := WithLocale(context.Background(), "es")
-
-	got := T(ctx, "admin.login.title", "Log in")
-
-	if got != "Iniciar sesión" {
-		t.Fatalf("T returned %q, want catalog value", got)
-	}
-}
-
-func TestTFallsBackWhenCatalogKeyIsMissing(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.login.title": "Iniciar sesión"})
-	ctx := WithLocale(context.Background(), "es")
-
-	got := T(ctx, "admin.logout.title", "Log out")
-
-	if got != "Log out" {
-		t.Fatalf("T returned %q, want fallback", got)
-	}
-}
-
-func TestTFormatsCatalogValueWhenArgsArePresent(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.create.title": "Nuevo %s"})
-	ctx := WithLocale(context.Background(), "es")
-
-	got := T(ctx, "admin.create.title", "New %s", "Post")
-
-	if got != "Nuevo Post" {
-		t.Fatalf("T returned %q, want formatted catalog value", got)
-	}
-}
-
-func TestTFormatsFallbackWhenArgsArePresent(t *testing.T) {
-	resetCatalogsForTest()
-	ctx := WithLocale(context.Background(), "es")
-
-	got := T(ctx, "admin.create.title", "New %s", "Post")
-
-	if got != "New Post" {
-		t.Fatalf("T returned %q, want formatted fallback", got)
-	}
-}
-
-func TestTDoesNotFormatWhenArgsAreAbsent(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.percent": "Progress: %s"})
-	ctx := WithLocale(context.Background(), "es")
-
-	got := T(ctx, "admin.percent", "Progress: %s")
-
-	if got != "Progress: %s" {
-		t.Fatalf("T returned %q, want unformatted catalog value", got)
-	}
-}
-
-func TestTTriesExactLocaleBeforeBaseLanguage(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.login.title": "Iniciar sesión"})
-	RegisterCatalog("es-MX", map[string]string{"admin.login.title": "Entrar"})
-	ctx := WithLocale(context.Background(), "es-MX")
-
-	got := T(ctx, "admin.login.title", "Log in")
-
-	if got != "Entrar" {
-		t.Fatalf("T returned %q, want exact-locale catalog value", got)
-	}
-}
-
-func TestTFallsBackToBaseLanguageCatalog(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.login.title": "Iniciar sesión"})
-	ctx := WithLocale(context.Background(), "es-MX")
-
-	got := T(ctx, "admin.login.title", "Log in")
-
-	if got != "Iniciar sesión" {
-		t.Fatalf("T returned %q, want base-language catalog value", got)
-	}
-}
-
-func TestRegisterCatalogMergesKeysForSameLocale(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.login.title": "Iniciar sesión"})
-	RegisterCatalog("es", map[string]string{"admin.button.save": "Guardar"})
-	ctx := WithLocale(context.Background(), "es")
-
-	login := T(ctx, "admin.login.title", "Log in")
-	save := T(ctx, "admin.button.save", "Save")
-
-	if login != "Iniciar sesión" || save != "Guardar" {
-		t.Fatalf("merged catalog values = %q, %q; want both keys preserved", login, save)
-	}
-}
-
-func TestRegisterCatalogLastWriteWinsPerKey(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.button.save": "Salvar"})
-	RegisterCatalog("es", map[string]string{"admin.button.save": "Guardar"})
-	ctx := WithLocale(context.Background(), "es")
-
-	got := T(ctx, "admin.button.save", "Save")
-
-	if got != "Guardar" {
-		t.Fatalf("T returned %q, want last registered value", got)
-	}
-}
-
-func TestRegisterCatalogKeepsLocalesIsolated(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"admin.button.save": "Guardar"})
-	RegisterCatalog("fr", map[string]string{"admin.button.save": "Enregistrer"})
-
-	spanish := T(WithLocale(context.Background(), "es"), "admin.button.save", "Save")
-	french := T(WithLocale(context.Background(), "fr"), "admin.button.save", "Save")
-
-	if spanish != "Guardar" || french != "Enregistrer" {
-		t.Fatalf("catalog values = %q, %q; want locales isolated", spanish, french)
-	}
-}
-
-func TestDefaultLocaleResolverMatchesExactLocale(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es-MX", map[string]string{"hello": "qué onda"})
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
-	request.Header.Set("Accept-Language", "fr;q=0.8, es-MX;q=0.9, es;q=0.7")
-
-	got := DefaultLocaleResolver(request)
-
-	if got != "es-MX" {
-		t.Fatalf("DefaultLocaleResolver returned %q, want exact locale", got)
-	}
-}
-
-func TestDefaultLocaleResolverMatchesBaseLanguage(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"hello": "hola"})
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
-	request.Header.Set("Accept-Language", "es-MX, fr;q=0.9")
-
-	got := DefaultLocaleResolver(request)
-
-	if got != "es" {
-		t.Fatalf("DefaultLocaleResolver returned %q, want base language", got)
-	}
-}
-
-func TestDefaultLocaleResolverFallsThroughForMissingOrMalformedHeader(t *testing.T) {
-	resetCatalogsForTest()
-	RegisterCatalog("es", map[string]string{"hello": "hola"})
-
-	for _, header := range []string{"", "::::", "es;q=not-a-number"} {
-		request := httptest.NewRequest(http.MethodGet, "/", nil)
-		request.Header.Set("Accept-Language", header)
-
-		if got := DefaultLocaleResolver(request); got != "" {
-			t.Fatalf("DefaultLocaleResolver(%q) returned %q, want empty locale", header, got)
+func TestRegisterCatalogMergeSemantics(t *testing.T) {
+	cases := []struct {
+		name          string
+		registrations []struct {
+			locale  string
+			catalog map[string]string
 		}
+		checks []struct {
+			locale   string
+			key      string
+			fallback string
+			want     string
+		}
+	}{
+		{
+			name: "merges keys registered separately for the same locale",
+			registrations: []struct {
+				locale  string
+				catalog map[string]string
+			}{
+				{"es", map[string]string{"admin.login.title": "Iniciar sesión"}},
+				{"es", map[string]string{"admin.button.save": "Guardar"}},
+			},
+			checks: []struct {
+				locale   string
+				key      string
+				fallback string
+				want     string
+			}{
+				{"es", "admin.login.title", "Log in", "Iniciar sesión"},
+				{"es", "admin.button.save", "Save", "Guardar"},
+			},
+		},
+		{
+			name: "last write wins per key for the same locale",
+			registrations: []struct {
+				locale  string
+				catalog map[string]string
+			}{
+				{"es", map[string]string{"admin.button.save": "Salvar"}},
+				{"es", map[string]string{"admin.button.save": "Guardar"}},
+			},
+			checks: []struct {
+				locale   string
+				key      string
+				fallback string
+				want     string
+			}{
+				{"es", "admin.button.save", "Save", "Guardar"},
+			},
+		},
+		{
+			name: "keeps locales isolated from one another",
+			registrations: []struct {
+				locale  string
+				catalog map[string]string
+			}{
+				{"es", map[string]string{"admin.button.save": "Guardar"}},
+				{"fr", map[string]string{"admin.button.save": "Enregistrer"}},
+			},
+			checks: []struct {
+				locale   string
+				key      string
+				fallback string
+				want     string
+			}{
+				{"es", "admin.button.save", "Save", "Guardar"},
+				{"fr", "admin.button.save", "Save", "Enregistrer"},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetCatalogsForTest()
+			for _, reg := range tc.registrations {
+				RegisterCatalog(reg.locale, reg.catalog)
+			}
+
+			for _, check := range tc.checks {
+				got := T(WithLocale(context.Background(), check.locale), check.key, check.fallback)
+				if got != check.want {
+					t.Errorf("case %q: T(locale=%q, key=%q) = %q, want %q", tc.name, check.locale, check.key, got, check.want)
+				}
+			}
+		})
+	}
+}
+
+func TestDefaultLocaleResolverResolution(t *testing.T) {
+	cases := []struct {
+		name           string
+		catalogLocale  string
+		catalog        map[string]string
+		acceptHeaders  []string
+		wantForHeaders string
+	}{
+		{
+			name:           "matches exact locale over a higher-quality base language",
+			catalogLocale:  "es-MX",
+			catalog:        map[string]string{"hello": "qué onda"},
+			acceptHeaders:  []string{"fr;q=0.8, es-MX;q=0.9, es;q=0.7"},
+			wantForHeaders: "es-MX",
+		},
+		{
+			name:           "matches base language when exact locale catalog is missing",
+			catalogLocale:  "es",
+			catalog:        map[string]string{"hello": "hola"},
+			acceptHeaders:  []string{"es-MX, fr;q=0.9"},
+			wantForHeaders: "es",
+		},
+		{
+			name:           "falls through to empty locale for missing or malformed header",
+			catalogLocale:  "es",
+			catalog:        map[string]string{"hello": "hola"},
+			acceptHeaders:  []string{"", "::::", "es;q=not-a-number"},
+			wantForHeaders: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetCatalogsForTest()
+			RegisterCatalog(tc.catalogLocale, tc.catalog)
+
+			for _, header := range tc.acceptHeaders {
+				request := httptest.NewRequest(http.MethodGet, "/", nil)
+				request.Header.Set("Accept-Language", header)
+
+				if got := DefaultLocaleResolver(request); got != tc.wantForHeaders {
+					t.Errorf("case %q: DefaultLocaleResolver(%q) returned %q, want %q", tc.name, header, got, tc.wantForHeaders)
+				}
+			}
+		})
 	}
 }
 

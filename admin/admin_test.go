@@ -26,42 +26,196 @@ type adminShellPost struct {
 	Title string
 }
 
-func TestAdminIndexRedirectsToFirstRegisteredModel(t *testing.T) {
-	handler, cookie := buildAuthenticatedAdminHandler(t)
+// TestAdminSessionGating covers how requests to admin routes respond to
+// every session/account state this milestone distinguishes: no session, an
+// invalid session cookie, a valid session, an account deactivated after
+// login, a non-staff account, and a staff (but non-superuser) account —
+// plus the plain index-redirect behavior for an authenticated session.
+func TestAdminSessionGating(t *testing.T) {
+	tests := []struct {
+		name string
+		// build returns the handler and fully-formed request to send.
+		build func(t *testing.T) (http.Handler, *http.Request)
+		// check verifies the response for this scenario.
+		check func(t *testing.T, response *httptest.ResponseRecorder)
+	}{
+		{
+			name: "authenticated GET /admin/ redirects to the first registered model",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, cookie := buildAuthenticatedAdminHandler(t)
+				request := httptest.NewRequest(http.MethodGet, "/admin/", nil)
+				request.AddCookie(cookie)
+				return handler, request
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code != http.StatusFound {
+					t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+				}
+				if got := response.Header().Get("Location"); got != "/admin/admin_shell_user/" {
+					t.Fatalf("Location = %q, want %q", got, "/admin/admin_shell_user/")
+				}
+			},
+		},
+		{
+			name: "authenticated GET /admin (no trailing slash) also redirects to the first registered model",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, cookie := buildAuthenticatedAdminHandler(t)
+				request := httptest.NewRequest(http.MethodGet, "/admin", nil)
+				request.AddCookie(cookie)
+				return handler, request
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code != http.StatusFound {
+					t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+				}
+				if got := response.Header().Get("Location"); got != "/admin/admin_shell_user/" {
+					t.Fatalf("Location = %q, want %q", got, "/admin/admin_shell_user/")
+				}
+			},
+		},
+		{
+			name: "GET /admin/ without a session redirects to login",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, _ := buildAuthenticatedAdminHandler(t)
+				return handler, httptest.NewRequest(http.MethodGet, "/admin/", nil)
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code != http.StatusFound {
+					t.Fatalf("status = %d, want %d (redirect to login)", response.Code, http.StatusFound)
+				}
+				if got := response.Header().Get("Location"); !strings.HasPrefix(got, "/admin/login/") {
+					t.Fatalf("Location = %q, want redirect to /admin/login/", got)
+				}
+			},
+		},
+		{
+			name: "GET on a model route without a session redirects to login with a next parameter",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, _ := buildAuthenticatedAdminHandler(t)
+				return handler, httptest.NewRequest(http.MethodGet, "/admin/admin_shell_user/", nil)
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code != http.StatusFound {
+					t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+				}
+				location := response.Header().Get("Location")
+				if !strings.HasPrefix(location, "/admin/login/?next=") {
+					t.Fatalf("Location = %q, want redirect to /admin/login/ with next", location)
+				}
+			},
+		},
+		{
+			name: "GET on a model route with an invalid session cookie redirects to login",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, _ := buildAuthenticatedAdminHandler(t)
+				request := httptest.NewRequest(http.MethodGet, "/admin/admin_shell_user/", nil)
+				request.AddCookie(&http.Cookie{Name: "tango_admin_session", Value: "bogus-token"})
+				return handler, request
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code != http.StatusFound {
+					t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+				}
+			},
+		},
+		{
+			name: "GET on a model route with a valid session reaches the view",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, cookie := buildAuthenticatedAdminHandler(t)
+				request := httptest.NewRequest(http.MethodGet, "/admin/admin_shell_user/", nil)
+				request.AddCookie(cookie)
+				return handler, request
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code == http.StatusFound {
+					t.Fatal("status = redirect, want request to reach view with a valid session")
+				}
+			},
+		},
+		{
+			name: "valid session for an account deactivated after login redirects to login, not 403",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, store, sqlDB := buildAdminHandlerWithStore(t)
+				if err := admin.CreateAccount(context.Background(), store, "wasactive", "secret"); err != nil {
+					t.Fatalf("seed admin account: %v", err)
+				}
+				cookie := loginAndGetSessionCookie(t, handler, "wasactive", "secret")
 
-	response := performAdminRequest(handler, http.MethodGet, "/admin/", cookie)
+				// Flip Active directly (bypassing the CLI's Deactivate,
+				// which would also invalidate the session) to isolate
+				// exactly what an inactive-but-still-session-holding
+				// account gets: a login redirect, the same as no session
+				// at all — never 403, which is reserved for an
+				// active-but-non-staff account. sessionUser's existing
+				// !Active check runs before requireSession ever looks at
+				// IsStaff, so this also confirms that ordering.
+				if _, err := sqlDB.Exec("UPDATE admin_user SET active = 0 WHERE username = 'wasactive'"); err != nil {
+					t.Fatalf("deactivate row directly: %v", err)
+				}
 
-	if response.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+				request := httptest.NewRequest(http.MethodGet, "/admin/admin_shell_user/", nil)
+				request.AddCookie(cookie)
+				return handler, request
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code != http.StatusFound {
+					t.Fatalf("status = %d, want %d (redirect to login, not 403)", response.Code, http.StatusFound)
+				}
+				if got := response.Header().Get("Location"); !strings.HasPrefix(got, "/admin/login/") {
+					t.Fatalf("Location = %q, want redirect to /admin/login/", got)
+				}
+			},
+		},
+		{
+			name: "valid session for a non-staff account returns 403 Forbidden",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, store, _ := buildAdminHandlerWithStore(t)
+				if err := admin.CreateAccount(context.Background(), store, "guest", "secret", admin.WithoutStaff()); err != nil {
+					t.Fatalf("seed non-staff admin account: %v", err)
+				}
+				cookie := loginAndGetSessionCookie(t, handler, "guest", "secret")
+
+				request := httptest.NewRequest(http.MethodGet, "/admin/admin_shell_user/", nil)
+				request.AddCookie(cookie)
+				return handler, request
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code != http.StatusForbidden {
+					t.Fatalf("status = %d, want %d (403 Forbidden)", response.Code, http.StatusForbidden)
+				}
+			},
+		},
+		{
+			name: "valid session for a staff-only account (not superuser) reaches the view",
+			build: func(t *testing.T) (http.Handler, *http.Request) {
+				handler, store, _ := buildAdminHandlerWithStore(t)
+				if err := admin.CreateAccount(context.Background(), store, "staffonly", "secret", admin.WithoutSuperuser()); err != nil {
+					t.Fatalf("seed staff-only admin account: %v", err)
+				}
+				cookie := loginAndGetSessionCookie(t, handler, "staffonly", "secret")
+
+				request := httptest.NewRequest(http.MethodGet, "/admin/admin_shell_user/", nil)
+				request.AddCookie(cookie)
+				return handler, request
+			},
+			check: func(t *testing.T, response *httptest.ResponseRecorder) {
+				if response.Code == http.StatusForbidden {
+					t.Fatal("status = 403, want a staff account (regardless of IsSuperuser) to reach the view")
+				}
+				if response.Code == http.StatusFound {
+					t.Fatal("status = redirect, want request to reach view with a valid staff session")
+				}
+			},
+		},
 	}
-	if got := response.Header().Get("Location"); got != "/admin/admin_shell_user/" {
-		t.Fatalf("Location = %q, want %q", got, "/admin/admin_shell_user/")
-	}
-}
 
-func TestAdminIndexWithoutTrailingSlashAlsoRedirects(t *testing.T) {
-	handler, cookie := buildAuthenticatedAdminHandler(t)
-
-	response := performAdminRequest(handler, http.MethodGet, "/admin", cookie)
-
-	if response.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
-	}
-	if got := response.Header().Get("Location"); got != "/admin/admin_shell_user/" {
-		t.Fatalf("Location = %q, want %q", got, "/admin/admin_shell_user/")
-	}
-}
-
-func TestAdminIndexRequiresSession(t *testing.T) {
-	handler, _ := buildAuthenticatedAdminHandler(t)
-
-	response := performAdminRequest(handler, http.MethodGet, "/admin/", nil)
-
-	if response.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d (redirect to login)", response.Code, http.StatusFound)
-	}
-	if got := response.Header().Get("Location"); !strings.HasPrefix(got, "/admin/login/") {
-		t.Fatalf("Location = %q, want redirect to /admin/login/", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, request := tt.build(t)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			tt.check(t, response)
+		})
 	}
 }
 
@@ -81,103 +235,6 @@ func TestAdminMountsRoutesForRegisteredModel(t *testing.T) {
 		if response.Code == http.StatusFound {
 			t.Fatalf("%s redirected (likely to login) with a valid session", path)
 		}
-	}
-}
-
-func TestAdminRequestWithoutSessionRedirectsToLoginWithNext(t *testing.T) {
-	handler, _ := buildAuthenticatedAdminHandler(t)
-
-	request := httptest.NewRequest(http.MethodGet, "/admin/admin_shell_user/", nil)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
-	}
-	location := response.Header().Get("Location")
-	if !strings.HasPrefix(location, "/admin/login/?next=") {
-		t.Fatalf("Location = %q, want redirect to /admin/login/ with next", location)
-	}
-}
-
-func TestAdminRequestWithInvalidSessionCookieRedirectsToLogin(t *testing.T) {
-	handler, _ := buildAuthenticatedAdminHandler(t)
-
-	request := httptest.NewRequest(http.MethodGet, "/admin/admin_shell_user/", nil)
-	request.AddCookie(&http.Cookie{Name: "tango_admin_session", Value: "bogus-token"})
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
-	}
-}
-
-func TestAdminRequestWithValidSessionReachesView(t *testing.T) {
-	handler, cookie := buildAuthenticatedAdminHandler(t)
-
-	response := performAdminRequest(handler, http.MethodGet, "/admin/admin_shell_user/", cookie)
-
-	if response.Code == http.StatusFound {
-		t.Fatal("status = redirect, want request to reach view with a valid session")
-	}
-}
-
-func TestAdminRequestWithValidSessionForNowInactiveAccountRedirectsNotForbidden(t *testing.T) {
-	handler, store, sqlDB := buildAdminHandlerWithStore(t)
-	if err := admin.CreateAccount(context.Background(), store, "wasactive", "secret"); err != nil {
-		t.Fatalf("seed admin account: %v", err)
-	}
-	cookie := loginAndGetSessionCookie(t, handler, "wasactive", "secret")
-
-	// Flip Active directly (bypassing the CLI's Deactivate, which would also
-	// invalidate the session) to isolate exactly what an inactive-but-still-
-	// session-holding account gets: a login redirect, the same as no session
-	// at all — never 403, which is reserved for an active-but-non-staff
-	// account. sessionUser's existing !Active check runs before requireSession
-	// ever looks at IsStaff, so this also confirms that ordering.
-	if _, err := sqlDB.Exec("UPDATE admin_user SET active = 0 WHERE username = 'wasactive'"); err != nil {
-		t.Fatalf("deactivate row directly: %v", err)
-	}
-
-	response := performAdminRequest(handler, http.MethodGet, "/admin/admin_shell_user/", cookie)
-
-	if response.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d (redirect to login, not 403)", response.Code, http.StatusFound)
-	}
-	if got := response.Header().Get("Location"); !strings.HasPrefix(got, "/admin/login/") {
-		t.Fatalf("Location = %q, want redirect to /admin/login/", got)
-	}
-}
-
-func TestAdminRequestWithNonStaffSessionReturns403Forbidden(t *testing.T) {
-	handler, store, _ := buildAdminHandlerWithStore(t)
-	if err := admin.CreateAccount(context.Background(), store, "guest", "secret", admin.WithoutStaff()); err != nil {
-		t.Fatalf("seed non-staff admin account: %v", err)
-	}
-	cookie := loginAndGetSessionCookie(t, handler, "guest", "secret")
-
-	response := performAdminRequest(handler, http.MethodGet, "/admin/admin_shell_user/", cookie)
-
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d (403 Forbidden)", response.Code, http.StatusForbidden)
-	}
-}
-
-func TestAdminRequestWithStaffSessionRegardlessOfSuperuserReachesView(t *testing.T) {
-	handler, store, _ := buildAdminHandlerWithStore(t)
-	if err := admin.CreateAccount(context.Background(), store, "staffonly", "secret", admin.WithoutSuperuser()); err != nil {
-		t.Fatalf("seed staff-only admin account: %v", err)
-	}
-	cookie := loginAndGetSessionCookie(t, handler, "staffonly", "secret")
-
-	response := performAdminRequest(handler, http.MethodGet, "/admin/admin_shell_user/", cookie)
-
-	if response.Code == http.StatusForbidden {
-		t.Fatal("status = 403, want a staff account (regardless of IsSuperuser) to reach the view")
-	}
-	if response.Code == http.StatusFound {
-		t.Fatal("status = redirect, want request to reach view with a valid staff session")
 	}
 }
 

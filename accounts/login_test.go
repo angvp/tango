@@ -124,42 +124,62 @@ func TestLoginWithCorrectCredentialsCreatesSessionAndRedirects(t *testing.T) {
 	}
 }
 
-func TestLoginWithUnknownEmailAndWrongPasswordProduceIdenticalGenericError(t *testing.T) {
-	handler, _ := buildRegisterTestHandler(t)
-	registerAccount(t, handler, "maria@example.com", "correct-password")
-
-	unknownEmail := postLogin(t, handler, url.Values{"email": {"nobody@example.com"}, "password": {"whatever"}})
-	wrongPassword := postLogin(t, handler, url.Values{"email": {"maria@example.com"}, "password": {"wrong-password"}})
-
-	if unknownEmail.Code != http.StatusUnauthorized || wrongPassword.Code != http.StatusUnauthorized {
-		t.Fatalf("status codes = %d, %d, want both %d", unknownEmail.Code, wrongPassword.Code, http.StatusUnauthorized)
+// TestLoginFailuresProduceIdenticalGenericError covers the three ways a
+// login attempt can fail — unknown email, wrong password, and an inactive
+// account — all of which must produce the exact same generic error so that
+// none of them leaks whether a given email is registered.
+func TestLoginFailuresProduceIdenticalGenericError(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T) (http.Handler, url.Values)
+	}{
+		{
+			name: "unknown email",
+			setup: func(t *testing.T) (http.Handler, url.Values) {
+				handler, _ := buildRegisterTestHandler(t)
+				registerAccount(t, handler, "maria@example.com", "correct-password")
+				return handler, url.Values{"email": {"nobody@example.com"}, "password": {"whatever"}}
+			},
+		},
+		{
+			name: "wrong password",
+			setup: func(t *testing.T) (http.Handler, url.Values) {
+				handler, _ := buildRegisterTestHandler(t)
+				registerAccount(t, handler, "maria@example.com", "correct-password")
+				return handler, url.Values{"email": {"maria@example.com"}, "password": {"wrong-password"}}
+			},
+		},
+		{
+			name: "inactive account",
+			setup: func(t *testing.T) (http.Handler, url.Values) {
+				handler, sqlDB := buildLoginTestHandler(t)
+				registerAccount(t, handler, "nora@example.com", "correct-password")
+				if _, err := sqlDB.Exec("UPDATE account SET active = 0 WHERE email = ?", "nora@example.com"); err != nil {
+					t.Fatalf("deactivate account: %v", err)
+				}
+				return handler, url.Values{"email": {"nora@example.com"}, "password": {"correct-password"}}
+			},
+		},
 	}
-	// The rendered body naturally differs (the echoed email value, each
-	// request's own CSRF token) — neither leaks whether an email is
-	// registered. The actual enumeration-relevant signal is the error
-	// message text itself, which must be identical in both cases.
-	if !strings.Contains(unknownEmail.Body.String(), "Invalid email or password.") {
-		t.Fatalf("unknown-email body does not contain the generic error: %s", unknownEmail.Body.String())
-	}
-	if !strings.Contains(wrongPassword.Body.String(), "Invalid email or password.") {
-		t.Fatalf("wrong-password body does not contain the generic error: %s", wrongPassword.Body.String())
-	}
-}
 
-func TestLoginForInactiveAccountFailsWithGenericError(t *testing.T) {
-	handler, sqlDB := buildLoginTestHandler(t)
-	registerAccount(t, handler, "nora@example.com", "correct-password")
-	if _, err := sqlDB.Exec("UPDATE account SET active = 0 WHERE email = ?", "nora@example.com"); err != nil {
-		t.Fatalf("deactivate account: %v", err)
-	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			handler, form := testCase.setup(t)
 
-	response := postLogin(t, handler, url.Values{"email": {"nora@example.com"}, "password": {"correct-password"}})
+			response := postLogin(t, handler, form)
 
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
-	}
-	if !strings.Contains(response.Body.String(), "Invalid email or password") {
-		t.Fatalf("body = %q, want the generic login error", response.Body.String())
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+			}
+			// The rendered body naturally differs (the echoed email value,
+			// each request's own CSRF token) — neither leaks whether an
+			// email is registered. The actual enumeration-relevant signal
+			// is the error message text itself, which must be identical
+			// across all these failure modes.
+			if !strings.Contains(response.Body.String(), "Invalid email or password.") {
+				t.Fatalf("body does not contain the generic error: %s", response.Body.String())
+			}
+		})
 	}
 }
 

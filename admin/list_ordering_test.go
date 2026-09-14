@@ -8,67 +8,67 @@ import (
 	"github.com/angvp/tango/admin"
 )
 
-func TestListViewOrdersRowsAscendingByOrdering(t *testing.T) {
-	handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
-		ListDisplay: []string{"Name", "Price"},
-		Ordering:    []string{"Price"},
+// TestListViewHonorsOrderingOption covers how the list view's row order (and
+// basic renderability) responds to the Ordering option: ascending order,
+// descending order, ordering preserved alongside a search query, and
+// rendering successfully with no Ordering configured at all.
+func TestListViewHonorsOrderingOption(t *testing.T) {
+	t.Run("ascending Ordering sorts rows by price low to high", func(t *testing.T) {
+		handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
+			ListDisplay: []string{"Name", "Price"},
+			Ordering:    []string{"Price"},
+		})
+		seedProduct(t, sqlDB, "Charlie", 30.00)
+		seedProduct(t, sqlDB, "Alpha", 10.00)
+		seedProduct(t, sqlDB, "Bravo", 20.00)
+
+		response := doRequest(t, handler, "GET", crudBasePath, nil)
+		assertOrder(t, response.Body.String(), "Alpha", "Bravo", "Charlie")
 	})
-	seedProduct(t, sqlDB, "Charlie", 30.00)
-	seedProduct(t, sqlDB, "Alpha", 10.00)
-	seedProduct(t, sqlDB, "Bravo", 20.00)
 
-	response := doRequest(t, handler, "GET", crudBasePath, nil)
-	body := response.Body.String()
+	t.Run("descending Ordering (-Price) sorts rows by price high to low", func(t *testing.T) {
+		handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
+			ListDisplay: []string{"Name", "Price"},
+			Ordering:    []string{"-Price"},
+		})
+		seedProduct(t, sqlDB, "Charlie", 30.00)
+		seedProduct(t, sqlDB, "Alpha", 10.00)
+		seedProduct(t, sqlDB, "Bravo", 20.00)
 
-	assertOrder(t, body, "Alpha", "Bravo", "Charlie")
-}
-
-func TestListViewOrdersRowsDescendingByOrdering(t *testing.T) {
-	handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
-		ListDisplay: []string{"Name", "Price"},
-		Ordering:    []string{"-Price"},
+		response := doRequest(t, handler, "GET", crudBasePath, nil)
+		assertOrder(t, response.Body.String(), "Charlie", "Bravo", "Alpha")
 	})
-	seedProduct(t, sqlDB, "Charlie", 30.00)
-	seedProduct(t, sqlDB, "Alpha", 10.00)
-	seedProduct(t, sqlDB, "Bravo", 20.00)
 
-	response := doRequest(t, handler, "GET", crudBasePath, nil)
-	body := response.Body.String()
+	t.Run("Ordering is still honored when a search query filters rows", func(t *testing.T) {
+		handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
+			ListDisplay: []string{"Name", "Price"},
+			Search:      []string{"Name"},
+			Ordering:    []string{"-Price"},
+		})
+		seedProduct(t, sqlDB, "Widget Charlie", 30.00)
+		seedProduct(t, sqlDB, "Widget Alpha", 10.00)
+		seedProduct(t, sqlDB, "Widget Bravo", 20.00)
 
-	assertOrder(t, body, "Charlie", "Bravo", "Alpha")
-}
-
-func TestListViewWithSearchQueryStillHonorsOrdering(t *testing.T) {
-	handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
-		ListDisplay: []string{"Name", "Price"},
-		Search:      []string{"Name"},
-		Ordering:    []string{"-Price"},
+		response := doRequest(t, handler, "GET", crudBasePath+"?q=Widget", nil)
+		assertOrder(t, response.Body.String(), "Widget Charlie", "Widget Bravo", "Widget Alpha")
 	})
-	seedProduct(t, sqlDB, "Widget Charlie", 30.00)
-	seedProduct(t, sqlDB, "Widget Alpha", 10.00)
-	seedProduct(t, sqlDB, "Widget Bravo", 20.00)
 
-	response := doRequest(t, handler, "GET", crudBasePath+"?q=Widget", nil)
-	body := response.Body.String()
+	t.Run("list view still renders all rows with no Ordering configured", func(t *testing.T) {
+		handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
+			ListDisplay: []string{"Name", "Price"},
+		})
+		seedProduct(t, sqlDB, "Alpha", 10.00)
+		seedProduct(t, sqlDB, "Bravo", 20.00)
 
-	assertOrder(t, body, "Widget Charlie", "Widget Bravo", "Widget Alpha")
-}
-
-func TestListViewWithNoOrderingStillRenders(t *testing.T) {
-	handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
-		ListDisplay: []string{"Name", "Price"},
+		response := doRequest(t, handler, "GET", crudBasePath, nil)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d; body: %s", response.Code, http.StatusOK, response.Body.String())
+		}
+		body := response.Body.String()
+		if !strings.Contains(body, "Alpha") || !strings.Contains(body, "Bravo") {
+			t.Fatalf("expected both rows to render with no Ordering set:\n%s", body)
+		}
 	})
-	seedProduct(t, sqlDB, "Alpha", 10.00)
-	seedProduct(t, sqlDB, "Bravo", 20.00)
-
-	response := doRequest(t, handler, "GET", crudBasePath, nil)
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body: %s", response.Code, http.StatusOK, response.Body.String())
-	}
-	body := response.Body.String()
-	if !strings.Contains(body, "Alpha") || !strings.Contains(body, "Bravo") {
-		t.Fatalf("expected both rows to render with no Ordering set:\n%s", body)
-	}
 }
 
 // assertOrder fails the test unless each name in order appears in body, and

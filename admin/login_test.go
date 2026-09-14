@@ -68,46 +68,65 @@ func doLoginRequest(t *testing.T, handler http.Handler, username string, passwor
 	return postLogin(t, handler, url.Values{"username": {username}, "password": {password}})
 }
 
-func TestLoginWithWrongPasswordShowsGenericError(t *testing.T) {
-	handler, _ := buildLoginTestHandler(t)
-
-	response := doLoginRequest(t, handler, "admin", "wrong-password")
-
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+// TestLoginRejectsInvalidCredentialsWithGenericError covers every account
+// or credential state that must fail login with a generic 401: a wrong
+// password, an unknown username, and a deactivated account presenting its
+// correct password. All must produce the same generic error message (never
+// leaking which part was wrong), and a wrong password must not set a
+// session cookie.
+func TestLoginRejectsInvalidCredentialsWithGenericError(t *testing.T) {
+	tests := []struct {
+		name string
+		// setup optionally mutates account state before the login attempt
+		// (e.g. deactivating it). It receives the store built alongside the
+		// handler.
+		setup            func(t *testing.T, store *db.Store)
+		username         string
+		password         string
+		checkNoCookieSet bool
+	}{
+		{
+			name:             "wrong password for a known username",
+			username:         "admin",
+			password:         "wrong-password",
+			checkNoCookieSet: true,
+		},
+		{
+			name:     "unknown username",
+			username: "no-such-user",
+			password: "whatever",
+		},
+		{
+			name: "deactivated account with its correct password",
+			setup: func(t *testing.T, store *db.Store) {
+				if err := admin.Deactivate(context.Background(), store, "admin"); err != nil {
+					t.Fatalf("deactivate: %v", err)
+				}
+			},
+			username: "admin",
+			password: "correct-password",
+		},
 	}
-	if !strings.Contains(response.Body.String(), "Invalid username or password") {
-		t.Fatalf("body does not contain generic error message:\n%s", response.Body.String())
-	}
-	if len(response.Result().Cookies()) != 0 {
-		t.Fatal("a session cookie was set despite a failed login")
-	}
-}
 
-func TestLoginWithUnknownUsernameShowsSameGenericError(t *testing.T) {
-	handler, _ := buildLoginTestHandler(t)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, store := buildLoginTestHandler(t)
+			if tt.setup != nil {
+				tt.setup(t, store)
+			}
 
-	response := doLoginRequest(t, handler, "no-such-user", "whatever")
+			response := doLoginRequest(t, handler, tt.username, tt.password)
 
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
-	}
-	if !strings.Contains(response.Body.String(), "Invalid username or password") {
-		t.Fatalf("body does not contain generic error message:\n%s", response.Body.String())
-	}
-}
-
-func TestLoginWithDeactivatedAccountFails(t *testing.T) {
-	handler, store := buildLoginTestHandler(t)
-
-	if err := admin.Deactivate(context.Background(), store, "admin"); err != nil {
-		t.Fatalf("deactivate: %v", err)
-	}
-
-	response := doLoginRequest(t, handler, "admin", "correct-password")
-
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+			}
+			if !strings.Contains(response.Body.String(), "Invalid username or password") {
+				t.Fatalf("body does not contain generic error message:\n%s", response.Body.String())
+			}
+			if tt.checkNoCookieSet && len(response.Result().Cookies()) != 0 {
+				t.Fatal("a session cookie was set despite a failed login")
+			}
+		})
 	}
 }
 

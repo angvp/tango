@@ -260,25 +260,6 @@ type Account struct {
 	ID int64 `tango:"pk"`
 }
 
-func TestModelsRegisterDuplicateNameFails(t *testing.T) {
-	registry := NewRegistry()
-	if err := registry.Register(Account{}); err != nil {
-		t.Fatalf("first Register returned error: %v", err)
-	}
-
-	type Account struct {
-		ID int64 `tango:"pk"`
-	}
-
-	err := registry.Register(Account{})
-	if err == nil {
-		t.Fatal("second Register returned nil error for duplicate name, want non-nil")
-	}
-	if !errors.Is(err, ErrDuplicateModel) {
-		t.Fatalf("error = %v, want it to wrap ErrDuplicateModel", err)
-	}
-}
-
 func TestModelsRegisterDuplicateDoesNotOverwriteOriginal(t *testing.T) {
 	registry := NewRegistry()
 	if err := registry.Register(Account{}); err != nil {
@@ -307,33 +288,9 @@ type NoPrimaryKey struct {
 	Name string
 }
 
-func TestModelsRegisterNoPrimaryKeyFails(t *testing.T) {
-	registry := NewRegistry()
-
-	err := registry.Register(NoPrimaryKey{})
-	if err == nil {
-		t.Fatal("Register returned nil error for a struct with no pk field, want non-nil")
-	}
-	if !errors.Is(err, ErrNoPrimaryKey) {
-		t.Fatalf("error = %v, want it to wrap ErrNoPrimaryKey", err)
-	}
-}
-
 type MultiplePrimaryKeys struct {
 	ID   int64  `tango:"pk"`
 	UUID string `tango:"pk"`
-}
-
-func TestModelsRegisterMultiplePrimaryKeysFails(t *testing.T) {
-	registry := NewRegistry()
-
-	err := registry.Register(MultiplePrimaryKeys{})
-	if err == nil {
-		t.Fatal("Register returned nil error for a struct with two pk fields, want non-nil")
-	}
-	if !errors.Is(err, ErrMultiplePrimaryKeys) {
-		t.Fatalf("error = %v, want it to wrap ErrMultiplePrimaryKeys", err)
-	}
 }
 
 type UntaggedID struct {
@@ -341,12 +298,63 @@ type UntaggedID struct {
 	Name string
 }
 
-func TestModelsRegisterFieldNamedIDWithoutTagStillFails(t *testing.T) {
-	registry := NewRegistry()
+// TestModelsRegisterStructLevelValidationFailures merges
+// TestModelsRegisterNoPrimaryKeyFails, TestModelsRegisterMultiplePrimaryKeysFails,
+// TestModelsRegisterFieldNamedIDWithoutTagStillFails and
+// TestModelsRegisterDuplicateNameFails into one table.
+func TestModelsRegisterStructLevelValidationFailures(t *testing.T) {
+	cases := []struct {
+		name    string
+		run     func(registry *Registry) error
+		wantErr error
+	}{
+		{
+			name: "struct with no pk field fails",
+			run: func(registry *Registry) error {
+				return registry.Register(NoPrimaryKey{})
+			},
+			wantErr: ErrNoPrimaryKey,
+		},
+		{
+			name: "struct with two pk fields fails",
+			run: func(registry *Registry) error {
+				return registry.Register(MultiplePrimaryKeys{})
+			},
+			wantErr: ErrMultiplePrimaryKeys,
+		},
+		{
+			name: "field named ID without pk tag still fails (no name-based auto-detection)",
+			run: func(registry *Registry) error {
+				return registry.Register(UntaggedID{})
+			},
+			wantErr: ErrNoPrimaryKey,
+		},
+		{
+			name: "registering a second model with the same derived name fails",
+			run: func(registry *Registry) error {
+				if err := registry.Register(Account{}); err != nil {
+					return err
+				}
+				type Account struct {
+					ID int64 `tango:"pk"`
+				}
+				return registry.Register(Account{})
+			},
+			wantErr: ErrDuplicateModel,
+		},
+	}
 
-	err := registry.Register(UntaggedID{})
-	if !errors.Is(err, ErrNoPrimaryKey) {
-		t.Fatalf("error = %v, want it to wrap ErrNoPrimaryKey (no name-based auto-detection)", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry()
+			err := tc.run(registry)
+			if err == nil {
+				t.Fatalf("case %q: Register returned nil error, want it to wrap %v", tc.name, tc.wantErr)
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("case %q: error = %v, want it to wrap %v", tc.name, err, tc.wantErr)
+			}
+		})
 	}
 }
 
@@ -366,27 +374,9 @@ type SliceField struct {
 	Tags []string
 }
 
-func TestModelsRegisterSliceFieldFails(t *testing.T) {
-	registry := NewRegistry()
-
-	err := registry.Register(SliceField{})
-	if !errors.Is(err, ErrUnsupportedField) {
-		t.Fatalf("error = %v, want it to wrap ErrUnsupportedField", err)
-	}
-}
-
 type MapField struct {
 	ID     int64 `tango:"pk"`
 	Labels map[string]string
-}
-
-func TestModelsRegisterMapFieldFails(t *testing.T) {
-	registry := NewRegistry()
-
-	err := registry.Register(MapField{})
-	if !errors.Is(err, ErrUnsupportedField) {
-		t.Fatalf("error = %v, want it to wrap ErrUnsupportedField", err)
-	}
 }
 
 type PointerField struct {
@@ -394,27 +384,9 @@ type PointerField struct {
 	Parent *PointerField
 }
 
-func TestModelsRegisterPointerFieldFails(t *testing.T) {
-	registry := NewRegistry()
-
-	err := registry.Register(PointerField{})
-	if !errors.Is(err, ErrUnsupportedField) {
-		t.Fatalf("error = %v, want it to wrap ErrUnsupportedField", err)
-	}
-}
-
 type InterfaceField struct {
 	ID      int64 `tango:"pk"`
 	Payload any
-}
-
-func TestModelsRegisterInterfaceFieldFails(t *testing.T) {
-	registry := NewRegistry()
-
-	err := registry.Register(InterfaceField{})
-	if !errors.Is(err, ErrUnsupportedField) {
-		t.Fatalf("error = %v, want it to wrap ErrUnsupportedField", err)
-	}
 }
 
 type OtherStruct struct {
@@ -426,26 +398,9 @@ type NonTimeStructField struct {
 	Other OtherStruct
 }
 
-func TestModelsRegisterNonTimeStructFieldFails(t *testing.T) {
-	registry := NewRegistry()
-
-	err := registry.Register(NonTimeStructField{})
-	if !errors.Is(err, ErrUnsupportedField) {
-		t.Fatalf("error = %v, want it to wrap ErrUnsupportedField", err)
-	}
-}
-
 type TimeField struct {
 	ID        int64 `tango:"pk"`
 	CreatedAt time.Time
-}
-
-func TestModelsRegisterTimeTimeFieldSucceeds(t *testing.T) {
-	registry := NewRegistry()
-
-	if err := registry.Register(TimeField{}); err != nil {
-		t.Fatalf("Register returned error for a time.Time field: %v", err)
-	}
 }
 
 type EmbeddedField struct {
@@ -453,12 +408,69 @@ type EmbeddedField struct {
 	OtherStruct
 }
 
-func TestModelsRegisterEmbeddedStructFieldFails(t *testing.T) {
-	registry := NewRegistry()
+// TestModelsRegisterFieldKindValidation merges TestModelsRegisterSliceFieldFails,
+// TestModelsRegisterMapFieldFails, TestModelsRegisterPointerFieldFails,
+// TestModelsRegisterInterfaceFieldFails, TestModelsRegisterNonTimeStructFieldFails,
+// TestModelsRegisterEmbeddedStructFieldFails and TestModelsRegisterTimeTimeFieldSucceeds
+// into one table.
+func TestModelsRegisterFieldKindValidation(t *testing.T) {
+	cases := []struct {
+		name      string
+		newStruct func() any
+		wantErr   error // nil means Register must succeed
+	}{
+		{
+			name:      "slice field is unsupported",
+			newStruct: func() any { return SliceField{} },
+			wantErr:   ErrUnsupportedField,
+		},
+		{
+			name:      "map field is unsupported",
+			newStruct: func() any { return MapField{} },
+			wantErr:   ErrUnsupportedField,
+		},
+		{
+			name:      "pointer field is unsupported",
+			newStruct: func() any { return PointerField{} },
+			wantErr:   ErrUnsupportedField,
+		},
+		{
+			name:      "interface field is unsupported",
+			newStruct: func() any { return InterfaceField{} },
+			wantErr:   ErrUnsupportedField,
+		},
+		{
+			name:      "non-time.Time struct field is unsupported",
+			newStruct: func() any { return NonTimeStructField{} },
+			wantErr:   ErrUnsupportedField,
+		},
+		{
+			name:      "embedded struct field is rejected outright",
+			newStruct: func() any { return EmbeddedField{} },
+			wantErr:   ErrEmbeddedField,
+		},
+		{
+			name:      "time.Time field succeeds",
+			newStruct: func() any { return TimeField{} },
+			wantErr:   nil,
+		},
+	}
 
-	err := registry.Register(EmbeddedField{})
-	if !errors.Is(err, ErrEmbeddedField) {
-		t.Fatalf("error = %v, want it to wrap ErrEmbeddedField", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry()
+			err := registry.Register(tc.newStruct())
+
+			if tc.wantErr == nil {
+				if err != nil {
+					t.Errorf("case %q: Register returned error: %v, want nil", tc.name, err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("case %q: error = %v, want it to wrap %v", tc.name, err, tc.wantErr)
+			}
+		})
 	}
 }
 
@@ -519,48 +531,61 @@ func TestModelsRegisterNonForeignKeyFieldLeavesForeignKeyEmpty(t *testing.T) {
 	}
 }
 
-func TestValidateForeignKeysPassesWhenTargetIsRegistered(t *testing.T) {
-	registry := NewRegistry()
-	if err := registry.Register(Author{}); err != nil {
-		t.Fatalf("Register(Author) returned error: %v", err)
-	}
-	if err := registry.Register(Post{}); err != nil {
-		t.Fatalf("Register(Post) returned error: %v", err)
+// TestValidateForeignKeys merges TestValidateForeignKeysPassesWhenTargetIsRegistered,
+// TestValidateForeignKeysIgnoresRegistrationOrder and
+// TestValidateForeignKeysFailsOnDanglingTarget into one table.
+func TestValidateForeignKeys(t *testing.T) {
+	cases := []struct {
+		name            string
+		register        []any
+		wantErr         error // nil means ValidateForeignKeys must succeed
+		wantErrContains []string
+	}{
+		{
+			name:     "passes when foreign key target is registered",
+			register: []any{Author{}, Post{}},
+			wantErr:  nil,
+		},
+		{
+			// Post references Author but is registered first — ValidateForeignKeys
+			// runs once after every app has registered, so order must not matter.
+			name:     "ignores registration order (InstalledApps-style order should not matter)",
+			register: []any{Post{}, Author{}},
+			wantErr:  nil,
+		},
+		{
+			name:            "fails on dangling foreign key target",
+			register:        []any{Post{}}, // Author never registered.
+			wantErr:         ErrUnknownForeignKeyTarget,
+			wantErrContains: []string{"Post.AuthorID", "Author"},
+		},
 	}
 
-	if err := registry.ValidateForeignKeys(); err != nil {
-		t.Fatalf("ValidateForeignKeys returned error: %v", err)
-	}
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry()
+			for _, model := range tc.register {
+				if err := registry.Register(model); err != nil {
+					t.Fatalf("case %q: Register(%T) returned error: %v", tc.name, model, err)
+				}
+			}
 
-func TestValidateForeignKeysIgnoresRegistrationOrder(t *testing.T) {
-	// Post references Author but is registered first — ValidateForeignKeys
-	// runs once after every app has registered, so order must not matter.
-	registry := NewRegistry()
-	if err := registry.Register(Post{}); err != nil {
-		t.Fatalf("Register(Post) returned error: %v", err)
-	}
-	if err := registry.Register(Author{}); err != nil {
-		t.Fatalf("Register(Author) returned error: %v", err)
-	}
+			err := registry.ValidateForeignKeys()
 
-	if err := registry.ValidateForeignKeys(); err != nil {
-		t.Fatalf("ValidateForeignKeys returned error: %v — InstalledApps-style order should not matter", err)
-	}
-}
-
-func TestValidateForeignKeysFailsOnDanglingTarget(t *testing.T) {
-	registry := NewRegistry()
-	if err := registry.Register(Post{}); err != nil {
-		t.Fatalf("Register(Post) returned error: %v", err)
-	}
-	// Author never registered.
-
-	err := registry.ValidateForeignKeys()
-	if !errors.Is(err, ErrUnknownForeignKeyTarget) {
-		t.Fatalf("error = %v, want it to wrap ErrUnknownForeignKeyTarget", err)
-	}
-	if !strings.Contains(err.Error(), "Post.AuthorID") || !strings.Contains(err.Error(), "Author") {
-		t.Fatalf("error = %q, want it to name the field and missing model", err.Error())
+			if tc.wantErr == nil {
+				if err != nil {
+					t.Errorf("case %q: ValidateForeignKeys returned error: %v, want nil", tc.name, err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("case %q: error = %v, want it to wrap %v", tc.name, err, tc.wantErr)
+			}
+			for _, substr := range tc.wantErrContains {
+				if !strings.Contains(err.Error(), substr) {
+					t.Errorf("case %q: error = %q, want it to contain %q", tc.name, err.Error(), substr)
+				}
+			}
+		})
 	}
 }

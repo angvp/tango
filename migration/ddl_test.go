@@ -57,44 +57,67 @@ func columnNames(t *testing.T, sqlDB *sql.DB, table string) []string {
 	return names
 }
 
-func TestApplyStepCreateTable(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
-	step := CreateTable{Table: "widget", Columns: []Column{
-		{Name: "id", Type: "integer", PrimaryKey: true},
-		{Name: "name", Type: "text"},
-	}}
-
-	if err := ApplyStep(context.Background(), sqlDB, db.SQLite, step); err != nil {
-		t.Fatalf("ApplyStep returned error: %v", err)
+// TestApplyStepBasicOperations merges TestApplyStepCreateTable,
+// TestApplyStepDropTable and TestApplyStepAddColumn into one table.
+func TestApplyStepBasicOperations(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, sqlDB *sql.DB)
+		step  Step
+		check func(t *testing.T, sqlDB *sql.DB)
+	}{
+		{
+			name: "create table creates a new table",
+			step: CreateTable{Table: "widget", Columns: []Column{
+				{Name: "id", Type: "integer", PrimaryKey: true},
+				{Name: "name", Type: "text"},
+			}},
+			check: func(t *testing.T, sqlDB *sql.DB) {
+				if !tableExists(t, sqlDB, "widget") {
+					t.Errorf("table %q was not created", "widget")
+				}
+			},
+		},
+		{
+			name: "drop table removes an existing table",
+			setup: func(t *testing.T, sqlDB *sql.DB) {
+				mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
+			},
+			step: DropTable{Table: "widget"},
+			check: func(t *testing.T, sqlDB *sql.DB) {
+				if tableExists(t, sqlDB, "widget") {
+					t.Errorf("table %q still exists after DropTable", "widget")
+				}
+			},
+		},
+		{
+			name: "add column adds a new column to an existing table",
+			setup: func(t *testing.T, sqlDB *sql.DB) {
+				mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
+			},
+			step: AddColumn{Table: "widget", Column: Column{Name: "name", Type: "text"}},
+			check: func(t *testing.T, sqlDB *sql.DB) {
+				names := columnNames(t, sqlDB, "widget")
+				if !contains(names, "name") {
+					t.Errorf("columns = %v, want to contain %q", names, "name")
+				}
+			},
+		},
 	}
 
-	if !tableExists(t, sqlDB, "widget") {
-		t.Fatalf("table %q was not created", "widget")
-	}
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sqlDB := openDDLTestDB(t)
+			if tc.setup != nil {
+				tc.setup(t, sqlDB)
+			}
 
-func TestApplyStepDropTable(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
-	ctx := context.Background()
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
+			if err := ApplyStep(context.Background(), sqlDB, db.SQLite, tc.step); err != nil {
+				t.Fatalf("case %q: ApplyStep returned error: %v", tc.name, err)
+			}
 
-	if err := ApplyStep(ctx, sqlDB, db.SQLite, DropTable{Table: "widget"}); err != nil {
-		t.Fatalf("ApplyStep returned error: %v", err)
-	}
-	if tableExists(t, sqlDB, "widget") {
-		t.Fatalf("table %q still exists after DropTable", "widget")
-	}
-}
-
-func TestApplyStepAddColumn(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
-
-	mustApply(t, sqlDB, AddColumn{Table: "widget", Column: Column{Name: "name", Type: "text"}})
-
-	names := columnNames(t, sqlDB, "widget")
-	if !contains(names, "name") {
-		t.Fatalf("columns = %v, want to contain %q", names, "name")
+			tc.check(t, sqlDB)
+		})
 	}
 }
 
