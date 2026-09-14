@@ -8,6 +8,11 @@ Canonical example: `examples/api-with-admin/`.
 
 - Build a local project app when the code belongs only to this host project.
 - Build a reusable app when the package is meant to be imported by another project; use `docs/agents/reusable-apps.md` for that.
+- Pick a shape. Default to Small. Only escalate when a concrete signal is present — see "Choosing a shape" below.
+
+## Choosing a shape
+
+Default to Small (`models.go`/`views.go`/`urls.go`/`admin.go` at app root) unless a concrete signal is already present: escalate to Medium (adds `services/` and `repositories/`-or-`store/`; no `ports/` yet) once views hold application decisions — validation spanning more than one field, multi-step writes, logic duplicated across views — and escalate to Hexagonal (adds `domain/`, `ports/`, `adapters/{db,http,admin}/`, the only tier where persistence structs move under `adapters/db/` separate from `domain/` types and admin registration moves into `adapters/admin/`) once the app has real business rules, multiple interfaces, reusable domain logic, or long-term maintenance pressure; never escalate "for future-proofing" with no signal present — an unused `ports/` interface with one implementation is ceremony, not architecture. Full rationale and code snippets: [application architecture guide](../guides/application-architecture.md) — this repo ships no runnable Hexagonal example under `examples/`, so treat that guide's snippets as illustrative, not a canonical tested reference.
 
 ## Do
 
