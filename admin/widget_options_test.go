@@ -61,6 +61,32 @@ func TestEditReadOnlyFieldKeepsExistingValueRegardlessOfSubmittedData(t *testing
 	}
 }
 
+// TestReadOnlyFieldRendersAsNonEditableDisplay covers readOnlyWidget.Render
+// (the GET side of Options.ReadOnly): existing tests only POST against a
+// read-only field, so the create form's GET rendering of that field was
+// never exercised. A read-only field must render as plain display markup,
+// not an editable <input>, on both create and edit.
+func TestReadOnlyFieldRendersAsNonEditableDisplay(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
+		ListDisplay: []string{"Name", "Price"},
+		ReadOnly:    []string{"Name"},
+	})
+
+	createBody := doRequest(t, handler, "GET", crudBasePath+"new/", nil).Body.String()
+	if strings.Contains(createBody, `name="Name"`) {
+		t.Fatalf("create form renders Name as an editable input despite ReadOnly:\n%s", createBody)
+	}
+
+	id := seedProduct(t, sqlDB, "Existing Widget", 4.5)
+	editBody := doRequest(t, handler, "GET", crudBasePath+itoa(id)+"/", nil).Body.String()
+	if strings.Contains(editBody, `name="Name"`) {
+		t.Fatalf("edit form renders Name as an editable input despite ReadOnly:\n%s", editBody)
+	}
+	if !strings.Contains(editBody, "Existing Widget") {
+		t.Fatalf("edit form does not display the read-only field's current value:\n%s", editBody)
+	}
+}
+
 func TestFieldOrderReordersRenderedFields(t *testing.T) {
 	handler, _ := buildProductAdminWithOptions(t, admin.Options{
 		ListDisplay: []string{"Name", "Price"},

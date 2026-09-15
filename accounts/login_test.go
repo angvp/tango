@@ -211,6 +211,74 @@ func TestLoginMissingCSRFTokenIsRejected(t *testing.T) {
 	}
 }
 
+// TestLoginWrongCSRFTokenIsRejected covers the case distinct from a
+// missing token: the request carries a real pre-session CSRF cookie, but
+// the submitted csrf_token form value doesn't match it (e.g. a stale form
+// re-submitted after the cookie rotated).
+func TestLoginWrongCSRFTokenIsRejected(t *testing.T) {
+	handler, _ := buildRegisterTestHandler(t)
+	csrfCookie := fetchLoginCSRF(t, handler)
+
+	form := url.Values{"email": {"x@example.com"}, "password": {"whatever"}, "csrf_token": {"not-the-right-token"}}
+	request := httptest.NewRequest(http.MethodPost, "/accounts/login/", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(csrfCookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+}
+
+// TestLoginPageReusesExistingPreSessionCSRFCookie covers
+// ensurePreSessionCSRFCookie's early-return branch: a second GET
+// /accounts/login/ carrying the cookie from a first visit must keep the
+// same CSRF token rather than rotating it out from under an in-flight
+// form (register shares this same cookie, scoped to all of /accounts/).
+func TestLoginPageReusesExistingPreSessionCSRFCookie(t *testing.T) {
+	handler, _ := buildRegisterTestHandler(t)
+	first := fetchLoginCSRF(t, handler)
+
+	request := httptest.NewRequest(http.MethodGet, "/accounts/login/", nil)
+	request.AddCookie(first)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	var second *http.Cookie
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == "tango_account_pre_session_csrf" {
+			second = cookie
+		}
+	}
+	if second != nil && second.Value != first.Value {
+		t.Fatalf("pre-session CSRF cookie rotated on a request that already carried one: got %q, want reused %q", second.Value, first.Value)
+	}
+	if !strings.Contains(response.Body.String(), `value="`+first.Value+`"`) {
+		t.Fatalf("rendered form does not carry the reused CSRF token:\n%s", response.Body.String())
+	}
+}
+
+// TestAccountsRoutesRejectUnregisteredMethods covers the router-level 405 a
+// framework user hits by sending a method no accounts route registers for
+// a given path — register/login only ever register GET and POST, logout
+// only POST.
+func TestAccountsRoutesRejectUnregisteredMethods(t *testing.T) {
+	handler, _ := buildRegisterTestHandler(t)
+
+	for _, path := range []string{"/accounts/register/", "/accounts/login/", "/accounts/logout/"} {
+		t.Run(path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPatch, path, nil)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("PATCH %s status = %d, want %d", path, response.Code, http.StatusMethodNotAllowed)
+			}
+		})
+	}
+}
+
 func TestLoginIsRateLimitedAfterRepeatedFailures(t *testing.T) {
 	handler, _ := buildRegisterTestHandler(t)
 	registerAccount(t, handler, "penny@example.com", "correct-password")

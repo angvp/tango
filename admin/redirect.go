@@ -15,10 +15,6 @@ func safeAdminNext(raw string, fallback string) string {
 	return security.SafeRedirect(raw, "/admin/", fallback)
 }
 
-func isSafeAdminNext(raw string) bool {
-	return security.IsSafeRedirect(raw, "/admin/")
-}
-
 func appendQuery(rawURL string, key string, value string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {

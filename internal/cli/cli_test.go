@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -291,6 +292,42 @@ func TestAdminMissingUsernameFails(t *testing.T) {
 	}
 }
 
+func TestTuiCommandDispatchesToStatusFetch(t *testing.T) {
+	runner := &recordingRunner{}
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"tui"}, "/app", io.Discard, &stderr, runner)
+
+	// isInteractiveTerminal() is false in the test environment, so tui()
+	// falls back to a status fetch; an empty stdout payload fails to decode
+	// as JSON, which is enough to prove Run's "tui" case reaches tui() with
+	// the right arguments without depending on a real terminal.
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1 (empty status payload fails to decode), stderr: %s", code, stderr.String())
+	}
+	want := recordedCommand{
+		dir:  "/app",
+		name: "go",
+		args: []string{"run", ".", "-tango-status"},
+	}
+	if !reflect.DeepEqual(runner.command, want) {
+		t.Fatalf("command = %#v, want %#v", runner.command, want)
+	}
+}
+
+func TestRunWithNilRunnerDefaultsToExecRunner(t *testing.T) {
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"shell"}, "/app", io.Discard, &stderr, nil)
+
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "Yaegi") {
+		t.Fatalf("stderr = %q, want Yaegi direction (nil runner must not panic)", stderr.String())
+	}
+}
+
 func TestRunnerErrorReturnsFailure(t *testing.T) {
 	var stderr bytes.Buffer
 	runner := &recordingRunner{err: errors.New("go missing")}
@@ -302,5 +339,24 @@ func TestRunnerErrorReturnsFailure(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "go missing") {
 		t.Fatalf("stderr = %q, want runner error", stderr.String())
+	}
+}
+
+// exitErrorRunner returns a real *exec.ExitError (from actually running a
+// failing command), so runGo's errors.As(err, &exitError) branch — distinct
+// from its generic-error fallback, already covered by
+// TestRunnerErrorReturnsFailure — gets exercised with the real type it's
+// written to detect.
+type exitErrorRunner struct{}
+
+func (exitErrorRunner) Run(ctx context.Context, dir string, name string, args []string, stdout io.Writer, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, "false")
+	return cmd.Run()
+}
+
+func TestRunnerExitErrorPropagatesRealExitCode(t *testing.T) {
+	code := Run(context.Background(), []string{"run"}, "/app", io.Discard, io.Discard, exitErrorRunner{})
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1 (the real exit code of `false`)", code)
 	}
 }

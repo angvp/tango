@@ -112,3 +112,61 @@ func TestFormPageRendersMatchingCSRFToken(t *testing.T) {
 		t.Fatalf("rendered form does not carry the expected CSRF token:\n%s", response.Body.String())
 	}
 }
+
+// TestLoginPageReusesExistingLoginCSRFCookie covers ensureLoginCSRFCookie's
+// early-return branch: a second GET /admin/login/ carrying the cookie from
+// a first visit (e.g. a reloaded or reopened login tab) must keep the same
+// CSRF token rather than silently rotating it out from under an
+// in-flight form.
+func TestLoginPageReusesExistingLoginCSRFCookie(t *testing.T) {
+	handler, _ := buildLoginTestHandler(t)
+
+	first := fetchLoginCSRF(t, handler)
+
+	request := httptest.NewRequest(http.MethodGet, "/admin/login/", nil)
+	request.AddCookie(first)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	var second *http.Cookie
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == "tango_admin_login_csrf" {
+			second = cookie
+		}
+	}
+	if second != nil && second.Value != first.Value {
+		t.Fatalf("login CSRF cookie rotated on a request that already carried one: got %q, want reused %q", second.Value, first.Value)
+	}
+	if !strings.Contains(response.Body.String(), `value="`+first.Value+`"`) {
+		t.Fatalf("rendered form does not carry the reused CSRF token:\n%s", response.Body.String())
+	}
+}
+
+// TestAdminRoutesRejectUnregisteredMethods covers the router-level 405 a
+// framework user hits by sending a method no admin route registers for a
+// given path (e.g. PATCH) — every admin route only ever registers GET
+// and/or POST, so any other method is rejected before reaching the view.
+func TestAdminRoutesRejectUnregisteredMethods(t *testing.T) {
+	handler, cookie := buildAuthenticatedAdminHandler(t)
+
+	paths := []string{
+		"/admin/",
+		"/admin/admin_shell_user/",
+		"/admin/admin_shell_user/new/",
+		"/admin/admin_shell_user/42/",
+		"/admin/admin_shell_user/42/delete/",
+		"/admin/login/",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPatch, path, nil)
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("PATCH %s status = %d, want %d", path, response.Code, http.StatusMethodNotAllowed)
+			}
+		})
+	}
+}

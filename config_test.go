@@ -7,6 +7,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -500,5 +502,371 @@ func TestStatusReportsPendingMigrations(t *testing.T) {
 
 	if status.MigrationsTotal != 2 || status.MigrationsApplied != 1 || status.MigrationsPending != 1 {
 		t.Fatalf("migration counts = %+v, want total=2 applied=1 pending=1", status)
+	}
+}
+
+// TestStatusReportsNonMissingTableDatabaseError covers the branch where
+// AppliedMigrations fails for a reason other than the tracking table simply
+// not existing yet (e.g. it exists but its schema is wrong) — Status must
+// still surface this as a DatabaseError rather than mistake it for the
+// read-only "no tracking table yet" case.
+func TestStatusReportsNonMissingTableDatabaseError(t *testing.T) {
+	app := tango.NewApp("widgets", func(registry *tango.Registry) error {
+		return nil
+	})
+	config := tango.Config{InstalledApps: []tango.App{app}}
+
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer sqlDB.Close()
+
+	// A tracking table that exists but lacks the columns AppliedMigrations
+	// queries: its error message will not contain "no such table".
+	if _, err := sqlDB.Exec("CREATE TABLE tango_migrations (id INTEGER)"); err != nil {
+		t.Fatalf("create malformed tracking table: %v", err)
+	}
+
+	status := tango.Status(context.Background(), config, sqlDB, db.SQLite, nil)
+
+	if status.DatabaseError == "" {
+		t.Fatal("DatabaseError is empty, want the underlying query error")
+	}
+	if status.MigrationsPending != 0 {
+		t.Fatalf("MigrationsPending = %d, want 0 (Status must not guess pending count on a non-missing-table error)", status.MigrationsPending)
+	}
+}
+
+// TestLoadEnvFileErrorHandling table-drives LoadEnvFile's error-returning
+// branches: a missing file (a no-op), a directory given as the path, a line
+// missing "=", and a key os.Setenv itself rejects (a NUL byte).
+func TestLoadEnvFileErrorHandling(t *testing.T) {
+	tests := []struct {
+		name            string
+		setup           func(t *testing.T, dir string) string // returns the path to load
+		wantErr         bool
+		wantErrContains string
+	}{
+		{
+			name: "missing file is a noop",
+			setup: func(t *testing.T, dir string) string {
+				return filepath.Join(dir, "does-not-exist.env")
+			},
+		},
+		{
+			name: "path is a directory",
+			setup: func(t *testing.T, dir string) string {
+				return dir
+			},
+			wantErr: true,
+		},
+		{
+			name: "line without equals",
+			setup: func(t *testing.T, dir string) string {
+				path := filepath.Join(dir, ".env")
+				if err := os.WriteFile(path, []byte("NOT_KEY_VALUE\n"), 0o644); err != nil {
+					t.Fatalf("write env file: %v", err)
+				}
+				return path
+			},
+			wantErr:         true,
+			wantErrContains: "expected KEY=VALUE",
+		},
+		{
+			// Covers the (rare) case where a parsed key isn't a valid
+			// environment variable name: a NUL byte makes os.Setenv itself
+			// reject it, and that failure must propagate rather than being
+			// swallowed.
+			name: "setenv rejects a NUL byte in the key",
+			setup: func(t *testing.T, dir string) string {
+				path := filepath.Join(dir, ".env")
+				if err := os.WriteFile(path, []byte("BAD\x00KEY=value\n"), 0o644); err != nil {
+					t.Fatalf("write env file: %v", err)
+				}
+				return path
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := tt.setup(t, dir)
+
+			err := tango.LoadEnvFile(path)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("LoadEnvFile error = nil, want non-nil")
+				}
+				if tt.wantErrContains != "" && !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Fatalf("LoadEnvFile error = %v, want it to contain %q", err, tt.wantErrContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadEnvFile: %v, want nil", err)
+			}
+		})
+	}
+}
+
+// TestLoadEnvFileSetsEnvironmentVariables table-drives LoadEnvFile's
+// successful parsing: unset variables get set (comments/blank lines
+// skipped), and already-set variables are left untouched.
+func TestLoadEnvFileSetsEnvironmentVariables(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		preset  map[string]string
+		wantEnv map[string]string
+	}{
+		{
+			name:    "sets unset variables and skips comments and blank lines",
+			content: "# a comment\n\nTANGO_TEST_ENV_LOAD_A=\"quoted value\"\nTANGO_TEST_ENV_LOAD_B=plain\n",
+			wantEnv: map[string]string{
+				"TANGO_TEST_ENV_LOAD_A": "quoted value",
+				"TANGO_TEST_ENV_LOAD_B": "plain",
+			},
+		},
+		{
+			name:    "does not override already set variables",
+			content: "TANGO_TEST_ENV_LOAD_PRESET=from_file\n",
+			preset:  map[string]string{"TANGO_TEST_ENV_LOAD_PRESET": "from_environment"},
+			wantEnv: map[string]string{"TANGO_TEST_ENV_LOAD_PRESET": "from_environment"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ".env")
+			if err := os.WriteFile(path, []byte(tt.content), 0o644); err != nil {
+				t.Fatalf("write env file: %v", err)
+			}
+
+			for key := range tt.wantEnv {
+				if _, preset := tt.preset[key]; !preset {
+					os.Unsetenv(key)
+				}
+			}
+			for key, value := range tt.preset {
+				t.Setenv(key, value)
+			}
+			t.Cleanup(func() {
+				for key := range tt.wantEnv {
+					os.Unsetenv(key)
+				}
+			})
+
+			if err := tango.LoadEnvFile(path); err != nil {
+				t.Fatalf("LoadEnvFile: %v", err)
+			}
+			for key, want := range tt.wantEnv {
+				if got := os.Getenv(key); got != want {
+					t.Fatalf("%s = %q, want %q", key, got, want)
+				}
+			}
+		})
+	}
+}
+
+func withArgs(t *testing.T, args []string, fn func()) {
+	t.Helper()
+	original := os.Args
+	os.Args = args
+	t.Cleanup(func() { os.Args = original })
+	fn()
+}
+
+// TestDispatchFlagsReportsFailures table-drives DispatchFlags's error paths
+// across its different flags: an unknown flag, and each handled flag
+// propagating an underlying failure (registration, check, or migration).
+func TestDispatchFlagsReportsFailures(t *testing.T) {
+	tests := []struct {
+		name   string
+		args   []string
+		config tango.Config
+		db     func(t *testing.T) *sql.DB
+		check  func(t *testing.T, err error)
+	}{
+		{
+			name: "rejects unknown flag",
+			args: []string{"tango", "--bogus"},
+			check: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("err = nil, want non-nil for an unknown flag")
+				}
+			},
+		},
+		{
+			name: "dump models reports registration error",
+			args: []string{"tango", "-tango-dump-models"},
+			config: tango.Config{InstalledApps: []tango.App{
+				tango.NewApp("dup", func(registry *tango.Registry) error { return nil }),
+				tango.NewApp("dup", func(registry *tango.Registry) error { return nil }),
+			}},
+			check: func(t *testing.T, err error) {
+				if !errors.Is(err, tango.ErrDuplicateApp) {
+					t.Fatalf("err = %v, want ErrDuplicateApp", err)
+				}
+			},
+		},
+		{
+			name: "check reports failure",
+			args: []string{"tango", "-check"},
+			config: tango.Config{InstalledApps: []tango.App{
+				tango.NewApp("bad", func(registry *tango.Registry) error { return errors.New("boom") }),
+			}},
+			check: func(t *testing.T, err error) {
+				if err == nil || !strings.Contains(err.Error(), "check failed:") {
+					t.Fatalf("err = %v, want \"check failed: ...\"", err)
+				}
+			},
+		},
+		{
+			name: "migrate down reports no applied migrations",
+			args: []string{"tango", "-migrate", "-down"},
+			db: func(t *testing.T) *sql.DB {
+				sqlDB, err := sql.Open("sqlite", ":memory:")
+				if err != nil {
+					t.Fatalf("open sqlite: %v", err)
+				}
+				t.Cleanup(func() { _ = sqlDB.Close() })
+				return sqlDB
+			},
+			check: func(t *testing.T, err error) {
+				if !errors.Is(err, migration.ErrNoAppliedMigrations) {
+					t.Fatalf("err = %v, want ErrNoAppliedMigrations", err)
+				}
+			},
+		},
+		{
+			name: "migrate reports apply failure",
+			args: []string{"tango", "-migrate"},
+			db: func(t *testing.T) *sql.DB {
+				sqlDB, err := sql.Open("sqlite", ":memory:")
+				if err != nil {
+					t.Fatalf("open sqlite: %v", err)
+				}
+				sqlDB.Close()
+				return sqlDB
+			},
+			check: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("err = nil, want non-nil for a closed database")
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sqlDB *sql.DB
+			if tt.db != nil {
+				sqlDB = tt.db(t)
+			}
+			withArgs(t, tt.args, func() {
+				handled, err := tango.DispatchFlags(tt.config, sqlDB, db.SQLite, nil)
+				if !handled {
+					t.Fatal("handled = false, want true")
+				}
+				tt.check(t, err)
+			})
+		})
+	}
+}
+
+// TestBuildRegistryErrorPropagatesToCheckAndDumpModels covers Check and
+// DumpModels both surfacing the same underlying BuildRegistry error
+// (ErrDuplicateApp) rather than swallowing or rewrapping it.
+func TestBuildRegistryErrorPropagatesToCheckAndDumpModels(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(config tango.Config) error
+	}{
+		{
+			name: "Check",
+			call: func(config tango.Config) error { return tango.Check(config) },
+		},
+		{
+			name: "DumpModels",
+			call: func(config tango.Config) error {
+				_, err := tango.DumpModels(config)
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := tango.NewApp("dup", func(registry *tango.Registry) error { return nil })
+			err := tt.call(tango.Config{InstalledApps: []tango.App{app, app}})
+			if !errors.Is(err, tango.ErrDuplicateApp) {
+				t.Fatalf("error = %v, want ErrDuplicateApp", err)
+			}
+		})
+	}
+}
+
+func TestCheckReturnsAggregatedAppCheckFailureWithDefaultDescription(t *testing.T) {
+	app := configCheckApp{
+		name: "widgets",
+		checks: []tango.AppCheck{
+			{Err: errors.New("boom")},
+		},
+	}
+
+	err := tango.Check(tango.Config{InstalledApps: []tango.App{app}})
+	if err == nil || !strings.Contains(err.Error(), "unnamed app check") {
+		t.Fatalf("error = %v, want it to fall back to \"unnamed app check\"", err)
+	}
+}
+
+// TestServeWrapsErrorsFromEachStage covers Serve wrapping the underlying
+// error from each stage of building and running an app in turn: building the
+// registry, running registration, and compiling routes.
+func TestServeWrapsErrorsFromEachStage(t *testing.T) {
+	tests := []struct {
+		name          string
+		config        tango.Config
+		wantErrPrefix string
+	}{
+		{
+			name: "build registry error",
+			config: tango.Config{InstalledApps: []tango.App{
+				tango.NewApp("dup", func(registry *tango.Registry) error { return nil }),
+				tango.NewApp("dup", func(registry *tango.Registry) error { return nil }),
+			}},
+			wantErrPrefix: "build registry:",
+		},
+		{
+			name: "run registration error",
+			config: tango.Config{InstalledApps: []tango.App{
+				tango.NewApp("bad", func(registry *tango.Registry) error { return errors.New("boom") }),
+			}},
+			wantErrPrefix: "run registration:",
+		},
+		{
+			name: "route compile error",
+			config: tango.Config{InstalledApps: []tango.App{
+				tango.NewApp("one", func(registry *tango.Registry) error {
+					return registry.Routes().Include("/users/", tango.URLs{
+						tango.Path("GET", "/", func(ctx *tango.Context) error { return nil }, tango.Name("list")),
+					})
+				}),
+				tango.NewApp("two", func(registry *tango.Registry) error {
+					return registry.Routes().Include("/users/", tango.URLs{
+						tango.Path("GET", "/active/", func(ctx *tango.Context) error { return nil }, tango.Name("list")),
+					})
+				}),
+			}},
+			wantErrPrefix: "compile routes:",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tango.Serve(tt.config, nil, db.SQLite)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErrPrefix) {
+				t.Fatalf("error = %v, want it to contain %q", err, tt.wantErrPrefix)
+			}
+		})
 	}
 }

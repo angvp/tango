@@ -321,6 +321,66 @@ func TestHandleCLICreateWithNoStaffAndNoSuperuserFlags(t *testing.T) {
 	}
 }
 
+// TestReadPasswordReturnsErrorOnEmptyInput covers readPassword's
+// no-input branch (via HandleCLI's create and resetpassword flags): a
+// stdin that closes without a line — e.g. a script piping nothing into
+// "tango admin create" by mistake — must return a clear error instead of
+// silently accepting an empty password.
+func TestReadPasswordReturnsErrorOnEmptyInput(t *testing.T) {
+	store := setupAccountStore(t)
+	ctx := context.Background()
+	var stdout strings.Builder
+
+	handled, err := admin.HandleCLI(ctx, store, []string{"-tango-admin-create=alice"}, strings.NewReader(""), &stdout, &stdout)
+	if !handled || err == nil {
+		t.Fatalf("HandleCLI create with no stdin input: handled=%v err=%v, want handled=true, err != nil", handled, err)
+	}
+
+	if err := admin.CreateAccount(ctx, store, "alice", "s3cret"); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	stdout.Reset()
+	handled, err = admin.HandleCLI(ctx, store, []string{"-tango-admin-resetpassword=alice"}, strings.NewReader(""), &stdout, &stdout)
+	if !handled || err == nil {
+		t.Fatalf("HandleCLI resetpassword with no stdin input: handled=%v err=%v, want handled=true, err != nil", handled, err)
+	}
+}
+
+// TestHandleCLIPropagatesAccountOperationErrors covers HandleCLI's error
+// branches for each flag's underlying account operation failing: creating
+// a duplicate username, resetting or deactivating an unknown account, and
+// the shared grant/revoke verb loop's error path — all must surface the
+// error rather than reporting success.
+func TestHandleCLIPropagatesAccountOperationErrors(t *testing.T) {
+	store := setupAccountStore(t)
+	ctx := context.Background()
+	var stdout strings.Builder
+
+	if err := admin.CreateAccount(ctx, store, "bob", "s3cret"); err != nil {
+		t.Fatalf("seed account: %v", err)
+	}
+
+	handled, err := admin.HandleCLI(ctx, store, []string{"-tango-admin-create=bob"}, strings.NewReader("hunter2\n"), &stdout, &stdout)
+	if !handled || !errors.Is(err, admin.ErrAccountExists) {
+		t.Fatalf("HandleCLI create duplicate: handled=%v err=%v, want handled=true, ErrAccountExists", handled, err)
+	}
+
+	handled, err = admin.HandleCLI(ctx, store, []string{"-tango-admin-resetpassword=no-such-user"}, strings.NewReader("hunter2\n"), &stdout, &stdout)
+	if !handled || !errors.Is(err, admin.ErrAccountNotFound) {
+		t.Fatalf("HandleCLI resetpassword unknown user: handled=%v err=%v, want handled=true, ErrAccountNotFound", handled, err)
+	}
+
+	handled, err = admin.HandleCLI(ctx, store, []string{"-tango-admin-deactivate=no-such-user"}, strings.NewReader(""), &stdout, &stdout)
+	if !handled || !errors.Is(err, admin.ErrAccountNotFound) {
+		t.Fatalf("HandleCLI deactivate unknown user: handled=%v err=%v, want handled=true, ErrAccountNotFound", handled, err)
+	}
+
+	handled, err = admin.HandleCLI(ctx, store, []string{"-tango-admin-grant-staff=no-such-user"}, strings.NewReader(""), &stdout, &stdout)
+	if !handled || !errors.Is(err, admin.ErrAccountNotFound) {
+		t.Fatalf("HandleCLI grant-staff unknown user: handled=%v err=%v, want handled=true, ErrAccountNotFound", handled, err)
+	}
+}
+
 func TestHandleCLIGrantAndRevokeStaffAndSuperuserVerbs(t *testing.T) {
 	store := setupAccountStore(t)
 	ctx := context.Background()

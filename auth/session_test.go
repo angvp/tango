@@ -53,6 +53,25 @@ type authSessionBadExpiresAt struct {
 	ExpiresAt string
 }
 
+type authSessionTokenNotString struct {
+	ID        int64 `tango:"pk"`
+	Token     int64
+	UserID    int64 `tango:"fk=authTestUser"`
+	ExpiresAt time.Time
+}
+
+type authSessionMissingUserID struct {
+	ID        int64 `tango:"pk"`
+	Token     string
+	ExpiresAt time.Time
+}
+
+type authSessionMissingExpiresAt struct {
+	ID     int64 `tango:"pk"`
+	Token  string
+	UserID int64 `tango:"fk=authTestUser"`
+}
+
 func TestPasswordHashAndVerify(t *testing.T) {
 	hash, err := auth.HashPassword("correct")
 	if err != nil {
@@ -69,6 +88,17 @@ func TestPasswordHashAndVerify(t *testing.T) {
 	}
 	if auth.VerifyPassword("not-a-bcrypt-hash", "correct") {
 		t.Fatal("VerifyPassword returned true for a garbled hash")
+	}
+}
+
+// TestHashPasswordRejectsPasswordsLongerThanBcryptLimit documents a real
+// constraint a framework user can hit: bcrypt only examines the first 72
+// bytes of its input and refuses longer passwords outright, rather than
+// silently truncating them.
+func TestHashPasswordRejectsPasswordsLongerThanBcryptLimit(t *testing.T) {
+	tooLong := strings.Repeat("a", 73)
+	if _, err := auth.HashPassword(tooLong); err == nil {
+		t.Fatal("HashPassword err = nil, want an error for a password over bcrypt's 72-byte limit")
 	}
 }
 
@@ -142,6 +172,107 @@ func TestDeleteSessionMissingTokenIsNoop(t *testing.T) {
 	}
 }
 
+func TestCreateSessionUserIDAssignment(t *testing.T) {
+	t.Run("nil userID is rejected", func(t *testing.T) {
+		store, _, _, sessionMeta, _ := buildAuthTestStore(t)
+		_, _, err := auth.CreateSession(context.Background(), store, sessionMeta, nil, time.Hour)
+		if !errors.Is(err, auth.ErrInvalidSessionModel) {
+			t.Fatalf("CreateSession(nil userID) error = %v, want ErrInvalidSessionModel", err)
+		}
+	})
+
+	t.Run("convertible userID type is accepted", func(t *testing.T) {
+		store, _, _, sessionMeta, userID := buildAuthTestStore(t)
+		// UserID is int64; int32 is convertible to it even though it is not
+		// directly assignable, exercising setReflectValue's ConvertibleTo path.
+		token, _, err := auth.CreateSession(context.Background(), store, sessionMeta, int32(userID), time.Hour)
+		if err != nil {
+			t.Fatalf("CreateSession(int32 userID): %v", err)
+		}
+		gotUserID, ok, err := auth.SessionUser(context.Background(), store, sessionMeta, token)
+		if err != nil || !ok {
+			t.Fatalf("SessionUser after convertible userID = (%v, %v, %v), want a valid session", gotUserID, ok, err)
+		}
+	})
+
+	t.Run("inconvertible userID type is rejected", func(t *testing.T) {
+		store, _, _, sessionMeta, _ := buildAuthTestStore(t)
+		_, _, err := auth.CreateSession(context.Background(), store, sessionMeta, struct{ X int }{X: 1}, time.Hour)
+		if !errors.Is(err, auth.ErrInvalidSessionModel) {
+			t.Fatalf("CreateSession(struct userID) error = %v, want ErrInvalidSessionModel", err)
+		}
+	})
+}
+
+func TestSessionHelpersPropagateUnderlyingStoreErrors(t *testing.T) {
+	t.Run("CreateSession", func(t *testing.T) {
+		store, sqlDB, _, sessionMeta, userID := buildAuthTestStore(t)
+		sqlDB.Close()
+		if _, _, err := auth.CreateSession(context.Background(), store, sessionMeta, userID, time.Hour); err == nil {
+			t.Fatal("CreateSession over a closed database returned nil error, want a store error")
+		}
+	})
+
+	t.Run("SessionUser", func(t *testing.T) {
+		store, sqlDB, _, sessionMeta, userID := buildAuthTestStore(t)
+		token, _, err := auth.CreateSession(context.Background(), store, sessionMeta, userID, time.Hour)
+		if err != nil {
+			t.Fatalf("CreateSession: %v", err)
+		}
+		sqlDB.Close()
+		if _, _, err := auth.SessionUser(context.Background(), store, sessionMeta, token); err == nil {
+			t.Fatal("SessionUser over a closed database returned nil error, want a store error")
+		}
+	})
+
+	t.Run("DeleteSession query", func(t *testing.T) {
+		store, sqlDB, _, sessionMeta, userID := buildAuthTestStore(t)
+		token, _, err := auth.CreateSession(context.Background(), store, sessionMeta, userID, time.Hour)
+		if err != nil {
+			t.Fatalf("CreateSession: %v", err)
+		}
+		sqlDB.Close()
+		if err := auth.DeleteSession(context.Background(), store, sessionMeta, token); err == nil {
+			t.Fatal("DeleteSession over a closed database returned nil error, want a store error")
+		}
+	})
+
+	t.Run("DeleteSession delete", func(t *testing.T) {
+		store, sqlDB, _, sessionMeta, userID := buildAuthTestStore(t)
+		token, _, err := auth.CreateSession(context.Background(), store, sessionMeta, userID, time.Hour)
+		if err != nil {
+			t.Fatalf("CreateSession: %v", err)
+		}
+
+		// Enforce foreign keys on this connection and add a row that
+		// references the session, so the session row's SELECT (inside
+		// DeleteSession) succeeds but the subsequent DELETE is rejected by
+		// the FK constraint — a realistic way an app-level FK could make a
+		// session undeletable without the token itself being invalid.
+		sqlDB.SetMaxOpenConns(1)
+		if _, err := sqlDB.Exec("PRAGMA foreign_keys = ON"); err != nil {
+			t.Fatalf("enable foreign keys: %v", err)
+		}
+		if _, err := sqlDB.Exec(`CREATE TABLE auth_test_session_dependent (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id INTEGER NOT NULL REFERENCES auth_test_session(id)
+		)`); err != nil {
+			t.Fatalf("create dependent table: %v", err)
+		}
+		var sessionID int64
+		if err := sqlDB.QueryRow("SELECT id FROM auth_test_session WHERE token = ?", token).Scan(&sessionID); err != nil {
+			t.Fatalf("look up session id: %v", err)
+		}
+		if _, err := sqlDB.Exec("INSERT INTO auth_test_session_dependent (session_id) VALUES (?)", sessionID); err != nil {
+			t.Fatalf("insert dependent row: %v", err)
+		}
+
+		if err := auth.DeleteSession(context.Background(), store, sessionMeta, token); err == nil {
+			t.Fatal("DeleteSession violating a foreign key constraint returned nil error, want a store error")
+		}
+	})
+}
+
 func TestValidateSessionModelFailures(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -150,6 +281,9 @@ func TestValidateSessionModelFailures(t *testing.T) {
 		{name: "missing token", value: authSessionMissingToken{}},
 		{name: "userid not foreign key", value: authSessionUserIDNotFK{}},
 		{name: "bad expires at", value: authSessionBadExpiresAt{}},
+		{name: "token not string", value: authSessionTokenNotString{}},
+		{name: "missing userid", value: authSessionMissingUserID{}},
+		{name: "missing expires at", value: authSessionMissingExpiresAt{}},
 	}
 
 	for _, tt := range tests {
@@ -235,6 +369,32 @@ func TestRequireLoginAndCurrentUserID(t *testing.T) {
 	}
 }
 
+func TestRequireLoginPropagatesCurrentUserIDError(t *testing.T) {
+	store, sqlDB, _, sessionMeta, userID := buildAuthTestStore(t)
+	token, _, err := auth.CreateSession(context.Background(), store, sessionMeta, userID, time.Hour)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	// Close the database out from under a valid cookie so CurrentUserID's
+	// session lookup fails with a real error instead of "not found".
+	sqlDB.Close()
+
+	protected := auth.RequireLogin(store, sessionMeta, "app_session", "/login/", "/app/", func(ctx *tango.Context) error {
+		t.Fatal("protected view ran, want RequireLogin to propagate the lookup error first")
+		return nil
+	})
+	handler := buildAuthHTTPHandler(t, protected)
+
+	req := httptest.NewRequest(http.MethodGet, "/app/private/", nil)
+	req.AddCookie(&http.Cookie{Name: "app_session", Value: token})
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 for a propagated store error", resp.Code)
+	}
+}
+
 func TestRequireLoginFallsBackWhenRequestOutsideAllowedPrefix(t *testing.T) {
 	store, _, _, sessionMeta, _ := buildAuthTestStore(t)
 	handler := buildAuthHTTPHandler(t, auth.RequireLogin(store, sessionMeta, "app_session", "/login/", "/app/", func(ctx *tango.Context) error {
@@ -250,6 +410,27 @@ func TestRequireLoginFallsBackWhenRequestOutsideAllowedPrefix(t *testing.T) {
 	}
 	if parsed.Path != "/login/" || parsed.Query().Get("next") != "/app/" {
 		t.Fatalf("Location = %q, want /login/?next=/app/", location)
+	}
+}
+
+// TestRequireLoginFallsBackToRawLoginPathWhenItFailsToParse documents
+// appendNext's defensive fallback: an unparsable loginPath (a configuration
+// mistake, not something the request can trigger) is redirected to as-is,
+// without a "next" query parameter appended, rather than panicking or
+// silently dropping the redirect.
+func TestRequireLoginFallsBackToRawLoginPathWhenItFailsToParse(t *testing.T) {
+	store, _, _, sessionMeta, _ := buildAuthTestStore(t)
+	handler := buildAuthHTTPHandler(t, auth.RequireLogin(store, sessionMeta, "app_session", "/login%zz", "/app/", func(ctx *tango.Context) error {
+		return ctx.JSON(http.StatusOK, map[string]string{"ok": "true"})
+	}))
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/app/private/", nil))
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302", response.Code)
+	}
+	if got := response.Header().Get("Location"); got != "/login%zz" {
+		t.Fatalf("Location = %q, want the raw unparsable loginPath unchanged", got)
 	}
 }
 

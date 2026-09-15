@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -170,4 +171,162 @@ func TestNewProjectRequiresName(t *testing.T) {
 	if len(runner.commands) != 0 {
 		t.Fatalf("commands = %+v, want none run", runner.commands)
 	}
+}
+
+func TestNewProjectRejectsUnknownFlag(t *testing.T) {
+	dir := t.TempDir()
+	var stderr strings.Builder
+	code := Run(context.Background(), []string{"newproject", "--bogus", "myapp"}, dir, io.Discard, &stderr, &multiRecordingRunner{})
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2, stderr: %s", code, stderr.String())
+	}
+}
+
+// TestNewProjectFailsWhenProjectFileIsBlocked table-drives the exit-1
+// filesystem-obstruction paths of newproject: something newproject expects
+// to create or write into is instead blocked by a pre-existing file or
+// directory of the wrong kind.
+func TestNewProjectFailsWhenProjectFileIsBlocked(t *testing.T) {
+	tests := []struct {
+		name  string
+		skip  func(t *testing.T) bool
+		setup func(t *testing.T, dir string)
+	}{
+		{
+			name: "project dir is blocked by a file",
+			setup: func(t *testing.T, dir string) {
+				if err := os.WriteFile(filepath.Join(dir, "myapp"), []byte("not a directory"), 0o644); err != nil {
+					t.Fatalf("seed blocking file: %v", err)
+				}
+			},
+		},
+		{
+			name: "main.go cannot be written",
+			skip: func(t *testing.T) bool { return os.Geteuid() == 0 },
+			setup: func(t *testing.T, dir string) {
+				projectDir := filepath.Join(dir, "myapp")
+				if err := os.MkdirAll(projectDir, 0o555); err != nil {
+					t.Fatalf("mkdir read-only project dir: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(projectDir, 0o755) })
+			},
+		},
+		{
+			name: "migrations path is blocked by a file",
+			setup: func(t *testing.T, dir string) {
+				projectDir := filepath.Join(dir, "myapp")
+				if err := os.MkdirAll(projectDir, 0o755); err != nil {
+					t.Fatalf("mkdir project dir: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(projectDir, "migrations"), []byte("not a directory"), 0o644); err != nil {
+					t.Fatalf("seed blocking file: %v", err)
+				}
+			},
+		},
+		{
+			name: "migrations.go is blocked by a directory",
+			setup: func(t *testing.T, dir string) {
+				migrationsDir := filepath.Join(dir, "myapp", "migrations")
+				if err := os.MkdirAll(filepath.Join(migrationsDir, "migrations.go"), 0o755); err != nil {
+					t.Fatalf("seed blocking directory: %v", err)
+				}
+			},
+		},
+		{
+			name: ".gitignore is blocked by a directory",
+			setup: func(t *testing.T, dir string) {
+				projectDir := filepath.Join(dir, "myapp")
+				if err := os.MkdirAll(filepath.Join(projectDir, ".gitignore"), 0o755); err != nil {
+					t.Fatalf("seed blocking directory: %v", err)
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip != nil && tt.skip(t) {
+				t.Skip("root ignores directory permission bits")
+			}
+			dir := t.TempDir()
+			tt.setup(t, dir)
+
+			var stderr strings.Builder
+			code := Run(context.Background(), []string{"newproject", "myapp"}, dir, io.Discard, &stderr, &multiRecordingRunner{})
+			if code != 1 {
+				t.Fatalf("exit code = %d, want 1, stderr: %s", code, stderr.String())
+			}
+		})
+	}
+}
+
+// TestNewProjectReportsCommandRunnerFailure table-drives newproject
+// propagating the underlying error from each external command it runs (go
+// mod init, then go mod tidy).
+func TestNewProjectReportsCommandRunnerFailure(t *testing.T) {
+	tests := []struct {
+		name        string
+		runner      Runner
+		wantErr     string
+		checkRunner func(t *testing.T, runner Runner)
+	}{
+		{
+			name:    "go mod init failure",
+			runner:  &multiRecordingRunner{err: errors.New("go mod init failed")},
+			wantErr: "go mod init failed",
+		},
+		{
+			name:    "go mod tidy failure",
+			runner:  &failOnCallRunner{failOnCall: 2, err: errors.New("go mod tidy failed")},
+			wantErr: "go mod tidy failed",
+			checkRunner: func(t *testing.T, runner Runner) {
+				got := runner.(*failOnCallRunner)
+				if got.calls != 2 {
+					t.Fatalf("runner.calls = %d, want exactly 2 (init succeeds, tidy fails)", got.calls)
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			var stderr strings.Builder
+			code := Run(context.Background(), []string{"newproject", "myapp"}, dir, io.Discard, &stderr, tt.runner)
+			if code != 1 {
+				t.Fatalf("exit code = %d, want 1, stderr: %s", code, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), tt.wantErr) {
+				t.Fatalf("stderr = %q, want it to contain %q", stderr.String(), tt.wantErr)
+			}
+			if tt.checkRunner != nil {
+				tt.checkRunner(t, tt.runner)
+			}
+		})
+	}
+}
+
+// TestWriteFormattedFileRejectsInvalidGoSource covers writeFormattedFile's
+// own format.Source error path directly: every real caller only ever
+// passes generated, always-valid Go source, so this branch is otherwise
+// unreachable through the public newproject/newapp commands.
+func TestWriteFormattedFileRejectsInvalidGoSource(t *testing.T) {
+	dir := t.TempDir()
+	err := writeFormattedFile(filepath.Join(dir, "broken.go"), "func broken(")
+	if err == nil {
+		t.Fatal("writeFormattedFile error = nil, want a syntax error for invalid Go source")
+	}
+}
+
+type failOnCallRunner struct {
+	calls      int
+	failOnCall int
+	err        error
+}
+
+func (r *failOnCallRunner) Run(ctx context.Context, dir string, name string, args []string, stdout io.Writer, stderr io.Writer) error {
+	r.calls++
+	if r.calls == r.failOnCall {
+		return r.err
+	}
+	return nil
 }

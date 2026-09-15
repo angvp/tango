@@ -19,6 +19,12 @@ import (
 // CLI, which enforces no minimum at all.
 const minPasswordLength = 8
 
+// maxPasswordLength matches bcrypt.GenerateFromPassword's hard limit:
+// bcrypt.ErrPasswordTooLong beyond 72 bytes. Enforced here as an explicit,
+// friendly validation error instead of letting a long password reach
+// bcrypt and surface as an unhandled 500.
+const maxPasswordLength = 72
+
 // normalizeEmail lowercases and trims raw, so Alice@Example.com and
 // alice@example.com are always treated as the same Account. Applied on
 // every write and lookup — the database's unique constraint is not
@@ -106,6 +112,9 @@ func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLim
 			}
 			if len(password) < minPasswordLength {
 				return rerender(http.StatusBadRequest, "Password must be at least 8 characters.")
+			}
+			if len(password) > maxPasswordLength {
+				return rerender(http.StatusBadRequest, "Password must be at most 72 characters.")
 			}
 
 			if _, exists, err := findAccountByEmail(ctx.Context(), store, email); err != nil {

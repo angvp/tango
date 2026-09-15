@@ -3,11 +3,13 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -600,6 +602,406 @@ func TestMakeMigrationsGeneratedMigrationsPackageCompilesAcrossMultipleFiles(t *
 	if err := build.Run(); err != nil {
 		t.Fatalf("go build of generated migrations package failed: %v\n%s", err, buildOut.String())
 	}
+}
+
+// TestMakeMigrationsRunFailures table-drives makemigrations's Run-level
+// failure paths: argument validation, dump-models/runner failures, and
+// pre-existing migration files that are corrupted or otherwise invalid.
+func TestMakeMigrationsRunFailures(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		skip       func(t *testing.T) bool
+		setup      func(t *testing.T, dir string)
+		runner     Runner
+		wantCode   int
+		wantStderr string
+		postCheck  func(t *testing.T, dir string)
+	}{
+		{
+			name:     "rejects unknown flag",
+			args:     []string{"makemigrations", "--bogus"},
+			wantCode: 2,
+		},
+		{
+			name:       "rejects unexpected positional arguments",
+			args:       []string{"makemigrations", "extra"},
+			wantCode:   2,
+			wantStderr: "unexpected arguments",
+		},
+		{
+			name:       "reports dump-models runner failure",
+			args:       []string{"makemigrations"},
+			runner:     erroringRunner{err: errors.New("go run failed")},
+			wantCode:   1,
+			wantStderr: "go run failed",
+		},
+		{
+			name:       "reports dump-models invalid JSON",
+			args:       []string{"makemigrations"},
+			runner:     garbageStdoutRunner{},
+			wantCode:   1,
+			wantStderr: "decode model manifest",
+		},
+		{
+			// A hand-edited or corrupted migration file (an unrecognized
+			// step "kind" in its JSON metadata comment) must surface as a
+			// clear makemigrations error rather than panicking or being
+			// silently ignored, and regenerateMigrationsAggregate must
+			// refuse the same file too.
+			name: "reports corrupted existing migration file",
+			args: []string{"makemigrations"},
+			setup: func(t *testing.T, dir string) {
+				migrationsDir := filepath.Join(dir, "migrations")
+				if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
+					t.Fatalf("mkdir migrations: %v", err)
+				}
+				corrupted := migrationJSONPrefix + `[{"app":"users","name":"0001_auto","up":[{"kind":"Bogus"}],"down":[],"reversible":true}]` + "\n"
+				if err := os.WriteFile(filepath.Join(migrationsDir, "0001_auto.go"), []byte(corrupted), 0o644); err != nil {
+					t.Fatalf("write corrupted migration: %v", err)
+				}
+			},
+			wantCode:   1,
+			wantStderr: "unknown migration step kind",
+			postCheck: func(t *testing.T, dir string) {
+				if err := regenerateMigrationsAggregate(dir); err == nil || !strings.Contains(err.Error(), "unknown migration step kind") {
+					t.Fatalf("regenerateMigrationsAggregate error = %v, want unknown-step-kind error", err)
+				}
+			},
+		},
+		{
+			// Covers the case where an existing migration file's JSON
+			// metadata comment decodes fine but describes an impossible
+			// sequence of steps (here, a DropTable with no prior
+			// CreateTable) — a real hazard for a hand-edited or
+			// externally-merged migration file, distinct from the
+			// decode-level corruption above.
+			name: "reports replay failure on semantically invalid existing migration",
+			args: []string{"makemigrations"},
+			setup: func(t *testing.T, dir string) {
+				migrationsDir := filepath.Join(dir, "migrations")
+				if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
+					t.Fatalf("mkdir migrations: %v", err)
+				}
+				invalid := migrationJSONPrefix + `[{"app":"users","name":"0001_auto","up":[{"kind":"DropTable","table":"user"}],"down":[],"reversible":true}]` + "\n"
+				if err := os.WriteFile(filepath.Join(migrationsDir, "0001_auto.go"), []byte(invalid), 0o644); err != nil {
+					t.Fatalf("write invalid migration: %v", err)
+				}
+			},
+			wantCode:   1,
+			wantStderr: "does not exist",
+		},
+		{
+			name: "reports next-migration-sequence failure when project dir is read-only",
+			args: []string{"makemigrations"},
+			skip: func(t *testing.T) bool { return os.Geteuid() == 0 },
+			setup: func(t *testing.T, dir string) {
+				if err := os.Chmod(dir, 0o555); err != nil {
+					t.Fatalf("chmod project dir read-only: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+			},
+			runner: dumpModelsRunner{models: []migration.Model{
+				{App: "users", Name: "user", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+			}},
+			wantCode: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip != nil && tt.skip(t) {
+				t.Skip("root ignores directory permission bits")
+			}
+			dir := t.TempDir()
+			if tt.setup != nil {
+				tt.setup(t, dir)
+			}
+			runner := tt.runner
+			if runner == nil {
+				runner = dumpModelsRunner{}
+			}
+
+			var stderr strings.Builder
+			code := Run(context.Background(), tt.args, dir, io.Discard, &stderr, runner)
+			if code != tt.wantCode {
+				t.Fatalf("exit code = %d, want %d, stderr: %s", code, tt.wantCode, stderr.String())
+			}
+			if tt.wantStderr != "" && !strings.Contains(stderr.String(), tt.wantStderr) {
+				t.Fatalf("stderr = %q, want it to contain %q", stderr.String(), tt.wantStderr)
+			}
+			if tt.postCheck != nil {
+				tt.postCheck(t, dir)
+			}
+		})
+	}
+}
+
+type erroringRunner struct{ err error }
+
+func (r erroringRunner) Run(ctx context.Context, dir string, name string, args []string, stdout io.Writer, stderr io.Writer) error {
+	return r.err
+}
+
+type garbageStdoutRunner struct{}
+
+func (garbageStdoutRunner) Run(ctx context.Context, dir string, name string, args []string, stdout io.Writer, stderr io.Writer) error {
+	_, err := stdout.Write([]byte("not json"))
+	return err
+}
+
+// TestMigrationHelpersPropagateFilesystemErrors table-drives loadMigrations,
+// nextMigrationSequence, autoMigrationTarget, explicitMigrationTarget, and
+// writeMigrationFile all correctly surfacing an error (and, where a decoy
+// error message exists, the RIGHT error rather than a look-alike) when the
+// filesystem gets in the way: malformed glob patterns, unreadable files,
+// permission-denied stats, corrupted metadata, and blocked paths.
+func TestMigrationHelpersPropagateFilesystemErrors(t *testing.T) {
+	tests := []struct {
+		name               string
+		skip               func(t *testing.T) bool
+		setup              func(t *testing.T, dir string)
+		call               func(t *testing.T, dir string) error
+		wantErrContains    string
+		wantErrNotContains string
+	}{
+		{
+			name: "loadMigrations fails on malformed glob pattern",
+			skip: func(t *testing.T) bool { return runtime.GOOS == "windows" },
+			call: func(t *testing.T, dir string) error {
+				_, err := loadMigrations(filepath.Join(dir, "weird[project"))
+				return err
+			},
+		},
+		{
+			name: "loadMigrations fails when migration file is unreadable",
+			skip: func(t *testing.T) bool { return os.Geteuid() == 0 },
+			setup: func(t *testing.T, dir string) {
+				migrationsDir := filepath.Join(dir, "migrations")
+				if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
+					t.Fatalf("mkdir migrations: %v", err)
+				}
+				filename := filepath.Join(migrationsDir, "0001_auto.go")
+				if err := os.WriteFile(filename, []byte("package migrations\n"), 0o644); err != nil {
+					t.Fatalf("write migration file: %v", err)
+				}
+				if err := os.Chmod(filename, 0o000); err != nil {
+					t.Fatalf("chmod migration file: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(filename, 0o644) })
+			},
+			call: func(t *testing.T, dir string) error {
+				_, err := loadMigrations(dir)
+				return err
+			},
+		},
+		{
+			name: "loadMigrations rejects corrupted metadata comment",
+			setup: func(t *testing.T, dir string) {
+				migrationsDir := filepath.Join(dir, "migrations")
+				if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
+					t.Fatalf("mkdir migrations: %v", err)
+				}
+				corrupted := migrationJSONPrefix + `not valid json` + "\n"
+				if err := os.WriteFile(filepath.Join(migrationsDir, "0001_auto.go"), []byte(corrupted), 0o644); err != nil {
+					t.Fatalf("write corrupted migration: %v", err)
+				}
+			},
+			call: func(t *testing.T, dir string) error {
+				_, err := loadMigrations(dir)
+				return err
+			},
+		},
+		{
+			// The down-steps counterpart to the "corrupted existing
+			// migration file" Run-level case above (which only corrupts
+			// "up"): decodeMigrations decodes Up and Down separately, so
+			// each has its own error-propagation branch to exercise.
+			name: "loadMigrations rejects unknown step kind in down steps",
+			setup: func(t *testing.T, dir string) {
+				migrationsDir := filepath.Join(dir, "migrations")
+				if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
+					t.Fatalf("mkdir migrations: %v", err)
+				}
+				corrupted := migrationJSONPrefix + `[{"app":"users","name":"0001_auto","up":[],"down":[{"kind":"Bogus"}],"reversible":true}]` + "\n"
+				if err := os.WriteFile(filepath.Join(migrationsDir, "0001_auto.go"), []byte(corrupted), 0o644); err != nil {
+					t.Fatalf("write corrupted migration: %v", err)
+				}
+			},
+			call: func(t *testing.T, dir string) error {
+				_, err := loadMigrations(dir)
+				return err
+			},
+			wantErrContains: "unknown migration step kind",
+		},
+		{
+			name: "nextMigrationSequence fails when migrations path is blocked by a file",
+			setup: func(t *testing.T, dir string) {
+				// Pre-create "migrations" as a plain file so MkdirAll cannot
+				// create the migrations directory over it.
+				if err := os.WriteFile(filepath.Join(dir, "migrations"), []byte("not a directory"), 0o644); err != nil {
+					t.Fatalf("seed blocking file: %v", err)
+				}
+			},
+			call: func(t *testing.T, dir string) error {
+				_, err := nextMigrationSequence(dir)
+				return err
+			},
+		},
+		{
+			name: "nextMigrationSequence fails on malformed glob pattern",
+			skip: func(t *testing.T) bool { return runtime.GOOS == "windows" },
+			call: func(t *testing.T, dir string) error {
+				_, err := nextMigrationSequence(filepath.Join(dir, "weird[project"))
+				return err
+			},
+		},
+		{
+			name: "autoMigrationTarget fails on permission-denied stat",
+			skip: func(t *testing.T) bool { return os.Geteuid() == 0 },
+			setup: func(t *testing.T, dir string) {
+				migrationsDir := filepath.Join(dir, "migrations")
+				if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
+					t.Fatalf("mkdir migrations: %v", err)
+				}
+				if err := os.Chmod(migrationsDir, 0o000); err != nil {
+					t.Fatalf("chmod migrations: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(migrationsDir, 0o755) })
+			},
+			call: func(t *testing.T, dir string) error {
+				_, _, err := autoMigrationTarget(dir, 1, time.Now().UTC())
+				return err
+			},
+			wantErrNotContains: "all 5 timestamp candidates",
+		},
+		{
+			name: "explicitMigrationTarget fails on permission-denied stat",
+			skip: func(t *testing.T) bool { return os.Geteuid() == 0 },
+			setup: func(t *testing.T, dir string) {
+				migrationsDir := filepath.Join(dir, "migrations")
+				if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
+					t.Fatalf("mkdir migrations: %v", err)
+				}
+				if err := os.Chmod(migrationsDir, 0o000); err != nil {
+					t.Fatalf("chmod migrations: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(migrationsDir, 0o755) })
+			},
+			call: func(t *testing.T, dir string) error {
+				_, _, err := explicitMigrationTarget(dir, 1, "add_index")
+				return err
+			},
+			wantErrNotContains: "already exists",
+		},
+		{
+			name: "writeMigrationFile fails when parent directory is missing",
+			call: func(t *testing.T, dir string) error {
+				filename := filepath.Join(dir, "does-not-exist", "0001_named.go")
+				return writeMigrationFile(filename, "M0001Named", []migration.Migration{{App: "users", Name: "0001_named"}})
+			},
+			wantErrNotContains: "already exists",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip != nil && tt.skip(t) {
+				t.Skip("root ignores directory/file permission bits")
+			}
+			dir := t.TempDir()
+			if tt.setup != nil {
+				tt.setup(t, dir)
+			}
+
+			err := tt.call(t, dir)
+			if err == nil {
+				t.Fatal("error = nil, want non-nil")
+			}
+			if tt.wantErrContains != "" && !strings.Contains(err.Error(), tt.wantErrContains) {
+				t.Fatalf("error = %v, want it to contain %q", err, tt.wantErrContains)
+			}
+			if tt.wantErrNotContains != "" && strings.Contains(err.Error(), tt.wantErrNotContains) {
+				t.Fatalf("error = %v, want it NOT to contain %q", err, tt.wantErrNotContains)
+			}
+		})
+	}
+}
+
+// TestMakeMigrationsGeneratesUniqueAndIndexStepsAcrossRuns exercises the
+// AlterColumnUnique/CreateIndex/DropIndex Go-literal and JSON encode/decode
+// paths, which a single create-table migration never touches.
+func TestMakeMigrationsGeneratesUniqueAndIndexStepsAcrossRuns(t *testing.T) {
+	dir := t.TempDir()
+
+	first := dumpModelsRunner{models: []migration.Model{
+		{App: "users", Name: "user", Columns: []migration.Column{
+			{Name: "id", Type: "integer", PrimaryKey: true},
+			{Name: "email", Type: "text"},
+		}},
+	}}
+	if code := Run(context.Background(), []string{"makemigrations"}, dir, io.Discard, io.Discard, first); code != 0 {
+		t.Fatalf("first run exit code = %d, want 0", code)
+	}
+
+	// Second run: make email unique and indexed.
+	second := dumpModelsRunner{models: []migration.Model{
+		{App: "users", Name: "user", Columns: []migration.Column{
+			{Name: "id", Type: "integer", PrimaryKey: true},
+			{Name: "email", Type: "text", Unique: true, Indexed: true},
+		}},
+	}}
+	var stderr strings.Builder
+	if code := Run(context.Background(), []string{"makemigrations"}, dir, io.Discard, &stderr, second); code != 0 {
+		t.Fatalf("second run exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+	secondFile := mustReadSingleGlob(t, filepath.Join(dir, "migrations", "0002_*.go"))
+	if !strings.Contains(secondFile, "migration.AlterColumnUnique{Table: \"user\", Column: \"email\", Unique: true}") {
+		t.Fatalf("second migration missing AlterColumnUnique literal:\n%s", secondFile)
+	}
+	if !strings.Contains(secondFile, "migration.CreateIndex{Table: \"user\", Column: \"email\"}") {
+		t.Fatalf("second migration missing CreateIndex literal:\n%s", secondFile)
+	}
+
+	// Third run: drop the index again (unique stays), to hit DropIndex.
+	third := dumpModelsRunner{models: []migration.Model{
+		{App: "users", Name: "user", Columns: []migration.Column{
+			{Name: "id", Type: "integer", PrimaryKey: true},
+			{Name: "email", Type: "text", Unique: true, Indexed: false},
+		}},
+	}}
+	if code := Run(context.Background(), []string{"makemigrations"}, dir, io.Discard, &stderr, third); code != 0 {
+		t.Fatalf("third run exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+	thirdFile := mustReadSingleGlob(t, filepath.Join(dir, "migrations", "0003_*.go"))
+	if !strings.Contains(thirdFile, "migration.DropIndex{Table: \"user\", Column: \"email\"}") {
+		t.Fatalf("third migration missing DropIndex literal:\n%s", thirdFile)
+	}
+
+	// The round trip through loadMigrations (used by both the next
+	// makemigrations run and regenerateMigrationsAggregate) must also decode
+	// these step kinds back correctly.
+	migrations, err := loadMigrations(dir)
+	if err != nil {
+		t.Fatalf("loadMigrations: %v", err)
+	}
+	if len(migrations) != 3 {
+		t.Fatalf("loaded %d migrations, want 3", len(migrations))
+	}
+}
+
+func mustReadSingleGlob(t *testing.T, pattern string) string {
+	t.Helper()
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		t.Fatalf("glob %s: %v", pattern, err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("glob %s matched %d files, want 1", pattern, len(files))
+	}
+	content, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("read %s: %v", files[0], err)
+	}
+	return string(content)
 }
 
 func TestMakeMigrationsNoChangesWritesNoFile(t *testing.T) {

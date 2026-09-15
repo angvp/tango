@@ -153,14 +153,6 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 	return result
 }
 
-func diffTableColumns(m *Migration, table string, fields []model.FieldMeta, existing []ColumnState) {
-	columns := make([]Column, len(fields))
-	for i, field := range fields {
-		columns[i] = desiredColumn(field)
-	}
-	diffColumns(m, table, columns, existing)
-}
-
 func diffColumns(m *Migration, table string, columns []Column, existing []ColumnState) {
 	existingByName := make(map[string]ColumnState, len(existing))
 	for _, c := range existing {

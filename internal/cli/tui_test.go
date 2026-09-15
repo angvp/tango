@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -56,6 +57,40 @@ func TestMenuItemsOrderAndAvailability(t *testing.T) {
 	}
 	if menuShell.available() {
 		t.Fatal("menuShell.available() = true, want false (tango shell isn't implemented yet)")
+	}
+}
+
+func TestTuiMenuItemLabelUnknownValueFallsBack(t *testing.T) {
+	var unknown tuiMenuItem = 99
+	if got := unknown.label(); got != "unknown" {
+		t.Fatalf("label() = %q, want %q for an out-of-range menu item", got, "unknown")
+	}
+}
+
+func TestExecRunnerRunsCommandInDirWithWiredOutput(t *testing.T) {
+	dir := t.TempDir()
+	var stdout, stderr strings.Builder
+
+	err := ExecRunner{}.Run(context.Background(), dir, "pwd", nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("Run: %v, stderr: %s", err, stderr.String())
+	}
+	if got := strings.TrimSpace(stdout.String()); got != dir {
+		// macOS /tmp is often a symlink to /private/tmp; pwd -P style
+		// mismatches would show up here too, so resolve both sides.
+		resolvedDir, _ := filepath.EvalSymlinks(dir)
+		resolvedGot, _ := filepath.EvalSymlinks(got)
+		if resolvedGot != resolvedDir {
+			t.Fatalf("pwd output = %q, want %q (dir wiring)", got, dir)
+		}
+	}
+}
+
+func TestExecRunnerReturnsErrorForMissingCommand(t *testing.T) {
+	dir := t.TempDir()
+	err := ExecRunner{}.Run(context.Background(), dir, "tango-cli-test-definitely-not-a-real-binary", nil, io.Discard, io.Discard)
+	if err == nil {
+		t.Fatal("Run error = nil, want an error for a nonexistent command")
 	}
 }
 
@@ -186,6 +221,27 @@ func TestPerformActionRollbackRunsOnlyWhenConfirmed(t *testing.T) {
 	}
 }
 
+func TestAdvanceDashboardQuitWithoutPerformingStopsWithoutRunningAnything(t *testing.T) {
+	dir := t.TempDir()
+	runner := &multiRecordingRunner{}
+
+	final := dashboardModel{performed: false}
+	next, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+
+	if !done {
+		t.Fatal("done = false, want true — quitting without a selection must stop the loop")
+	}
+	if code != 0 {
+		t.Fatalf("code = %d, want 0", code)
+	}
+	if next != (tango.ProjectStatus{}) {
+		t.Fatalf("next = %+v, want zero value", next)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("commands = %+v, want none run", runner.commands)
+	}
+}
+
 func TestAdvanceDashboardRefetchesStatusAfterConfirmedMigrationAction(t *testing.T) {
 	dir := t.TempDir()
 	refreshedStatus := tango.ProjectStatus{RegistrationOK: true, DatabaseReachable: true, MigrationsTotal: 1, MigrationsApplied: 1}
@@ -233,6 +289,84 @@ func TestAdvanceDashboardDoesNotRefetchStatusForRunServer(t *testing.T) {
 	}
 	if len(runner.commands) != 1 {
 		t.Fatalf("commands = %+v, want exactly 1 (the run-server command, no status re-fetch)", runner.commands)
+	}
+}
+
+func TestAdvanceDashboardStatusRefetchFailurePropagatesError(t *testing.T) {
+	dir := t.TempDir()
+	runner := &jsonStdoutRunner{err: errors.New("go run failed")}
+
+	final := dashboardModel{performed: true, confirmed: true, action: menuApplyMigrations}
+	_, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+
+	if !done {
+		t.Fatal("done = false, want true — a failed status re-fetch must stop the loop")
+	}
+	if code != 1 {
+		t.Fatalf("code = %d, want 1", code)
+	}
+}
+
+func TestAdvanceDashboardDeclinedConfirmationStillRefetchesStatus(t *testing.T) {
+	dir := t.TempDir()
+	refreshedStatus := tango.ProjectStatus{RegistrationOK: true, DatabaseReachable: true}
+	encoded, err := json.Marshal(refreshedStatus)
+	if err != nil {
+		t.Fatalf("marshal status: %v", err)
+	}
+	runner := &jsonStdoutRunner{payload: encoded}
+
+	final := dashboardModel{performed: true, confirmed: false, action: menuApplyMigrations}
+	next, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+
+	if done {
+		t.Fatal("done = true, want false — a declined confirmation still loops with a refreshed status attempt")
+	}
+	if code != 0 {
+		t.Fatalf("code = %d, want 0", code)
+	}
+	if next != refreshedStatus {
+		t.Fatalf("next = %+v, want %+v", next, refreshedStatus)
+	}
+	// performAction is a no-op for a declined confirmation, so only the
+	// status re-fetch command runs.
+	if len(runner.commands) != 1 {
+		t.Fatalf("commands = %+v, want exactly 1 (status re-fetch only, no migration command)", runner.commands)
+	}
+}
+
+func TestAdvanceDashboardStopsWhenPerformActionFails(t *testing.T) {
+	dir := t.TempDir()
+	runner := &multiRecordingRunner{err: errors.New("migrate failed")}
+
+	final := dashboardModel{performed: true, confirmed: true, action: menuApplyMigrations}
+	_, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+
+	if !done {
+		t.Fatal("done = false, want true — a failed action must stop the loop without re-fetching status")
+	}
+	if code != 1 {
+		t.Fatalf("code = %d, want 1", code)
+	}
+	if len(runner.commands) != 1 {
+		t.Fatalf("commands = %+v, want exactly 1 (the failed action only, no status re-fetch)", runner.commands)
+	}
+}
+
+func TestPrintStatusPlainRendersFailureStates(t *testing.T) {
+	var out strings.Builder
+	printStatusPlain(&out, tango.ProjectStatus{
+		RegistrationOK:    false,
+		RegistrationError: "boom",
+		DatabaseReachable: false,
+		DatabaseError:     "no db",
+	})
+
+	got := out.String()
+	for _, want := range []string{"registration: FAILED (boom)", "database: UNREACHABLE (no db)"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, got)
+		}
 	}
 }
 

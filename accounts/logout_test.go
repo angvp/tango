@@ -55,6 +55,26 @@ func TestLogoutHasNoGetRoute(t *testing.T) {
 	}
 }
 
+// TestLogoutWithNoSessionCookieStillRedirects covers logout's other
+// branch: a request with no session cookie at all (e.g. a user who
+// already logged out in another tab double-submitting the logout form)
+// must still succeed with a redirect, never an error, since there is
+// nothing to delete.
+func TestLogoutWithNoSessionCookieStillRedirects(t *testing.T) {
+	handler, _ := buildProtectedTestHandler(t)
+
+	request := httptest.NewRequest(http.MethodPost, "/accounts/logout/", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+	}
+	if got := response.Header().Get("Location"); got != "/accounts/login/" {
+		t.Fatalf("Location = %q, want %q", got, "/accounts/login/")
+	}
+}
+
 func TestLogoutDoesNotAffectOtherSessionsForSameAccount(t *testing.T) {
 	handler, _ := buildProtectedTestHandler(t)
 	registerAccount(t, handler, "sara@example.com", "correct-password")

@@ -132,6 +132,52 @@ func TestRegisterRejectsPasswordUnderMinimumLength(t *testing.T) {
 	}
 }
 
+func TestRegisterRejectsEmptyEmailOrPassword(t *testing.T) {
+	tests := []struct {
+		name  string
+		email string
+		pass  string
+	}{
+		{name: "empty email", email: "", pass: "correct-password"},
+		{name: "empty password", email: "empty-pass@example.com", pass: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, _ := buildRegisterTestHandler(t)
+			response := postRegister(t, handler, url.Values{"email": {tt.email}, "password": {tt.pass}})
+
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+			}
+			if !strings.Contains(response.Body.String(), "required") {
+				t.Fatalf("body = %q, want a required-fields error", response.Body.String())
+			}
+		})
+	}
+}
+
+// TestRegisterRejectsPasswordOverBcryptLimit covers the fix for a bug this
+// ticket surfaced: bcrypt hard-rejects passwords over 72 bytes
+// (bcrypt.ErrPasswordTooLong), so a password-manager-generated password
+// past that length used to reach bcrypt unchecked and surface as a raw
+// 500. registerView now validates the length upfront and returns the same
+// kind of friendly 400 as the existing too-short case.
+func TestRegisterRejectsPasswordOverBcryptLimit(t *testing.T) {
+	handler, _ := buildRegisterTestHandler(t)
+
+	response := postRegister(t, handler, url.Values{
+		"email":    {"toolong@example.com"},
+		"password": {strings.Repeat("a", 100)},
+	})
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(response.Body.String(), "72 characters") {
+		t.Fatalf("body = %q, want a max-length validation message", response.Body.String())
+	}
+}
+
 func TestRegisterDuplicateEmailIsCaseInsensitiveAndSaysAlreadyRegistered(t *testing.T) {
 	handler, _ := buildRegisterTestHandler(t)
 
