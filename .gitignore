@@ -1,3 +1,4 @@
 /app.db
 /examples/*/app.db
 /coverage.out
+/junit.xml

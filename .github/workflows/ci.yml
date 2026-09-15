@@ -24,9 +24,26 @@ jobs:
       - name: go build
         run: go build ./...
       - name: go test
-        run: go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
+        run: |
+          go run gotest.tools/gotestsum@v1.13.0 \
+            --junitfile junit.xml \
+            --format testname \
+            -- ./... -count=1 -coverprofile=coverage.out -covermode=atomic
       - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
           files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          files: junit.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload JUnit report artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: junit.xml
