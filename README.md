@@ -1,5 +1,7 @@
 # tanGO
 
+[![codecov](https://codecov.io/gh/angvp/tango/branch/main/graph/badge.svg)](https://codecov.io/gh/angvp/tango)
+
 tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics but built from plain Go structs and interfaces — no code generation, no reflection-heavy magic beyond what's needed to read your model tags, and no hidden configuration.
 
 **Status: v0.1 candidate.** The public API is still settling. Behavior described in this README and the linked docs reflects what's implemented today; anything explicitly marked "planned" or "future" is not yet built. See [Limitations and compatibility](docs/limitations.md) before depending on tanGO for anything beyond experimentation.
