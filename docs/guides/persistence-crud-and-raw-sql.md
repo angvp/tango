@@ -12,11 +12,42 @@ Every method takes the model's `model.ModelMeta` (from `registry.Models().Get("P
 
 - **`Create(ctx, meta, dest any) error`** — inserts `dest`, backfilling a database-generated primary key into it.
 - **`Get(ctx, meta, pk any, dest any) error`** — scans the row matching `pk` into `dest`. Returns `db.ErrNotFound` (wrapped) if no row matches.
-- **`List(ctx, meta, query db.Query, dest *[]T) error`** — scans every matching row into `dest`. `db.Query{Limit, Offset, OrderBy}` carries pagination and ordering; `OrderBy` entries are Go field names, optionally prefixed with `-` for descending (`"-CreatedAt"`), and are validated against the model's actual fields — an unknown field fails with a clear error rather than silently doing nothing.
+- **`List(ctx, meta, query db.Query, dest *[]T) error`** — scans every matching row into `dest`. `db.Query{Where, Any, Limit, Offset, OrderBy}` carries filtering, pagination, and ordering; `OrderBy` entries are Go field names, optionally prefixed with `-` for descending (`"-CreatedAt"`), and are validated against the model's actual fields — an unknown field fails with a clear error rather than silently doing nothing.
 - **`Update(ctx, meta, dest any) error`** — writes `dest`'s current field values to the row matching its primary key. Returns `db.ErrNotFound` if no row matches.
 - **`Delete(ctx, meta, pk any) error`** — deletes the row matching `pk`. Returns `db.ErrNotFound` if no row matches.
 
 Table and column names are derived automatically (snake_case of the Go type/field names) — you never configure this mapping.
+
+## Filtering with `Where`
+
+`Where` is a slice of `db.Condition{Field, Op, Value}`. Each `Field` is a Go model field name; conditions are joined with AND. For example, given a `Post` model with a `CreatedAt time.Time` field:
+
+```go
+var posts []Post
+err := store.List(ctx, meta, db.Query{
+	Where: []db.Condition{
+		{Field: "CreatedAt", Op: db.OpGte, Value: start},
+		{Field: "CreatedAt", Op: db.OpLt, Value: end},
+	},
+	OrderBy: []string{"CreatedAt"},
+}, &posts)
+```
+
+The example returns posts in the `[start, end)` time range. `examples/api-with-admin/apps/posts/views.go` shows the same API in a working app view: an `author_id` query param builds a `Where` condition, and a `q` query param builds an `Any` group (`OpLike` across `Title`/`Body`) — combined with AND when both are present.
+
+| Operator | Meaning | Allowed fields |
+| --- | --- | --- |
+| `db.OpEq`, `db.OpNe` | Equal, not equal | Any supported model field |
+| `db.OpGt`, `db.OpGte`, `db.OpLt`, `db.OpLte` | Greater/less than, inclusive variants | Numeric fields and `time.Time` |
+| `db.OpLike` | SQL `LIKE` pattern match | String fields |
+
+`Value` must have the field's Go kind (`time.Time` for a time field). `nil` is rejected; use literal `false`, `0`, or `""` to filter for those values. Nil and empty `Where` slices both mean no filter. Unknown fields, unsupported operators, incompatible field kinds, and mismatched value types return errors before SQL execution. Values are passed as SQL parameters on both SQLite and Postgres.
+
+`Any` is one OR group, combined with `Where` using AND. For example, `Where: []db.Condition{{Field: "Active", Op: db.OpEq, Value: true}}` and `Any: []db.Condition{{Field: "Name", Op: db.OpLike, Value: "Al%"}, {Field: "Name", Op: db.OpLike, Value: "Be%"}}` selects active rows whose name matches either pattern. `OpLike` accepts an SQL pattern: `%` and `_` are wildcards. Case matching follows the configured database's `LIKE` behavior, which can differ between SQLite and Postgres. An empty `Any` applies no OR filter.
+
+`Store.Count(ctx, meta, query)` returns the total rows matching `Where` and `Any`. It ignores `Limit`, `Offset`, and `OrderBy`, so the same `Query` can drive a paginated `List` and its total count.
+
+This API does not support nested boolean groups, automatic wildcard escaping, `IS NULL`, joins, cross-model filtering, or filtering `Store.Get`. Use raw SQL below for queries outside this scope.
 
 ## Raw SQL
 

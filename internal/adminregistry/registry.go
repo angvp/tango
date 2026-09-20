@@ -79,6 +79,13 @@ func (r *Registry) Register(value any, opts Options) error {
 	if err := validateFields(meta, opts.Search, "Search"); err != nil {
 		return err
 	}
+	for _, name := range opts.Search {
+		for _, field := range meta.Fields {
+			if field.Name == name && field.Type.Kind() != reflect.String {
+				return fmt.Errorf("tango admin: Search field %q on %s must be a string", name, meta.Name)
+			}
+		}
+	}
 	if err := validateOrderingFields(meta, opts.Ordering); err != nil {
 		return err
 	}

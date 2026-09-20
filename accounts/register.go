@@ -41,14 +41,8 @@ func normalizeEmail(raw string) string {
 func findAccountByEmail(ctx context.Context, store *db.Store, email string) (Account, bool, error) {
 	meta, _ := accountModelMetas()
 	var rows []Account
-	sqlQuery := "SELECT " +
-		db.ColumnName("ID") + " AS ID, " +
-		db.ColumnName("Email") + " AS Email, " +
-		db.ColumnName("PasswordHash") + " AS PasswordHash, " +
-		db.ColumnName("Active") + " AS Active, " +
-		db.ColumnName("CreatedAt") + " AS CreatedAt FROM " +
-		db.ColumnName(meta.Name) + " WHERE " + db.ColumnName("Email") + " = ?"
-	if err := store.Query(ctx, &rows, sqlQuery, email); err != nil {
+	query := db.Query{Where: []db.Condition{{Field: "Email", Op: db.OpEq, Value: email}}, Limit: 1}
+	if err := store.List(ctx, meta, query, &rows); err != nil {
 		return Account{}, false, err
 	}
 	if len(rows) == 0 {

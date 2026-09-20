@@ -195,6 +195,89 @@ func TestStoreListRejectsUnknownOrderByFieldPostgres(t *testing.T) {
 	}
 }
 
+func TestStoreListWherePostgres(t *testing.T) {
+	sqlDB := openPostgresTestDB(t)
+	meta := registerPostgresModel(t, postgresWidget{})
+	store := NewStore(sqlDB, Postgres)
+	createdAt := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	for _, widget := range []postgresWidget{
+		{Name: "first", Count: 0, CreatedAt: createdAt},
+		{Name: "second", Count: 5, CreatedAt: createdAt.Add(time.Hour)},
+		{Name: "third", Count: 10, CreatedAt: createdAt.Add(2 * time.Hour)},
+	} {
+		if err := store.Create(context.Background(), meta, &widget); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tests := []struct {
+		name  string
+		where []Condition
+		want  int
+	}{
+		{"eq", []Condition{{"Count", OpEq, 0}}, 1},
+		{"ne", []Condition{{"Count", OpNe, 0}}, 2},
+		{"gt", []Condition{{"Count", OpGt, 5}}, 1},
+		{"gte", []Condition{{"Count", OpGte, 5}}, 2},
+		{"lt", []Condition{{"Count", OpLt, 5}}, 1},
+		{"lte", []Condition{{"Count", OpLte, 5}}, 2},
+		{"and", []Condition{{"CreatedAt", OpGte, createdAt.Add(time.Hour)}, {"Count", OpLte, 5}}, 1},
+		{"time range", []Condition{{"CreatedAt", OpGte, createdAt}, {"CreatedAt", OpLte, createdAt.Add(time.Hour)}}, 2},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got []postgresWidget
+			if err := store.List(context.Background(), meta, Query{Where: test.where}, &got); err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != test.want {
+				t.Fatalf("filtered rows = %+v, want %d", got, test.want)
+			}
+		})
+	}
+	var got []postgresWidget
+	for _, condition := range []Condition{{Field: "Count", Op: OpEq, Value: nil}, {Field: "Count", Op: OpEq, Value: "5"}} {
+		err := store.List(context.Background(), meta, Query{Where: []Condition{condition}}, &got)
+		if err == nil {
+			t.Fatalf("condition %+v unexpectedly succeeded", condition)
+		}
+	}
+}
+
+func TestStoreAnyLikeAndCountPostgres(t *testing.T) {
+	sqlDB := openPostgresTestDB(t)
+	meta := registerPostgresModel(t, postgresWidget{})
+	store := NewStore(sqlDB, Postgres)
+	for _, widget := range []postgresWidget{
+		{Name: "Alpha", Active: true},
+		{Name: "Beta", Active: true},
+		{Name: "Alpine", Active: false},
+	} {
+		if err := store.Create(context.Background(), meta, &widget); err != nil {
+			t.Fatal(err)
+		}
+	}
+	query := Query{
+		Where: []Condition{{Field: "Active", Op: OpEq, Value: true}},
+		Any: []Condition{
+			{Field: "Name", Op: OpLike, Value: "Al%"},
+			{Field: "Name", Op: OpLike, Value: "%eta"},
+		},
+		OrderBy: []string{"Name"},
+		Limit:   1,
+	}
+	var got []postgresWidget
+	if err := store.List(context.Background(), meta, query, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Name != "Alpha" {
+		t.Fatalf("List = %+v, want Alpha", got)
+	}
+	count, err := store.Count(context.Background(), meta, query)
+	if err != nil || count != 2 {
+		t.Fatalf("Count = %d, %v; want 2", count, err)
+	}
+}
+
 func postgresTestDSN(t *testing.T) string {
 	t.Helper()
 

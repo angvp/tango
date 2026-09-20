@@ -22,7 +22,7 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 `admin.Options` fields all reference **Go field names**, not column names, and are validated against the model's actual fields at registration time — a typo fails `Register` immediately with a clear error, never a silent no-op:
 
 - **`ListDisplay`** — columns shown on the list page.
-- **`Search`** — fields a free-text search box filters against.
+- **`Search`** — string fields a free-text search box filters against. Registration rejects non-string fields; search uses SQL `LIKE`, so `%` and `_` in the query retain wildcard meaning and case matching follows the database dialect.
 - **`Ordering`** — the static default order the list page's rows are shown in (not interactive/click-to-sort). Prefix a field with `-` for descending, e.g. `"-CreatedAt"`.
 
 ## Adding the admin app

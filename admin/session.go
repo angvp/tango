@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -52,12 +51,8 @@ func sessionUser(ctx context.Context, store *db.Store, token string) (AdminUser,
 
 	userMeta, sessionMeta := adminModelMetas()
 	var sessions []AdminSession
-	sqlQuery := fmt.Sprintf(
-		"SELECT %s AS ID, %s AS Token, %s AS UserID, %s AS ExpiresAt FROM %s WHERE %s = ?",
-		db.ColumnName("ID"), db.ColumnName("Token"), db.ColumnName("UserID"), db.ColumnName("ExpiresAt"),
-		db.ColumnName(sessionMeta.Name), db.ColumnName("Token"),
-	)
-	if err := store.Query(ctx, &sessions, sqlQuery, token); err != nil {
+	sessionQuery := db.Query{Where: []db.Condition{{Field: "Token", Op: db.OpEq, Value: token}}, Limit: 1}
+	if err := store.List(ctx, sessionMeta, sessionQuery, &sessions); err != nil {
 		return AdminUser{}, false, err
 	}
 	if len(sessions) == 0 {
@@ -69,13 +64,8 @@ func sessionUser(ctx context.Context, store *db.Store, token string) (AdminUser,
 	}
 
 	var users []AdminUser
-	userQuery := fmt.Sprintf(
-		"SELECT %s AS ID, %s AS Username, %s AS PasswordHash, %s AS Active, %s AS IsStaff, %s AS IsSuperuser, %s AS CreatedAt FROM %s WHERE %s = ?",
-		db.ColumnName("ID"), db.ColumnName("Username"), db.ColumnName("PasswordHash"),
-		db.ColumnName("Active"), db.ColumnName("IsStaff"), db.ColumnName("IsSuperuser"),
-		db.ColumnName("CreatedAt"), db.ColumnName(userMeta.Name), db.ColumnName("ID"),
-	)
-	if err := store.Query(ctx, &users, userQuery, session.UserID); err != nil {
+	userQuery := db.Query{Where: []db.Condition{{Field: "ID", Op: db.OpEq, Value: session.UserID}}, Limit: 1}
+	if err := store.List(ctx, userMeta, userQuery, &users); err != nil {
 		return AdminUser{}, false, err
 	}
 	if len(users) == 0 || !users[0].Active {
@@ -88,11 +78,8 @@ func sessionUser(ctx context.Context, store *db.Store, token string) (AdminUser,
 func deleteSessionByToken(ctx context.Context, store *db.Store, token string) error {
 	_, sessionMeta := adminModelMetas()
 	var sessions []AdminSession
-	sqlQuery := fmt.Sprintf(
-		"SELECT %s AS ID FROM %s WHERE %s = ?",
-		db.ColumnName("ID"), db.ColumnName(sessionMeta.Name), db.ColumnName("Token"),
-	)
-	if err := store.Query(ctx, &sessions, sqlQuery, token); err != nil {
+	query := db.Query{Where: []db.Condition{{Field: "Token", Op: db.OpEq, Value: token}}, Limit: 1}
+	if err := store.List(ctx, sessionMeta, query, &sessions); err != nil {
 		return err
 	}
 	for _, session := range sessions {

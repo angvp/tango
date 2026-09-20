@@ -41,13 +41,8 @@ func adminModelMetas() (userMeta model.ModelMeta, sessionMeta model.ModelMeta) {
 func findAdminUserByUsername(ctx context.Context, store *db.Store, username string) (AdminUser, bool, error) {
 	meta, _ := adminModelMetas()
 	var rows []AdminUser
-	sqlQuery := fmt.Sprintf(
-		"SELECT %s AS ID, %s AS Username, %s AS PasswordHash, %s AS Active, %s AS IsStaff, %s AS IsSuperuser, %s AS CreatedAt FROM %s WHERE %s = ?",
-		db.ColumnName("ID"), db.ColumnName("Username"), db.ColumnName("PasswordHash"),
-		db.ColumnName("Active"), db.ColumnName("IsStaff"), db.ColumnName("IsSuperuser"),
-		db.ColumnName("CreatedAt"), db.ColumnName(meta.Name), db.ColumnName("Username"),
-	)
-	if err := store.Query(ctx, &rows, sqlQuery, username); err != nil {
+	query := db.Query{Where: []db.Condition{{Field: "Username", Op: db.OpEq, Value: username}}, Limit: 1}
+	if err := store.List(ctx, meta, query, &rows); err != nil {
 		return AdminUser{}, false, err
 	}
 	if len(rows) == 0 {
@@ -200,11 +195,8 @@ func invalidateSessions(ctx context.Context, store *db.Store, userID int64) erro
 	_, sessionMeta := adminModelMetas()
 
 	var sessions []AdminSession
-	sqlQuery := fmt.Sprintf(
-		"SELECT %s AS ID FROM %s WHERE %s = ?",
-		db.ColumnName("ID"), db.ColumnName(sessionMeta.Name), db.ColumnName("UserID"),
-	)
-	if err := store.Query(ctx, &sessions, sqlQuery, userID); err != nil {
+	query := db.Query{Where: []db.Condition{{Field: "UserID", Op: db.OpEq, Value: userID}}}
+	if err := store.List(ctx, sessionMeta, query, &sessions); err != nil {
 		return err
 	}
 	for _, session := range sessions {

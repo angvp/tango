@@ -32,14 +32,8 @@ func accountFromToken(ctx context.Context, store *db.Store, token string) (Accou
 
 	meta, _ := accountModelMetas()
 	var rows []Account
-	sqlQuery := "SELECT " +
-		db.ColumnName("ID") + " AS ID, " +
-		db.ColumnName("Email") + " AS Email, " +
-		db.ColumnName("PasswordHash") + " AS PasswordHash, " +
-		db.ColumnName("Active") + " AS Active, " +
-		db.ColumnName("CreatedAt") + " AS CreatedAt FROM " +
-		db.ColumnName(meta.Name) + " WHERE " + db.ColumnName("ID") + " = ?"
-	if err := store.Query(ctx, &rows, sqlQuery, userID); err != nil {
+	query := db.Query{Where: []db.Condition{{Field: "ID", Op: db.OpEq, Value: userID}}, Limit: 1}
+	if err := store.List(ctx, meta, query, &rows); err != nil {
 		return Account{}, false, err
 	}
 	if len(rows) == 0 || !rows[0].Active {

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
-	"strings"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
@@ -29,17 +28,16 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 		// whether a next page actually has rows, rather than assuming one
 		// exists whenever this page happens to be exactly full.
 		query := db.Query{Limit: pageSize + 1, Offset: (page - 1) * pageSize, OrderBy: registration.Options.Ordering}
+		if q != "" {
+			for _, field := range registration.Options.Search {
+				query.Any = append(query.Any, db.Condition{Field: field, Op: db.OpLike, Value: "%" + q + "%"})
+			}
+		}
 
 		sliceType := reflect.SliceOf(meta.Type)
 		destPtr := reflect.New(sliceType)
 
-		var err error
-		if q != "" && len(registration.Options.Search) > 0 {
-			err = searchList(ctx.Context(), store, meta, registration.Options.Search, q, query, destPtr.Interface())
-		} else {
-			err = store.List(ctx.Context(), meta, query, destPtr.Interface())
-		}
-		if err != nil {
+		if err := store.List(ctx.Context(), meta, query, destPtr.Interface()); err != nil {
 			return err
 		}
 
@@ -53,7 +51,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			rows = rows[:pageSize]
 		}
 
-		total, err := countRows(ctx.Context(), store, meta, registration.Options.Search, q)
+		total, err := store.Count(ctx.Context(), meta, query)
 		if err != nil {
 			return err
 		}
@@ -125,69 +123,12 @@ func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adm
 	return rows, nil
 }
 
-func searchList(ctx context.Context, store *db.Store, meta model.ModelMeta, searchFields []string, q string, query db.Query, dest any) error {
-	selectColumns := make([]string, len(meta.Fields))
-	for i, field := range meta.Fields {
-		selectColumns[i] = db.ColumnName(field.Name) + " AS " + field.Name
-	}
-
-	var likeClauses []string
-	var args []any
-	for _, name := range searchFields {
-		likeClauses = append(likeClauses, db.ColumnName(name)+" LIKE ?")
-		args = append(args, "%"+q+"%")
-	}
-
-	sqlQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectColumns, ", "), db.ColumnName(meta.Name))
-	if len(likeClauses) > 0 {
-		sqlQuery += " WHERE " + strings.Join(likeClauses, " OR ")
-	}
-	if len(query.OrderBy) > 0 {
-		orderClauses := make([]string, len(query.OrderBy))
-		for i, entry := range query.OrderBy {
-			fieldName := entry
-			direction := "ASC"
-			if strings.HasPrefix(entry, "-") {
-				fieldName = entry[1:]
-				direction = "DESC"
-			}
-			orderClauses[i] = db.ColumnName(fieldName) + " " + direction
-		}
-		sqlQuery += " ORDER BY " + strings.Join(orderClauses, ", ")
-	}
-	sqlQuery += fmt.Sprintf(" LIMIT %d OFFSET %d", query.Limit, query.Offset)
-
-	return store.Query(ctx, dest, sqlQuery, args...)
-}
-
 func parsePage(raw string) int {
 	page, err := strconv.Atoi(raw)
 	if err != nil || page < 1 {
 		return 1
 	}
 	return page
-}
-
-// countRows returns the total number of rows matching the same filter
-// searchList/store.List would apply, so the paginator can show a true page
-// count instead of guessing from whether the current page happens to be full.
-func countRows(ctx context.Context, store *db.Store, meta model.ModelMeta, searchFields []string, q string) (int, error) {
-	var args []any
-	sqlQuery := "SELECT COUNT(*) AS Count FROM " + db.ColumnName(meta.Name)
-	if q != "" && len(searchFields) > 0 {
-		likeClauses := make([]string, len(searchFields))
-		for i, name := range searchFields {
-			likeClauses[i] = db.ColumnName(name) + " LIKE ?"
-			args = append(args, "%"+q+"%")
-		}
-		sqlQuery += " WHERE " + strings.Join(likeClauses, " OR ")
-	}
-
-	var result struct{ Count int }
-	if err := store.QueryRow(ctx, &result, sqlQuery, args...); err != nil {
-		return 0, err
-	}
-	return result.Count, nil
 }
 
 // pageLink is one entry in a rendered pagination control: either a page

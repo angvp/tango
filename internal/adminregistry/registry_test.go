@@ -37,6 +37,14 @@ func TestRegisterAcceptsValidOptions(t *testing.T) {
 	}
 }
 
+func TestRegisterRejectsNonStringSearchField(t *testing.T) {
+	r := newTestRegistry(t)
+	err := r.Register(RegistryTestPost{}, Options{Search: []string{"ID"}})
+	if err == nil || !strings.Contains(err.Error(), "must be a string") {
+		t.Fatalf("Register error = %v, want string-field validation", err)
+	}
+}
+
 func TestRegisterStoresRegistrationUnderModelName(t *testing.T) {
 	r := newTestRegistry(t)
 
