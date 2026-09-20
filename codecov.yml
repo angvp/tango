@@ -1,0 +1,16 @@
+# NOTE for repo admin: these checks post to PRs but do not block merges on
+# their own. To actually enforce this floor, mark both checks (codecov/project,
+# codecov/patch) as required status checks in GitHub branch protection settings
+# for `main` — that step can only be done from the GitHub UI/API, not from here.
+coverage:
+  status:
+    project:
+      default:
+        target: 90%
+        threshold: 1%
+        informational: false
+    patch:
+      default:
+        target: 90%
+        threshold: 1%
+        informational: false

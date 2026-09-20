@@ -52,4 +52,23 @@ Future breaking changes to these flag names, JSON shapes, or exit-code expectati
 
 `admin.Widget`, the `admin.Options` fields it and `Labels`/`HelpText`/`ReadOnly`/`FieldOrder` live in, the built-in widgets, and `admin.Branding`/`admin.WithBranding` are **best-effort**, not one of the [stable v0.1 CLI app-side flags](#stable-v01-cli-app-side-flags) above. This is a different, narrower promise than "APIs still expected to change before a stable release" just above: that section names things expected to *settle* before v0.1 ships. This admin-extensibility surface is expected to keep evolving even after v0.1, because admin's internals — its rendering, its default field behaviors, its theme — aren't finished settling and are likely to keep changing as real usage surfaces gaps. Breaking changes here may land without the advance-notice process the stable CLI flags get.
 
-Everything else documented in the [tutorial](tutorial/01-bootstrap-routing-json.md), [guides](guides/), and [reference](reference.md) reflects real, tested, current behavior in this repository — not a plan.
+## Test coverage
+
+Root-module statement coverage is **95%+**, tracked via Codecov (see the badge on the [README](../README.md)) and regenerated with:
+
+```sh
+go run gotest.tools/gotestsum@v1.13.0 \
+  --junitfile junit.xml \
+  --format testname \
+  -- ./... -count=1 -coverprofile=coverage.out -covermode=atomic
+```
+
+A small set of lines is deliberately never exercised by a unit test, because doing so would need a live Postgres connection or a real interactive terminal rather than a meaningful behavioral test — about 23 statements (~0.7% of the codebase):
+
+- **`db.Store.Create`'s Postgres `RETURNING`-based insert path** (`db/store.go`) — only taken when both `dialect == db.Postgres` and the model needs a backfilled default, and only actually reachable with a live Postgres connection (the SQLite-backed test suite, which is this repo's default, never exercises it). Exercised manually via the opt-in `TANGO_TEST_POSTGRES_DSN` Postgres test tier, not via the default coverage run.
+- **`cmd/tango`'s entrypoint** (`cmd/tango/main.go`) — a single `os.Exit(cli.Run(...))` line; `cli.Run`'s own dispatch logic is fully covered separately in `internal/cli`.
+- **The real interactive TUI event loop** (`internal/cli/tui_dashboard.go`'s `runDashboard`, backed by `tea.Program.Run()`) and **the real-stdin interactivity check** (`internal/cli/tui.go`'s `isInteractiveTerminal`) — both require an actual terminal/TTY. `tui_dashboard.go`'s own model logic (`Update`/`View`/cursor movement/dashboard state transitions) is fully unit-tested independently of the real event loop that drives it.
+
+A further small residual (well under 1% of the codebase) of ordinary, lower-priority gaps — mostly `database/sql` driver-failure branches (`sql.Result.RowsAffected()` erroring, `sql.Rows.Scan()`/`.Columns()` erroring, `tx.Commit()` failing) and a couple of stdlib-guaranteed-safe error checks — was deliberately not chased once the 95% target was met, per this project's own design principle against writing tests for impossible or low-value branches purely to inflate a metric.
+
+
