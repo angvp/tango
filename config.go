@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -156,23 +155,14 @@ func DispatchFlags(config Config, sqlDB *sql.DB, dialect db.Dialect, migrations 
 // Serve builds and runs config's registry using sqlDB-backed persistence.
 // dialect must match whatever dialect sqlDB was opened with — callers that
 // also invoke DispatchFlags should pass the same dialect value to both.
+//
+// Serve blocks forever: it delegates to ServeContext with a background
+// context, which never cancels, so there is no caller-triggered shutdown
+// path. Callers that want graceful shutdown call ServeContext directly with
+// a cancelable context (e.g. one built from signal.NotifyContext).
 func Serve(config Config, sqlDB *sql.DB, dialect db.Dialect) error {
-	registry, err := BuildRegistry(config)
-	if err != nil {
-		return fmt.Errorf("build registry: %w", err)
-	}
-	if err := registry.RunRegistration(); err != nil {
-		return fmt.Errorf("run registration: %w", err)
-	}
-	registry.SetStore(db.NewStore(sqlDB, dialect))
-	handler, err := registry.Routes().Handler()
-	if err != nil {
-		return fmt.Errorf("compile routes: %w", err)
-	}
-	return listenAndServe(config.Addr, handler)
+	return ServeContext(context.Background(), config, sqlDB, dialect)
 }
-
-var listenAndServe = http.ListenAndServe
 
 // Check validates that the configured app registry can boot, compile routes,
 // and pass every AppCheck contributed by installed apps.

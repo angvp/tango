@@ -1,21 +1,19 @@
 package tango
 
 import (
+	"context"
 	"database/sql"
-	"errors"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
 
 	_ "modernc.org/sqlite"
 )
-
-var errStopServe = errors.New("stop")
 
 func captureStdout(t *testing.T, fn func() error) (string, error) {
 	t.Helper()
@@ -150,23 +148,25 @@ func TestServeBuildsRegistryAndListens(t *testing.T) {
 	}
 	defer sqlDB.Close()
 
-	original := listenAndServe
-	var gotAddr string
-	listenAndServe = func(addr string, handler http.Handler) error {
-		gotAddr = addr
-		if handler == nil {
-			t.Fatal("handler is nil")
-		}
-		return errStopServe
-	}
-	t.Cleanup(func() { listenAndServe = original })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0"}, sqlDB, db.SQLite)
+	}()
 
-	err = Serve(Config{Addr: ":8123"}, sqlDB, db.SQLite)
-	if !errors.Is(err, errStopServe) {
-		t.Fatalf("Serve error = %v, want stop", err)
-	}
-	if gotAddr != ":8123" {
-		t.Fatalf("addr = %q, want :8123", gotAddr)
+	// ServeContext's bind happens synchronously inside it before it ever
+	// blocks, but nothing signals this test the instant that's done — give
+	// it a moment, then cancel to trigger a graceful, no-op shutdown.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ServeContext error = %v, want nil for a clean caller-triggered shutdown", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ServeContext did not return after ctx cancellation")
 	}
 }
 

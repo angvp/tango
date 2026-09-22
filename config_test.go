@@ -870,3 +870,39 @@ func TestServeWrapsErrorsFromEachStage(t *testing.T) {
 		})
 	}
 }
+
+// TestServeRollsBackLifecycleStartFailure covers Serve's delegation to
+// ServeContext: a failing Lifecycle.Start, registered from an app's
+// Register callback, must surface through Serve's return value and must
+// have already stopped every component that started before it, in reverse
+// order — behavior that did not exist before ServeContext, since there was
+// no Lifecycle concept for Serve to roll back.
+func TestServeRollsBackLifecycleStartFailure(t *testing.T) {
+	var log []string
+	startErr := errors.New("boom")
+
+	app := tango.NewApp("lifecycle-owner", func(r *tango.Registry) error {
+		if err := r.RegisterLifecycle(tango.Lifecycle{
+			Name:  "a",
+			Start: func(context.Context) error { log = append(log, "start:a"); return nil },
+			Stop:  func(context.Context) error { log = append(log, "stop:a"); return nil },
+		}); err != nil {
+			return err
+		}
+		return r.RegisterLifecycle(tango.Lifecycle{
+			Name:  "b",
+			Start: func(context.Context) error { log = append(log, "start:b"); return startErr },
+			Stop:  func(context.Context) error { log = append(log, "stop:b"); return nil },
+		})
+	})
+
+	err := tango.Serve(tango.Config{Addr: "127.0.0.1:0", InstalledApps: []tango.App{app}}, nil, db.SQLite)
+	if !errors.Is(err, startErr) {
+		t.Fatalf("errors.Is(err, startErr) = false; err = %v", err)
+	}
+
+	want := []string{"start:a", "start:b", "stop:a"}
+	if got := strings.Join(log, ","); got != strings.Join(want, ",") {
+		t.Fatalf("log = %v, want %v", log, want)
+	}
+}
