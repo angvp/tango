@@ -14,7 +14,7 @@ Canonical example: `examples/notes-starter`. Human guide: `docs/guides/rate-limi
 ## Choose The Shape
 
 - One `Limiter` per distinct policy (a login route and a public API route almost always want different `Limit`/`Refill` values — construct two `Limiter`s, not one shared one with a workaround).
-- Default `WithCost(1)` per request is right for uniform endpoints; use `WithCost(n)` for one expensive route.
+- Default `WithCost(1)` per request is right for uniform endpoints; use `WithCost(n)` for one expensive route — `n` must not exceed that `Limiter`'s own `Limit`, or every request fails outright (`Take` rejects a cost it could never satisfy).
 - Override `WithLimitedHandler`/`WithErrorHandler` only when the default JSON responses don't match your app's error envelope.
 
 ## Don't

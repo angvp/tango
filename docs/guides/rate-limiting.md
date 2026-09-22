@@ -19,6 +19,8 @@ limiter, err := ratelimit.NewLimiter(ratelimit.Options{
 
 `Options.Clock` defaults to `time.Now`; it exists mainly so `ratelimit.Middleware`'s own tests (and a host's, if it tests its own middleware stack) can inject a fake clock rather than depending on real-time sleeps. Direct `Limiter.Take` callers always pass an explicit `now` and don't need `Clock` at all.
 
+A `Limiter` opportunistically forgets a key once its bucket has been idle long enough to have fully refilled anyway (`Limit * Refill`) — freeing the memory rather than retaining every key ever seen for the process's whole lifetime. This never changes what any key observes: a bucket that's been idle that long is already back at full capacity, so evicting it and letting the next request for that key recreate it fresh is indistinguishable from leaving the stale entry in place. The sweep runs inline during `Take` (no background goroutine), at most once per that same `Limit * Refill` window, so it doesn't add real cost to the common case of a few actively-used keys.
+
 ## The `Decision`
 
 ```go
@@ -30,7 +32,7 @@ type Decision struct {
 }
 ```
 
-`Limiter.Take(ctx, key, now, cost)` returns a `Decision` describing whether `key` had `cost` tokens available. `RetryAfter` is derived from the bucket's actual refill state (time until enough tokens accumulate again) — never a hardcoded guess. `cost` defaults to 1 per request via `ratelimit.Middleware` (see below); a caller may charge more for an expensive operation via `WithCost`, or call `Take` directly with any `cost` for non-HTTP use.
+`Limiter.Take(ctx, key, now, cost)` returns a `Decision` describing whether `key` had `cost` tokens available. `RetryAfter` is derived from the bucket's actual refill state (time until enough tokens accumulate again) — never a hardcoded guess. `cost` defaults to 1 per request via `ratelimit.Middleware` (see below); a caller may charge more for an expensive operation via `WithCost`, or call `Take` directly with any `cost` for non-HTTP use. `cost` must be positive and must not exceed `Limit` — a bucket never holds more than `Limit` tokens, so a request costing more than that could never succeed no matter how long it waited; `Take` rejects it outright with an error rather than returning a `Decision` with a finite `RetryAfter` that would never actually resolve.
 
 ## Key extraction
 
