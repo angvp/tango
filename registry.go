@@ -22,6 +22,8 @@ type Registry struct {
 	routes           *RouteRegistry
 	registrationDone bool
 	store            *db.Store
+	lifecycles       []Lifecycle
+	lifecycleNames   map[string]struct{}
 }
 
 // NewRegistry returns an empty, ready-to-use Registry.
