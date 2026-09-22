@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -22,11 +23,18 @@ type fakeCoordinator struct {
 	mu            sync.Mutex
 	joinCalls     int
 	leaveCalls    int
+	leaveArgs     []leaveCall
 	dispatches    []realtime.Event
 	dispatchPeers []realtime.Peer
 
 	joinDelay chan struct{} // if non-nil, Join blocks on it before returning
 	joinErr   error
+}
+
+type leaveCall struct {
+	roomID    string
+	principal realtime.Principal
+	peer      realtime.Peer
 }
 
 func (f *fakeCoordinator) Join(ctx context.Context, roomID string, p realtime.Principal, peer realtime.Peer) error {
@@ -47,6 +55,7 @@ func (f *fakeCoordinator) Leave(ctx context.Context, roomID string, p realtime.P
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.leaveCalls++
+	f.leaveArgs = append(f.leaveArgs, leaveCall{roomID: roomID, principal: p, peer: peer})
 	return nil
 }
 
@@ -240,6 +249,104 @@ func TestCoordinatorJoinFailureClosesConnectionWithoutDispatch(t *testing.T) {
 	if fc.dispatchCount() != 0 {
 		t.Fatalf("no message should ever have been dispatched, got %d dispatches", fc.dispatchCount())
 	}
+}
+
+// TestJoinFailureBeforeMembershipCallsLeaveExactlyOnce covers the
+// pre-membership half of the "Join has no rollback" cleanup requirement: a
+// Join failure that happens before any membership exists (e.g. a Snapshot
+// error) must still make View call Leave — a safe, idempotent no-op in
+// this case, but View has no way to know that from the error alone, so it
+// always calls it — exactly once, with the same room/principal/peer Join
+// was given.
+func TestJoinFailureBeforeMembershipCallsLeaveExactlyOnce(t *testing.T) {
+	fc := &fakeCoordinator{joinErr: fmt.Errorf("snapshot failed")}
+	server := httptest.NewServer(buildHandler(t, fc, alwaysAuth("alice"), fixedRoom("room-1")))
+	defer server.Close()
+
+	conn, _, err := ws.Dial(context.Background(), toWSURL(server.URL)+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.CloseNow()
+
+	_, _, err = conn.Read(context.Background())
+	if err == nil {
+		t.Fatal("expected the connection to be closed after a Join failure")
+	}
+
+	waitForCondition(t, func() bool { return fc.leaveCallCount() == 1 }, "expected exactly one best-effort Leave after a pre-membership Join failure")
+	time.Sleep(50 * time.Millisecond)
+
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	if got := len(fc.leaveArgs); got != 1 {
+		t.Fatalf("Leave called %d times, want exactly 1", got)
+	}
+	got := fc.leaveArgs[0]
+	if got.roomID != "room-1" || got.principal.UserID != "alice" {
+		t.Fatalf("Leave args = %+v, want room-1/alice", got)
+	}
+}
+
+// joinFailingLogic rejects every EventJoin, after membership and the
+// snapshot delivery have already been applied by the room loop — exactly
+// the "Join has no rollback" case View's best-effort Leave exists for.
+type joinFailingLogic struct{}
+
+func (joinFailingLogic) Handle(_ *realtime.RoomContext, ev realtime.Event) error {
+	if ev.Kind == realtime.EventJoin {
+		return fmt.Errorf("join rejected by logic")
+	}
+	return nil
+}
+
+func (joinFailingLogic) Snapshot(*realtime.RoomContext, realtime.Principal) ([]byte, error) {
+	return []byte("snapshot"), nil
+}
+
+// TestJoinFailureAfterMembershipLeavesNoGhostPeer covers the
+// post-membership half, against a real Hub: an EventJoin handler error
+// leaves membership installed (Join has no rollback), so View's
+// best-effort Leave is what actually removes the peer it just installed.
+// If it didn't, the room would never go empty and could never evict.
+func TestJoinFailureAfterMembershipLeavesNoGhostPeer(t *testing.T) {
+	hub, err := realtime.NewHub(func(string) realtime.Logic { return joinFailingLogic{} }, realtime.Options{ReconnectWindow: 30 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("NewHub: %v", err)
+	}
+	defer func() { _ = hub.Close(context.Background()) }()
+
+	server := httptest.NewServer(buildHandler(t, hub, alwaysAuth("alice"), fixedRoom("room-1")))
+	defer server.Close()
+
+	conn, _, err := ws.Dial(context.Background(), toWSURL(server.URL)+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.CloseNow()
+
+	// The snapshot delivery is asynchronous (its own outbound queue, drained
+	// by a separate writer goroutine) and races the EventJoin failure that
+	// then triggers the close — the client may legitimately observe the
+	// snapshot before the close frame arrives. Drain until the connection
+	// actually closes, with an overall deadline so a real regression still
+	// fails the test instead of hanging.
+	readCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var closeErr error
+	for {
+		if _, _, err := conn.Read(readCtx); err != nil {
+			closeErr = err
+			break
+		}
+	}
+	if closeErr == nil {
+		t.Fatal("expected the connection to be closed after a post-membership Join failure")
+	}
+
+	waitForCondition(t, func() bool {
+		return errors.Is(hub.Dispatch(context.Background(), realtime.Event{Kind: realtime.EventAction, RoomID: "room-1"}), realtime.ErrRoomNotFound)
+	}, "room never evicted — the ghost peer installed before the EventJoin failure was never removed")
 }
 
 func TestOversizedMessageNeverDispatchedAndClosesConnection(t *testing.T) {

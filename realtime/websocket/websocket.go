@@ -70,17 +70,34 @@ func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID fu
 
 		peer := &connPeer{conn: conn}
 		if err := coordinator.Join(ctx.Context(), room, principal, peer); err != nil {
+			// Join has no rollback: an EventJoin handler error is returned
+			// while membership it already installed stays installed (see
+			// realtime.Hub.Join's doc comment). A Join failure that occurs
+			// before membership exists — e.g. a Snapshot error — makes this
+			// Leave a safe, idempotent no-op; one that occurs after is what
+			// actually needs this call, or the dead Peer stays registered
+			// indefinitely and the room can never evict.
+			bestEffortLeave(coordinator, room, principal, peer)
 			conn.Close(ws.StatusInternalError, "join failed")
 			return nil
 		}
 
 		readLoop(ctx.Context(), coordinator, room, principal, peer, conn)
 
-		leaveCtx, cancel := context.WithTimeout(context.Background(), leaveTimeout)
-		defer cancel()
-		_ = coordinator.Leave(leaveCtx, room, principal, peer)
+		bestEffortLeave(coordinator, room, principal, peer)
 		return nil
 	}
+}
+
+// bestEffortLeave calls Leave with a fresh, bounded background context —
+// shared by both places View must clean up membership: after the read loop
+// ends normally, and after a failed Join that may have installed membership
+// anyway. Leave is always a safe idempotent no-op if there was nothing to
+// remove.
+func bestEffortLeave(coordinator realtime.Coordinator, roomID string, principal realtime.Principal, peer realtime.Peer) {
+	leaveCtx, cancel := context.WithTimeout(context.Background(), leaveTimeout)
+	defer cancel()
+	_ = coordinator.Leave(leaveCtx, roomID, principal, peer)
 }
 
 // readLoop reads client messages until the connection ends for any reason
