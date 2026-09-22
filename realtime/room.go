@@ -156,15 +156,29 @@ func (r *room) submitInternal(op roomOp) {
 func (r *room) run() {
 	defer close(r.done)
 	for {
+		// Checked non-blockingly before the main select so that, once
+		// Hub.Close begins, this room deterministically stops pulling any
+		// further op from inbox — including one already sitting there —
+		// rather than leaving that choice to Go's random tie-breaking
+		// between two simultaneously ready select cases. Anything left in
+		// inbox is then resolved by drainInbox with ErrClosed, never
+		// silently processed after shutdown has begun.
+		select {
+		case <-r.hub.closeCh:
+			r.shutdown(ErrClosed)
+			return
+		default:
+		}
+
 		select {
 		case op := <-r.inbox:
 			r.process(op)
 			if r.closing {
-				r.shutdown()
+				r.shutdown(ErrRoomNotFound)
 				return
 			}
 		case <-r.hub.closeCh:
-			r.shutdown()
+			r.shutdown(ErrClosed)
 			return
 		}
 	}
@@ -182,14 +196,16 @@ func (r *room) beginShutdown() {
 	r.inflight.Wait()
 }
 
-// drainInbox replies ErrRoomNotFound to every op left in the queue once
-// nothing can enqueue any more (call only after beginShutdown).
-func (r *room) drainInbox() {
+// drainInbox replies reason to every op left in the queue once nothing can
+// enqueue any more (call only after beginShutdown). reason is ErrClosed
+// when Hub.Close caused this shutdown, or ErrRoomNotFound for an ordinary
+// eviction — see run and shutdown.
+func (r *room) drainInbox(reason error) {
 	for {
 		select {
 		case op := <-r.inbox:
 			if op.reply != nil {
-				op.reply <- ErrRoomNotFound
+				op.reply <- reason
 			}
 		default:
 			return
@@ -305,10 +321,10 @@ func (r *room) handleEvictCheck(op roomOp) {
 	r.closing = true
 }
 
-func (r *room) shutdown() {
+func (r *room) shutdown(reason error) {
 	r.hub.removeRoom(r.id, r)
 	r.beginShutdown()
-	r.drainInbox()
+	r.drainInbox(reason)
 	r.cancelEviction()
 	for _, t := range r.timers {
 		if t.stop != nil {
@@ -340,9 +356,16 @@ func (r *room) sendUser(userID string, payload []byte) {
 // deliver enqueues payload for m without ever blocking the room loop: a
 // full outbound queue means m is slow, so m is closed instead — the room
 // and every other peer are unaffected.
+//
+// payload is copied before enqueueing: delivery happens later, on a
+// separate writer goroutine (runPeerWriter), so retaining the caller's own
+// slice would let it observe a mutation the caller makes to that slice
+// after Dispatch/DispatchPeer has already returned.
 func (r *room) deliver(userID string, m *member, payload []byte) {
+	buf := make([]byte, len(payload))
+	copy(buf, payload)
 	select {
-	case m.queue <- payload:
+	case m.queue <- buf:
 	default:
 		r.closeMember(userID, m)
 	}

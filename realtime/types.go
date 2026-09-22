@@ -132,7 +132,8 @@ var (
 	// has already been evicted.
 	ErrRoomNotFound = errors.New("tango realtime: room not found")
 	// ErrClosed is returned by Join/Dispatch/DispatchPeer once Hub.Close
-	// has begun.
+	// has begun — including for operations that were already queued, or
+	// blocked trying to enqueue, at the moment it began.
 	ErrClosed = errors.New("tango realtime: hub is closed")
 	// ErrStalePeer is returned by DispatchPeer when peer is not exactly
 	// the currently installed connection for the event's Principal in that

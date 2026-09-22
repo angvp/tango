@@ -103,7 +103,7 @@ func (h *Hub) Leave(ctx context.Context, roomID string, principal Principal, pee
 		return nil
 	}
 	err := r.submit(ctx, roomOp{kind: opLeave, principal: principal, peer: peer})
-	if errors.Is(err, ErrRoomNotFound) {
+	if errors.Is(err, ErrRoomNotFound) || errors.Is(err, ErrClosed) {
 		return nil
 	}
 	return err
