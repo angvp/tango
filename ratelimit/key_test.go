@@ -98,3 +98,23 @@ func TestRemoteIPKeyMalformedRemoteAddrFallsBackToRawValue(t *testing.T) {
 		t.Fatalf("key = %q, want the raw RemoteAddr as a fallback", got)
 	}
 }
+
+func TestRemoteIPKeyTrustedProxiesWithUnparseablePeerIgnoresForwardedHeader(t *testing.T) {
+	trusted := mustCIDR(t, "10.0.0.0/8")
+	key := RemoteIPKey(trusted)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	// A peer address that fails net.ParseIP (not a malformed host:port —
+	// remoteAddrHost falls back to the raw string, which then must not be
+	// treated as trusted by peerIsTrusted).
+	req.RemoteAddr = "not-an-ip:12345"
+	req.Header.Set("X-Forwarded-For", "6.6.6.6")
+
+	got, err := key(req)
+	if err != nil {
+		t.Fatalf("key: %v", err)
+	}
+	if got != "not-an-ip" {
+		t.Fatalf("key = %q, want the raw peer host, not the forwarded header, when the peer isn't a parseable IP", got)
+	}
+}

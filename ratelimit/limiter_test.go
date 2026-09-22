@@ -195,3 +195,16 @@ func TestTakeConcurrentSameAndDistinctKeys(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestTakeRejectsCanceledContext(t *testing.T) {
+	l, err := NewLimiter(Options{Limit: 5, Refill: time.Second})
+	if err != nil {
+		t.Fatalf("NewLimiter: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := l.Take(ctx, "k", time.Now(), 1); err == nil {
+		t.Fatal("expected Take to reject an already-canceled context")
+	}
+}
