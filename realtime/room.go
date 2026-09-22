@@ -13,11 +13,12 @@ const (
 	opDispatch
 	opSendUser
 	opEvictCheck
+	opTimerExpiry
 )
 
 // roomOp is one unit of work submitted to a room's inbox. reply is nil for
-// internally-produced ops (eviction checks, and later timer expiry), which
-// have no caller waiting on a result.
+// internally-produced ops (eviction checks, timer expiry), which have no
+// caller waiting on a result.
 type roomOp struct {
 	kind      opKind
 	principal Principal
@@ -25,6 +26,7 @@ type roomOp struct {
 	event     Event
 	payload   []byte
 	evictGen  uint64
+	timerGen  uint64
 	reply     chan error
 }
 
@@ -56,6 +58,8 @@ type room struct {
 	evictGen  uint64
 	evictStop func() bool
 	closing   bool
+
+	timers map[string]*roomTimer
 }
 
 func newRoom(hub *Hub, id string) *room {
@@ -66,6 +70,7 @@ func newRoom(hub *Hub, id string) *room {
 		inbox:   make(chan roomOp, hub.opts.RoomQueue),
 		done:    make(chan struct{}),
 		members: make(map[string]*member),
+		timers:  make(map[string]*roomTimer),
 	}
 	go r.run()
 	return r
@@ -187,6 +192,8 @@ func (r *room) process(op roomOp) {
 		r.handleSendUser(op)
 	case opEvictCheck:
 		r.handleEvictCheck(op)
+	case opTimerExpiry:
+		r.handleTimerExpiry(op)
 	}
 }
 
@@ -254,6 +261,11 @@ func (r *room) shutdown() {
 	r.beginShutdown()
 	r.drainInbox()
 	r.cancelEviction()
+	for _, t := range r.timers {
+		if t.stop != nil {
+			t.stop()
+		}
+	}
 	for userID, m := range r.members {
 		delete(r.members, userID)
 		m.cancel()
