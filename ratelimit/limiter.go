@@ -15,6 +15,7 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 )
@@ -57,8 +58,9 @@ type Limiter struct {
 	refill time.Duration
 	clock  func() time.Time
 
-	mu      sync.Mutex
-	buckets map[string]bucketState
+	mu          sync.Mutex
+	buckets     map[string]bucketState
+	lastCleanup time.Time
 }
 
 type bucketState struct {
@@ -136,5 +138,64 @@ func (l *Limiter) Take(ctx context.Context, key string, now time.Time, cost int)
 	decision.Remaining = int(state.tokens)
 
 	l.buckets[key] = state
+	l.cleanupLocked(now)
+
 	return decision, nil
+}
+
+// staleAfter is how long a key's bucket can sit untouched before it's
+// guaranteed to have refilled back to full capacity — Limit tokens at one
+// per Refill each. Past that point, evicting the bucket and letting the
+// next Take for that key recreate it fresh (also full, per Take's own
+// first-seen-key behavior) is behaviorally identical to leaving the stale
+// entry in place — the only effect of eviction is freeing the memory.
+//
+// Limit * Refill can overflow time.Duration's int64 nanosecond range for
+// large-but-valid combinations (e.g. a very high Limit paired with a
+// multi-hour Refill) — this is purely an internal memory-cleanup detail, so
+// such a Limiter must still work exactly like any other, just with its
+// buckets saturating to the largest representable positive Duration before
+// they're ever considered stale enough to evict, rather than NewLimiter
+// rejecting an otherwise valid configuration or the multiplication silently
+// wrapping into a small/negative value that would evict, and therefore
+// alter the behavior of, buckets that are still genuinely in active use.
+func (l *Limiter) staleAfter() time.Duration {
+	return saturatingMul(int64(l.limit), int64(l.refill))
+}
+
+// saturatingMul returns a*b clamped to math.MaxInt64 instead of overflowing
+// when both a and b are positive (the only case staleAfter ever calls it
+// with — Limit and Refill are both validated positive by NewLimiter).
+func saturatingMul(a, b int64) time.Duration {
+	if a == 0 || b == 0 {
+		return 0
+	}
+	if a > math.MaxInt64/b {
+		return time.Duration(math.MaxInt64)
+	}
+	return time.Duration(a * b)
+}
+
+// cleanupLocked opportunistically sweeps buckets untouched for at least
+// staleAfter, at most once per staleAfter window — called from within Take,
+// under l.mu, so it adds no background goroutine, lifecycle hook, or
+// separate scheduling mechanism. It uses the caller-supplied now throughout,
+// so it never depends on real wall-clock time and needs no sleeping in
+// tests. An always-in-use Limiter (few distinct keys, called often) pays an
+// O(len(buckets)) sweep only once every staleAfter — not on every Take.
+func (l *Limiter) cleanupLocked(now time.Time) {
+	threshold := l.staleAfter()
+	if l.lastCleanup.IsZero() {
+		l.lastCleanup = now
+		return
+	}
+	if now.Sub(l.lastCleanup) < threshold {
+		return
+	}
+	l.lastCleanup = now
+	for key, state := range l.buckets {
+		if now.Sub(state.last) >= threshold {
+			delete(l.buckets, key)
+		}
+	}
 }
