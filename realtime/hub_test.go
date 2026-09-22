@@ -385,6 +385,13 @@ func TestPeerQueueOverflowClosesOnlyThatPeer(t *testing.T) {
 	if err := hub.Join(ctx, "room-1", Principal{UserID: "fast"}, fast); err != nil {
 		t.Fatalf("fast join: %v", err)
 	}
+	// fast's own queue (depth 1, same as slow's) starts out holding its
+	// snapshot too. Wait for fast's writer to actually drain it before
+	// touching fast again below — otherwise a later SendUser to fast could
+	// race that drain, find fast's single-slot queue still "full" with the
+	// undelivered snapshot, and spuriously close fast via the exact same
+	// overflow path this test uses to close slow.
+	waitForMessages(t, fast, 1)
 
 	// slow's queue (depth 1) already holds its snapshot and the writer is
 	// blocked delivering it, so the next broadcasts overflow slow's queue.
