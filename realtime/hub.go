@@ -247,16 +247,26 @@ func (h *Hub) removeRoom(id string, self *room) {
 	}
 }
 
-// validatePeer rejects a nil Peer, or one whose dynamic type is not
-// comparable, at the Join boundary — the single admission point for
-// membership — so no value ever stored in a room's membership map can cause
-// the identity comparisons in Leave/DispatchPeer to panic.
+// validatePeer rejects a nil Peer interface, a typed-nil value inside a
+// non-nil Peer interface (e.g. a nil *connPeer — comparable and non-nil as
+// an interface, but a call to its methods can still panic), and any Peer
+// whose dynamic type is not comparable. It runs at the Join boundary — the
+// single admission point for membership — so no value ever stored in a
+// room's membership map can cause the identity comparisons in
+// Leave/DispatchPeer to panic, and no ghost peer whose methods panic on use
+// can ever be installed.
 func validatePeer(p Peer) error {
 	if p == nil {
 		return ErrInvalidPeer
 	}
 	if !reflect.TypeOf(p).Comparable() {
 		return ErrInvalidPeer
+	}
+	switch v := reflect.ValueOf(p); v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		if v.IsNil() {
+			return ErrInvalidPeer
+		}
 	}
 	return nil
 }
