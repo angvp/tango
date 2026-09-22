@@ -32,15 +32,58 @@ func TestNewLimiterValidation(t *testing.T) {
 	}
 }
 
-func TestTakeRejectsNonPositiveCost(t *testing.T) {
+func TestTakeCostValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		cost    int
+		wantErr bool
+	}{
+		{name: "cost <= 0 (zero)", cost: 0, wantErr: true},
+		{name: "cost <= 0 (negative)", cost: -1, wantErr: true},
+		{name: "cost == Limit", cost: 5, wantErr: false},
+		{name: "cost > Limit", cost: 6, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			l, err := NewLimiter(Options{Limit: 5, Refill: time.Second})
+			if err != nil {
+				t.Fatalf("NewLimiter: %v", err)
+			}
+			_, err = l.Take(context.Background(), "k", time.Unix(0, 0), tc.cost)
+			if tc.wantErr && err == nil {
+				t.Fatalf("cost=%d: expected an error", tc.cost)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("cost=%d: unexpected error: %v", tc.cost, err)
+			}
+		})
+	}
+}
+
+// TestTakeCostExceedingLimitNeverModifiesBucketState proves a cost > Limit
+// error is rejected before touching bucket state at all — a later,
+// legitimate request for the same key must see the bucket exactly as if
+// the over-limit call had never happened.
+func TestTakeCostExceedingLimitNeverModifiesBucketState(t *testing.T) {
 	l, err := NewLimiter(Options{Limit: 5, Refill: time.Second})
 	if err != nil {
 		t.Fatalf("NewLimiter: %v", err)
 	}
-	for _, cost := range []int{0, -1} {
-		if _, err := l.Take(context.Background(), "k", time.Now(), cost); err == nil {
-			t.Fatalf("cost=%d: expected an error", cost)
-		}
+	ctx := context.Background()
+	now := time.Unix(0, 0)
+
+	if _, err := l.Take(ctx, "k", now, 100); err == nil {
+		t.Fatal("expected an error for cost > Limit")
+	}
+
+	// The bucket must still be untouched: a fresh full-capacity request
+	// succeeds exactly as if "k" had never been seen.
+	d, err := l.Take(ctx, "k", now, 5)
+	if err != nil {
+		t.Fatalf("take after rejected over-limit cost: %v", err)
+	}
+	if !d.Allowed || d.Remaining != 0 {
+		t.Fatalf("expected a full, untouched bucket (Allowed with 0 remaining after consuming all 5), got %+v", d)
 	}
 }
 

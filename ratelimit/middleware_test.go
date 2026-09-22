@@ -226,6 +226,41 @@ func TestMiddlewareTakeErrorGoesToErrorHandler(t *testing.T) {
 	}
 }
 
+// TestMiddlewareCostExceedingLimitGoesToErrorHandler covers finding 1's
+// middleware-routing requirement: a WithCost configured higher than the
+// Limiter's own Limit can never succeed, and Middleware must route that
+// error to ErrorHandler like any other Take error — never LimitedHandler,
+// and never calling next.
+func TestMiddlewareCostExceedingLimitGoesToErrorHandler(t *testing.T) {
+	l := newFixedClockLimiter(t, 5, time.Second, time.Unix(0, 0))
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next must not be called when cost exceeds the limiter's Limit")
+	})
+
+	limitedCalled := false
+	var costErr error
+	handler := Middleware(l, alwaysKey("k"), WithCost(6),
+		WithLimitedHandler(func(http.ResponseWriter, *http.Request, Decision) { limitedCalled = true }),
+		WithErrorHandler(func(w http.ResponseWriter, r *http.Request, err error) {
+			costErr = err
+			w.WriteHeader(http.StatusBadRequest)
+		}),
+	)(next)
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if limitedCalled {
+		t.Fatal("an impossible cost must never be routed to limitedHandler")
+	}
+	if costErr == nil {
+		t.Fatal("expected Take's cost-exceeds-limit error to reach errorHandler")
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
 func TestErrKeyFuncEmptyMessage(t *testing.T) {
 	if got := errEmptyKey.Error(); got == "" {
 		t.Fatal("errEmptyKey.Error() must not be empty")

@@ -90,7 +90,11 @@ func NewLimiter(opts Options) (*Limiter, error) {
 // Take consumes cost tokens for key at time now, returning the resulting
 // Decision. cost must be positive — a caller charging more than 1 token
 // per request (e.g. for an expensive operation) passes a larger cost, but
-// cost <= 0 is a caller error, never silently treated as 1.
+// cost <= 0 is a caller error, never silently treated as 1. cost must also
+// not exceed Limit: a bucket's capacity never holds more than Limit tokens,
+// so a request costing more than that could never succeed no matter how
+// long it waited — that's a caller/configuration error, not an ordinary
+// rejection with a finite RetryAfter.
 //
 // A key seen for the first time starts with a full bucket (Limit tokens),
 // so the very first requests for any key may burst up to Limit before
@@ -98,6 +102,9 @@ func NewLimiter(opts Options) (*Limiter, error) {
 func (l *Limiter) Take(ctx context.Context, key string, now time.Time, cost int) (Decision, error) {
 	if cost <= 0 {
 		return Decision{}, fmt.Errorf("tango ratelimit: cost must be positive, got %d", cost)
+	}
+	if cost > l.limit {
+		return Decision{}, fmt.Errorf("tango ratelimit: cost %d exceeds limit %d — this request could never succeed", cost, l.limit)
 	}
 	if err := ctx.Err(); err != nil {
 		return Decision{}, err
