@@ -138,6 +138,13 @@ func TestSubmitAgainstNormallyEvictedRoomReturnsErrRoomNotFound(t *testing.T) {
 // hardening item: outbound delivery is asynchronous (a separate writer
 // goroutine drains each peer's queue), so a caller mutating its own buffer
 // immediately after Dispatch returns must never be observed by the Peer.
+//
+// The Peer's writer is blocked (via fakePeer.block) before Dispatch even
+// runs, so the second message Dispatch enqueues cannot possibly have been
+// read out of the queue — let alone Sent — by the time the buffer is
+// mutated. Without that block, an unblocked fakePeer could race ahead and
+// consume the payload before the mutation happens, letting the test pass
+// even if deliver() didn't copy anything.
 func TestPayloadBytesAreCopiedBeforeAsyncDelivery(t *testing.T) {
 	logic := &recordingLogic{}
 	logic.handle = func(rc *RoomContext, ev Event) error {
@@ -152,22 +159,141 @@ func TestPayloadBytesAreCopiedBeforeAsyncDelivery(t *testing.T) {
 	hub, _ := newTestHub(t, func(string) Logic { return logic }, Options{})
 	ctx := context.Background()
 
-	peer := &fakePeer{}
+	peer := &fakePeer{block: make(chan struct{})}
 	if err := hub.Join(ctx, "room-1", Principal{UserID: "alice"}, peer); err != nil {
 		t.Fatalf("join: %v", err)
 	}
+	// The snapshot delivery is now stuck in the writer goroutine's Send
+	// call, blocked on peer.block — nothing has been (or can be) read from
+	// peer's outbound queue yet.
 
 	buf := []byte("original")
 	if err := hub.Dispatch(ctx, Event{Kind: EventAction, RoomID: "room-1", Payload: buf}); err != nil {
 		t.Fatalf("dispatch: %v", err)
 	}
-	// Mutate the caller's own buffer immediately after Dispatch returns —
-	// Dispatch returning only guarantees Logic.Handle ran, not that
-	// delivery to the Peer's writer goroutine has happened yet.
+	// Mutate the caller's own buffer while the writer is still blocked on
+	// the *first* message — the second message (this Dispatch's) cannot
+	// have been touched by anything yet except deliver()'s own copy.
 	copy(buf, "mutated!")
+
+	close(peer.block)
 
 	got := waitForMessages(t, peer, 2)
 	if string(got[1]) != "original" {
 		t.Fatalf("peer received %q, want the unmutated original %q", got[1], "original")
+	}
+}
+
+// TestReceivedOpAfterCloseChIsRejectedWithoutRunningLogic deterministically
+// exercises the shutdown-select race itself: room.run's main select can
+// pick its inbox case even though closeCh has also just become ready (Go's
+// select makes no ordering promise between simultaneously ready cases), so
+// handleReceivedOp re-checks closeCh after the dequeue and before
+// r.process(op). Looping and hoping to observe Go's random tie-break choose
+// the inbox case would be probabilistic; instead this constructs a room
+// without starting its run() goroutine, so the exact race window —
+// closeCh already closed at the moment an op is about to be processed —
+// is reproduced on every run, not just sometimes.
+func TestReceivedOpAfterCloseChIsRejectedWithoutRunningLogic(t *testing.T) {
+	handled := make(chan Event, 1)
+	logic := &recordingLogic{}
+	logic.handle = func(_ *RoomContext, ev Event) error {
+		handled <- ev
+		return nil
+	}
+	hub, _ := newTestHub(t, func(string) Logic { return logic }, Options{})
+
+	r := &room{
+		id:      "room-1",
+		hub:     hub,
+		logic:   logic,
+		inbox:   make(chan roomOp, 4),
+		done:    make(chan struct{}),
+		members: make(map[string]*member),
+		timers:  make(map[string]*roomTimer),
+	}
+	hub.mu.Lock()
+	hub.rooms[r.id] = r
+	hub.mu.Unlock()
+
+	// A second op left sitting in inbox, unrelated to the one passed
+	// directly to handleReceivedOp below — proves the shutdown this
+	// triggers drains every other queued op with ErrClosed too, via the
+	// normal drainInbox path, not just the one op handed to it directly.
+	otherReply := make(chan error, 1)
+	r.inbox <- roomOp{kind: opDispatch, event: Event{Kind: EventAction, RoomID: "room-1"}, reply: otherReply}
+
+	// closeCh is already closed by the time this op is "received" —
+	// exactly the race window the fix closes.
+	close(hub.closeCh)
+
+	op := roomOp{kind: opDispatch, event: Event{Kind: EventAction, RoomID: "room-1"}, reply: make(chan error, 1)}
+	if stop := r.handleReceivedOp(op); !stop {
+		t.Fatal("handleReceivedOp must report stop=true once closeCh is already closed")
+	}
+
+	select {
+	case err := <-op.reply:
+		if !errors.Is(err, ErrClosed) {
+			t.Fatalf("op caught by the shutdown race = %v, want ErrClosed", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("op never got a reply")
+	}
+
+	select {
+	case err := <-otherReply:
+		if !errors.Is(err, ErrClosed) {
+			t.Fatalf("other queued op = %v, want ErrClosed", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("other queued op never got a reply")
+	}
+
+	select {
+	case ev := <-handled:
+		t.Fatalf("Logic.Handle must never run for an op caught by the shutdown race, got %+v", ev)
+	default:
+	}
+}
+
+// TestReceivedOpNormalEvictionStillReturnsErrRoomNotFound is
+// handleReceivedOp's other exit path, proven with the same deterministic
+// construction: when the room decides to evict on its own (not because
+// Hub.Close began), the reason handed to shutdown/drainInbox must stay
+// ErrRoomNotFound, never ErrClosed.
+func TestReceivedOpNormalEvictionStillReturnsErrRoomNotFound(t *testing.T) {
+	logic := &recordingLogic{}
+	hub, _ := newTestHub(t, func(string) Logic { return logic }, Options{})
+
+	r := &room{
+		id:      "room-1",
+		hub:     hub,
+		logic:   logic,
+		inbox:   make(chan roomOp, 4),
+		done:    make(chan struct{}),
+		members: make(map[string]*member), // empty, so handleEvictCheck decides to close
+		timers:  make(map[string]*roomTimer),
+	}
+	hub.mu.Lock()
+	hub.rooms[r.id] = r
+	hub.mu.Unlock()
+
+	otherReply := make(chan error, 1)
+	r.inbox <- roomOp{kind: opDispatch, event: Event{Kind: EventAction, RoomID: "room-1"}, reply: otherReply}
+
+	// hub.closeCh is deliberately left open: this is an ordinary eviction.
+	op := roomOp{kind: opEvictCheck, evictGen: 0}
+	if stop := r.handleReceivedOp(op); !stop {
+		t.Fatal("handleReceivedOp must report stop=true once the room decides to evict")
+	}
+
+	select {
+	case err := <-otherReply:
+		if !errors.Is(err, ErrRoomNotFound) {
+			t.Fatalf("queued op during a normal eviction = %v, want ErrRoomNotFound", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("queued op never got a reply")
 	}
 }

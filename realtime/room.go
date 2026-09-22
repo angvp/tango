@@ -172,9 +172,7 @@ func (r *room) run() {
 
 		select {
 		case op := <-r.inbox:
-			r.process(op)
-			if r.closing {
-				r.shutdown(ErrRoomNotFound)
+			if r.handleReceivedOp(op) {
 				return
 			}
 		case <-r.hub.closeCh:
@@ -182,6 +180,34 @@ func (r *room) run() {
 			return
 		}
 	}
+}
+
+// handleReceivedOp processes op, which the main select in run just pulled
+// off inbox — except that select can itself race Hub.Close: both its
+// inbox and closeCh cases can become ready at once, and Go's select makes
+// no promise about which one it picks. Re-checking closeCh here, after the
+// dequeue but before r.process(op), closes that window: if it's already
+// closed, op is rejected with ErrClosed (never reaching Logic.Handle) and
+// shutdown begins immediately, which then drains every other op still
+// waiting in inbox with ErrClosed too via drainInbox. It reports whether
+// the caller's loop should stop.
+func (r *room) handleReceivedOp(op roomOp) (stop bool) {
+	select {
+	case <-r.hub.closeCh:
+		if op.reply != nil {
+			op.reply <- ErrClosed
+		}
+		r.shutdown(ErrClosed)
+		return true
+	default:
+	}
+
+	r.process(op)
+	if r.closing {
+		r.shutdown(ErrRoomNotFound)
+		return true
+	}
+	return false
 }
 
 // beginShutdown makes the room stop accepting new submissions and waits
