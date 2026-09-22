@@ -114,16 +114,25 @@ const (
 // Coordinator is the surface realtime/websocket (and any other adapter)
 // depends on. It is kept intentionally narrow: its purpose is adapter
 // testability against a fake implementation, not general swappability.
+// It deliberately excludes Hub.Dispatch — a transport must always act
+// through DispatchPeer, which is bound to its specific live connection, not
+// the unrestricted membership-free path bots and other trusted host-side
+// producers use.
 type Coordinator interface {
 	Join(context.Context, string, Principal, Peer) error
 	Leave(context.Context, string, Principal, Peer) error
-	Dispatch(context.Context, Event) error
+	DispatchPeer(context.Context, Event, Peer) error
 }
 
 var (
-	// ErrRoomNotFound is returned by Dispatch against a room that has
-	// never existed or has already been evicted.
+	// ErrRoomNotFound is returned against a room that has never existed or
+	// has already been evicted.
 	ErrRoomNotFound = errors.New("tango realtime: room not found")
-	// ErrClosed is returned by Join/Dispatch once Hub.Close has begun.
+	// ErrClosed is returned by Join/Dispatch/DispatchPeer once Hub.Close
+	// has begun.
 	ErrClosed = errors.New("tango realtime: hub is closed")
+	// ErrStalePeer is returned by DispatchPeer when peer is not exactly
+	// the currently installed connection for the event's Principal in that
+	// room — stale, replaced, overflow-removed, or never a member.
+	ErrStalePeer = errors.New("tango realtime: peer is not the current connection")
 )

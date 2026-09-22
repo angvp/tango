@@ -19,10 +19,11 @@ import (
 // fakeCoordinator is a minimal, in-memory realtime.Coordinator stand-in for
 // adapter-level tests that shouldn't depend on real room-loop timing.
 type fakeCoordinator struct {
-	mu         sync.Mutex
-	joinCalls  int
-	leaveCalls int
-	dispatches []realtime.Event
+	mu            sync.Mutex
+	joinCalls     int
+	leaveCalls    int
+	dispatches    []realtime.Event
+	dispatchPeers []realtime.Peer
 
 	joinDelay chan struct{} // if non-nil, Join blocks on it before returning
 	joinErr   error
@@ -49,10 +50,11 @@ func (f *fakeCoordinator) Leave(ctx context.Context, roomID string, p realtime.P
 	return nil
 }
 
-func (f *fakeCoordinator) Dispatch(ctx context.Context, ev realtime.Event) error {
+func (f *fakeCoordinator) DispatchPeer(ctx context.Context, ev realtime.Event, peer realtime.Peer) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.dispatches = append(f.dispatches, ev)
+	f.dispatchPeers = append(f.dispatchPeers, peer)
 	return nil
 }
 
@@ -167,6 +169,37 @@ func TestJoinBeforeReadOrdering(t *testing.T) {
 	close(joinRelease)
 
 	waitForCondition(t, func() bool { return fc.dispatchCount() == 1 }, "expected the early message to be dispatched once Join completed")
+}
+
+// TestReadLoopDispatchesThroughDispatchPeerWithItsOwnPeer proves View wires
+// itself to Coordinator.DispatchPeer, carrying the exact same connPeer it
+// registered via Join — never the unrestricted Coordinator.Dispatch, which
+// realtime.Coordinator no longer even exposes to adapters.
+func TestReadLoopDispatchesThroughDispatchPeerWithItsOwnPeer(t *testing.T) {
+	fc := &fakeCoordinator{}
+	server := httptest.NewServer(buildHandler(t, fc, alwaysAuth("alice"), fixedRoom("room-1")))
+	defer server.Close()
+
+	conn, _, err := ws.Dial(context.Background(), toWSURL(server.URL)+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.CloseNow()
+
+	if err := conn.Write(context.Background(), ws.MessageBinary, []byte("hi")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	waitForCondition(t, func() bool { return fc.dispatchCount() == 1 }, "expected the message to reach DispatchPeer")
+
+	fc.mu.Lock()
+	peer := fc.dispatchPeers[0]
+	fc.mu.Unlock()
+	if peer == nil {
+		t.Fatal("DispatchPeer was called with a nil peer")
+	}
+	if _, ok := peer.(*connPeer); !ok {
+		t.Fatalf("DispatchPeer peer type = %T, want *connPeer", peer)
+	}
 }
 
 func TestOversizedMessageNeverDispatchedAndClosesConnection(t *testing.T) {

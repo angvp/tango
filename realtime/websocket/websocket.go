@@ -94,12 +94,12 @@ func readLoop(ctx context.Context, coordinator realtime.Coordinator, roomID stri
 		if err != nil {
 			return
 		}
-		_ = coordinator.Dispatch(ctx, realtime.Event{
+		_ = coordinator.DispatchPeer(ctx, realtime.Event{
 			Kind:      realtime.EventAction,
 			RoomID:    roomID,
 			Principal: principal,
 			Payload:   payload,
-		})
+		}, peer)
 	}
 }
 

@@ -124,6 +124,31 @@ func (h *Hub) Dispatch(ctx context.Context, ev Event) error {
 	return r.submit(ctx, roomOp{kind: opDispatch, event: ev})
 }
 
+// DispatchPeer delivers ev.Payload into ev.RoomID's Logic.Handle on behalf
+// of peer, which must currently be the live connection for ev.Principal in
+// that room. Unlike Dispatch, DispatchPeer is membership- and
+// generation-bound: it is what realtime/websocket (and any other transport
+// adapter) must use instead of Dispatch, so a replaced or overflow-removed
+// connection can never keep acting as if it were still current. It returns
+// ErrStalePeer for a peer that is stale, replaced, overflow-removed, or was
+// never a member — checked inside the room loop, before Logic.Handle runs.
+func (h *Hub) DispatchPeer(ctx context.Context, ev Event, peer Peer) error {
+	if ev.Kind != EventAction {
+		return fmt.Errorf("tango realtime: DispatchPeer only accepts EventAction")
+	}
+	if peer == nil {
+		return ErrStalePeer
+	}
+	if h.isClosed() {
+		return ErrClosed
+	}
+	r := h.getRoom(ev.RoomID)
+	if r == nil {
+		return ErrRoomNotFound
+	}
+	return r.submit(ctx, roomOp{kind: opDispatchPeer, event: ev, peer: peer})
+}
+
 // SendUser delivers payload to userID's live peer in every room the Hub
 // currently tracks where that user has one — a no-op in any room where
 // they don't.

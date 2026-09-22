@@ -11,6 +11,7 @@ const (
 	opJoin opKind = iota
 	opLeave
 	opDispatch
+	opDispatchPeer
 	opSendUser
 	opEvictCheck
 	opTimerExpiry
@@ -188,6 +189,8 @@ func (r *room) process(op roomOp) {
 		r.handleLeave(op)
 	case opDispatch:
 		r.handleDispatch(op)
+	case opDispatchPeer:
+		r.handleDispatchPeer(op)
 	case opSendUser:
 		r.handleSendUser(op)
 	case opEvictCheck:
@@ -237,6 +240,19 @@ func (r *room) handleLeave(op roomOp) {
 }
 
 func (r *room) handleDispatch(op roomOp) {
+	rc := &RoomContext{room: r}
+	op.reply <- r.logic.Handle(rc, op.event)
+}
+
+// handleDispatchPeer is DispatchPeer's room-loop counterpart: op.peer must
+// be exactly the currently installed connection for op.event.Principal, or
+// the dispatch is rejected before Logic.Handle ever runs.
+func (r *room) handleDispatchPeer(op roomOp) {
+	existing, ok := r.members[op.event.Principal.UserID]
+	if !ok || existing.peer != op.peer {
+		op.reply <- ErrStalePeer
+		return
+	}
 	rc := &RoomContext{room: r}
 	op.reply <- r.logic.Handle(rc, op.event)
 }
