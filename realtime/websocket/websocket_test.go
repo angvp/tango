@@ -202,6 +202,46 @@ func TestReadLoopDispatchesThroughDispatchPeerWithItsOwnPeer(t *testing.T) {
 	}
 }
 
+func TestBadRoomIDNeverUpgrades(t *testing.T) {
+	fc := &fakeCoordinator{}
+	failingRoomID := func(*tango.Context) (string, error) { return "", fmt.Errorf("no room") }
+	server := httptest.NewServer(buildHandler(t, fc, alwaysAuth("alice"), failingRoomID))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/ws")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if fc.joinCalls != 0 {
+		t.Fatalf("Join should never have been called, got %d calls", fc.joinCalls)
+	}
+}
+
+func TestCoordinatorJoinFailureClosesConnectionWithoutDispatch(t *testing.T) {
+	fc := &fakeCoordinator{joinErr: fmt.Errorf("room is full")}
+	server := httptest.NewServer(buildHandler(t, fc, alwaysAuth("alice"), fixedRoom("room-1")))
+	defer server.Close()
+
+	conn, _, err := ws.Dial(context.Background(), toWSURL(server.URL)+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.CloseNow()
+
+	_, _, err = conn.Read(context.Background())
+	if err == nil {
+		t.Fatal("expected the connection to be closed after a Join failure")
+	}
+	if fc.dispatchCount() != 0 {
+		t.Fatalf("no message should ever have been dispatched, got %d dispatches", fc.dispatchCount())
+	}
+}
+
 func TestOversizedMessageNeverDispatchedAndClosesConnection(t *testing.T) {
 	fc := &fakeCoordinator{}
 	server := httptest.NewServer(buildHandler(t, fc, alwaysAuth("alice"), fixedRoom("room-1")))
