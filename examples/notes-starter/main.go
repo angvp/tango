@@ -5,17 +5,33 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
+	"github.com/angvp/tango/ratelimit"
 
 	"notes-starter/migrations"
 
 	_ "modernc.org/sqlite"
 )
+
+// createLimiter throttles note creation per client IP: 5 notes, refilling
+// one every 10 seconds. A real app would tune this to its own traffic
+// shape — see docs/guides/rate-limiting.md.
+var createLimiter = mustNewCreateLimiter()
+
+func mustNewCreateLimiter() *ratelimit.Limiter {
+	limiter, err := ratelimit.NewLimiter(ratelimit.Options{Limit: 5, Refill: 10 * time.Second})
+	if err != nil {
+		panic(err)
+	}
+	return limiter
+}
 
 type Note struct {
 	ID      int64 `tango:"pk"`
@@ -49,7 +65,8 @@ func (a *NotesApp) Register(registry *tango.Registry) error {
 	}
 	return registry.Routes().Include("/api/notes/", tango.URLs{
 		tango.Path("GET", "/", a.list, tango.Name("list")),
-		tango.Path("POST", "/", a.create, tango.Name("create")),
+		tango.Path("POST", "/", a.create, tango.Name("create"),
+			tango.Use(ratelimit.Middleware(createLimiter, ratelimit.RemoteIPKey()))),
 	})
 }
 
@@ -99,13 +116,7 @@ func run() error {
 	defer sqlDB.Close()
 
 	store := db.NewStore(sqlDB, db.SQLite)
-	config := tango.Config{
-		InstalledApps: []tango.App{
-			&NotesApp{store: store},
-			admin.New(store),
-		},
-		Addr: ":8000",
-	}
+	config := appConfig(store)
 
 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 		return err
@@ -118,4 +129,31 @@ func run() error {
 
 	fmt.Println("listening on", config.Addr)
 	return tango.Serve(config, sqlDB, db.SQLite)
+}
+
+func appConfig(store *db.Store) tango.Config {
+	return tango.Config{
+		InstalledApps: []tango.App{
+			&NotesApp{store: store},
+			admin.New(store),
+		},
+		Addr: ":8000",
+	}
+}
+
+// buildHandler compiles config into a servable http.Handler exactly the
+// way tango.Serve does (including wiring store into the registry), split
+// out here so tests can exercise real routing/middleware (including
+// createLimiter) against an httptest server without going through main's
+// flag/env/serve plumbing.
+func buildHandler(config tango.Config, store *db.Store) (http.Handler, error) {
+	registry, err := tango.BuildRegistry(config)
+	if err != nil {
+		return nil, err
+	}
+	if err := registry.RunRegistration(); err != nil {
+		return nil, err
+	}
+	registry.SetStore(store)
+	return registry.Routes().Handler()
 }

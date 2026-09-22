@@ -1,6 +1,6 @@
 # Notes starter
 
-This example is a small tanGO app you could keep as a starting point: one model, JSON routes, generated migrations, and the HTML admin.
+This example is a small tanGO app you could keep as a starting point: one model, JSON routes, generated migrations, the HTML admin, and `ratelimit.Middleware` on the note-creation route.
 
 ## Run locally
 
@@ -22,6 +22,8 @@ curl -X POST http://localhost:8000/api/notes/ \
 
 curl http://localhost:8000/api/notes/
 ```
+
+`POST /api/notes/` is rate limited per client IP (5 requests, refilling one every 10 seconds, via `ratelimit.NewLimiter`/`ratelimit.Middleware` in `main.go`) — exceeding it returns `429` with a `Retry-After` header. `GET /api/notes/` is not limited. See [rate limiting](../../docs/guides/rate-limiting.md) for the full model; this example's limits are deliberately small so you can trigger the `429` locally without waiting.
 
 ## Configuration
 

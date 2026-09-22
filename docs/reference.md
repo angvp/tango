@@ -121,6 +121,19 @@ See [realtime and WebSockets](guides/realtime-websockets.md), [ADR 0028](adr/002
 
 Wraps `github.com/coder/websocket`; no third-party type appears in this package's own public API. See [realtime and WebSockets](guides/realtime-websockets.md).
 
+## `ratelimit` (`github.com/angvp/tango/ratelimit`)
+
+| Symbol | What it's for |
+|---|---|
+| `type Decision struct{ Allowed bool; Limit, Remaining int; RetryAfter time.Duration }` | The outcome of one `Limiter.Take` call — enough to build custom headers/body without reaching into `Limiter`'s internal state. |
+| `type Options struct{ Limit int; Refill time.Duration; Clock func() time.Time }`, `func NewLimiter(Options) (*Limiter, error)` | Configures a token bucket's capacity/refill rate; `Limit`/`Refill` must be positive. `Clock` defaults to `time.Now`, injectable for deterministic tests. |
+| `func (*Limiter) Take(ctx context.Context, key string, now time.Time, cost int) (Decision, error)` | Concrete, in-memory, per-key token bucket, safe for concurrent use. A key seen for the first time starts full (allows an initial burst up to `Limit`). `cost` must be positive. No storage interface in v0.0.1 — see [ADR 0029](adr/0029-ratelimit-is-a-concrete-token-bucket.md). |
+| `type KeyFunc func(*http.Request) (string, error)`, `func RemoteIPKey(trustedProxies ...*net.IPNet) KeyFunc` | Caller-supplied key extraction — `ratelimit` never imports `auth`/`auth/jwt`/`accounts`. `RemoteIPKey` uses only `RemoteAddr` by default; `X-Forwarded-For`/`X-Real-IP` are honored only from an immediate peer inside a given trusted CIDR. |
+| `type LimitedHandler func(http.ResponseWriter, *http.Request, Decision)`, `type ErrorHandler func(http.ResponseWriter, *http.Request, error)` | Respond to a rejected `Decision`, or to a `KeyFunc` failure — kept distinct; an extraction failure is never treated as "over budget." |
+| `func Middleware(limiter *Limiter, key KeyFunc, opts ...MiddlewareOption) tango.Middleware`, `WithLimitedHandler`, `WithErrorHandler`, `WithCost(int)` | Ordinary `tango.Middleware` composition, usable at any attachment tier and on a WebSocket upgrade route. Default rejection: `429`, JSON, `Retry-After` (refill-derived, rounded up to whole seconds), `{"error":"rate limit exceeded"}`. Default extraction failure: `400`, JSON, `{"error":"rate limit key extraction failed"}`. |
+
+Independent of `admin`/`accounts`' existing failed-login-attempt limiter, which counts authentication failures in a sliding window rather than every request — the two are not merged. See [rate limiting](guides/rate-limiting.md) and the runnable example wired into [`examples/notes-starter`](../examples/notes-starter).
+
 ## `accounts` (`github.com/angvp/tango/accounts`)
 
 | Symbol | What it's for |

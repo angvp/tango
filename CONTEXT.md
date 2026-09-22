@@ -35,3 +35,15 @@ Do not tie a Principal to `accounts.Account` or `AdminUser`: a host maps its own
 How long a `realtime` room retains its in-memory membership/state for a `Principal` with no live `Peer`, before implicit eviction. Purely a temporary-retention mechanism, not durable persistence and not a guarantee that any particular socket stays alive — a `Principal` reconnecting within the window gets its room membership restored and receives a fresh `Logic.Snapshot`; past the window, an otherwise-empty room is evicted and any in-memory state it held is gone. Bots never hold membership, so they neither keep a room alive during this window nor are affected by it ending.
 
 Do not call this a session: this is in-memory retention only, with no durability guarantee across a process restart or `Hub.Close`.
+
+## Decision
+
+`ratelimit.Decision`, the outcome of one `Limiter.Take` call — `Allowed`, `Limit`, `Remaining`, `RetryAfter`. Passed to a rejected request's `LimitedHandler` so a host can build its own response/headers from it instead of trusting `ratelimit`'s default body. Not the token bucket's internal state (token count, last-refill time) — those stay unexported inside `Limiter`.
+
+Do not call this a Result or Verdict: say Decision specifically when meaning `ratelimit.Decision`.
+
+## Key extractor
+
+A `ratelimit.KeyFunc`, a caller-supplied `func(*http.Request) (string, error)` that produces the string a `Limiter` buckets by. `ratelimit` ships one default, `RemoteIPKey`, but never imports `auth`/`auth/jwt`/`accounts` itself — a host wanting to key on identity rather than IP writes its own. An extractor's error is distinct from a rejected Decision: `Middleware` routes it to `ErrorHandler`, never `LimitedHandler` — an extraction failure is not the same fact as "this caller is over budget."
+
+Do not conflate an extractor error with a limited/rejected request: they go to different handlers for a reason.
