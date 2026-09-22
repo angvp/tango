@@ -10,25 +10,27 @@ Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/realtime-
 - Implement `Logic.Handle`/`Snapshot`; only call `*realtime.RoomContext` methods from inside those two calls, never store the context.
 - Use `BroadcastExcept` for join notices — `EventJoin` fires after membership is installed, so a plain `Broadcast` would notify the joiner about their own join.
 - Validate an action fully before calling `Broadcast`/`SendUser`/`ResetTimer` — there is no rollback if `Handle` returns an error afterward.
-- Mount `realtime/websocket.View(hub, authenticate, roomID)` as an ordinary route; write your own `Authenticate` (may call `auth/jwt.Service.Verify` directly, a cookie session, or anything else).
+- Mount `realtime/websocket.View(hub, authenticate, roomID)` as an ordinary route; write your own `Authenticate` (may call `auth/jwt.Service.Verify` directly, a cookie session, or anything else). `View` dispatches every inbound message through `Hub.DispatchPeer`, never `Hub.Dispatch` — that's what makes a replaced or overflow-removed connection unable to keep acting.
 - Wire `Hub.Close(ctx)` into your own shutdown path if you have one — `tango.Serve` has no built-in graceful shutdown.
 
 ## Choose The Room Model
 
-- One live `Peer` per `(RoomID, Principal)` always — a second `Join` replaces, never coexists with, an earlier one.
-- A `Principal` can `Dispatch` without ever `Join`ing — that's how a bot acts. It never appears in membership and never keeps an empty room alive.
+- One live `Peer` per `(RoomID, Principal)` always — a second `Join` replaces, never coexists with, an earlier one. `Peer` must be non-nil and comparable (a pointer type) — `Join` rejects anything else with `ErrInvalidPeer`.
+- A `Principal` can `Dispatch` without ever `Join`ing — that's how a bot acts. It never appears in membership and never keeps an empty room alive. Only `Dispatch` (host/bot-facing) allows this; `DispatchPeer` (transport-facing) always requires current membership, or you get `ErrStalePeer`.
 - Rooms are created on first `Join` and evicted after `ReconnectWindow` once empty — don't build your own room-lifecycle bookkeeping on top.
 
 ## Don't
 
-- Do not treat `Payload []byte` as anything but opaque — `realtime` never parses it; pick your own encoding.
+- Do not call `Hub.Dispatch` from a transport adapter — use `DispatchPeer(ctx, event, peer)` instead, so a stale/replaced/overflow-removed connection is rejected before it ever reaches `Logic.Handle`.
+- Do not treat `Payload []byte` as anything but opaque — `realtime` never parses it; pick your own encoding. It is safe to mutate your own buffer right after `Dispatch`/`DispatchPeer` returns — delivery always copies first.
 - Do not add a `Principal.Bot`/`Kind` field — the Hub behaves identically regardless of actor; distinguish in your own `Logic` if you need to.
-- Do not expect `Join`/`Leave`/`Dispatch` to return before the room loop has actually applied them — they are synchronous by design, not fire-and-forget.
+- Do not expect `Join`/`Leave`/`Dispatch`/`DispatchPeer` to return before the room loop has actually applied them (including running `Logic.Handle` for `Join`/`Leave`'s own `EventJoin`/`EventLeave`) — they are synchronous by design, not fire-and-forget.
 - Do not assume `Hub.Close` integrates with `tango.Serve`/`Config` — it does not, in v0.1.
 - Do not rely on `realtime` for persistence, replay, or distributed/multi-process rooms — single-process, in-memory only.
 
 ## Check
 
 - Exercise join, leave, a rejected action, an oversized WebSocket message, and a reconnect within `ReconnectWindow`.
-- Verify a bot `Dispatch` against a nonexistent/evicted room returns `ErrRoomNotFound`.
+- Verify a bot `Dispatch` against a nonexistent/evicted room returns `ErrRoomNotFound`, and that a replaced/overflow-removed `Peer`'s `DispatchPeer` returns `ErrStalePeer`.
+- Verify an op queued or blocked when `Hub.Close` begins returns `ErrClosed`, not `ErrRoomNotFound`.
 - Run `docs/agents/checklist.md` before stopping.

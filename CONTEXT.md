@@ -14,13 +14,13 @@ Do not call decoded claims an Application session: sessions are persisted, revoc
 
 ## Room loop
 
-The single goroutine that is the sole owner of one active `realtime` room's membership, timers, and every call into host-supplied `Logic` — `Join`, `Leave`, `Dispatch`, and timer expiry all become events processed one at a time, in arrival order, by this loop alone. No other goroutine (a socket's read loop, a timer callback, a bot's scheduler) ever mutates room state directly. See [ADR 0028](docs/adr/0028-realtime-rooms-use-a-single-owner-event-loop-not-locks.md).
+The single goroutine that is the sole owner of one active `realtime` room's membership, timers, and every call into host-supplied `Logic` — `Join`, `Leave`, `Dispatch`, `DispatchPeer`, and timer expiry all become events processed one at a time, in arrival order, by this loop alone. No other goroutine (a socket's read loop, its writer goroutine, a timer callback, a bot's scheduler) ever mutates room state directly — even a failed outbound `Send` is reported back to the room loop as an event, not handled where it happened. See [ADR 0028](docs/adr/0028-realtime-rooms-use-a-single-owner-event-loop-not-locks.md).
 
 Do not call this just "the room": that's ambiguous between the owning goroutine itself and the domain state `Logic` maintains inside it — say Room loop when specifically meaning the owning goroutine.
 
 ## Peer
 
-One live, replaceable transport connection for one `Principal` in one room — not the user, and not a retained room member in its own right. Joining with a new `Peer` while an old one is still live for the same room and `Principal` replaces it: the old `Peer`'s eventual `Leave` is a stale, idempotent no-op, never removing the replacement. A `Peer` going away (closed, or its outbound queue overflowed) does not by itself end the underlying room membership — see Reconnect window.
+One live, replaceable transport connection for one `Principal` in one room — not the user, and not a retained room member in its own right. Must be non-nil and comparable (a pointer type); `Join` rejects anything else outright. Joining with a new `Peer` while an old one is still live for the same room and `Principal` replaces it: the old `Peer`'s eventual `Leave` is a stale, idempotent no-op, and its `DispatchPeer` calls are rejected the same way, never reaching `Logic`. A `Peer` going away (closed, its outbound queue overflowed, or its `Send` failing) does not by itself end the underlying room membership — see Reconnect window.
 
 Do not call this a Connection generically, or conflate it with Principal: Peer is the transport, Principal is the identity it currently carries.
 
