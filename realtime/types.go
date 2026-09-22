@@ -42,8 +42,11 @@ type Event struct {
 
 // Peer is one live, replaceable transport connection for one Principal in
 // one room. Implementations must be comparable (a pointer-receiver type is
-// the natural choice) so the Hub can recognize a stale Leave from an
-// already-replaced connection by identity.
+// the natural choice) so the Hub can recognize a stale Leave or DispatchPeer
+// call from an already-replaced connection by identity. Join validates this
+// at the boundary — a nil Peer, or one whose dynamic type is not comparable,
+// is rejected with ErrInvalidPeer rather than ever being admitted into
+// membership, so no later comparison against it can panic.
 type Peer interface {
 	Send(context.Context, []byte) error
 	Close() error
@@ -135,4 +138,7 @@ var (
 	// the currently installed connection for the event's Principal in that
 	// room — stale, replaced, overflow-removed, or never a member.
 	ErrStalePeer = errors.New("tango realtime: peer is not the current connection")
+	// ErrInvalidPeer is returned by Join for a nil Peer, or one whose
+	// dynamic type is not comparable.
+	ErrInvalidPeer = errors.New("tango realtime: peer must be non-nil and comparable")
 )

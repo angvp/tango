@@ -37,6 +37,18 @@ type member struct {
 	cancel context.CancelFunc
 }
 
+// peerEqual reports whether a and b are the same Peer identity. It is a
+// plain interface comparison, but a safe one: Join's validation (see
+// validatePeer) guarantees every Peer ever admitted into a room's
+// membership — and therefore ever passed as a — has a comparable dynamic
+// type. Per the Go spec, comparing two interface values panics only when
+// both share one identical, non-comparable dynamic type; since a's type is
+// always comparable, that case can never occur here regardless of what b
+// is, including a nil or a non-comparable caller-supplied value.
+func peerEqual(a, b Peer) bool {
+	return a == b
+}
+
 // room is the single-owner event loop for one room ID: every membership
 // change, delivery, and call into Logic happens on this goroutine alone.
 // See the package doc and this milestone's ADR for why.
@@ -227,7 +239,7 @@ func (r *room) handleJoin(op roomOp) {
 func (r *room) handleLeave(op roomOp) {
 	userID := op.principal.UserID
 	existing, ok := r.members[userID]
-	if !ok || existing.peer != op.peer {
+	if !ok || !peerEqual(existing.peer, op.peer) {
 		// Stale (already-replaced) or unknown leave: idempotent no-op.
 		op.reply <- nil
 		return
@@ -249,7 +261,7 @@ func (r *room) handleDispatch(op roomOp) {
 // the dispatch is rejected before Logic.Handle ever runs.
 func (r *room) handleDispatchPeer(op roomOp) {
 	existing, ok := r.members[op.event.Principal.UserID]
-	if !ok || existing.peer != op.peer {
+	if !ok || !peerEqual(existing.peer, op.peer) {
 		op.reply <- ErrStalePeer
 		return
 	}

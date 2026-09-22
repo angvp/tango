@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -75,6 +76,9 @@ func defaultNewTimer(d time.Duration, f func()) func() bool {
 // applied the join (installed membership and enqueued Logic.Snapshot for
 // delivery) or ctx is done.
 func (h *Hub) Join(ctx context.Context, roomID string, principal Principal, peer Peer) error {
+	if err := validatePeer(peer); err != nil {
+		return err
+	}
 	for {
 		r, ok := h.getOrCreateRoom(roomID)
 		if !ok {
@@ -241,6 +245,20 @@ func (h *Hub) removeRoom(id string, self *room) {
 	if h.rooms[id] == self {
 		delete(h.rooms, id)
 	}
+}
+
+// validatePeer rejects a nil Peer, or one whose dynamic type is not
+// comparable, at the Join boundary — the single admission point for
+// membership — so no value ever stored in a room's membership map can cause
+// the identity comparisons in Leave/DispatchPeer to panic.
+func validatePeer(p Peer) error {
+	if p == nil {
+		return ErrInvalidPeer
+	}
+	if !reflect.TypeOf(p).Comparable() {
+		return ErrInvalidPeer
+	}
+	return nil
 }
 
 var _ Coordinator = (*Hub)(nil)
