@@ -75,11 +75,11 @@ func defaultNewTimer(d time.Duration, f func()) func() bool {
 // applied the join (installed membership and enqueued Logic.Snapshot for
 // delivery) or ctx is done.
 func (h *Hub) Join(ctx context.Context, roomID string, principal Principal, peer Peer) error {
-	if h.isClosed() {
-		return ErrClosed
-	}
 	for {
-		r := h.getOrCreateRoom(roomID)
+		r, ok := h.getOrCreateRoom(roomID)
+		if !ok {
+			return ErrClosed
+		}
 		err := r.submit(ctx, roomOp{kind: opJoin, principal: principal, peer: peer})
 		if errors.Is(err, ErrRoomNotFound) {
 			// r was already mid-eviction when we grabbed it; retry against
@@ -186,15 +186,22 @@ func (h *Hub) isClosed() bool {
 	}
 }
 
-func (h *Hub) getOrCreateRoom(id string) *room {
+// getOrCreateRoom returns ok=false, creating nothing, once the Hub has
+// started closing — checked under the same h.mu Close uses to snapshot its
+// room list, so no room can be created after that snapshot is taken (which
+// would otherwise be a room Close never waits for).
+func (h *Hub) getOrCreateRoom(id string) (r *room, ok bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if r, ok := h.rooms[id]; ok {
-		return r
+	if h.closed {
+		return nil, false
 	}
-	r := newRoom(h, id)
+	if r, ok := h.rooms[id]; ok {
+		return r, true
+	}
+	r = newRoom(h, id)
 	h.rooms[id] = r
-	return r
+	return r, true
 }
 
 func (h *Hub) getRoom(id string) *room {
