@@ -31,6 +31,7 @@ Use this as the universal contract, then use `docs/agents/` for task-specific re
 - Reusable apps: `docs/agents/reusable-apps.md`
 - Relationships and foreign keys: `docs/agents/relationships.md`
 - Auth and accounts: `docs/agents/auth-and-accounts.md`
+- JWT authentication: `docs/agents/jwt-auth.md`
 - Middleware and View wrappers: `docs/agents/middleware.md`
 - Optional prompt snippets: `docs/agents/prompts.md`
 

@@ -76,6 +76,22 @@ See [persistence CRUD and raw SQL](guides/persistence-crud-and-raw-sql.md) and [
 
 See [application auth](guides/application-auth.md). This package is primitives-only: no default `User` model, no signup view, no login view, and no sharing with admin auth.
 
+## `auth/jwt` (`github.com/angvp/tango/auth/jwt`)
+
+| Symbol | What it's for |
+|---|---|
+| `type Claims struct{ Subject, Issuer, Audience string; IssuedAt, ExpiresAt time.Time }` | tanGO-owned, registered-claims-only decoded token payload. `Subject` is opaque application identity. |
+| `type Key struct{ ID string; Secret []byte }` | One HS256 key identified by `kid`; secrets must contain at least `MinimumSecretBytes` bytes. |
+| `func NewService(active Key, verificationKeys []Key, issuer, audience string, opts ...ServiceOption) (*Service, error)` | Constructs an immutable issuer/verifier. The active key signs and verifies; retired keys verify only. |
+| `func WithMaxTTL(time.Duration) ServiceOption`, `func WithClockSkew(time.Duration) ServiceOption` | Configure issuance lifetime limits and up to five minutes of verification leeway. Defaults are `DefaultMaxTTL` (24 hours) and `DefaultClockSkew` (zero). |
+| `func (*Service) Issue(subject string, ttl time.Duration) (string, error)`, `func (*Service) Verify(token string) (Claims, error)` | Issue an HS256 token or validate its algorithm, key, signature, issuer, audience, and timestamps without a database lookup. |
+| `type Extractor func(*http.Request) (string, error)`, `BearerToken`, `QueryToken(name)` | Read a token from the standard bearer header or, when necessary, a named query parameter. |
+| `func (*Service) Middleware(Extractor) tango.Middleware` | Optional-auth HTTP middleware: missing tokens pass; supplied invalid/expired tokens return a generic JSON 401; valid claims enter the request context. |
+| `func FromContext(context.Context) (Claims, bool)`, `func Require(tango.View) tango.View` | Read verified claims and require them for a view. `Require` always rejects if middleware did not install claims first. |
+| `ErrMissingToken`, `ErrInvalidToken`, `ErrExpiredToken` | Sentinel errors checkable with `errors.Is`; wire responses never reveal the distinction. |
+
+See [JWT authentication](guides/jwt-auth.md) and the runnable [`examples/jwt-api`](../examples/jwt-api).
+
 ## `accounts` (`github.com/angvp/tango/accounts`)
 
 | Symbol | What it's for |
