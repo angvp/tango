@@ -92,6 +92,33 @@ See [application auth](guides/application-auth.md). This package is primitives-o
 
 See [JWT authentication](guides/jwt-auth.md) and the runnable [`examples/jwt-api`](../examples/jwt-api).
 
+## `realtime` (`github.com/angvp/tango/realtime`)
+
+| Symbol | What it's for |
+|---|---|
+| `type Principal struct{ UserID string }`, `type Peer interface{ Send(context.Context, []byte) error; Close() error }` | The stable actor identity and one live, replaceable transport connection for it. `Peer` implementations must be comparable (a pointer type). |
+| `type EventKind`, `type Event struct{ Kind EventKind; RoomID string; Principal Principal; Timer string; Payload []byte }` | `EventAction`/`EventTimer`/`EventJoin`/`EventLeave`. `Payload` is opaque — never parsed by `realtime` itself. |
+| `type Logic interface{ Handle(*RoomContext, Event) error; Snapshot(*RoomContext, Principal) ([]byte, error) }`, `type Factory func(roomID string) Logic` | Host-supplied domain behavior for one room; one `Hub` always uses the same `Factory`. |
+| `type RoomContext` with `Broadcast`, `BroadcastExcept(userID string, ...)`, `SendUser(userID string, ...)`, `ResetTimer(name string, duration time.Duration) error` | Valid only inside one `Handle`/`Snapshot` call, on that room's own event-loop goroutine. |
+| `type Options struct{ ReconnectWindow time.Duration; PeerQueue, RoomQueue int }` | Defaults: `DefaultReconnectWindow` (30s), `DefaultPeerQueue` (16), `DefaultRoomQueue` (64). A negative field is rejected at `NewHub`. |
+| `type Coordinator interface{ Join, Leave, Dispatch }`, `func NewHub(Factory, Options) (*Hub, error)` | `*Hub` implements `Coordinator`. `Coordinator` exists mainly so adapters (like `realtime/websocket`) can be tested against a fake. |
+| `func (*Hub) Join(context.Context, roomID string, Principal, Peer) error`, `func (*Hub) Leave(...) error`, `func (*Hub) Dispatch(context.Context, Event) error` | Block until the room's single-owner event loop has actually applied the operation, not merely enqueued it. `Dispatch` requires `Event.Kind == EventAction`. |
+| `func (*Hub) SendUser(ctx context.Context, userID string, payload []byte) error` | Delivers to `userID`'s live peer in every room the Hub currently tracks where they have one. |
+| `func (*Hub) Close(ctx context.Context) error` | Idempotent: rejects new `Join`/`Dispatch` with `ErrClosed`, stops timers, closes peers, waits for every room loop to exit (or `ctx` to be canceled). |
+| `ErrRoomNotFound`, `ErrClosed` | Sentinel errors checkable with `errors.Is`. |
+
+See [realtime and WebSockets](guides/realtime-websockets.md), [ADR 0028](adr/0028-realtime-rooms-use-a-single-owner-event-loop-not-locks.md), and the runnable [`examples/realtime-chat`](../examples/realtime-chat).
+
+## `realtime/websocket` (`github.com/angvp/tango/realtime/websocket`)
+
+| Symbol | What it's for |
+|---|---|
+| `type Authenticate func(*http.Request) (realtime.Principal, error)` | Resolves the requesting `Principal` before any WebSocket upgrade is attempted; a failure never touches the handshake. |
+| `func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error)) tango.View` | Mount as an ordinary route. Blocks on `coordinator.Join` before starting the read loop; calls `Leave` exactly once when the connection ends. |
+| `DefaultMaxMessageSize` | 32 KiB inbound message cap; an oversized frame closes the connection rather than being buffered. |
+
+Wraps `github.com/coder/websocket`; no third-party type appears in this package's own public API. See [realtime and WebSockets](guides/realtime-websockets.md).
+
 ## `accounts` (`github.com/angvp/tango/accounts`)
 
 | Symbol | What it's for |

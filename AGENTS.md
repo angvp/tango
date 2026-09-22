@@ -32,6 +32,7 @@ Use this as the universal contract, then use `docs/agents/` for task-specific re
 - Relationships and foreign keys: `docs/agents/relationships.md`
 - Auth and accounts: `docs/agents/auth-and-accounts.md`
 - JWT authentication: `docs/agents/jwt-auth.md`
+- Realtime rooms and WebSockets: `docs/agents/realtime.md`
 - Middleware and View wrappers: `docs/agents/middleware.md`
 - Optional prompt snippets: `docs/agents/prompts.md`
 
