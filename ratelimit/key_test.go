@@ -118,3 +118,38 @@ func TestRemoteIPKeyTrustedProxiesWithUnparseablePeerIgnoresForwardedHeader(t *t
 		t.Fatalf("key = %q, want the raw peer host, not the forwarded header, when the peer isn't a parseable IP", got)
 	}
 }
+
+func TestRemoteIPKeyNilTrustedCIDREntryIsIgnoredSafely(t *testing.T) {
+	trusted := mustCIDR(t, "10.0.0.0/8")
+	// A nil entry mixed in with valid ones must never panic, and must
+	// simply be skipped — the valid entries still work normally.
+	key := RemoteIPKey(nil, trusted, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "198.51.100.9")
+
+	got, err := key(req)
+	if err != nil {
+		t.Fatalf("key: %v", err)
+	}
+	if got != "198.51.100.9" {
+		t.Fatalf("key = %q, want the forwarded address honored from the valid trusted CIDR despite the nil entries", got)
+	}
+}
+
+func TestRemoteIPKeyOnlyNilTrustedCIDRsNeverTrusts(t *testing.T) {
+	key := RemoteIPKey(nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "198.51.100.9")
+
+	got, err := key(req)
+	if err != nil {
+		t.Fatalf("key: %v", err)
+	}
+	if got != "10.0.0.1" {
+		t.Fatalf("key = %q, want the real peer address — an all-nil trustedProxies list must never trust anything", got)
+	}
+}

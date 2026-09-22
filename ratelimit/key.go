@@ -57,6 +57,9 @@ func peerIsTrusted(peer string, trustedProxies []*net.IPNet) bool {
 		return false
 	}
 	for _, cidr := range trustedProxies {
+		if cidr == nil {
+			continue
+		}
 		if cidr.Contains(ip) {
 			return true
 		}
