@@ -26,7 +26,7 @@ Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/realtime-
 - Do not add a `Principal.Bot`/`Kind` field — the Hub behaves identically regardless of actor; distinguish in your own `Logic` if you need to.
 - Do not expect `Join`/`Leave`/`Dispatch`/`DispatchPeer` to return before the room loop has actually applied them (including running `Logic.Handle` for `Join`/`Leave`'s own `EventJoin`/`EventLeave`) — they are synchronous by design, not fire-and-forget.
 - Do not assume a failed `Join` means nothing happened — membership and any snapshot delivery it already applied stay applied; call `Leave` to clean up (see `realtime/websocket.View`'s own pattern).
-- Do not assume `Hub.Close` integrates with `tango.Serve`/`Config` — it does not, in v0.1.
+- Do not assume `Hub.Close` integrates with `tango.Serve`/`Config` — it does not, in v0.0.1.
 - Do not rely on `realtime` for persistence, replay, or distributed/multi-process rooms — single-process, in-memory only.
 
 ## Check

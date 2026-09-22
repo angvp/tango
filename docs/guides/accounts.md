@@ -27,7 +27,7 @@ type AccountSession struct {
 }
 ```
 
-`Account` is deliberately bare: identity, credential, activity state, a timestamp. v0.1 deliberately ships no `IsStaff`, `Role`, `Group`, or `Permission`-shaped field. An app that needs roles or permissions today queries `Account` itself (if installed) or its own domain data, from its own [View wrapper](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
+`Account` is deliberately bare: identity, credential, activity state, a timestamp. v0.0.1 deliberately ships no `IsStaff`, `Role`, `Group`, or `Permission`-shaped field. An app that needs roles or permissions today queries `Account` itself (if installed) or its own domain data, from its own [View wrapper](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
 
 `Email` is always stored lowercased and trimmed, and every lookup normalizes the same way — `Alice@Example.com` and `alice@example.com` are always the same `Account`.
 
@@ -54,7 +54,7 @@ config := tango.Config{
 
 ## Routes
 
-`accounts` mounts a fixed prefix, like every other reusable app in tanGO (`admin` owns `/admin/`, the `greetings` example owns `/greetings/`) — there is no host-configurable mount prefix in v0.1:
+`accounts` mounts a fixed prefix, like every other reusable app in tanGO (`admin` owns `/admin/`, the `greetings` example owns `/greetings/`) — there is no host-configurable mount prefix in v0.0.1:
 
 - `GET`/`POST /accounts/register/` — registration. On success, creates the `Account` (`Active=true` immediately — there's no email verification step yet), creates a session, and redirects straight to the post-login destination. No separate login step is needed after signing up.
 - `GET`/`POST /accounts/login/` — login. Any failure (unknown email, wrong password, or an inactive account) produces the exact same generic error — none of those cases are distinguishable from the response, so a failed attempt never reveals whether a given email is even registered. This is deliberately asymmetric with registration's specific "this email is already registered" error: login is a credential check, where a generic error closes off an oracle for identifying registered emails; registration is a self-service form where a genuine user needs to know why their signup didn't go through, and an email address isn't a secret the way a password is.
@@ -62,7 +62,7 @@ config := tango.Config{
 
 Both `register` and `login` accept a `next` query parameter/form value, validated against any same-origin path (not restricted to `/accounts/`, since accounts's login can be reached from protecting any page across your site) — an off-site or malformed `next` falls back to `/`.
 
-Both endpoints are CSRF-protected and rate-limited (a small per-IP, in-memory limiter — not distributed, no CAPTCHA, no configurable policy in v0.1).
+Both endpoints are CSRF-protected and rate-limited (a small per-IP, in-memory limiter — not distributed, no CAPTCHA, no configurable policy in v0.0.1).
 
 ## Protecting your own routes
 
@@ -88,7 +88,7 @@ if !ok {
 }
 ```
 
-`accounts.CurrentAccountID` returns just the `int64` ID if you don't need the full row. Both are thin, `Active`-aware sugar over `auth.CurrentUserID` — a plain function call your own Views use, not a route. There is no `/accounts/me/` page in v0.1; a real account-settings/profile page is its own feature surface, left to a later milestone.
+`accounts.CurrentAccountID` returns just the `int64` ID if you don't need the full row. Both are thin, `Active`-aware sugar over `auth.CurrentUserID` — a plain function call your own Views use, not a route. There is no `/accounts/me/` page in v0.0.1; a real account-settings/profile page is its own feature surface, left to a later milestone.
 
 ## Admin integration
 
@@ -102,7 +102,7 @@ registry.Admin().Register(accounts.Account{}, admin.Options{
 })
 ```
 
-Keep `PasswordHash` read-only (or omit it from `ListDisplay`/leave it out of any custom field ordering) — it should never be directly editable through the generic admin form. There is no `accounts`-specific CLI for managing accounts (no `tango accounts deactivate <email>`); once `Account` is registered with admin, the generic admin CRUD — including flipping `Active` — is the whole v0.1 operational story for managing accounts outside the web flow.
+Keep `PasswordHash` read-only (or omit it from `ListDisplay`/leave it out of any custom field ordering) — it should never be directly editable through the generic admin form. There is no `accounts`-specific CLI for managing accounts (no `tango accounts deactivate <email>`); once `Account` is registered with admin, the generic admin CRUD — including flipping `Active` — is the whole v0.0.1 operational story for managing accounts outside the web flow.
 
 ## Non-goals
 

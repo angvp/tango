@@ -10,7 +10,7 @@ Do not call decoded claims an Application session: sessions are persisted, revoc
 
 ## JWT signing key
 
-`auth/jwt.Key{ID, Secret}` is one HMAC key identified by `kid`. A service has one active key for issuing new tokens and a fixed set of retired verification-only keys. The active key is automatically included in the verification set. Rotation is manual across deployments; v0.1 has no JWKS, remote loading, or automatic rotation.
+`auth/jwt.Key{ID, Secret}` is one HMAC key identified by `kid`. A service has one active key for issuing new tokens and a fixed set of retired verification-only keys. The active key is automatically included in the verification set. Rotation is manual across deployments; v0.0.1 has no JWKS, remote loading, or automatic rotation.
 
 ## Room loop
 

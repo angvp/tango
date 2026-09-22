@@ -65,7 +65,7 @@ tanGO does not add a `Principal.Bot`/`Kind` field: the Hub orders and delivers i
 
 `Hub.Close(ctx)` is idempotent: it rejects further `Join`/`Dispatch`/`DispatchPeer` with `ErrClosed`, stops every room's pending timers, closes every live peer, and waits for every room loop to actually exit (or for `ctx` to be canceled, in which case it returns promptly with `ctx.Err()` while shutdown continues best-effort in the background). An operation already queued, or blocked trying to enqueue, at the moment `Close` began also resolves to `ErrClosed` — `ErrRoomNotFound` stays reserved for an actual room eviction, never Hub-wide shutdown.
 
-tanGO has no general application-lifecycle or graceful-shutdown mechanism today — `tango.Serve` is a bare `http.ListenAndServe` call, for every app, not just one using `realtime`. `Hub.Close` is therefore a plain method a host wires into its own shutdown path (an `http.Server` it manages itself, a signal handler, etc.) if it has one. There is no `tango.Serve`/`Config` integration in v0.1.
+tanGO has no general application-lifecycle or graceful-shutdown mechanism today — `tango.Serve` is a bare `http.ListenAndServe` call, for every app, not just one using `realtime`. `Hub.Close` is therefore a plain method a host wires into its own shutdown path (an `http.Server` it manages itself, a signal handler, etc.) if it has one. There is no `tango.Serve`/`Config` integration in v0.0.1.
 
 ## The WebSocket adapter
 

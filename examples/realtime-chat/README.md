@@ -29,6 +29,6 @@ go run .
 ```
 
 Deliberately out of scope for this example (and for `realtime` itself in
-v0.1): no persistence across a restart, no distributed/multi-process
+v0.0.1): no persistence across a restart, no distributed/multi-process
 rooms, and no chat history replay on join — `Logic.Snapshot` here is a
 static welcome message, not a message backlog.

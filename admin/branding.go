@@ -5,7 +5,7 @@ import "github.com/angvp/tango"
 // Branding lets an app replace admin's generic sidebar title with its own
 // name and logo — the only two named customization slots admin exposes
 // beyond field-level Widgets. This surface is best-effort, not a stable
-// v0.1 contract, and grants no access to any other part of admin's
+// v0.0.1 contract, and grants no access to any other part of admin's
 // layout/template.
 type Branding struct {
 	// Name replaces the sidebar's generic "tanGO Admin" title when set.

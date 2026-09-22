@@ -1,6 +1,6 @@
 # tanGO Agent Notes
 
-This file is best-effort guidance for coding agents working in tanGO projects. It is not a versioned or stable contract; tanGO is still a v0.1 framework and its public API is still settling.
+This file is best-effort guidance for coding agents working in tanGO projects. It is not a versioned or stable contract; tanGO is still a v0.0.1 framework and its public API is still settling.
 
 Use this as the universal contract, then use `docs/agents/` for task-specific recipes.
 

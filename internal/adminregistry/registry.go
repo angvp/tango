@@ -34,7 +34,7 @@ type Options struct {
 	FieldOrder []string
 	// Widgets overrides how a field renders and parses in create/edit
 	// forms, keyed by Go field name. See Widget — best-effort, not a
-	// stable v0.1 contract.
+	// stable v0.0.1 contract.
 	Widgets map[string]Widget
 }
 

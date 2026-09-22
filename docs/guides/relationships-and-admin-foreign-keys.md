@@ -1,6 +1,6 @@
 # Guide: relationships and admin foreign keys
 
-tanGO supports exactly one relationship shape in v0.1: a many-to-one **foreign key field**. No many-to-many, no reverse accessors, no automatic joins — see [limitations](../limitations.md) for the full boundary.
+tanGO supports exactly one relationship shape in v0.0.1: a many-to-one **foreign key field**. No many-to-many, no reverse accessors, no automatic joins — see [limitations](../limitations.md) for the full boundary.
 
 Together with the validation and cascade-delete behavior below, this is what tanGO calls its **minimal ORM foundations**: a small, deliberately bounded set of relationship-aware behavior across `model`, `db`, and `admin`. It is not a full ORM — there's no `QuerySet`, no lazy loading, no many-to-many, no reverse managers, no signals, no nested writes. See [where `Store` stops](#where-store-stops-and-raw-sql-begins) below for the boundary this implies.
 
@@ -69,7 +69,7 @@ registry.Admin().Register(Author{}, admin.Options{
 
 The same `Label` value is used for the related-object column on any list page that includes the FK field in `ListDisplay`. If the related model has no `Label` configured — or isn't admin-registered at all — every FK display falls back to the raw primary key value; this is never a hard error, so adding a foreign key never breaks an existing admin registration that hasn't gotten around to setting `Label` yet.
 
-Building the select and the related labels costs one query per related row shown (accepted for v0.1 — see [limitations](../limitations.md)).
+Building the select and the related labels costs one query per related row shown (accepted for v0.0.1 — see [limitations](../limitations.md)).
 
 ## Where `Store` stops and raw SQL begins
 

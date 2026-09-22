@@ -75,5 +75,5 @@ From here:
 - The [guides](../guides/) cover each topic (routing, models, persistence, migrations, admin, checks, dialects) independently, if you want depth on one without redoing this tutorial.
 - Two guides go beyond what this tutorial builds: [relationships and admin foreign keys](../guides/relationships-and-admin-foreign-keys.md) (giving `Post` an `AuthorID`-style foreign key, with cascade delete and FK-aware admin editing) and [reusable apps](../guides/reusable-apps.md) (packaging an app as its own importable Go package other projects can install).
 - Once this app's `views.go`/`models.go` start feeling crowded, [application architecture](../guides/application-architecture.md) covers the Medium and Hexagonal shapes to grow into — and, just as importantly, when to stay exactly as small as this tutorial leaves you.
-- The [API reference](../reference.md) documents the full supported v0.1 surface.
+- The [API reference](../reference.md) documents the full supported v0.0.1 surface.
 - [Limitations and compatibility](../limitations.md) is worth reading before using tanGO for anything beyond a small project.

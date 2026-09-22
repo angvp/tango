@@ -32,7 +32,7 @@ Combine them: `tango:"pk,unique"` is valid, though redundant (a primary key is a
 - `float32`, `float64`
 - `time.Time`
 
-Anything else — including an embedded/anonymous struct field — fails `Register` with a clear error identifying the offending field. There is no relationship support (foreign keys, joins) in v0.1; see [limitations](../limitations.md).
+Anything else — including an embedded/anonymous struct field — fails `Register` with a clear error identifying the offending field. There is no relationship support (foreign keys, joins) in v0.0.1; see [limitations](../limitations.md).
 
 ## Naming
 

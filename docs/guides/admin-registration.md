@@ -87,14 +87,14 @@ Admin routes require a valid session, established by logging in at `/admin/login
 
 Once a session is valid, one more check runs before a request reaches any admin route: `AdminUser.IsStaff`. An authenticated, active account with `IsStaff=false` gets `403 Forbidden` — distinct from the unauthenticated case above, which redirects to `/admin/login/` instead. A 403 rather than a redirect is deliberate: the account is genuinely logged in, and signing in again changes nothing, so a login redirect there would be actively misleading.
 
-`IsStaff` is the only flag with real effect in v0.1. `AdminUser` also has `IsSuperuser`, but it is currently ignored: it has no distinct behavior, and it does not bypass `IsStaff` — a non-staff account with `IsSuperuser=true` still gets `403 Forbidden`, exactly like any other non-staff account. It exists purely as forward-compatible groundwork for a future, finer-grained permission bypass, so that a later milestone doesn't force every existing tanGO project through a second migration to add one boolean column.
+`IsStaff` is the only flag with real effect in v0.0.1. `AdminUser` also has `IsSuperuser`, but it is currently ignored: it has no distinct behavior, and it does not bypass `IsStaff` — a non-staff account with `IsSuperuser=true` still gets `403 Forbidden`, exactly like any other non-staff account. It exists purely as forward-compatible groundwork for a future, finer-grained permission bypass, so that a later milestone doesn't force every existing tanGO project through a second migration to add one boolean column.
 
 Both flags default to `true`, for both new accounts and existing ones:
 
 - `tango admin create <username>` with no flags produces `IsStaff=true, IsSuperuser=true` — the same "immediately usable full admin account" behavior `create` has always had. Pass `--no-staff` and/or `--no-superuser` to opt out at creation time (`-tango-admin-no-staff`/`-tango-admin-no-superuser` at the app-side flag layer).
 - Upgrading an existing project to a tanGO version with these fields backfills every pre-existing `AdminUser` row to `IsStaff=true, IsSuperuser=true` — every account that could log in and use admin before the upgrade still can, unchanged.
 
-There is no per-model, named, or object-level permission in v0.1 — `IsStaff`/`IsSuperuser` are the only tiers, and there's no `Group`/`Role` model or admin-UI-driven account management; every change to these flags goes through the CLI verbs above. App-level "require a named permission" is out of scope for tanGO entirely: an application wanting role or permission checks on its own routes wraps its own view the same way [`auth.RequireLogin`](application-auth.md#protecting-routes) does, against its own User model — tanGO owns no app-level User model to hang a generic primitive on.
+There is no per-model, named, or object-level permission in v0.0.1 — `IsStaff`/`IsSuperuser` are the only tiers, and there's no `Group`/`Role` model or admin-UI-driven account management; every change to these flags goes through the CLI verbs above. App-level "require a named permission" is out of scope for tanGO entirely: an application wanting role or permission checks on its own routes wraps its own view the same way [`auth.RequireLogin`](application-auth.md#protecting-routes) does, against its own User model — tanGO owns no app-level User model to hang a generic primitive on.
 
 ## Routes
 
@@ -132,7 +132,7 @@ For a field tagged as a foreign key, the admin renders a `<select>` populated fr
 
 For example, if `Book.AuthorID` is tagged `tango:"fk=Author"` and both `Book` and `Author` are admin-registered, the `Book` form gets a `+` beside the `Author` select. This is intentionally create-only: there is no edit link for the selected related object, no delete/remove action, no autocomplete, no many-to-many editing, and no inline formset support.
 
-This is a full-page navigation, not a popup. Any unsaved changes in the parent form are lost when you click `+`; save the parent object first if you need to preserve those values. That trade-off is deliberate for v0.1 so the feature stays small and predictable.
+This is a full-page navigation, not a popup. Any unsaved changes in the parent form are lost when you click `+`; save the parent object first if you need to preserve those values. That trade-off is deliberate for v0.0.1 so the feature stays small and predictable.
 
 ## List page display
 
@@ -198,4 +198,4 @@ Omit it — `admin.New(store)` with no options — and the sidebar shows tanGO's
 
 ## Stability
 
-`Widget`, the `Options` fields this section and the one above describe, the built-in widgets, and `Branding` are **best-effort**, not one of tanGO's [stable v0.1 contracts](../limitations.md#stable-v01-cli-app-side-flags): admin's internals are still expected to evolve, and this surface may change without the advance-notice process those contracts get. This is different from `docs/limitations.md`'s "APIs still expected to change before a stable release" — that section names things expected to *settle* before v0.1 ships; this surface is expected to keep evolving even after.
+`Widget`, the `Options` fields this section and the one above describe, the built-in widgets, and `Branding` are **best-effort**, not one of tanGO's [stable v0.0.1 contracts](../limitations.md#stable-v001-cli-app-side-flags): admin's internals are still expected to evolve, and this surface may change without the advance-notice process those contracts get. This is different from `docs/limitations.md`'s "APIs still expected to change before a stable release" — that section names things expected to *settle* before v0.0.1 ships; this surface is expected to keep evolving even after.

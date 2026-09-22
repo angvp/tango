@@ -10,7 +10,7 @@ import (
 // registerTemplate is deliberately minimal, plain HTML — this milestone
 // proves the flow works, not tanGO's public-site design language. A real
 // project is expected to replace or skin it immediately; there is no
-// template-override hook in v0.1 (write your own view instead).
+// template-override hook in v0.0.1 (write your own view instead).
 var registerTemplate = template.Must(template.New("register").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Register</title></head>

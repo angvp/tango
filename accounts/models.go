@@ -7,7 +7,7 @@ import (
 )
 
 // Account is the accounts app's own Application user model — a plain
-// identity, credential, activity state, and timestamp. v0.1 deliberately
+// identity, credential, activity state, and timestamp. v0.0.1 deliberately
 // ships no permission-shaped field (no IsStaff, Role, Group, or
 // Permission): an app wanting roles or permissions writes its own View
 // wrapper against its own domain data, including Account itself if this

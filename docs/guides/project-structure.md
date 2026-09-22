@@ -20,7 +20,7 @@
   - `-tango-admin-create` / `-resetpassword` / `-deactivate` — manage Admin accounts (behind `tango admin create/resetpassword/deactivate`), then exit.
   - No flag — start the HTTP server.
 
-  Every one of these is plain Go you can read top to bottom in `main.go`; `DispatchFlags` only centralizes the repeated flag behavior. These flag names and their JSON/exit-code expectations are a stable v0.1 contract — see [limitations and compatibility](../limitations.md#stable-v01-cli-app-side-flags).
+  Every one of these is plain Go you can read top to bottom in `main.go`; `DispatchFlags` only centralizes the repeated flag behavior. These flag names and their JSON/exit-code expectations are a stable v0.0.1 contract — see [limitations and compatibility](../limitations.md#stable-v001-cli-app-side-flags).
 - **`migrations/migrations.go`** — starts as an empty `var Migrations = []migration.Migration{}`. `tango makemigrations` regenerates this file's `Migrations` slice every time it runs, aggregating every migration file in the directory — see the [migrations guide](migrations.md).
 
 Useful scaffold options:

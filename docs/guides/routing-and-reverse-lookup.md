@@ -52,7 +52,7 @@ Composition order is always outer to inner:
 Config.Middleware -> Include WithMiddleware -> Path Use -> View
 ```
 
-`tango.Recoverer()` is the only built-in middleware in v0.1. It is opt-in, catches downstream panics, logs them server-side, and returns the same generic JSON `500` response shape tanGO uses when a View returns an error.
+`tango.Recoverer()` is the only built-in middleware in v0.0.1. It is opt-in, catches downstream panics, logs them server-side, and returns the same generic JSON `500` response shape tanGO uses when a View returns an error.
 
 A **View wrapper** is different: it is a `func(tango.View) tango.View` that runs after `*tango.Context` exists. Use View wrappers for Context-aware behavior such as auth, permissions, current-user lookup, redirects, and admin session checks. `auth.RequireLogin(...)` is a View wrapper, not middleware. Middleware and View wrappers permanently coexist; neither replaces the other.
 
@@ -74,4 +74,4 @@ url, err := reverser.Reverse("posts:detail", tango.Params{"id": "42"})
 
 ## Error handling
 
-A view returning a non-nil error results in a fixed 500 response with a generic JSON body; the underlying error is logged server-side but never sent to the client. There's no per-route custom error-handling hook in v0.1 — return a JSON error body yourself (via `ctx.JSON`) for anything a client needs to see.
+A view returning a non-nil error results in a fixed 500 response with a generic JSON body; the underlying error is logged server-side but never sent to the client. There's no per-route custom error-handling hook in v0.0.1 — return a JSON error body yourself (via `ctx.JSON`) for anything a client needs to see.

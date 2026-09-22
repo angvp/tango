@@ -1,24 +1,24 @@
 # Limitations and compatibility
 
-tanGO is a v0.1 candidate. This page is the honest summary of where it stops, so you can decide whether that's fine for your project before investing in it.
+tanGO is a v0.0.1 candidate. This page is the honest summary of where it stops, so you can decide whether that's fine for your project before investing in it.
 
-## Non-goals for v0.1
+## Non-goals for v0.0.1
 
 - **Only one relationship shape: many-to-one foreign keys.** A field like `AuthorID int64 \`tango:"fk=Author"\`` is the whole contract — see [relationships and admin foreign keys](guides/relationships-and-admin-foreign-keys.md), which together with schema validation, referential-integrity validation, and cascade delete makes up what tanGO calls its **minimal ORM foundations**: deliberately not a full ORM. No many-to-many, no reverse accessors (`author.Posts`), no eager/lazy loading, no automatic joins. If you need any of those, write the SQL yourself via `Store.Query`/`QueryRow` — see [where `Store` stops](guides/relationships-and-admin-foreign-keys.md#where-store-stops-and-raw-sql-begins).
 - **Composite unique/index constraints aren't supported.** A field's `tango:"unique"`/`tango:"index"` tag always describes that one column alone; there is no equivalent of Django's `unique_together` (a composite constraint spanning multiple fields) yet. This is a deliberate gap, not an oversight — if it's designed later, it will be a separate, non-tag, registration-time mechanism, Django-inspired in spirit but not an extension of the `fk=`/`unique`/`index` tag grammar.
-- **Admin's foreign key select has no raw-SQL escape hatch.** Rendering an FK `<select>` or a related-object label runs one query per row (N+1) — acceptable for v0.1's admin (already a non-optimized internal tool), but there's no way yet to hand-optimize a specific list page with a custom join.
-- **Admin extensibility stops well short of Django admin.** `admin.Widget`, the `Options` presentation fields, and `admin.WithBranding` (see [admin registration](guides/admin-registration.md)) cover per-field customization and two branding slots — deliberately not inlines, admin actions, permission matrices, custom querysets, custom changelist views, or full `ModelAdmin`-style subclassing. None of those are planned for v0.1; each would be its own future milestone if ever built.
+- **Admin's foreign key select has no raw-SQL escape hatch.** Rendering an FK `<select>` or a related-object label runs one query per row (N+1) — acceptable for v0.0.1's admin (already a non-optimized internal tool), but there's no way yet to hand-optimize a specific list page with a custom join.
+- **Admin extensibility stops well short of Django admin.** `admin.Widget`, the `Options` presentation fields, and `admin.WithBranding` (see [admin registration](guides/admin-registration.md)) cover per-field customization and two branding slots — deliberately not inlines, admin actions, permission matrices, custom querysets, custom changelist views, or full `ModelAdmin`-style subclassing. None of those are planned for v0.0.1; each would be its own future milestone if ever built.
 - **Contributed migrations require explicit concatenation, not automatic discovery.** A reusable app can ship its own `Migrations` var, generated with a throwaway harness inside its own repo; the host project's `main.go` must explicitly concatenate it with the host's own `migrations.Migrations` before calling `DispatchFlags`/`ApplyPending`/`RollbackLast` — tanGO never scans installed apps for migrations on its own. See [reusable apps](guides/reusable-apps.md).
 - **No rename or type-change migration steps.** A field rename or type change shows up in a generated migration as a drop-and-add, because model metadata doesn't yet track field identity across a rename.
 - **`tango shell` is not implemented.** Its direction (a Yaegi-based Go interpreter, not a subprocess-per-command or a debugger) is decided, but the command itself isn't built yet.
-- **No generated documentation site.** Docs are repository Markdown plus generated Go package docs (`go doc`, pkg.go.dev). No Docusaurus/Hugo/mkdocs site for v0.1.
+- **No generated documentation site.** Docs are repository Markdown plus generated Go package docs (`go doc`, pkg.go.dev). No Docusaurus/Hugo/mkdocs site for v0.0.1.
 - **No `tango newproject`/`newapp` interactive wizard.** Both are non-interactive, single-shot scaffolding commands; there's no guided multi-step prompt flow.
 
 ## Security boundaries
 
 - **Admin has a real session-cookie login, bcrypt-hashed accounts, CSRF protection on every form, and rate-limited login attempts** — but it is still an internal-tool admin, not a full production auth system. There's no account lockout (only rate limiting), no idle timeout or "remember me" (sessions have a fixed lifetime from login), no password reset via email, and no admin-UI account management (`tango admin create/resetpassword/deactivate` is CLI-only, by design — see [admin registration](guides/admin-registration.md)). It's suitable for a trusted, low-traffic internal tool behind TLS — not a public-facing admin panel; tanGO provides no network-layer protection of its own.
-- **The login rate limiter is in-memory and per-process.** It resets on restart and isn't shared across multiple server instances behind a load balancer — a real but bounded gap for a single-process v0.1 admin tool. The same limiter, and the same bound, protects the optional `accounts` app's login and registration endpoints.
-- **`accounts` (the optional first-party register/login/logout app) has no password-reset email flow and no email-verification/confirmation step at signup** — a freshly registered account is usable immediately, with no mail milestone yet to gate on. There's no dedicated CLI for managing accounts either; the generic admin CRUD is the whole v0.1 operational story, once you've manually registered `Account` with `admin` — see [the accounts guide](guides/accounts.md).
+- **The login rate limiter is in-memory and per-process.** It resets on restart and isn't shared across multiple server instances behind a load balancer — a real but bounded gap for a single-process v0.0.1 admin tool. The same limiter, and the same bound, protects the optional `accounts` app's login and registration endpoints.
+- **`accounts` (the optional first-party register/login/logout app) has no password-reset email flow and no email-verification/confirmation step at signup** — a freshly registered account is usable immediately, with no mail milestone yet to gate on. There's no dedicated CLI for managing accounts either; the generic admin CRUD is the whole v0.0.1 operational story, once you've manually registered `Account` with `admin` — see [the accounts guide](guides/accounts.md).
 - **JWT access tokens are stateless and cannot be revoked before expiry.** `auth/jwt` performs no database lookup, blacklist check, or account-status check during verification. There are no refresh tokens. Choose database-backed cookie sessions when immediate logout or deactivation must invalidate credentials; otherwise keep JWT lifetimes short and treat expiry as the only containment mechanism. See [JWT authentication](guides/jwt-auth.md).
 - **JWT support is HS256-only with manual, fixed-set key rotation.** There is no RS256/ES256, JWKS, external identity-provider verification, automatic rotation, or remote key loading. A deployment explicitly supplies one active signing key and any retired verification-only keys.
 - **Query-string JWTs can leak through infrastructure logs.** `jwt.QueryToken` exists for transports that genuinely cannot send an `Authorization` header, but URLs may appear in browser history and server or proxy access logs. Prefer `jwt.BearerToken` whenever possible.
@@ -37,9 +37,9 @@ See the [SQLite/PostgreSQL setup guide](guides/sqlite-and-postgresql-setup.md) f
 
 A migration containing `DropColumn` or `DropTable` is marked irreversible. `tango migrate down` on one fails explicitly with a clear error rather than attempting to restore data it has no way to recover. If you need to test a rollback path, do it in a disposable database before applying the same migration to data you care about.
 
-## Stable v0.1 CLI app-side flags
+## Stable v0.0.1 CLI app-side flags
 
-The generated `main.go` flag-dispatch convention is a stable v0.1 contract:
+The generated `main.go` flag-dispatch convention is a stable v0.0.1 contract:
 
 - `-check` validates registration, route compilation, and app-contributed checks, then exits non-zero on failure.
 - `-tango-dump-models` prints registered model metadata as JSON for `tango makemigrations`.
@@ -57,7 +57,7 @@ Future breaking changes to these flag names, JSON shapes, or exit-code expectati
 
 ## Best-effort admin extensibility
 
-`admin.Widget`, the `admin.Options` fields it and `Labels`/`HelpText`/`ReadOnly`/`FieldOrder` live in, the built-in widgets, and `admin.Branding`/`admin.WithBranding` are **best-effort**, not one of the [stable v0.1 CLI app-side flags](#stable-v01-cli-app-side-flags) above. This is a different, narrower promise than "APIs still expected to change before a stable release" just above: that section names things expected to *settle* before v0.1 ships. This admin-extensibility surface is expected to keep evolving even after v0.1, because admin's internals — its rendering, its default field behaviors, its theme — aren't finished settling and are likely to keep changing as real usage surfaces gaps. Breaking changes here may land without the advance-notice process the stable CLI flags get.
+`admin.Widget`, the `admin.Options` fields it and `Labels`/`HelpText`/`ReadOnly`/`FieldOrder` live in, the built-in widgets, and `admin.Branding`/`admin.WithBranding` are **best-effort**, not one of the [stable v0.0.1 CLI app-side flags](#stable-v001-cli-app-side-flags) above. This is a different, narrower promise than "APIs still expected to change before a stable release" just above: that section names things expected to *settle* before v0.0.1 ships. This admin-extensibility surface is expected to keep evolving even after v0.0.1, because admin's internals — its rendering, its default field behaviors, its theme — aren't finished settling and are likely to keep changing as real usage surfaces gaps. Breaking changes here may land without the advance-notice process the stable CLI flags get.
 
 ## Test coverage
 

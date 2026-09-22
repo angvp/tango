@@ -70,7 +70,7 @@ type FieldValues interface {
 // Widgets, set via Options.Widgets like any custom one.
 //
 // This interface, tanGO's built-in widgets, and Options' Widgets/Labels/
-// HelpText/ReadOnly/FieldOrder fields are best-effort, not a stable v0.1
+// HelpText/ReadOnly/FieldOrder fields are best-effort, not a stable v0.0.1
 // contract — see docs/limitations.md. A widget's
 // Render output may include its own <link>/<script> tags for CSS/JS
 // (served via its owning app's own embed.FS route, per the convention

@@ -45,7 +45,7 @@ This is a deliberate boundary, not an oversight: tanGO's model registry does not
 
 - Give exported model types names that are unlikely to collide across independently-authored packages — prefer a descriptive, package-specific name (`WidgetOrder`) over a generic one (`Order`) if the package is meant to be installed alongside other reusable apps.
 - Routes don't have this problem today: `Include(prefix, routes)` already namespaces every named route under `prefix`'s trimmed form (e.g. `Include("/widgets/", ...)` combined with `tango.Name("list")` yields the fully-qualified route name `"widgets:list"`), so two reusable apps using distinct URL prefixes never collide on route names, even if their view names are similar.
-- If a genuine collision boundary matters for your project (e.g. installing two apps you don't control the naming of), the accepted mitigation for v0.1 is choosing different type names before installing both — not a registry-level workaround.
+- If a genuine collision boundary matters for your project (e.g. installing two apps you don't control the naming of), the accepted mitigation for v0.0.1 is choosing different type names before installing both — not a registry-level workaround.
 
 ## Contributed migrations
 

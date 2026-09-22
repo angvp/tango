@@ -4,7 +4,7 @@
 
 tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics but built from plain Go structs and interfaces — no code generation, no reflection-heavy magic beyond what's needed to read your model tags, and no hidden configuration.
 
-**Status: v0.1 candidate.** The public API is still settling. Behavior described in this README and the linked docs reflects what's implemented today; anything explicitly marked "planned" or "future" is not yet built. See [Limitations and compatibility](docs/limitations.md) before depending on tanGO for anything beyond experimentation.
+**Status: v0.0.1 candidate.** The public API is still settling. Behavior described in this README and the linked docs reflects what's implemented today; anything explicitly marked "planned" or "future" is not yet built. See [Limitations and compatibility](docs/limitations.md) before depending on tanGO for anything beyond experimentation.
 
 ## What you get
 
@@ -67,9 +67,9 @@ curl http://localhost:8000/greetings/World/
 
 - **[Tutorial](docs/tutorial/01-bootstrap-routing-json.md)** — build one small application from scratch: bootstrap, routing, JSON views, persistence, migrations, and the HTML admin.
 - **[Guides](docs/guides/)** — standalone, task-oriented references: project structure, application architecture, configuration, models and tags, routing, `Context`, persistence, migrations, admin, app checks, dialect setup, reusable apps, and relationships/admin foreign keys.
-- **[API reference](docs/reference.md)** — the supported v0.1 public surface, linked to runnable examples. Generated package docs are also available via `go doc` or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published.
+- **[API reference](docs/reference.md)** — the supported v0.0.1 public surface, linked to runnable examples. Generated package docs are also available via `go doc` or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published.
 - **[Examples](examples/)** — `jsonapi` (JSON-only); `api-with-admin` (JSON API and HTML admin sharing the same models, including an `AuthorID`-style foreign key with FK-backed admin editing); `notes-starter` (a keepable starter-style app using the reduced `main.go` shape); and `reusable-greetings`/`reusable-greetings-host` (a reusable tanGO app and a host project installing it, demonstrating contributed migrations and app-owned static assets).
-- **[Limitations and compatibility](docs/limitations.md)** — v0.1 non-goals, security boundaries, dialect differences, and APIs still expected to change.
+- **[Limitations and compatibility](docs/limitations.md)** — v0.0.1 non-goals, security boundaries, dialect differences, and APIs still expected to change.
 
 ## Verifying the docs
 

@@ -166,7 +166,7 @@ func (r *Registry) All() []ModelMeta {
 }
 
 // supportedFieldType reports whether t is a kind the metadata layer can
-// describe in v0.1: string, bool, any integer/float kind, or time.Time as
+// describe in v0.0.1: string, bool, any integer/float kind, or time.Time as
 // the sole named-struct exception.
 func supportedFieldType(t reflect.Type) bool {
 	switch t.Kind() {

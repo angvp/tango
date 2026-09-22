@@ -1,6 +1,6 @@
 # Guide: configuration
 
-tanGO's configuration surface is deliberately small for v0.1:
+tanGO's configuration surface is deliberately small for v0.0.1:
 
 ```go
 type Config struct {

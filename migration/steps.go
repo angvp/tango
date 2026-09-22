@@ -8,7 +8,7 @@ type Step interface {
 }
 
 // Column describes the SQL-relevant shape of one table column. It is exported
-// for generated migration files and CLI diffing, not as a hand-authored v0.1
+// for generated migration files and CLI diffing, not as a hand-authored v0.0.1
 // application API.
 type Column struct {
 	Name       string

@@ -22,7 +22,7 @@ func New(store *db.Store) tango.App { return App{store: store} }
 ## Don't
 
 - Do not scan for reusable apps.
-- Do not load plugins dynamically for v0.1 behavior.
+- Do not load plugins dynamically for v0.0.1 behavior.
 - Do not copy reusable app internals into the host project.
 - Do not import host project packages from the reusable app.
 

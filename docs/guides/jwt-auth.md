@@ -66,7 +66,7 @@ The active key is automatically part of the verification set; do not duplicate i
 - HS256 only: no RS256, ES256, JWKS, or external identity-provider verification.
 - No refresh tokens or automatic refresh rotation.
 - No blacklist or revocation store; expiry is the only containment mechanism.
-- No custom claims in v0.1; look up application data using `Claims.Subject` when needed.
+- No custom claims in v0.0.1; look up application data using `Claims.Subject` when needed.
 - No automatic or remote key rotation.
 
 See [limitations](../limitations.md) for the security trade-offs.
