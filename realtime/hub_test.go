@@ -319,7 +319,12 @@ func TestJoinFailsCleanlyWhenSnapshotErrors(t *testing.T) {
 
 func TestDispatchReturnsLogicError(t *testing.T) {
 	wantErr := errors.New("rejected")
-	logic := &recordingLogic{handle: func(*RoomContext, Event) error { return wantErr }}
+	logic := &recordingLogic{handle: func(_ *RoomContext, ev Event) error {
+		if ev.Kind == EventAction {
+			return wantErr
+		}
+		return nil
+	}}
 	hub, _ := newTestHub(t, func(string) Logic { return logic }, Options{})
 	ctx := context.Background()
 

@@ -237,24 +237,29 @@ func (r *room) handleJoin(op roomOp) {
 	r.cancelEviction()
 
 	r.deliver(userID, m, snapshot)
-	op.reply <- nil
 
-	_ = r.logic.Handle(rc, Event{Kind: EventJoin, RoomID: r.id, Principal: op.principal})
+	// Join does not return until EventJoin has been handled: membership and
+	// the snapshot delivery above are never rolled back on a Handle error
+	// (see Logic's doc comment on Dispatch's identical no-rollback rule) —
+	// Join simply surfaces that error to the caller once Handle is done.
+	err = r.logic.Handle(rc, Event{Kind: EventJoin, RoomID: r.id, Principal: op.principal})
+	op.reply <- err
 }
 
 func (r *room) handleLeave(op roomOp) {
 	userID := op.principal.UserID
 	existing, ok := r.members[userID]
 	if !ok || !peerEqual(existing.peer, op.peer) {
-		// Stale (already-replaced) or unknown leave: idempotent no-op.
+		// Stale (already-replaced) or unknown leave: idempotent no-op. No
+		// EventLeave is emitted for it.
 		op.reply <- nil
 		return
 	}
 	r.closeMember(userID, existing)
-	op.reply <- nil
 
 	rc := &RoomContext{room: r}
-	_ = r.logic.Handle(rc, Event{Kind: EventLeave, RoomID: r.id, Principal: op.principal})
+	err := r.logic.Handle(rc, Event{Kind: EventLeave, RoomID: r.id, Principal: op.principal})
+	op.reply <- err
 }
 
 func (r *room) handleDispatch(op roomOp) {
