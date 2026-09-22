@@ -96,7 +96,7 @@ See [JWT authentication](guides/jwt-auth.md) and the runnable [`examples/jwt-api
 
 | Symbol | What it's for |
 |---|---|
-| `type Principal struct{ UserID string }`, `type Peer interface{ Send(context.Context, []byte) error; Close() error }` | The stable actor identity and one live, replaceable transport connection for it. `Peer` implementations must be comparable (a pointer type); `Join` rejects a nil or non-comparable `Peer` with `ErrInvalidPeer`. |
+| `type Principal struct{ UserID string }`, `type Peer interface{ Send(context.Context, []byte) error; Close() error }` | The stable actor identity and one live, replaceable transport connection for it. `Peer` implementations must be comparable (a pointer type); `Join` rejects a nil interface, a typed-nil pointer inside a non-nil `Peer` interface, or a non-comparable dynamic type, all with `ErrInvalidPeer`. |
 | `type EventKind`, `type Event struct{ Kind EventKind; RoomID string; Principal Principal; Timer string; Payload []byte }` | `EventAction`/`EventTimer`/`EventJoin`/`EventLeave`. `Payload` is opaque — never parsed by `realtime` itself, and always copied before outbound delivery, so mutating a caller's buffer after `Dispatch`/`DispatchPeer` returns is safe. |
 | `type Logic interface{ Handle(*RoomContext, Event) error; Snapshot(*RoomContext, Principal) ([]byte, error) }`, `type Factory func(roomID string) Logic` | Host-supplied domain behavior for one room; one `Hub` always uses the same `Factory`. |
 | `type RoomContext` with `Broadcast`, `BroadcastExcept(userID string, ...)`, `SendUser(userID string, ...)`, `ResetTimer(name string, duration time.Duration) error` | Valid only inside one `Handle`/`Snapshot` call, on that room's own event-loop goroutine. |
@@ -116,7 +116,7 @@ See [realtime and WebSockets](guides/realtime-websockets.md), [ADR 0028](adr/002
 | Symbol | What it's for |
 |---|---|
 | `type Authenticate func(*http.Request) (realtime.Principal, error)` | Resolves the requesting `Principal` before any WebSocket upgrade is attempted; a failure never touches the handshake. |
-| `func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error)) tango.View` | Mount as an ordinary route. Blocks on `coordinator.Join` before starting the read loop; dispatches every inbound message through `coordinator.DispatchPeer`, carrying its own connection, never the unrestricted `Hub.Dispatch`; calls `Leave` exactly once when the connection ends. |
+| `func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error)) tango.View` | Mount as an ordinary route. Blocks on `coordinator.Join` before starting the read loop; dispatches every inbound message through `coordinator.DispatchPeer`, carrying its own connection, never the unrestricted `Hub.Dispatch`; calls `Leave` exactly once when the connection ends, including a best-effort `Leave` after a failed `Join` (which has no rollback and can leave membership installed). |
 | `DefaultMaxMessageSize` | 32 KiB inbound message cap; an oversized frame closes the connection rather than being buffered. |
 
 Wraps `github.com/coder/websocket`; no third-party type appears in this package's own public API. See [realtime and WebSockets](guides/realtime-websockets.md).
