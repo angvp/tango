@@ -65,7 +65,16 @@ tanGO does not add a `Principal.Bot`/`Kind` field: the Hub orders and delivers i
 
 `Hub.Close(ctx)` is idempotent: it rejects further `Join`/`Dispatch`/`DispatchPeer` with `ErrClosed`, stops every room's pending timers, closes every live peer, and waits for every room loop to actually exit (or for `ctx` to be canceled, in which case it returns promptly with `ctx.Err()` while shutdown continues best-effort in the background). An operation already queued, or blocked trying to enqueue, at the moment `Close` began also resolves to `ErrClosed` — `ErrRoomNotFound` stays reserved for an actual room eviction, never Hub-wide shutdown.
 
-tanGO has no general application-lifecycle or graceful-shutdown mechanism today — `tango.Serve` is a bare `http.ListenAndServe` call, for every app, not just one using `realtime`. `Hub.Close` is therefore a plain method a host wires into its own shutdown path (an `http.Server` it manages itself, a signal handler, etc.) if it has one. There is no `tango.Serve`/`Config` integration in v0.0.1.
+`Hub.Close` integrates with `tango.ServeContext` by registering it as a `Lifecycle`'s `Stop`:
+
+```go
+registry.RegisterLifecycle(tango.Lifecycle{
+    Name: "chat-hub",
+    Stop: hub.Close,
+})
+```
+
+then calling `tango.ServeContext` (not `tango.Serve`) with a caller-cancelable context, typically built with `signal.NotifyContext`. See [application lifecycle](application-lifecycle.md) and `examples/realtime-chat`, which wires this exact pattern.
 
 ## The WebSocket adapter
 
@@ -96,6 +105,5 @@ registry.Routes().Include("/", tango.URLs{
 - No persistence or replay of room state across a restart or past a room's eviction.
 - No automatic game rules, bot AI, or matchmaking — `Logic` is entirely host-written.
 - No configurable backpressure policy beyond "close the slow peer."
-- No `tango.Serve` shutdown integration; `Hub.Close` must be wired manually.
 
 See [limitations](../limitations.md) for the full list and the numeric defaults.

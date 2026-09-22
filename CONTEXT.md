@@ -47,3 +47,21 @@ Do not call this a Result or Verdict: say Decision specifically when meaning `ra
 A `ratelimit.KeyFunc`, a caller-supplied `func(*http.Request) (string, error)` that produces the string a `Limiter` buckets by. `ratelimit` ships one default, `RemoteIPKey`, but never imports `auth`/`auth/jwt`/`accounts` itself — a host wanting to key on identity rather than IP writes its own. An extractor's error is distinct from a rejected Decision: `Middleware` routes it to `ErrorHandler`, never `LimitedHandler` — an extraction failure is not the same fact as "this caller is over budget."
 
 Do not conflate an extractor error with a limited/rejected request: they go to different handlers for a reason.
+
+## Lifecycle component
+
+One `tango.Lifecycle{Name, Start, Stop}` registered via `Registry.RegisterLifecycle`, explicitly, inside an `App`'s `Register` callback — never started implicitly by registering it. `Start`/`Stop` are each independently optional (nil means no-op for that phase), but at least one must be set and `Name` must be non-empty; `RegisterLifecycle` rejects violations rather than normalizing them. Distinct from Checker (an optional-interface, one-per-App, metadata-only pattern) — see [ADR 0030](docs/adr/0030-lifecycle-is-explicit-registry-registration-not-an-optional-app-interface.md) for why Lifecycle deliberately isn't shaped the same way.
+
+Do not conflate this with App: an App may register zero, one, or several Lifecycle components, they are not the same thing. Do not conflate it with Checker either: a different, narrower, implicit-interface mechanism.
+
+## Application context
+
+The long-lived `context.Context` `tango.ServeContext` passes to every `Lifecycle.Start`, and that a component may retain for its own background goroutines. Deliberately not a direct child of the caller's context passed to `ServeContext` — built via `context.WithoutCancel` plus `ServeContext`'s own cancellation, so component work isn't torn down the instant the caller triggers shutdown, only once HTTP draining has actually finished. See [ADR 0031](docs/adr/0031-shutdown-uses-two-independent-phase-timeouts-and-a-decoupled-application-context.md).
+
+Do not conflate this with Shutdown context: a different, second, phase-scoped context. Do not conflate it with the caller's own `ctx` either: a distinct value `ServeContext` deliberately decouples cancellation from.
+
+## Shutdown context
+
+A fresh, timeout-bounded `context.Context` (per `WithShutdownTimeout`, default 15s) that `tango.ServeContext` creates independently for each shutdown phase — one for `http.Server.Shutdown`'s drain, a separate one later for every `Lifecycle.Stop` call — never derived from the by-then-canceled Application context. Two independent budgets, not one shared remainder: a graceful shutdown may take up to roughly twice the configured timeout in the worst case.
+
+Do not conflate this with Application context: the long-lived Start-time context, never the same value as a Shutdown context, which is short-lived and created fresh per phase. Do not assume one shutdown timeout covers the whole sequence — it covers one phase at a time.

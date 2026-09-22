@@ -11,7 +11,7 @@ Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/realtime-
 - Use `BroadcastExcept` for join notices — `EventJoin` fires after membership is installed, so a plain `Broadcast` would notify the joiner about their own join.
 - Validate an action fully before calling `Broadcast`/`SendUser`/`ResetTimer` — there is no rollback if `Handle` returns an error afterward.
 - Mount `realtime/websocket.View(hub, authenticate, roomID)` as an ordinary route; write your own `Authenticate` (may call `auth/jwt.Service.Verify` directly, a cookie session, or anything else). `View` dispatches every inbound message through `Hub.DispatchPeer`, never `Hub.Dispatch` — that's what makes a replaced or overflow-removed connection unable to keep acting. If you write your own adapter instead of using `View`, always call `Leave` after a failed `Join` too — `Join` has no rollback, so an `EventJoin` handler error can leave membership installed with no connection left to remove it.
-- Wire `Hub.Close(ctx)` into your own shutdown path if you have one — `tango.Serve` has no built-in graceful shutdown.
+- Register `Hub.Close` as a `Lifecycle`'s `Stop` (`registry.RegisterLifecycle(tango.Lifecycle{Name: "...", Stop: hub.Close})`) and call `tango.ServeContext`, not `tango.Serve`, for graceful shutdown — see `docs/agents/application-lifecycle.md`.
 
 ## Choose The Room Model
 
@@ -26,7 +26,7 @@ Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/realtime-
 - Do not add a `Principal.Bot`/`Kind` field — the Hub behaves identically regardless of actor; distinguish in your own `Logic` if you need to.
 - Do not expect `Join`/`Leave`/`Dispatch`/`DispatchPeer` to return before the room loop has actually applied them (including running `Logic.Handle` for `Join`/`Leave`'s own `EventJoin`/`EventLeave`) — they are synchronous by design, not fire-and-forget.
 - Do not assume a failed `Join` means nothing happened — membership and any snapshot delivery it already applied stay applied; call `Leave` to clean up (see `realtime/websocket.View`'s own pattern).
-- Do not assume `Hub.Close` integrates with `tango.Serve`/`Config` — it does not, in v0.0.1.
+- Do not assume `Hub.Close` integrates automatically with `tango.Serve`/`ServeContext` — you must explicitly register it via `RegisterLifecycle`.
 - Do not rely on `realtime` for persistence, replay, or distributed/multi-process rooms — single-process, in-memory only.
 
 ## Check
