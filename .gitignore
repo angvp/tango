@@ -2,3 +2,4 @@
 /examples/*/app.db
 /coverage.out
 /junit.xml
+/examples/jwt-api/jwt-api
