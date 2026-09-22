@@ -15,15 +15,18 @@ const (
 	opSendUser
 	opEvictCheck
 	opTimerExpiry
+	opPeerSendFailed
 )
 
 // roomOp is one unit of work submitted to a room's inbox. reply is nil for
-// internally-produced ops (eviction checks, timer expiry), which have no
-// caller waiting on a result.
+// internally-produced ops (eviction checks, timer expiry, a writer
+// goroutine reporting a failed Send), which have no caller waiting on a
+// result.
 type roomOp struct {
 	kind      opKind
 	principal Principal
 	peer      Peer
+	member    *member // set only for opPeerSendFailed
 	event     Event
 	payload   []byte
 	evictGen  uint64
@@ -32,6 +35,7 @@ type roomOp struct {
 }
 
 type member struct {
+	userID string
 	peer   Peer
 	queue  chan []byte
 	cancel context.CancelFunc
@@ -209,6 +213,8 @@ func (r *room) process(op roomOp) {
 		r.handleEvictCheck(op)
 	case opTimerExpiry:
 		r.handleTimerExpiry(op)
+	case opPeerSendFailed:
+		r.handlePeerSendFailed(op)
 	}
 }
 
@@ -225,9 +231,9 @@ func (r *room) handleJoin(op roomOp) {
 		r.closeMember(userID, existing)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &member{peer: op.peer, queue: make(chan []byte, r.hub.opts.PeerQueue), cancel: cancel}
+	m := &member{userID: userID, peer: op.peer, queue: make(chan []byte, r.hub.opts.PeerQueue), cancel: cancel}
 	r.members[userID] = m
-	go runPeerWriter(ctx, m)
+	go runPeerWriter(ctx, r, m)
 	r.cancelEviction()
 
 	r.deliver(userID, m, snapshot)
@@ -272,6 +278,16 @@ func (r *room) handleDispatchPeer(op roomOp) {
 func (r *room) handleSendUser(op roomOp) {
 	r.sendUser(op.principal.UserID, op.payload)
 	op.reply <- nil
+}
+
+// handlePeerSendFailed removes exactly the member generation that reported
+// a failed Peer.Send, via runPeerWriter's opPeerSendFailed. It reuses
+// closeMember's existing pointer-identity check (current membership's
+// *member must still be op.member), so a late failure from a connection
+// already superseded by a later Join is a safe no-op that never touches the
+// replacement — the same guarantee closeMember already gives Leave.
+func (r *room) handlePeerSendFailed(op roomOp) {
+	r.closeMember(op.member.userID, op.member)
 }
 
 func (r *room) handleEvictCheck(op roomOp) {
@@ -357,11 +373,19 @@ func (r *room) cancelEviction() {
 	r.evictGen++ // invalidate any fire already in flight past Stop's race window
 }
 
-func runPeerWriter(ctx context.Context, m *member) {
+// runPeerWriter drains m's outbound queue and writes to its Peer. It never
+// mutates room membership directly — a failed Send is reported back to the
+// room loop via opPeerSendFailed (see handlePeerSendFailed), which is the
+// only place membership is ever changed, and this goroutine exits as soon
+// as it has reported one.
+func runPeerWriter(ctx context.Context, r *room, m *member) {
 	for {
 		select {
 		case payload := <-m.queue:
-			_ = m.peer.Send(ctx, payload)
+			if err := m.peer.Send(ctx, payload); err != nil {
+				r.submitInternal(roomOp{kind: opPeerSendFailed, member: m})
+				return
+			}
 		case <-ctx.Done():
 			return
 		}

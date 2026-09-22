@@ -104,6 +104,9 @@ type fakePeer struct {
 	// block, if non-nil, is closed to allow a queued Send to proceed —
 	// used to simulate a slow/stalled peer.
 	block chan struct{}
+	// sendErr, if non-nil, is returned by every Send instead of recording
+	// the payload — used to simulate a broken outbound connection.
+	sendErr error
 }
 
 func (p *fakePeer) Send(ctx context.Context, payload []byte) error {
@@ -115,8 +118,11 @@ func (p *fakePeer) Send(ctx context.Context, payload []byte) error {
 		}
 	}
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sendErr != nil {
+		return p.sendErr
+	}
 	p.received = append(p.received, payload)
-	p.mu.Unlock()
 	return nil
 }
 
