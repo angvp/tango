@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/angvp/tango"
 	tangojwt "github.com/angvp/tango/auth/jwt"
+	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/realtime"
 	realtimews "github.com/angvp/tango/realtime/websocket"
 )
@@ -60,13 +64,16 @@ func run() int {
 		return 0
 	}
 
-	handler, err := buildHandler(hub, jwtService)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
+	// signal.NotifyContext is the host's own responsibility — tanGO never
+	// installs OS signal handling itself. Canceling this ctx (Ctrl-C or
+	// SIGTERM) triggers ServeContext's graceful shutdown: draining
+	// in-flight connections, then stopping hub.Close via the registered
+	// "chat-hub" Lifecycle.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	fmt.Println("listening on :8000")
-	if err := http.ListenAndServe(":8000", handler); err != nil {
+	if err := tango.ServeContext(ctx, exampleConfig(hub, jwtService), nil, db.SQLite); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -123,8 +130,14 @@ func exampleConfig(hub *realtime.Hub, jwtService *tangojwt.Service) tango.Config
 	view := realtimews.View(hub, authenticate(jwtService), roomID)
 
 	app := tango.NewApp("realtime-chat", func(registry *tango.Registry) error {
-		return registry.Routes().Include("/", tango.URLs{
+		if err := registry.Routes().Include("/", tango.URLs{
 			tango.Path(http.MethodGet, "/rooms/{id}/ws", view, tango.Name("chat-ws")),
+		}); err != nil {
+			return err
+		}
+		return registry.RegisterLifecycle(tango.Lifecycle{
+			Name: "chat-hub",
+			Stop: hub.Close,
 		})
 	})
 	return tango.Config{InstalledApps: []tango.App{app}, Addr: ":8000"}

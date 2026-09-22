@@ -15,7 +15,14 @@ It demonstrates:
   (see Milestone 26's `docs/limitations.md` note on query-token logging
   exposure);
 - reconnecting within the room's reconnect window restores membership and
-  delivers a fresh `Logic.Snapshot`.
+  delivers a fresh `Logic.Snapshot`;
+- graceful shutdown: `hub.Close` is registered as a `tango.Lifecycle`
+  (`registry.RegisterLifecycle(tango.Lifecycle{Name: "chat-hub", Stop: hub.Close})`),
+  and `main` builds its context with `signal.NotifyContext` and calls
+  `tango.ServeContext` instead of `tango.Serve` — Ctrl-C or SIGTERM now
+  drains in-flight connections before closing the hub, instead of the
+  process exiting mid-request. See the
+  [application lifecycle guide](../../docs/guides/application-lifecycle.md).
 
 Its hardcoded JWT secret and `-issue-token` flag are development-only
 tools, not a production credential or authentication endpoint — same
