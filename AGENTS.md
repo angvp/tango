@@ -35,6 +35,7 @@ Use this as the universal contract, then use `docs/agents/` for task-specific re
 - Realtime rooms and WebSockets: `docs/agents/realtime.md`
 - Rate limiting: `docs/agents/ratelimit.md`
 - Middleware and View wrappers: `docs/agents/middleware.md`
+- Structured logging and metrics: `docs/agents/observability.md`
 - Optional prompt snippets: `docs/agents/prompts.md`
 
 ## Sync Rule

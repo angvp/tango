@@ -52,7 +52,7 @@ Composition order is always outer to inner:
 Config.Middleware -> Include WithMiddleware -> Path Use -> View
 ```
 
-`tango.Recoverer()` is the only built-in middleware in v0.0.1. It is opt-in, catches downstream panics, logs them server-side, and returns the same generic JSON `500` response shape tanGO uses when a View returns an error.
+Built-in middleware remains opt-in. `tango.Recoverer()` catches downstream panics and returns tanGO's generic JSON `500`; `tango.RequestID()` adds correlation IDs; `tango.AccessLogger()` emits structured access events. When all three are used, order them `RequestID -> Recoverer -> AccessLogger`. See [structured logging and observability](observability.md).
 
 A **View wrapper** is different: it is a `func(tango.View) tango.View` that runs after `*tango.Context` exists. Use View wrappers for Context-aware behavior such as auth, permissions, current-user lookup, redirects, and admin session checks. `auth.RequireLogin(...)` is a View wrapper, not middleware. Middleware and View wrappers permanently coexist; neither replaces the other.
 

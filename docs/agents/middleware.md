@@ -12,7 +12,10 @@ Canonical files: `middleware.go`, `routeregistry.go`, `accounts/require_login.go
 ## Use Middleware For
 
 - Panic recovery with `tango.Recoverer()`.
-- Request IDs, logging, CORS, compression, security headers, or other raw `net/http` concerns.
+- Correlation IDs with `tango.RequestID()` and structured access events with `tango.AccessLogger()`.
+- CORS, compression, security headers, or other raw `net/http` concerns.
+
+When using all three observability middleware, order them `RequestID -> Recoverer -> AccessLogger`. See `docs/agents/observability.md`.
 
 Attachment tiers:
 

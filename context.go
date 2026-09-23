@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"html/template"
+	"log/slog"
 	"net/http"
 )
 
@@ -18,18 +19,34 @@ type Context struct {
 	request *http.Request
 	writer  http.ResponseWriter
 	params  map[string]string
+	logger  *slog.Logger
 }
 
 // newContext builds a Context. Param wiring from the compiled route tree
 // lands in a later milestone ticket; params may be nil or supplied directly
 // for now.
 func newContext(w http.ResponseWriter, r *http.Request, params map[string]string) *Context {
+	return newContextWithLogger(w, r, params, slog.Default(), "")
+}
+
+func newContextWithLogger(w http.ResponseWriter, r *http.Request, params map[string]string, logger *slog.Logger, route string) *Context {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	attrs := []any{slog.String("route", route), slog.String("method", r.Method)}
+	if requestID, ok := RequestIDFromContext(r.Context()); ok {
+		attrs = append(attrs, slog.String("request_id", requestID))
+	}
 	return &Context{
 		request: r,
 		writer:  w,
 		params:  params,
+		logger:  logger.With(attrs...),
 	}
 }
+
+// Logger returns the request-scoped structured logger.
+func (c *Context) Logger() *slog.Logger { return c.logger }
 
 // Param returns a named path parameter's value, or "" if absent.
 func (c *Context) Param(name string) string {

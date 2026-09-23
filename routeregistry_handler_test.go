@@ -396,7 +396,7 @@ func TestRecovererReturnsGeneric500AndLogsPanic(t *testing.T) {
 	if body["error"] != "internal error" {
 		t.Fatalf("error body = %q, want %q", body["error"], "internal error")
 	}
-	if !bytes.Contains(logBuffer.Bytes(), []byte("tango: view error: boom")) {
+	if !bytes.Contains(logBuffer.Bytes(), []byte(EventPanic)) || !bytes.Contains(logBuffer.Bytes(), []byte("recovered=boom")) {
 		t.Fatalf("log = %q, want panic logged", logBuffer.String())
 	}
 }

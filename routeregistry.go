@@ -3,10 +3,12 @@ package tango
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
+	"github.com/angvp/tango/internal/observabilitysafe"
+	"github.com/angvp/tango/observability"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -35,9 +37,12 @@ type includedRoute struct {
 // RouteRegistry is the Milestone 2 sub-registry apps contribute routes to,
 // mirroring the shape of Milestone 1's Registry sub-APIs.
 type RouteRegistry struct {
-	registry   *Registry
-	included   []includedRoute
-	middleware []Middleware
+	registry        *Registry
+	included        []includedRoute
+	middleware      []Middleware
+	logger          *slog.Logger
+	recorder        observability.Recorder
+	recorderEnabled bool
 }
 
 // IncludeOption customizes one Include call.
@@ -125,6 +130,14 @@ type compiled struct {
 // collisions between routes contributed by different Include calls (the
 // cross-app case Include itself cannot see).
 func (rr *RouteRegistry) compile() (*compiled, error) {
+	logger := rr.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	recorder := rr.recorder
+	if recorder == nil {
+		recorder = observability.NopRecorder{}
+	}
 	mux := chi.NewRouter()
 	patterns := make(map[string]string, len(rr.included))
 
@@ -145,18 +158,29 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 				}
 			}
 
-			ctx := newContext(w, r, params)
+			ctx := newContextWithLogger(w, r, params, logger, route.pattern)
 			if err := view(ctx); err != nil {
-				log.Printf("tango: view error: %v", err)
+				observabilitysafe.Call(func() {
+					ctx.Logger().LogAttrs(r.Context(), slog.LevelError, EventViewError, slog.Any("error", err))
+				})
 				writeInternalError(w)
 			}
 		})
 
 		handler := applyMiddleware(terminal, append(append([]Middleware(nil), rr.middleware...), route.middleware...))
+		if rr.recorderEnabled {
+			handler = instrumentHTTP(handler, recorder, route.method, route.pattern)
+		}
 		mux.Method(route.method, route.pattern, handler)
 	}
 
 	return &compiled{handler: mux, patterns: patterns}, nil
+}
+
+func (rr *RouteRegistry) setObservability(logger *slog.Logger, recorder observability.Recorder, recorderEnabled bool) {
+	rr.logger = logger
+	rr.recorder = recorder
+	rr.recorderEnabled = recorderEnabled
 }
 
 func (rr *RouteRegistry) setMiddleware(middleware []Middleware) {
