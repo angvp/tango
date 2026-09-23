@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/angvp/tango/internal/observabilitysafe"
+	"github.com/angvp/tango/observability"
 )
 
 // Hub owns every active room for one Factory. Rooms are not pre-declared:
@@ -55,6 +59,9 @@ func NewHub(factory Factory, opts Options) (*Hub, error) {
 	if opts.PeerQueue == 0 {
 		opts.PeerQueue = DefaultPeerQueue
 	}
+	if opts.Recorder == nil {
+		opts.Recorder = observability.NopRecorder{}
+	}
 
 	return &Hub{
 		factory:  factory,
@@ -75,7 +82,8 @@ func defaultNewTimer(d time.Duration, f func()) func() bool {
 // the room on first join. It blocks until the room's own event loop has
 // applied the join (installed membership and enqueued Logic.Snapshot for
 // delivery) or ctx is done.
-func (h *Hub) Join(ctx context.Context, roomID string, principal Principal, peer Peer) error {
+func (h *Hub) Join(ctx context.Context, roomID string, principal Principal, peer Peer) (err error) {
+	defer func() { h.recordOperation("join", err) }()
 	if err := validatePeer(peer); err != nil {
 		return err
 	}
@@ -84,7 +92,7 @@ func (h *Hub) Join(ctx context.Context, roomID string, principal Principal, peer
 		if !ok {
 			return ErrClosed
 		}
-		err := r.submit(ctx, roomOp{kind: opJoin, principal: principal, peer: peer})
+		err = r.submit(ctx, roomOp{kind: opJoin, principal: principal, peer: peer})
 		if errors.Is(err, ErrRoomNotFound) {
 			// r was already mid-eviction when we grabbed it; retry against
 			// a fresh room now that it has (or will have) removed itself.
@@ -97,12 +105,13 @@ func (h *Hub) Join(ctx context.Context, roomID string, principal Principal, peer
 // Leave removes peer as principal's live connection in roomID, if it is
 // still the current one. A Leave for a room that no longer exists, or from
 // a peer already superseded by a later Join, is a no-op — never an error.
-func (h *Hub) Leave(ctx context.Context, roomID string, principal Principal, peer Peer) error {
+func (h *Hub) Leave(ctx context.Context, roomID string, principal Principal, peer Peer) (err error) {
+	defer func() { h.recordOperation("leave", err) }()
 	r := h.getRoom(roomID)
 	if r == nil {
 		return nil
 	}
-	err := r.submit(ctx, roomOp{kind: opLeave, principal: principal, peer: peer})
+	err = r.submit(ctx, roomOp{kind: opLeave, principal: principal, peer: peer})
 	if errors.Is(err, ErrRoomNotFound) || errors.Is(err, ErrClosed) {
 		return nil
 	}
@@ -114,7 +123,8 @@ func (h *Hub) Leave(ctx context.Context, roomID string, principal Principal, pee
 // internally by the room loop itself, never accepted from a caller.
 // Dispatch does not require the caller to have joined; this is how a bot
 // Principal acts without ever holding a Peer.
-func (h *Hub) Dispatch(ctx context.Context, ev Event) error {
+func (h *Hub) Dispatch(ctx context.Context, ev Event) (err error) {
+	defer func() { h.recordOperation("dispatch", err) }()
 	if ev.Kind != EventAction {
 		return fmt.Errorf("tango realtime: Dispatch only accepts EventAction")
 	}
@@ -128,6 +138,17 @@ func (h *Hub) Dispatch(ctx context.Context, ev Event) error {
 	return r.submit(ctx, roomOp{kind: opDispatch, event: ev})
 }
 
+func (h *Hub) recordOperation(event string, err error) {
+	outcome := "success"
+	if err != nil {
+		outcome = "error"
+	}
+	observabilitysafe.Call(func() {
+		h.opts.Recorder.AddCounter(observability.MetricRealtimeRoomEvents, 1,
+			slog.String("event", event), slog.String("outcome", outcome))
+	})
+}
+
 // DispatchPeer delivers ev.Payload into ev.RoomID's Logic.Handle on behalf
 // of peer, which must currently be the live connection for ev.Principal in
 // that room. Unlike Dispatch, DispatchPeer is membership- and
@@ -136,7 +157,8 @@ func (h *Hub) Dispatch(ctx context.Context, ev Event) error {
 // connection can never keep acting as if it were still current. It returns
 // ErrStalePeer for a peer that is stale, replaced, overflow-removed, or was
 // never a member — checked inside the room loop, before Logic.Handle runs.
-func (h *Hub) DispatchPeer(ctx context.Context, ev Event, peer Peer) error {
+func (h *Hub) DispatchPeer(ctx context.Context, ev Event, peer Peer) (err error) {
+	defer func() { h.recordOperation("dispatch", err) }()
 	if ev.Kind != EventAction {
 		return fmt.Errorf("tango realtime: DispatchPeer only accepts EventAction")
 	}

@@ -14,7 +14,7 @@ hub, err := realtime.NewHub(func(roomID string) realtime.Logic {
 }, realtime.Options{})
 ```
 
-A host running more than one kind of room (chat and a game, say) constructs more than one `Hub`. `Options{ReconnectWindow, PeerQueue, RoomQueue}` all default to sane values (`DefaultReconnectWindow` 30s, `DefaultPeerQueue` 16, `DefaultRoomQueue` 64) when left zero; a negative value is rejected by `NewHub` itself, at construction, not at first use.
+A host running more than one kind of room (chat and a game, say) constructs more than one `Hub`. `Options{ReconnectWindow, PeerQueue, RoomQueue}` all default to sane values (`DefaultReconnectWindow` 30s, `DefaultPeerQueue` 16, `DefaultRoomQueue` 64) when left zero; a negative value is rejected by `NewHub` itself, at construction, not at first use. Set `Options.Recorder` to record bounded `join`/`leave`/`dispatch` success/error metrics; both `Dispatch` and the WebSocket adapter's `DispatchPeer` path count as `dispatch`. It defaults to no-op and must be safe for concurrent calls.
 
 ## The `Logic` contract
 

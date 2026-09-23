@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -107,6 +108,10 @@ func waitForCondition(t *testing.T, cond func() bool, msg string) {
 }
 
 func buildHandler(t *testing.T, coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error)) http.Handler {
+	return buildHandlerWithMiddleware(t, coordinator, authenticate, roomID)
+}
+
+func buildHandlerWithMiddleware(t *testing.T, coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error), middleware ...tango.Middleware) http.Handler {
 	t.Helper()
 	view := View(coordinator, authenticate, roomID)
 	app := tango.NewApp("ws-test", func(registry *tango.Registry) error {
@@ -115,7 +120,7 @@ func buildHandler(t *testing.T, coordinator realtime.Coordinator, authenticate A
 			tango.Path(http.MethodGet, "/rooms/{id}/ws", view),
 		})
 	})
-	registry, err := tango.BuildRegistry(tango.Config{InstalledApps: []tango.App{app}})
+	registry, err := tango.BuildRegistry(tango.Config{InstalledApps: []tango.App{app}, Middleware: middleware})
 	if err != nil {
 		t.Fatalf("build registry: %v", err)
 	}
@@ -127,6 +132,40 @@ func buildHandler(t *testing.T, coordinator realtime.Coordinator, authenticate A
 		t.Fatalf("compile routes: %v", err)
 	}
 	return handler
+}
+
+type accessCaptureHandler struct{ events chan string }
+
+func (h accessCaptureHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h accessCaptureHandler) WithAttrs([]slog.Attr) slog.Handler       { return h }
+func (h accessCaptureHandler) WithGroup(string) slog.Handler            { return h }
+func (h accessCaptureHandler) Handle(_ context.Context, record slog.Record) error {
+	h.events <- record.Message
+	return nil
+}
+
+func TestAccessLoggerPreservesRealWebSocketUpgrade(t *testing.T) {
+	fc := &fakeCoordinator{}
+	events := make(chan string, 1)
+	logger := slog.New(accessCaptureHandler{events: events})
+	handler := buildHandlerWithMiddleware(t, fc, alwaysAuth("alice"), fixedRoom("room-1"), tango.AccessLogger(tango.WithAccessLogger(logger)))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	conn, _, err := ws.Dial(context.Background(), toWSURL(server.URL)+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial through AccessLogger: %v", err)
+	}
+	_ = conn.Close(ws.StatusNormalClosure, "")
+
+	select {
+	case event := <-events:
+		if event != tango.EventAccessLog {
+			t.Fatalf("event = %q", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("AccessLogger did not emit after WebSocket connection closed")
+	}
 }
 
 func TestAuthenticationFailureNeverUpgrades(t *testing.T) {

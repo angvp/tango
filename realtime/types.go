@@ -9,6 +9,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/angvp/tango/observability"
 )
 
 // Principal is the stable, transport-independent actor identity a host
@@ -106,6 +108,9 @@ type Options struct {
 	PeerQueue int
 	// RoomQueue is the bounded inbound event-queue depth per room.
 	RoomQueue int
+	// Recorder receives bounded Hub operation metrics. Implementations must
+	// be safe for concurrent use. Nil uses observability.NopRecorder{}.
+	Recorder observability.Recorder
 }
 
 const (
