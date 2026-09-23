@@ -20,14 +20,19 @@ Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/applicati
 
 ## Don't
 
-- Do not assume the context passed to `Start` is a child of the caller's `ctx` — it's the decoupled Application context (`context.WithoutCancel(ctx)` plus `ServeContext`'s own cancellation), canceled only after HTTP draining finishes, not the instant the caller cancels.
-- Do not assume one `WithShutdownTimeout` covers the whole shutdown — HTTP draining and `Lifecycle.Stop` calls each get their own independent budget; worst case is ~2x the configured value.
+- Do not assume the context passed to `Start` is a child of the caller's `ctx` — it's the decoupled Application context (`context.WithoutCancel(ctx)` plus `ServeContext`'s own cancellation). During startup it *is* canceled promptly the moment the caller cancels `ctx` (so a cooperative `Start` watching it can return); once every component has started, it stays live through HTTP draining and is canceled only afterward, not the instant the caller cancels.
+- If your `Start` blocks on long-running work, have it select on the received context so it can return promptly on cancellation — a `Start` that ignores it can hang `ServeContext` indefinitely during startup.
+- A `Start` that wants to be excluded from rollback's `Stop` calls when interrupted must return a non-nil error (idiomatically its own `ctx.Err()`); one that returns `nil` is treated as having genuinely started, even if it raced with cancellation.
+- Do not assume one `WithShutdownTimeout` covers the whole shutdown — HTTP draining and the entire `Lifecycle.Stop` pass each get their own independent budget; worst case is ~2x the configured value. Within the stop phase, every `Stop` call shares that one budget — it is not reset per component.
+- Do not assume a successful forced `Server.Close()` means the returned error is `nil` — a drain-timeout error is still reported (`errors.Is(err, context.DeadlineExceeded)`) even when the forced close itself succeeds, since in-flight requests may have been aborted.
 - Do not rely on framework-installed signal handling, a restart policy, or `-tango-status` reporting lifecycle state — none of that exists; see `docs/limitations.md`.
 - Do not register a `Lifecycle` with a blank `Name` or both callbacks nil — `RegisterLifecycle` rejects both outright rather than normalizing them.
 
 ## Check
 
-- Exercise: `Start` failure rolls back already-started components in reverse order; caller cancellation mid-startup does the same.
+- Exercise: `Start` failure rolls back already-started components in reverse order; caller cancellation mid-startup does the same, including a `Start` that's actually blocked on its received context (not one that just calls cancel and returns) — assert no leaked startup goroutine.
 - Exercise: normal shutdown drains, then cancels the Application context, then stops components in reverse order — assert ordering via a log across at least two components.
+- Exercise: multiple `Stop` hooks prove they share one deadline (a slow earlier `Stop` measurably reduces the remaining budget seen by a later one), not a fresh timeout each.
+- Exercise: hitting the drain deadline forces a close and still returns a `context.DeadlineExceeded`-wrapped error, while the Application context stays live for the whole drain window and only cancels afterward.
 - Verify `errors.Is` finds `ErrDuplicateLifecycle` on a repeated name, and finds the original `Start`/serve error plus each wrapped `Stop` error through a joined result.
 - Run `docs/agents/checklist.md` before stopping.
