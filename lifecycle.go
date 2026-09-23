@@ -11,6 +11,11 @@ import (
 // Lifecycle with the same Name has already been registered.
 var ErrDuplicateLifecycle = errors.New("tango: duplicate lifecycle name")
 
+// ErrReservedLifecycleName is returned by Registry.RegisterLifecycle when a
+// Lifecycle's Name collides with the internal name ServeContext reserves for
+// the Scheduler lifecycle it appends itself (see schedulerLifecycleName).
+var ErrReservedLifecycleName = errors.New("tango: reserved lifecycle name")
+
 // Lifecycle is a named component with optional startup and shutdown hooks,
 // run by ServeContext around the HTTP server's own lifetime. Start and Stop
 // are each optional (nil is skipped), but at least one of them must be set.
@@ -31,6 +36,9 @@ func (r *Registry) RegisterLifecycle(lifecycle Lifecycle) error {
 	}
 	if lifecycle.Start == nil && lifecycle.Stop == nil {
 		return fmt.Errorf("tango: lifecycle %q must set Start, Stop, or both", lifecycle.Name)
+	}
+	if lifecycle.Name == schedulerLifecycleName {
+		return fmt.Errorf("%w: %q", ErrReservedLifecycleName, lifecycle.Name)
 	}
 
 	if _, exists := r.lifecycleNames[lifecycle.Name]; exists {

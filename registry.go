@@ -24,6 +24,8 @@ type Registry struct {
 	store            *db.Store
 	lifecycles       []Lifecycle
 	lifecycleNames   map[string]struct{}
+	jobs             []Job
+	jobNames         map[string]struct{}
 }
 
 // NewRegistry returns an empty, ready-to-use Registry.
