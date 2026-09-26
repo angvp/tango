@@ -68,6 +68,12 @@ func (f *fakeCoordinator) DispatchPeer(ctx context.Context, ev realtime.Event, p
 	return nil
 }
 
+func (f *fakeCoordinator) joinCallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.joinCalls
+}
+
 func (f *fakeCoordinator) dispatchCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -509,4 +515,111 @@ func TestEndToEndBroadcastAndReconnect(t *testing.T) {
 	if string(snap) != "snapshot" {
 		t.Fatalf("reconnect snapshot = %q, want %q", snap, "snapshot")
 	}
+}
+
+// buildHandlerWithViewOptions mirrors buildHandler, but forwards opts to
+// View — for tests that need to configure the upgrade's origin check.
+func buildHandlerWithViewOptions(t *testing.T, coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error), opts ...ViewOption) http.Handler {
+	t.Helper()
+	view := View(coordinator, authenticate, roomID, opts...)
+	app := tango.NewApp("ws-test-origin", func(registry *tango.Registry) error {
+		return registry.Routes().Include("/", tango.URLs{
+			tango.Path(http.MethodGet, "/ws", view),
+		})
+	})
+	registry, err := tango.BuildRegistry(tango.Config{InstalledApps: []tango.App{app}})
+	if err != nil {
+		t.Fatalf("build registry: %v", err)
+	}
+	if err := registry.RunRegistration(); err != nil {
+		t.Fatalf("run registration: %v", err)
+	}
+	handler, err := registry.Routes().Handler()
+	if err != nil {
+		t.Fatalf("compile routes: %v", err)
+	}
+	return handler
+}
+
+// dialWithOrigin dials url with an explicit Origin header — coder/websocket's
+// own Dial never sends one on its own, so authenticateOrigin's real check is
+// otherwise never exercised by these tests (a request with no Origin header
+// at all is always treated as same-origin).
+func dialWithOrigin(ctx context.Context, url, origin string) (*ws.Conn, *http.Response, error) {
+	return ws.Dial(ctx, url, &ws.DialOptions{HTTPHeader: http.Header{"Origin": []string{origin}}})
+}
+
+// TestCrossOriginUpgradeRejectedByDefault proves View keeps
+// coder/websocket's default same-origin protection when no ViewOption
+// configures it away: a handshake whose Origin doesn't match the route's
+// own Host still gets coder/websocket's own 403, exactly as if View had
+// passed nil AcceptOptions (its pre-ViewOption behavior).
+func TestCrossOriginUpgradeRejectedByDefault(t *testing.T) {
+	fc := &fakeCoordinator{}
+	server := httptest.NewServer(buildHandler(t, fc, alwaysAuth("alice"), fixedRoom("room-1")))
+	defer server.Close()
+
+	_, resp, err := dialWithOrigin(context.Background(), toWSURL(server.URL)+"/ws", "http://cross-origin.example")
+	if err == nil {
+		t.Fatal("expected the cross-origin handshake to fail, it succeeded")
+	}
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %v, want 403", resp)
+	}
+	if got := fc.joinCallCount(); got != 0 {
+		t.Fatalf("Join should never have been called, got %d calls", got)
+	}
+}
+
+// TestWithOriginPatternsAllowsMatchingCrossOrigin proves WithOriginPatterns
+// actually reaches coder/websocket's own check: a handshake whose Origin is
+// covered by a configured pattern now succeeds where it would otherwise 403.
+func TestWithOriginPatternsAllowsMatchingCrossOrigin(t *testing.T) {
+	fc := &fakeCoordinator{}
+	server := httptest.NewServer(buildHandlerWithViewOptions(t, fc, alwaysAuth("alice"), fixedRoom("room-1"),
+		WithOriginPatterns("frontend.example")))
+	defer server.Close()
+
+	conn, resp, err := dialWithOrigin(context.Background(), toWSURL(server.URL)+"/ws", "http://frontend.example")
+	if err != nil {
+		t.Fatalf("dial: %v (status %v)", err, resp)
+	}
+	defer conn.CloseNow()
+
+	waitForCondition(t, func() bool { return fc.joinCallCount() == 1 }, "expected Join to have been called once")
+}
+
+// TestWithOriginPatternsStillRejectsUnlistedOrigin proves an origin outside
+// the configured patterns is still rejected — WithOriginPatterns narrows
+// the check, it doesn't disable it.
+func TestWithOriginPatternsStillRejectsUnlistedOrigin(t *testing.T) {
+	fc := &fakeCoordinator{}
+	server := httptest.NewServer(buildHandlerWithViewOptions(t, fc, alwaysAuth("alice"), fixedRoom("room-1"),
+		WithOriginPatterns("frontend.example")))
+	defer server.Close()
+
+	_, resp, err := dialWithOrigin(context.Background(), toWSURL(server.URL)+"/ws", "http://someone-else.example")
+	if err == nil {
+		t.Fatal("expected the handshake to fail, it succeeded")
+	}
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %v, want 403", resp)
+	}
+}
+
+// TestWithInsecureSkipVerifyAllowsAnyOrigin proves the escape hatch works:
+// no pattern needed, every origin passes.
+func TestWithInsecureSkipVerifyAllowsAnyOrigin(t *testing.T) {
+	fc := &fakeCoordinator{}
+	server := httptest.NewServer(buildHandlerWithViewOptions(t, fc, alwaysAuth("alice"), fixedRoom("room-1"),
+		WithInsecureSkipVerify()))
+	defer server.Close()
+
+	conn, resp, err := dialWithOrigin(context.Background(), toWSURL(server.URL)+"/ws", "http://anything-at-all.example")
+	if err != nil {
+		t.Fatalf("dial: %v (status %v)", err, resp)
+	}
+	defer conn.CloseNow()
+
+	waitForCondition(t, func() bool { return fc.joinCallCount() == 1 }, "expected Join to have been called once")
 }

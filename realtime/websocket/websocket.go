@@ -33,6 +33,54 @@ const leaveTimeout = 5 * time.Second
 // else; this package never imports auth, auth/jwt, or accounts.
 type Authenticate func(*http.Request) (realtime.Principal, error)
 
+// viewConfig holds View's tunables, built from the ViewOption values
+// passed to it.
+type viewConfig struct {
+	acceptOptions *ws.AcceptOptions
+}
+
+// ViewOption configures View.
+type ViewOption func(*viewConfig)
+
+// WithOriginPatterns configures the host patterns coder/websocket's Accept
+// treats as authorized origins for the upgrade's Origin header check —
+// required whenever the connecting page's origin differs from this route's
+// own Host (a separate frontend dev server on another port, a different
+// subdomain in production, etc.). Without this, Accept applies its default
+// same-origin check and responds 403 to any cross-origin handshake,
+// regardless of whether authenticate would have accepted the request.
+//
+// Patterns follow ws.AcceptOptions.OriginPatterns's own syntax (a bare host,
+// optionally with a scheme, "*" wildcards allowed within a segment). Do not
+// pass "*" alone as a pattern — that authorizes any origin unconditionally;
+// use WithInsecureSkipVerify instead so that intent is explicit at the call
+// site rather than hidden behind a pattern that reads like a real host.
+func WithOriginPatterns(patterns ...string) ViewOption {
+	return func(c *viewConfig) {
+		c.acceptOptions = ensureAcceptOptions(c.acceptOptions)
+		c.acceptOptions.OriginPatterns = patterns
+	}
+}
+
+// WithInsecureSkipVerify disables Accept's origin verification entirely —
+// every origin is accepted. Prefer WithOriginPatterns; this exists for the
+// same reason coder/websocket exposes InsecureSkipVerify directly: some
+// deployments (e.g. serving to native clients, or behind infrastructure
+// that already enforces origin) have no real origin to check.
+func WithInsecureSkipVerify() ViewOption {
+	return func(c *viewConfig) {
+		c.acceptOptions = ensureAcceptOptions(c.acceptOptions)
+		c.acceptOptions.InsecureSkipVerify = true
+	}
+}
+
+func ensureAcceptOptions(opts *ws.AcceptOptions) *ws.AcceptOptions {
+	if opts == nil {
+		return &ws.AcceptOptions{}
+	}
+	return opts
+}
+
 // View upgrades an authenticated request to a WebSocket connection and
 // runs it against coordinator until the connection ends. Mount it as an
 // ordinary route, e.g. tango.Path("GET", "/rooms/{id}/ws", View(hub,
@@ -48,7 +96,19 @@ type Authenticate func(*http.Request) (realtime.Principal, error)
 // reading any client message — a message sent immediately after the
 // socket opens must never race ahead of the room loop's own
 // membership-apply. This is exactly why realtime.Hub.Join is synchronous.
-func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error)) tango.View {
+//
+// By default, the upgrade is rejected with 403 for any request whose
+// Origin header doesn't match this route's own Host — coder/websocket's
+// own same-origin protection. Pass WithOriginPatterns (or, if there's
+// truly no origin to check, WithInsecureSkipVerify) to allow a connecting
+// page served from a different origin, such as a frontend dev server on
+// another port or a separate production domain.
+func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error), opts ...ViewOption) tango.View {
+	config := viewConfig{}
+	for _, opt := range opts {
+		opt(&config)
+	}
+
 	return func(ctx *tango.Context) error {
 		principal, err := authenticate(ctx.Request())
 		if err != nil {
@@ -60,7 +120,7 @@ func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID fu
 			return ctx.JSON(http.StatusBadRequest, map[string]string{"error": "bad request"})
 		}
 
-		conn, err := ws.Accept(ctx.ResponseWriter(), ctx.Request(), nil)
+		conn, err := ws.Accept(ctx.ResponseWriter(), ctx.Request(), config.acceptOptions)
 		if err != nil {
 			// Accept has already written an HTTP error response on failure.
 			return nil
