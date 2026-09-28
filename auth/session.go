@@ -68,17 +68,10 @@ func SessionUser(ctx context.Context, store *db.Store, sessionMeta model.ModelMe
 		return nil, false, nil
 	}
 
-	dest := reflect.New(reflect.SliceOf(sessionMeta.Type))
-	sqlQuery := fmt.Sprintf(
-		"SELECT %s AS %s, %s AS %s FROM %s WHERE %s = ?",
-		db.ColumnName(fields.userID.Name), fields.userID.Name,
-		db.ColumnName(fields.expiresAt.Name), fields.expiresAt.Name,
-		db.ColumnName(sessionMeta.Name), db.ColumnName(fields.token.Name),
-	)
-	if err := store.Query(ctx, dest.Interface(), sqlQuery, token); err != nil {
+	rows, err := sessionsByToken(ctx, store, sessionMeta, fields, token)
+	if err != nil {
 		return nil, false, err
 	}
-	rows := dest.Elem()
 	if rows.Len() == 0 {
 		return nil, false, nil
 	}
@@ -101,16 +94,10 @@ func DeleteSession(ctx context.Context, store *db.Store, sessionMeta model.Model
 		return nil
 	}
 
-	dest := reflect.New(reflect.SliceOf(sessionMeta.Type))
-	sqlQuery := fmt.Sprintf(
-		"SELECT %s AS %s FROM %s WHERE %s = ?",
-		db.ColumnName(fields.primaryKey.Name), fields.primaryKey.Name,
-		db.ColumnName(sessionMeta.Name), db.ColumnName(fields.token.Name),
-	)
-	if err := store.Query(ctx, dest.Interface(), sqlQuery, token); err != nil {
+	rows, err := sessionsByToken(ctx, store, sessionMeta, fields, token)
+	if err != nil {
 		return err
 	}
-	rows := dest.Elem()
 	for i := 0; i < rows.Len(); i++ {
 		pk := rows.Index(i).FieldByName(fields.primaryKey.Name).Interface()
 		if err := store.Delete(ctx, sessionMeta, pk); err != nil {
@@ -118,6 +105,18 @@ func DeleteSession(ctx context.Context, store *db.Store, sessionMeta model.Model
 		}
 	}
 	return nil
+}
+
+// sessionsByToken loads every session row whose token matches. It goes
+// through Store.List rather than hand-written SQL so the query uses the
+// placeholder syntax of whichever dialect the store was built with.
+func sessionsByToken(ctx context.Context, store *db.Store, sessionMeta model.ModelMeta, fields sessionFields, token string) (reflect.Value, error) {
+	dest := reflect.New(reflect.SliceOf(sessionMeta.Type))
+	query := db.Query{Where: []db.Condition{{Field: fields.token.Name, Op: db.OpEq, Value: token}}}
+	if err := store.List(ctx, sessionMeta, query, dest.Interface()); err != nil {
+		return reflect.Value{}, err
+	}
+	return dest.Elem(), nil
 }
 
 func inspectSessionModel(sessionMeta model.ModelMeta) (sessionFields, error) {
