@@ -176,7 +176,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 
 		columns = append(columns, ColumnName(field.Name))
 		placeholders = append(placeholders, placeholder(s.dialect, len(placeholders)+1))
-		args = append(args, fieldValue.Interface())
+		args = append(args, columnValue(field, fieldValue))
 	}
 
 	needsBackfill := primaryKeyField.Name != "" && primaryKeyValue.IsZero()
@@ -289,7 +289,7 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 			return fmt.Errorf("tango db: field %q not found on %s", field.Name, meta.Name)
 		}
 		assignments = append(assignments, ColumnName(field.Name)+" = "+placeholder(s.dialect, len(assignments)+1))
-		args = append(args, fieldValue.Interface())
+		args = append(args, columnValue(field, fieldValue))
 	}
 	args = append(args, primaryKeyValue)
 
@@ -625,16 +625,65 @@ type rowScanner interface {
 // scanFieldsInto scans one row's columns, in meta.Fields order, into the
 // corresponding fields of structValue.
 func scanFieldsInto(scanner rowScanner, structValue reflect.Value, fields []model.FieldMeta) error {
-	pointers := make([]any, len(fields))
+	targets := make([]reflect.Value, len(fields))
 	for i, field := range fields {
 		fieldValue := structValue.FieldByName(field.Name)
 		if !fieldValue.IsValid() {
 			return fmt.Errorf("tango db: field %q not found on %s", field.Name, structValue.Type())
 		}
-		pointers[i] = fieldValue.Addr().Interface()
+		targets[i] = fieldValue
 	}
 
-	return scanner.Scan(pointers...)
+	return scanNullAsZero(scanner, targets)
+}
+
+// columnValue is the value written for field. A foreign key field left at
+// its zero value is unset, so it is written as NULL: the database's
+// REFERENCES constraint accepts NULL but would reject a reference to a
+// nonexistent row 0.
+func columnValue(field model.FieldMeta, fieldValue reflect.Value) any {
+	if field.ForeignKey != "" && fieldValue.IsZero() {
+		return nil
+	}
+	return fieldValue.Interface()
+}
+
+// scanNullAsZero scans one row into fields, reading SQL NULL as the field's
+// Go zero value. tanGO has no nullable field type, so NULL and zero mean
+// the same thing: an unset foreign key is stored as NULL, and a column
+// added to a table that already had rows is NULL in those rows.
+//
+// Each field is scanned through a pointer-to-pointer, which database/sql
+// sets to nil for NULL and allocates otherwise, applying its usual type
+// conversions. Pointer fields already have a NULL representation (nil), so
+// they are scanned into directly.
+func scanNullAsZero(scanner rowScanner, fields []reflect.Value) error {
+	holders := make([]reflect.Value, len(fields))
+	pointers := make([]any, len(fields))
+	for i, field := range fields {
+		if field.Kind() == reflect.Pointer {
+			pointers[i] = field.Addr().Interface()
+			continue
+		}
+		holders[i] = reflect.New(reflect.PointerTo(field.Type()))
+		pointers[i] = holders[i].Interface()
+	}
+
+	if err := scanner.Scan(pointers...); err != nil {
+		return err
+	}
+
+	for i, holder := range holders {
+		if !holder.IsValid() {
+			continue
+		}
+		if value := holder.Elem(); value.IsNil() {
+			fields[i].SetZero()
+		} else {
+			fields[i].Set(value.Elem())
+		}
+	}
+	return nil
 }
 
 // findPrimaryKeyField returns the FieldMeta flagged PrimaryKey in meta.
@@ -765,16 +814,16 @@ func scanColumnsInto(rows *sql.Rows, structValue reflect.Value) error {
 	}
 
 	structType := structValue.Type()
-	pointers := make([]any, len(columns))
+	targets := make([]reflect.Value, len(columns))
 	for i, column := range columns {
 		fieldValue, err := findFieldByColumn(structValue, structType, column)
 		if err != nil {
 			return err
 		}
-		pointers[i] = fieldValue.Addr().Interface()
+		targets[i] = fieldValue
 	}
 
-	return rows.Scan(pointers...)
+	return scanNullAsZero(rows, targets)
 }
 
 // findFieldByColumn locates the struct field matching column, comparing
