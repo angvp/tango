@@ -1,6 +1,6 @@
 # Guide: relationships and admin foreign keys
 
-tanGO supports exactly one relationship shape in v0.0.1: a many-to-one **foreign key field**. No many-to-many, no reverse accessors, no automatic joins — see [limitations](../limitations.md) for the full boundary.
+tanGO supports exactly one relationship shape: a many-to-one **foreign key field**. No many-to-many, no reverse accessors, no automatic joins — see [limitations](../limitations.md) for the full boundary.
 
 Together with the validation and cascade-delete behavior below, this is what tanGO calls its **minimal ORM foundations**: a small, deliberately bounded set of relationship-aware behavior across `model`, `db`, and `admin`. It is not a full ORM — there's no `QuerySet`, no lazy loading, no many-to-many, no reverse managers, no signals, no nested writes. See [where `Store` stops](#where-store-stops-and-raw-sql-begins) below for the boundary this implies.
 
@@ -28,7 +28,7 @@ type Post struct {
 tanGO checks foreign keys at two different times, for two different things:
 
 - **Schema validation** — `Registry.Models().ValidateForeignKeys()` (called automatically by `Config.Check`, and so by `-check`) confirms that the *related model itself* is registered. It runs once, after every installed app finishes registering. Failure returns `model.ErrUnknownForeignKeyTarget`.
-- **Referential-integrity validation** — `Store.Create` and `Store.Update` confirm that a set foreign key field's value actually references an *existing row* of the related model, via a preflight `SELECT` before the write. Failure returns `db.ErrInvalidForeignKey`. A foreign key field left at its Go zero value (`0`) is treated as unset and skipped — tanGO has no nullable-field mechanism, so this is a convention that relies on primary keys starting at `1` in practice, not a general "optional foreign key" feature.
+- **Referential-integrity validation** — `Store.Create` and `Store.Update` confirm that a set foreign key field's value actually references an *existing row* of the related model, via a preflight `SELECT` before the write. Failure returns `db.ErrInvalidForeignKey`. A foreign key field left at its Go zero value (`0`) is treated as unset: it skips the check and is stored as `NULL`, so the database's `REFERENCES` constraint accepts it, and a `NULL` foreign key reads back as `0`. tanGO has no nullable-field mechanism, so this is a convention that relies on primary keys starting at `1` in practice, not a general "optional foreign key" feature.
 
 Referential-integrity validation only runs when `Store.UseModels` has been called (the same gate that enables cascade delete, below), and is deliberately not wrapped in the same transaction as the write it guards — the generated DB-level `REFERENCES` constraint (see above) is what actually closes the narrow race this leaves open, when it's enabled.
 
@@ -69,7 +69,7 @@ registry.Admin().Register(Author{}, admin.Options{
 
 The same `Label` value is used for the related-object column on any list page that includes the FK field in `ListDisplay`. If the related model has no `Label` configured — or isn't admin-registered at all — every FK display falls back to the raw primary key value; this is never a hard error, so adding a foreign key never breaks an existing admin registration that hasn't gotten around to setting `Label` yet.
 
-Building the select and the related labels costs one query per related row shown (accepted for v0.0.1 — see [limitations](../limitations.md)).
+Building the select and the related labels costs one query per related row shown (accepted — see [limitations](../limitations.md)).
 
 ## Where `Store` stops and raw SQL begins
 

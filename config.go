@@ -17,7 +17,7 @@ import (
 
 const defaultAddr = ":8000"
 
-// Config is the minimal application configuration for v0.1.
+// Config is the minimal application configuration.
 type Config struct {
 	InstalledApps []App
 	Addr          string

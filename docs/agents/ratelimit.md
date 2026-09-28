@@ -21,7 +21,7 @@ Canonical example: `examples/notes-starter`. Human guide: `docs/guides/rate-limi
 
 - Do not reuse `admin`/`accounts`' internal failed-login-attempt limiter for general request throttling — different semantics (failures-only vs. every request).
 - Do not treat a `KeyFunc` error the same as a rejected request — they go to `ErrorHandler`/`LimitedHandler` respectively, on purpose.
-- Do not expect a distributed/shared-state limiter — `ratelimit` is single-process, in-memory only in v0.0.1.
+- Do not expect a distributed/shared-state limiter — `ratelimit` is single-process, in-memory only.
 - Do not trust `X-Forwarded-For`/`X-Real-IP` without configuring `trustedProxies` — an untrusted peer can forge them.
 
 ## Check

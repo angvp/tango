@@ -74,4 +74,4 @@ url, err := reverser.Reverse("posts:detail", tango.Params{"id": "42"})
 
 ## Error handling
 
-A view returning a non-nil error results in a fixed 500 response with a generic JSON body; the underlying error is logged server-side but never sent to the client. There's no per-route custom error-handling hook in v0.0.1 — return a JSON error body yourself (via `ctx.JSON`) for anything a client needs to see.
+A view returning a non-nil error results in a fixed 500 response with a generic JSON body; the underlying error is logged server-side but never sent to the client. There's no per-route custom error-handling hook — return a JSON error body yourself (via `ctx.JSON`) for anything a client needs to see.

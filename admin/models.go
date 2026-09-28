@@ -19,10 +19,9 @@ type AdminUser struct {
 	// access the admin panel at all. Checked by requireSession alongside
 	// (not instead of) the existing session-validity check. Independent of
 	// Active: Active is checked at login, IsStaff only on an already-valid
-	// session. It is the only one of these two flags with real effect in
-	// v0.0.1.
+	// session. It is the only one of these two flags with real effect.
 	IsStaff bool
-	// IsSuperuser is currently ignored: it has no distinct behavior in v0.0.1
+	// IsSuperuser is currently ignored: it has no distinct behavior
 	// and does not bypass IsStaff — a non-staff superuser still gets 403,
 	// same as any other non-staff account. It exists only as forward-
 	// compatible groundwork for a future, finer-grained permission bypass,

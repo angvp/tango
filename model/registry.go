@@ -27,7 +27,7 @@ var ErrUnsupportedField = errors.New("tango: unsupported field type")
 
 // ErrEmbeddedField is returned by Registry.Register when a struct has an
 // embedded (anonymous) field. Embedded fields are rejected outright, not
-// flattened, in v0.1.
+// flattened.
 var ErrEmbeddedField = errors.New("tango: embedded fields are not supported")
 
 // ErrUnknownForeignKeyTarget is returned by ValidateForeignKeys when a
@@ -166,7 +166,7 @@ func (r *Registry) All() []ModelMeta {
 }
 
 // supportedFieldType reports whether t is a kind the metadata layer can
-// describe in v0.0.1: string, bool, any integer/float kind, or time.Time as
+// describe: string, bool, any integer/float kind, or time.Time as
 // the sole named-struct exception.
 func supportedFieldType(t reflect.Type) bool {
 	switch t.Kind() {
