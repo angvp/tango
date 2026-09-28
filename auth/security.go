@@ -15,4 +15,8 @@ var (
 	SafeRedirect = security.SafeRedirect
 	// IsSafeRedirect reports whether raw is safe for allowedPrefix.
 	IsSafeRedirect = security.IsSafeRedirect
+	// IsHTTPS reports whether the client connected over HTTPS, directly or
+	// through a TLS-terminating proxy that sets X-Forwarded-Proto or
+	// Forwarded. Use it for a cookie's Secure flag.
+	IsHTTPS = security.IsHTTPS
 )

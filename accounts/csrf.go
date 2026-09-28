@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/angvp/tango"
+
+	"github.com/angvp/tango/internal/security"
 )
 
 // csrfFieldName is the hidden form field every accounts form carries its
@@ -33,7 +35,7 @@ func ensurePreSessionCSRFCookie(w http.ResponseWriter, r *http.Request) (string,
 		Value:    token,
 		Path:     "/accounts/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   security.IsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 	return token, nil

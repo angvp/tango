@@ -1,6 +1,8 @@
 package auth_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/angvp/tango/auth"
@@ -33,5 +35,16 @@ func TestSafeRedirectHelpersUseArbitraryPrefix(t *testing.T) {
 		if got := auth.SafeRedirect(raw, "/app/", "/app/"); got != "/app/" {
 			t.Fatalf("SafeRedirect(%q) = %q, want fallback /app/", raw, got)
 		}
+	}
+}
+
+func TestIsHTTPSHonorsTLSTerminatingProxy(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "http://example.test/", nil)
+	if auth.IsHTTPS(r) {
+		t.Fatal("IsHTTPS = true for plain HTTP")
+	}
+	r.Header.Set("X-Forwarded-Proto", "https")
+	if !auth.IsHTTPS(r) {
+		t.Fatal("IsHTTPS = false behind a proxy that says https")
 	}
 }

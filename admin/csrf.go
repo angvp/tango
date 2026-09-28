@@ -73,7 +73,7 @@ func ensureLoginCSRFCookie(w http.ResponseWriter, r *http.Request) (string, erro
 		Value:    token,
 		Path:     "/admin/login/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   security.IsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 	return token, nil

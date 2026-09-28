@@ -7,6 +7,7 @@ import (
 
 	"github.com/angvp/tango/auth"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/security"
 )
 
 // defaultSessionDuration is deliberately much longer than admin's fixed
@@ -37,9 +38,9 @@ func createAccountSession(ctx context.Context, store *db.Store, cfg accountsConf
 	return nil
 }
 
-// setSessionCookie sets the session cookie. Secure is only set when the
-// request itself arrived over TLS, mirroring admin's own precedent — see
-// docs/limitations.md. Path is "/" (not "/accounts/"): a host's own views
+// setSessionCookie sets the session cookie. Secure is set when the client
+// connected over HTTPS, directly or through a TLS-terminating proxy (see
+// security.IsHTTPS), mirroring admin's own precedent. Path is "/" (not "/accounts/"): a host's own views
 // anywhere on the site use the current-account helper, which needs the
 // cookie sent on every request, not just ones under /accounts/.
 func setSessionCookie(w http.ResponseWriter, r *http.Request, name string, token string, expiresAt time.Time) {
@@ -49,7 +50,7 @@ func setSessionCookie(w http.ResponseWriter, r *http.Request, name string, token
 		Path:     "/",
 		Expires:  expiresAt,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   security.IsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -63,7 +64,7 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request, name string) {
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   security.IsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }

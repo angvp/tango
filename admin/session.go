@@ -11,6 +11,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/i18n"
+	"github.com/angvp/tango/internal/security"
 )
 
 // sessionCookieName is the cookie carrying an AdminSession's token.
@@ -98,8 +99,9 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-// setSessionCookie sets the session cookie. Secure is only set when the
-// request itself arrived over TLS: a fixed Secure=true would silently stop
+// setSessionCookie sets the session cookie. Secure is set when the client
+// connected over HTTPS, directly or through a TLS-terminating proxy (see
+// security.IsHTTPS), rather than always: a fixed Secure=true would silently stop
 // login from working over the plain-HTTP localhost most local development
 // (and the tutorial) uses, and this framework's documented boundary is
 // "TLS if exposed," not "TLS always" — see docs/limitations.md.
@@ -110,7 +112,7 @@ func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, expi
 		Path:     "/",
 		Expires:  expiresAt,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   security.IsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -123,7 +125,7 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   security.IsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }

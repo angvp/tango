@@ -77,7 +77,7 @@ func Login(store *db.Store, userMeta, sessionMeta model.ModelMeta) tango.View {
 			Expires:  expiresAt,
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
-			Secure:   ctx.Request().TLS != nil,
+			Secure:   auth.IsHTTPS(ctx.Request()), // also true behind a TLS-terminating proxy
 		})
 		return ctx.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	}
