@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -336,9 +337,10 @@ func registerPostgresModel(t *testing.T, value any) model.ModelMeta {
 		t.Fatalf("register model: %v", err)
 	}
 
-	meta, ok := registry.Get("PostgresWidget")
+	name := reflect.TypeOf(value).Name()
+	meta, ok := registry.Get(name)
 	if !ok {
-		t.Fatalf("model PostgresWidget not registered")
+		t.Fatalf("model %s not registered", name)
 	}
 	return meta
 }

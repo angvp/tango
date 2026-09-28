@@ -78,10 +78,10 @@ func TestApplyStepCreateTableWithForeignKeyPostgresEnforcesConstraint(t *testing
 	sqlDB := openPostgresDDLTestDB(t)
 	ctx := context.Background()
 
-	mustApply(t, sqlDB, CreateTable{Table: "fk_ddl_author", Columns: []Column{
+	mustApplyPostgres(t, sqlDB, CreateTable{Table: "fk_ddl_author", Columns: []Column{
 		{Name: "id", Type: "integer", PrimaryKey: true},
 	}})
-	mustApply(t, sqlDB, CreateTable{Table: "fk_ddl_post", Columns: []Column{
+	mustApplyPostgres(t, sqlDB, CreateTable{Table: "fk_ddl_post", Columns: []Column{
 		{Name: "id", Type: "integer", PrimaryKey: true},
 		{Name: "author_id", Type: "integer", References: "fk_ddl_author"},
 	}})
@@ -92,6 +92,13 @@ func TestApplyStepCreateTableWithForeignKeyPostgresEnforcesConstraint(t *testing
 
 	if _, err := sqlDB.ExecContext(ctx, "INSERT INTO fk_ddl_post (author_id) VALUES (999)"); err == nil {
 		t.Fatal("insert with dangling foreign key succeeded on Postgres, want a constraint violation")
+	}
+}
+
+func mustApplyPostgres(t *testing.T, sqlDB *sql.DB, step Step) {
+	t.Helper()
+	if err := ApplyStep(context.Background(), sqlDB, db.Postgres, step); err != nil {
+		t.Fatalf("ApplyStep(%T) returned error: %v", step, err)
 	}
 }
 
