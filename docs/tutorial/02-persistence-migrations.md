@@ -105,10 +105,13 @@ func createPost(store *db.Store, meta model.ModelMeta) tango.View {
 
 ```sh
 tango makemigrations
-# created migrations/0001_auto.go
+# created migrations/0001_auto_20260928023955.go
+# created migrations/0002_auto_20260928023955.go
 ```
 
-Inspect it — it's plain Go, not a DSL, expressing typed steps like `migration.CreateTable`. Apply it:
+The first run writes two files — one for the admin's own tables (the scaffold installed the admin app) and one for `Post`. The timestamp in each name keeps them in order.
+
+Inspect them — they're plain Go, not a DSL, expressing typed steps like `migration.CreateTable`. Apply them:
 
 ```sh
 tango migrate

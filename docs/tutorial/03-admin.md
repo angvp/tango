@@ -70,10 +70,12 @@ Starting from an empty directory, you now have one running application serving:
 - An HTML admin (`/admin/post/`) for the same data, behind a real session-cookie login.
 - A schema created entirely through migrations you generated and applied yourself.
 
-From here:
+**Part 4** lets people comment on posts, which brings in foreign keys, cascading deletes, and raw SQL for the queries `db.Store` doesn't cover. Or, if you'd rather branch off here:
 
 - The [guides](../guides/) cover each topic (routing, models, persistence, migrations, admin, checks, dialects) independently, if you want depth on one without redoing this tutorial.
 - Two guides go beyond what this tutorial builds: [relationships and admin foreign keys](../guides/relationships-and-admin-foreign-keys.md) (giving `Post` an `AuthorID`-style foreign key, with cascade delete and FK-aware admin editing) and [reusable apps](../guides/reusable-apps.md) (packaging an app as its own importable Go package other projects can install).
 - Once this app's `views.go`/`models.go` start feeling crowded, [application architecture](../guides/application-architecture.md) covers the Medium and Hexagonal shapes to grow into — and, just as importantly, when to stay exactly as small as this tutorial leaves you.
-- The [API reference](../reference.md) documents the full supported v0.0.1 surface.
+- The [API reference](../reference.md) documents the full supported surface.
 - [Limitations and compatibility](../limitations.md) is worth reading before using tanGO for anything beyond a small project.
+
+Continue: [Tutorial, part 4: comments and foreign keys](04-comments-and-foreign-keys.md)
