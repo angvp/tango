@@ -16,8 +16,9 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/auth"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/migration"
 	"github.com/angvp/tango/model"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
 
 type authTestUser struct {
@@ -244,26 +245,20 @@ func TestSessionHelpersPropagateUnderlyingStoreErrors(t *testing.T) {
 			t.Fatalf("CreateSession: %v", err)
 		}
 
-		// Enforce foreign keys on this connection and add a row that
-		// references the session, so the session row's SELECT (inside
-		// DeleteSession) succeeds but the subsequent DELETE is rejected by
-		// the FK constraint — a realistic way an app-level FK could make a
-		// session undeletable without the token itself being invalid.
-		sqlDB.SetMaxOpenConns(1)
-		if _, err := sqlDB.Exec("PRAGMA foreign_keys = ON"); err != nil {
-			t.Fatalf("enable foreign keys: %v", err)
-		}
-		if _, err := sqlDB.Exec(`CREATE TABLE auth_test_session_dependent (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			session_id INTEGER NOT NULL REFERENCES auth_test_session(id)
-		)`); err != nil {
+		// Add a row that references the session, so the session row's
+		// SELECT (inside DeleteSession) succeeds but the subsequent DELETE
+		// is rejected by the FK constraint — a realistic way an app-level
+		// FK could make a session undeletable without the token itself
+		// being invalid. testdb enforces foreign keys on both dialects.
+		ctx := context.Background()
+		dependent := migration.CreateTable{Table: "auth_test_session_dependent", Columns: []migration.Column{
+			{Name: "id", Type: "integer", PrimaryKey: true},
+			{Name: "session_id", Type: "integer", References: "auth_test_session"},
+		}}
+		if err := migration.ApplyStep(ctx, sqlDB, testdb.Dialect(), dependent); err != nil {
 			t.Fatalf("create dependent table: %v", err)
 		}
-		var sessionID int64
-		if err := sqlDB.QueryRow("SELECT id FROM auth_test_session WHERE token = ?", token).Scan(&sessionID); err != nil {
-			t.Fatalf("look up session id: %v", err)
-		}
-		if _, err := sqlDB.Exec("INSERT INTO auth_test_session_dependent (session_id) VALUES (?)", sessionID); err != nil {
+		if _, err := sqlDB.ExecContext(ctx, "INSERT INTO auth_test_session_dependent (session_id) SELECT id FROM auth_test_session"); err != nil {
 			t.Fatalf("insert dependent row: %v", err)
 		}
 
@@ -468,7 +463,11 @@ func TestApplicationAuthFullLoginProtectCurrentUserLogoutFlow(t *testing.T) {
 		password := ctx.Request().PostForm.Get("password")
 
 		var users []authTestUser
-		if err := store.Query(ctx.Context(), &users, "SELECT id, email, password_hash FROM auth_test_user WHERE email = ?", email); err != nil {
+		query := "SELECT id, email, password_hash FROM auth_test_user WHERE email = ?"
+		if testdb.Dialect() == db.Postgres {
+			query = "SELECT id, email, password_hash FROM auth_test_user WHERE email = $1"
+		}
+		if err := store.Query(ctx.Context(), &users, query, email); err != nil {
 			return err
 		}
 		if len(users) != 1 || !auth.VerifyPassword(users[0].PasswordHash, password) {
@@ -588,20 +587,16 @@ func buildAuthTestStore(t *testing.T) (*db.Store, *sql.DB, model.ModelMeta, mode
 	userMeta, _ := models.Get("authTestUser")
 	sessionMeta, _ := models.Get("authTestSession")
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
+	// The tables come from the framework's own migrations, as in an app.
+	sqlDB, dialect := testdb.Open(t)
+	migrations := migration.Diff(models.All(), migration.SchemaState{Tables: map[string]migration.TableState{}})
+	for i := range migrations {
+		migrations[i].Name = "0001_initial"
 	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	for _, stmt := range []string{
-		`CREATE TABLE auth_test_user (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, password_hash TEXT NOT NULL)`,
-		`CREATE TABLE auth_test_session (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, user_id INTEGER NOT NULL, expires_at TIMESTAMP NOT NULL)`,
-	} {
-		if _, err := sqlDB.Exec(stmt); err != nil {
-			t.Fatalf("create table: %v", err)
-		}
+	if err := migration.ApplyPending(context.Background(), sqlDB, dialect, migrations); err != nil {
+		t.Fatalf("migrate auth test models: %v", err)
 	}
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	user := authTestUser{Email: "ada@example.test", PasswordHash: "hash"}
 	if err := store.Create(context.Background(), userMeta, &user); err != nil {
 		t.Fatalf("create user: %v", err)
