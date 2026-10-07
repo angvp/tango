@@ -23,6 +23,12 @@ jobs:
         run: go vet ./...
       - name: go build
         run: go build ./...
+      # Relative links and #anchors only; --offline skips external URLs.
+      - name: Markdown links
+        uses: lycheeverse/lychee-action@v2.9.0
+        with:
+          lycheeVersion: v0.24.2
+          args: --offline --include-fragments --no-progress './**/*.md'
 
   test:
     name: test (${{ matrix.dialect }})
