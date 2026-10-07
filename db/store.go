@@ -597,7 +597,7 @@ func validateCondition(meta model.ModelMeta, condition Condition) (model.FieldMe
 	if condition.Op == OpLike && fieldKind != reflect.String {
 		return field, fmt.Errorf("tango db: Where operator %q is only supported for string fields, got %q", condition.Op, field.Name)
 	}
-	if condition.Op != OpEq && condition.Op != OpNe && condition.Op != OpLike && field.Type != reflect.TypeFor[time.Time]() {
+	if condition.Op != OpEq && condition.Op != OpNe && condition.Op != OpLike && field.Type != timeType {
 		switch fieldKind {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
@@ -675,15 +675,39 @@ func scanNullAsZero(scanner rowScanner, fields []reflect.Value) error {
 
 	for i, holder := range holders {
 		if !holder.IsValid() {
+			normalizeTimePointer(fields[i])
 			continue
 		}
 		if value := holder.Elem(); value.IsNil() {
 			fields[i].SetZero()
 		} else {
 			fields[i].Set(value.Elem())
+			normalizeTime(fields[i])
 		}
 	}
 	return nil
+}
+
+var timeType = reflect.TypeFor[time.Time]()
+
+// normalizeTime converts a scanned time.Time field to UTC. Drivers disagree
+// on the zone they read a time back in (pgx uses the process's local zone
+// for TIMESTAMPTZ, modernc.org/sqlite the zone stored in the text), so
+// without this the same stored instant would come back, and serialise,
+// differently per dialect and per machine.
+func normalizeTime(field reflect.Value) {
+	if field.Type() == timeType {
+		field.Set(reflect.ValueOf(field.Interface().(time.Time).UTC()))
+	}
+}
+
+// normalizeTimePointer is normalizeTime for a non-nil *time.Time field.
+func normalizeTimePointer(field reflect.Value) {
+	if field.Type().Elem() != timeType || field.IsNil() {
+		return
+	}
+	utc := field.Elem().Interface().(time.Time).UTC()
+	field.Set(reflect.ValueOf(&utc))
 }
 
 // findPrimaryKeyField returns the FieldMeta flagged PrimaryKey in meta.
