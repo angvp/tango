@@ -12,7 +12,7 @@
 ```
 
 - **`go.mod`** — a normal Go module; tanGO is a real dependency, not a vendored framework.
-- **`main.go`** — pre-wired for SQLite by default: loads `.env` (for `TANGO_DB_DSN`/`TANGO_DB_DIALECT`, if you add one yourself), opens `*sql.DB`, constructs a `db.Store`, installs the admin app, then calls `admin.HandleCLI`, `tango.DispatchFlags`, and finally `tango.Serve`. Admin accounts are created afterward with `tango admin create <username>` — see [admin registration](admin-registration.md) — not baked into any generated file. The app-side flag convention is:
+- **`main.go`** — pre-wired for SQLite by default: loads `.env` (for `TANGO_DB_DSN`, if you add one yourself), picks the database from `TANGO_DB_DSN`'s scheme with `tango.LoadDBConfigFromEnv` (default `sqlite://app.db`; see [configuration](configuration.md#database-env-helpers)), opens `*sql.DB`, constructs a `db.Store`, installs the admin app, then calls `admin.HandleCLI`, `tango.DispatchFlags`, and finally `tango.Serve`. Admin accounts are created afterward with `tango admin create <username>` — see [admin registration](admin-registration.md) — not baked into any generated file. The app-side flag convention is:
   - `-check` — validate app registration and route compilation, then exit (see [app checks](app-checks.md)).
   - `-tango-dump-models` — print registered models as JSON, then exit. Used internally by `tango makemigrations`.
   - `-tango-status` — print registration/database/migration status as JSON, then exit. Used by `tango tui`.
@@ -25,7 +25,7 @@
 
 Useful scaffold options:
 
-- `tango newproject --dialect=postgres <name>` generates a Postgres-wired project using the `pgx` stdlib driver and a local-dev default DSN.
+- `tango newproject --dialect=postgres <name>` generates a Postgres-wired project using the `pgx` stdlib driver; its `main.go` sets a local-dev `TANGO_DB_DSN` (`postgres://postgres:postgres@localhost:5432/<name>`) when the variable is unset.
 - `tango newproject --dialect=sqlite <name>` is the default SQLite shape.
 - `tango newproject --no-admin <name>` skips admin wiring entirely.
 

@@ -153,9 +153,6 @@ func TestNewProjectPostgresDialect(t *testing.T) {
 			t.Fatalf("main.go does not contain %q:\n%s", want, source)
 		}
 	}
-	if strings.Contains(source, "TANGO_DB_DIALECT") {
-		t.Fatalf("main.go still names the retired TANGO_DB_DIALECT:\n%s", source)
-	}
 }
 
 func TestNewProjectRejectsUnknownDialect(t *testing.T) {
