@@ -45,3 +45,4 @@ New records take the next free number here. This directory is the single, public
 | [0037](0037-request-id-never-trusts-an-inbound-header-without-explicit-opt-in.md) | `RequestID` middleware never trusts an inbound header unless a host explicitly opts in | Accepted |
 | [0038](0038-null-reads-as-the-zero-value-and-unset-foreign-keys-write-null.md) | NULL reads as the zero value, and an unset foreign key is written as NULL | Accepted |
 | [0039](0039-secure-cookies-trust-forwarded-proto.md) | Cookies' Secure flag trusts the proxy's forwarded protocol | Accepted |
+| [0040](0040-tests-run-once-per-test-dialect-chosen-by-one-scheme-driven-dsn.md) | Tests run once per Test dialect, chosen by one scheme-driven `TANGO_TEST_DSN` through a public `testdb` package | Accepted |

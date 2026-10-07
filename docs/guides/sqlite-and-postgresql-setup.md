@@ -44,10 +44,12 @@ store := db.NewStore(sqlDB, db.Postgres)
 
 ## Testing against Postgres
 
-Postgres-targeted tests in this repo are opt-in via an environment variable:
+The test suite runs against one Test dialect per `go test` run, chosen by `TANGO_TEST_DSN` with the same scheme-qualified grammar as `TANGO_DB_DSN`:
 
 ```sh
-TANGO_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/tango_test?sslmode=disable" go test ./db/...
+go test ./...                                    # unset: in-memory SQLite
+TANGO_TEST_DSN="sqlite://test.db" go test ./...  # SQLite, a fresh file per test (the path is not used)
+TANGO_TEST_DSN="postgres://user:pass@localhost:5432/tango_test?sslmode=disable" go test ./db/...
 ```
 
-They skip cleanly when the variable is unset — a contributor without a local Postgres instance still gets a full, green SQLite-only test run.
+A contributor without a local Postgres instance still gets a full, green SQLite run. In a Postgres run each test gets its own schema, dropped when the test ends, and an unreachable database fails the run instead of skipping. Your own app's tests can use the same helper: `testdb.Open(t)` or `testdb.Store(t)` from `github.com/angvp/tango/testdb`.

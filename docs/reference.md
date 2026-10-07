@@ -231,3 +231,14 @@ CLI-internal exported surface:
 | `func Replay(...)`, `type SchemaState`, `type TableState`, `type ColumnState` | Schema reconstruction for `tango makemigrations`. |
 | `func Diff(...)`, `func DiffModels(...)` | Diff engine behind `tango makemigrations`. |
 | `func ApplyStep(...)` | Shared DDL translator used by migration runners and tests; use `tango migrate` / `ApplyPending` instead. |
+
+## `testdb` (`github.com/angvp/tango/testdb`)
+
+For tests only. The run's Test dialect comes from `TANGO_TEST_DSN`, with the same grammar as `TANGO_DB_DSN`: unset or `sqlite://:memory:` is in-memory SQLite, any other `sqlite://` path is a fresh SQLite file per test (the path itself is not used), and `postgres://…`/`postgresql://…` is a fresh schema per test, dropped when the test ends. See [ADR 0040](adr/0040-tests-run-once-per-test-dialect-chosen-by-one-scheme-driven-dsn.md).
+
+| Symbol | What it's for |
+|---|---|
+| `func Open(t testing.TB) (*sql.DB, db.Dialect)` | A fresh database for this test, closed by `t.Cleanup`. An unsupported scheme or an unreachable Postgres fails the test; it never skips. |
+| `func Store(t testing.TB) *db.Store` | `db.NewStore` over `Open(t)`. |
+| `func Dialect() db.Dialect` | The run's Test dialect, for per-dialect raw SQL inside a test. |
+| `func SQLiteOnly(t testing.TB, reason string)`, `func PostgresOnly(t testing.TB, reason string)` | Skip the test on the other dialect, with a reason, so every exemption is explicit and greppable. |

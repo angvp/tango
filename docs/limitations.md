@@ -81,7 +81,7 @@ go run gotest.tools/gotestsum@v1.13.0 \
 
 A small set of lines is deliberately never exercised by a unit test, because doing so would need a live Postgres connection or a real interactive terminal rather than a meaningful behavioral test — about 23 statements (~0.7% of the codebase):
 
-- **`db.Store.Create`'s Postgres `RETURNING`-based insert path** (`db/store.go`) — only taken when both `dialect == db.Postgres` and the model needs a backfilled default, and only actually reachable with a live Postgres connection (the SQLite-backed test suite, which is this repo's default, never exercises it). Exercised manually via the opt-in `TANGO_TEST_POSTGRES_DSN` Postgres test tier, not via the default coverage run.
+- **`db.Store.Create`'s Postgres `RETURNING`-based insert path** (`db/store.go`) — only taken when both `dialect == db.Postgres` and the model needs a backfilled default, and only actually reachable with a live Postgres connection (the SQLite-backed test suite, which is this repo's default, never exercises it). Exercised by a Postgres run of the suite (`TANGO_TEST_DSN=postgres://…`), not by the default in-memory SQLite coverage run.
 - **`cmd/tango`'s entrypoint** (`cmd/tango/main.go`) — a single `os.Exit(cli.Run(...))` line; `cli.Run`'s own dispatch logic is fully covered separately in `internal/cli`.
 - **The real interactive TUI event loop** (`internal/cli/tui_dashboard.go`'s `runDashboard`, backed by `tea.Program.Run()`) and **the real-stdin interactivity check** (`internal/cli/tui.go`'s `isInteractiveTerminal`) — both require an actual terminal/TTY. `tui_dashboard.go`'s own model logic (`Update`/`View`/cursor movement/dashboard state transitions) is fully unit-tested independently of the real event loop that drives it.
 

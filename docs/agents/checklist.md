@@ -7,6 +7,7 @@ Use this shared checklist from every recipe instead of repeating validation step
 - Run `go test ./...` in the project module you changed.
 - Run `go vet ./...` when the project has no known vet blockers.
 - Run `gofmt` on changed Go files.
+- Database-backed tests get their database from `testdb.Open(t)` or `testdb.Store(t)`; when a change touches SQL, also run them with `TANGO_TEST_DSN=postgres://…`.
 
 ## tanGO Validation
 
