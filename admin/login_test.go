@@ -2,7 +2,6 @@ package admin_test
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,38 +13,13 @@ import (
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
-	_ "modernc.org/sqlite"
 )
 
 func buildLoginTestHandler(t *testing.T) (http.Handler, *db.Store) {
 	t.Helper()
 
 	registry := tango.NewRegistry()
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_user (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		is_staff BOOLEAN NOT NULL,
-		is_superuser BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_user: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_session: %v", err)
-	}
-	store := db.NewStore(sqlDB, db.SQLite)
+	_, store := migratedAdminDB(t, registry)
 	if err := admin.CreateAccount(context.Background(), store, "admin", "correct-password"); err != nil {
 		t.Fatalf("seed admin account: %v", err)
 	}
@@ -189,7 +163,7 @@ func TestExpiredSessionIsTreatedAsUnauthenticated(t *testing.T) {
 	}
 	sessionMeta, _ := registry.Get("AdminSession")
 	var sessions []admin.AdminSession
-	if err := store.Query(context.Background(), &sessions, "SELECT id AS ID, token AS Token, user_id AS UserID, expires_at AS ExpiresAt FROM admin_session WHERE token = ?", cookie.Value); err != nil {
+	if err := store.Query(context.Background(), &sessions, "SELECT id AS ID, token AS Token, user_id AS UserID, expires_at AS ExpiresAt FROM admin_session WHERE token = $1", cookie.Value); err != nil {
 		t.Fatalf("query session: %v", err)
 	}
 	if len(sessions) != 1 {

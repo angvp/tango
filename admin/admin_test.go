@@ -14,7 +14,6 @@ import (
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/testdb"
-	_ "modernc.org/sqlite"
 )
 
 type adminShellUser struct {

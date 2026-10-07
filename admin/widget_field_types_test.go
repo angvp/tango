@@ -10,7 +10,6 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
-	_ "modernc.org/sqlite"
 )
 
 // widgetGadget exercises every built-in Widget/parsing branch crudProduct's

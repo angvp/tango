@@ -13,7 +13,6 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
-	_ "modernc.org/sqlite"
 )
 
 type crudProduct struct {

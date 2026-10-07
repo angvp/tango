@@ -3,7 +3,6 @@ package admin_test
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -14,8 +13,6 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
-	"github.com/angvp/tango/db"
-	_ "modernc.org/sqlite"
 )
 
 // TestAdminSecurityJourney exercises the full Milestone 12 security
@@ -38,28 +35,7 @@ func TestAdminSecurityJourney(t *testing.T) {
 		t.Fatalf("register admin model: %v", err)
 	}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	if _, err := sqlDB.Exec(`CREATE TABLE widget (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`); err != nil {
-		t.Fatalf("create widget table: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_user (
-		id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL, active BOOLEAN NOT NULL,
-		is_staff BOOLEAN NOT NULL, is_superuser BOOLEAN NOT NULL, created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_user: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL, expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_session: %v", err)
-	}
-	store := db.NewStore(sqlDB, db.SQLite)
+	sqlDB, store := migratedAdminDB(t, registry)
 
 	// 1. Account creation goes through the CLI path, hashing via bcrypt —
 	// never a raw password write.
@@ -138,7 +114,7 @@ func TestAdminSecurityJourney(t *testing.T) {
 		t.Fatalf("create with CSRF = %d, want %d, body: %s", goodCreateResp.Code, http.StatusFound, goodCreateResp.Body.String())
 	}
 	var widgetID int64
-	if err := sqlDB.QueryRow(`SELECT id FROM widget WHERE name = ?`, "Gadget").Scan(&widgetID); err != nil {
+	if err := sqlDB.QueryRow(`SELECT id FROM widget WHERE name = $1`, "Gadget").Scan(&widgetID); err != nil {
 		t.Fatalf("find created widget: %v", err)
 	}
 
@@ -151,7 +127,7 @@ func TestAdminSecurityJourney(t *testing.T) {
 	if confirmResp.Code != http.StatusOK {
 		t.Fatalf("GET delete confirmation = %d, want %d", confirmResp.Code, http.StatusOK)
 	}
-	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM widget WHERE id = ?`, widgetID).Scan(&count); err != nil {
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM widget WHERE id = $1`, widgetID).Scan(&count); err != nil {
 		t.Fatalf("count after GET confirm: %v", err)
 	}
 	if count != 1 {
@@ -166,7 +142,7 @@ func TestAdminSecurityJourney(t *testing.T) {
 	if deleteResp.Code != http.StatusFound {
 		t.Fatalf("delete POST = %d, want %d", deleteResp.Code, http.StatusFound)
 	}
-	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM widget WHERE id = ?`, widgetID).Scan(&count); err != nil {
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM widget WHERE id = $1`, widgetID).Scan(&count); err != nil {
 		t.Fatalf("count after delete: %v", err)
 	}
 	if count != 0 {

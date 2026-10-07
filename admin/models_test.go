@@ -1,25 +1,18 @@
 package admin_test
 
 import (
-	"database/sql"
 	"testing"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
-	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
 
 func TestAdminRegistersAdminUserAndAdminSessionAsOrdinaryModels(t *testing.T) {
 	registry := tango.NewRegistry()
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := testdb.Store(t)
 
 	if err := registry.Register(admin.New(store)); err != nil {
 		t.Fatalf("register admin app: %v", err)

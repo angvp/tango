@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/admin"
-	_ "modernc.org/sqlite"
 )
 
 // --- Malformed primary key in the URL path (edit/delete) ---
@@ -118,16 +117,8 @@ func TestCreateViewPostWithUnreadableBodyReturnsError(t *testing.T) {
 // accounts.registerView's IsUniqueConstraintViolation branch) — the
 // database error propagates as-is, which this test locks in.
 func TestCreateViewPropagatesStoreErrorOnDuplicateUniqueField(t *testing.T) {
-	handler, _, sqlDB := buildAdminHandlerWithStore(t)
-	// buildAdminHandlerWithStore's raw CREATE TABLE has no UNIQUE constraint
-	// of its own (the model's tango:"unique" tag only matters to tanGO's
-	// own migration generator, not this hand-written test schema), so add
-	// one directly to make a genuine duplicate-email insert fail at the
-	// database level, the way it would in a migrated project.
-	if _, err := sqlDB.Exec(`CREATE UNIQUE INDEX admin_shell_user_email_unique ON admin_shell_user (email)`); err != nil {
-		t.Fatalf("add unique index: %v", err)
-	}
-
+	// The migrated schema carries Email's unique index, as a project's would.
+	handler, _, _ := buildAdminHandlerWithStore(t)
 	cookie := loginAndGetSessionCookie(t, handler, "admin", "secret")
 	response := doAdminShellUserCreate(t, handler, cookie, "seed@example.com")
 

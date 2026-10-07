@@ -2,7 +2,6 @@ package admin_test
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,7 +14,6 @@ import (
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/i18n"
-	_ "modernc.org/sqlite"
 )
 
 const adminI18NLocale = "zz-admin-i18n"
@@ -184,31 +182,7 @@ func buildLoginTestHandlerWithMiddleware(t *testing.T, middleware tango.Middlewa
 	t.Helper()
 
 	registry := tango.NewRegistry()
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_user (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		is_staff BOOLEAN NOT NULL,
-		is_superuser BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_user: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_session: %v", err)
-	}
-	store := db.NewStore(sqlDB, db.SQLite)
+	_, store := migratedAdminDB(t, registry)
 	if err := admin.CreateAccount(context.Background(), store, "admin", "correct-password"); err != nil {
 		t.Fatalf("seed admin account: %v", err)
 	}
