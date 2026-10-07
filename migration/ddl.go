@@ -36,6 +36,8 @@ func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		return exec(ctx, sqlDB, createIndexSQL(dialect, false, indexName(s.Table, s.Column), s.Table, s.Column))
 	case DropIndex:
 		return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", quote(dialect, indexName(s.Table, s.Column))))
+	case RenameColumn:
+		return renameColumn(ctx, sqlDB, dialect, s)
 	default:
 		return fmt.Errorf("tango migration: unsupported step type %T", step)
 	}

@@ -27,6 +27,7 @@ Use the actual project workflow if it wraps these commands differently.
 - Do not hand-edit generated migration files unless the change is intentional and reviewed.
 - Do not leave an accidental migration diff after exploratory model changes.
 - Do not assume `makemigrations` applied anything; generation and application are separate steps.
+- When a field was renamed, pass `--rename app.Model.Field=NewField` so its data is kept; never `--allow-drop` it.
 - Do not pass `--allow-drop` to get past a refused run unless the model or field really should be deleted with its data; each `--allow-drop` names exactly one `app.Model` or `app.Model.Field`.
 
 ## Check

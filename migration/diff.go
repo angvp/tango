@@ -126,7 +126,11 @@ func Diff(models []model.ModelMeta, state SchemaState) ([]Migration, error) {
 // DiffModels compares desired model shapes against a replayed migration
 // state, as Diff does. It is exported only for the tango CLI's
 // makemigrations machinery.
-func DiffModels(models []Model, state SchemaState) ([]Migration, error) {
+func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migration, error) {
+	if err := validateRenames(models, state, renames); err != nil {
+		return nil, err
+	}
+
 	byApp := make(map[string]*Migration)
 
 	appMigration := func(app string) *Migration {
@@ -161,8 +165,10 @@ func DiffModels(models []Model, state SchemaState) ([]Migration, error) {
 			continue
 		}
 
-		unsupported = append(unsupported, unsupportedChanges(meta, existing.Columns)...)
-		diffColumns(appMigration(meta.App), table, meta.Columns, existing.Columns)
+		m := appMigration(meta.App)
+		columns := applyRenames(m, table, existing.Columns, renames)
+		unsupported = append(unsupported, unsupportedChanges(meta, columns)...)
+		diffColumns(m, table, meta.Columns, columns)
 	}
 	if len(unsupported) > 0 {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedChange, strings.Join(unsupported, "; "))

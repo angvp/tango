@@ -101,9 +101,11 @@ func printUsage(w io.Writer) {
 	fmt.Fprint(w, `Usage:
   tango run [args...]      Run the current Go app with go run .
   tango check [args...]    Run the current Go app with -check
-  tango makemigrations [--name <name>] [--allow-drop <app.Model[.Field]>]...
+  tango makemigrations [--name <name>] [--rename <app.Model.Field=NewField>]...
+                     [--allow-drop <app.Model[.Field]>]...
                            Generate a migration from current model metadata;
-                           each model or field it drops needs its own --allow-drop
+                           --rename keeps a renamed field's data, and each
+                           model or field it drops needs its own --allow-drop
   tango migrate            Apply pending migrations (go run . -migrate)
   tango migrate down       Roll back the last applied migration
   tango newproject [--dialect=sqlite|postgres] [--no-admin] <name>
@@ -177,7 +179,8 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 	flags := flag.NewFlagSet("makemigrations", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	explicitName := flags.String("name", "", "use a descriptive migration name")
-	var allowDrops stringList
+	var renames, allowDrops stringList
+	flags.Var(&renames, "rename", "keep a renamed field's data: app.Model.Field=NewField; repeat for each")
 	flags.Var(&allowDrops, "allow-drop", "allow dropping one model (app.Model) or field (app.Model.Field) and its data; repeat for each")
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -221,7 +224,12 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 		return 1
 	}
 
-	changes, err := migration.DiffModels(models, state)
+	renameMappings, err := parseRenames(renames)
+	if err != nil {
+		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
+		return 2
+	}
+	changes, err := migration.DiffModels(models, state, renameMappings...)
 	if err != nil {
 		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
 		return 1
@@ -534,6 +542,8 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 		fmt.Fprintf(builder, "migration.CreateIndex{Table: %q, Column: %q},\n", s.Table, s.Column)
 	case migration.DropIndex:
 		fmt.Fprintf(builder, "migration.DropIndex{Table: %q, Column: %q},\n", s.Table, s.Column)
+	case migration.RenameColumn:
+		fmt.Fprintf(builder, "migration.RenameColumn{Table: %q, From: %q, To: %q},\n", s.Table, s.From, s.To)
 	}
 }
 

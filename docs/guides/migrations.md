@@ -17,9 +17,21 @@ Each generated file expresses a small, dialect-agnostic step vocabulary:
 - `AlterColumnUnique`
 - `CreateIndex`, `DropIndex`
 
-There's no rename step and no column-type-change step. A rename is indistinguishable from a drop+add given what model metadata tracks, so it shows up as a migration dropping the old column and adding the new one. A change no step can express — a field's column type (`int` to `string`; `int` to `int64` is the same column type, so it isn't a change), which field is the primary key, or a foreign key's target, including adding or removing `fk=` on an existing field — makes `tango makemigrations` fail with an error naming every such field (`shop.Widget.Stock changes type from integer to text`) and write nothing, rather than leave the database silently out of step with your models.
+There's no column-type-change step. A field rename is a step (`RenameColumn`), but only when you say so: see [renaming a field](#renaming-a-field). A change no step can express — a field's column type (`int` to `string`; `int` to `int64` is the same column type, so it isn't a change), which field is the primary key, or a foreign key's target, including adding or removing `fk=` on an existing field — makes `tango makemigrations` fail with an error naming every such field (`shop.Widget.Stock changes type from integer to text`) and write nothing, rather than leave the database silently out of step with your models.
 
 A generated file's `var M####Xxx = []migration.Migration{...}` is for human readability of the diff — the file an app's `main.go` actually imports is `migrations/migrations.go`, whose `Migrations` slice is regenerated (aggregating every file) on each `tango makemigrations` run. Never hand-edit `migrations.go`.
+
+## Renaming a field
+
+Model metadata can't tell a renamed field from a removed one and a new one, and tanGO never guesses. Tell `makemigrations` with `--rename app.Model.Field=NewField`, one per renamed field (Go names or table/column names both work):
+
+```sh
+tango makemigrations --rename shop.Widget.Stock=Quantity
+```
+
+The migration renames the column in place (`ALTER TABLE … RENAME COLUMN` on both SQLite and PostgreSQL), so every row keeps its value, and the column's indexes, uniqueness and foreign key come with it. It's reversible: `tango migrate down` renames it back. A renamed field needs no `--allow-drop`.
+
+Every `--rename` is checked against migration history and your models before anything is written: the old name must be in history and gone from the models, the new name must be in the models and not in history, and no old or new name may appear in two mappings. A mapping that fails any of these makes the run fail, naming what you asked for and what history and the models actually have, and nothing is written.
 
 ## Dropping a model or field
 

@@ -113,6 +113,19 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		table.Columns[index].Indexed = false
 		state.Tables[s.Table] = table
 
+	case RenameColumn:
+		table, index, err := requireColumn(state, s.Table, s.From)
+		if err != nil {
+			return err
+		}
+		if columnIndex(table.Columns, s.To) != -1 {
+			return fmt.Errorf("tango migration: column %q already exists on table %q", s.To, s.Table)
+		}
+		columns := append([]ColumnState(nil), table.Columns...)
+		columns[index].Name = s.To
+		table.Columns = columns
+		state.Tables[s.Table] = table
+
 	default:
 		return fmt.Errorf("tango migration: unknown step type %T", step)
 	}

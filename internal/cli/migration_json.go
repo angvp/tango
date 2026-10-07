@@ -22,6 +22,8 @@ type encodedStep struct {
 	Unique  bool               `json:"unique,omitempty"`
 	Columns []migration.Column `json:"columns,omitempty"`
 	Def     migration.Column   `json:"def,omitempty"`
+	// To is a rename's new name; Column holds the old one.
+	To string `json:"to,omitempty"`
 }
 
 func encodeMigrations(migrations []migration.Migration) ([]encodedMigration, error) {
@@ -91,6 +93,8 @@ func encodeSteps(steps []migration.Step) ([]encodedStep, error) {
 			encoded[i] = encodedStep{Kind: "CreateIndex", Table: s.Table, Column: s.Column}
 		case migration.DropIndex:
 			encoded[i] = encodedStep{Kind: "DropIndex", Table: s.Table, Column: s.Column}
+		case migration.RenameColumn:
+			encoded[i] = encodedStep{Kind: "RenameColumn", Table: s.Table, Column: s.From, To: s.To}
 		default:
 			return nil, fmt.Errorf("unsupported migration step type %T", step)
 		}
@@ -116,6 +120,8 @@ func decodeSteps(steps []encodedStep) ([]migration.Step, error) {
 			decoded[i] = migration.CreateIndex{Table: step.Table, Column: step.Column}
 		case "DropIndex":
 			decoded[i] = migration.DropIndex{Table: step.Table, Column: step.Column}
+		case "RenameColumn":
+			decoded[i] = migration.RenameColumn{Table: step.Table, From: step.Column, To: step.To}
 		default:
 			return nil, fmt.Errorf("unknown migration step kind %q", step.Kind)
 		}
