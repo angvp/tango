@@ -1,7 +1,6 @@
 package db_test
 
 import (
-	"context"
 	"database/sql"
 	"reflect"
 	"strconv"
@@ -9,31 +8,20 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/db"
-	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/internal/migrationtest"
 	"github.com/angvp/tango/model"
 	"github.com/angvp/tango/testdb"
 )
 
 // openTables returns a fresh database for the run's Test dialect holding a
-// table for each model, built by the framework's own migration DDL (the
-// CreateTable step `tango migrate` applies), plus the registry the models
-// were registered in. Tables are created in argument order, so a foreign
-// key's target must come before the model referencing it.
+// table for each model, built by the framework's own migrations (what
+// `tango migrate` applies), plus the registry the models were registered
+// in.
 func openTables(t *testing.T, models ...any) (*sql.DB, db.Dialect, *model.Registry) {
 	t.Helper()
 	registry := registerModels(t, models...)
-	metas := make([]model.ModelMeta, len(models))
-	for i, value := range models {
-		metas[i] = metaFor(t, registry, value)
-	}
-
 	sqlDB, dialect := testdb.Open(t)
-	for _, table := range migration.ModelsFromMeta(metas) {
-		step := migration.CreateTable{Table: table.Name, Columns: table.Columns}
-		if err := migration.ApplyStep(context.Background(), sqlDB, dialect, step); err != nil {
-			t.Fatalf("create table %s: %v", table.Name, err)
-		}
-	}
+	migrationtest.Apply(t, sqlDB, dialect, registry.All())
 	return sqlDB, dialect, registry
 }
 

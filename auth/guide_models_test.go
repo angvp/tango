@@ -7,7 +7,7 @@ import (
 
 	"github.com/angvp/tango/auth"
 	"github.com/angvp/tango/db"
-	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/internal/migrationtest"
 	"github.com/angvp/tango/model"
 	"github.com/angvp/tango/testdb"
 )
@@ -40,9 +40,7 @@ func TestApplicationAuthGuideModelsMigrateAndLogIn(t *testing.T) {
 	sessionMeta, _ := models.Get("UserSession")
 
 	sqlDB, dialect := testdb.Open(t)
-	if err := migration.ApplyPending(ctx, sqlDB, dialect, migration.Diff(models.All(), migration.SchemaState{})); err != nil {
-		t.Fatalf("migrate guide models: %v", err)
-	}
+	migrationtest.Apply(t, sqlDB, dialect, models.All())
 	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(models)
 

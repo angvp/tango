@@ -16,6 +16,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/auth"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/migrationtest"
 	"github.com/angvp/tango/migration"
 	"github.com/angvp/tango/model"
 	"github.com/angvp/tango/testdb"
@@ -589,13 +590,7 @@ func buildAuthTestStore(t *testing.T) (*db.Store, *sql.DB, model.ModelMeta, mode
 
 	// The tables come from the framework's own migrations, as in an app.
 	sqlDB, dialect := testdb.Open(t)
-	migrations := migration.Diff(models.All(), migration.SchemaState{Tables: map[string]migration.TableState{}})
-	for i := range migrations {
-		migrations[i].Name = "0001_initial"
-	}
-	if err := migration.ApplyPending(context.Background(), sqlDB, dialect, migrations); err != nil {
-		t.Fatalf("migrate auth test models: %v", err)
-	}
+	migrationtest.Apply(t, sqlDB, dialect, models.All())
 	store := db.NewStore(sqlDB, dialect)
 	user := authTestUser{Email: "ada@example.test", PasswordHash: "hash"}
 	if err := store.Create(context.Background(), userMeta, &user); err != nil {

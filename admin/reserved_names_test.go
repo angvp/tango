@@ -11,7 +11,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
-	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/internal/migrationtest"
 	"github.com/angvp/tango/testdb"
 )
 
@@ -60,11 +60,7 @@ func buildReservedNamesAdmin(t *testing.T) (http.Handler, *db.Store, *tango.Regi
 		t.Fatalf("run registration: %v", err)
 	}
 	store.UseModels(registry.Models())
-
-	migrations := migration.Diff(registry.Models().All(), migration.SchemaState{})
-	if err := migration.ApplyPending(ctx, sqlDB, dialect, migrations); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	migrationtest.Apply(t, sqlDB, dialect, registry.Models().All())
 
 	if err := admin.CreateAccount(ctx, store, "admin", "secret"); err != nil {
 		t.Fatalf("seed admin account: %v", err)
