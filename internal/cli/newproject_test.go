@@ -75,6 +75,12 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		}
 	}
 
+	// The generated file is the first code a reader sees, so its standard
+	// library imports form one sorted group, the way goimports leaves them.
+	if !strings.Contains(mainSource, "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\n") {
+		t.Fatalf("main.go standard library imports are not one sorted group:\n%s", mainSource)
+	}
+
 	migrationsGo, err := os.ReadFile(filepath.Join(projectDir, "migrations", "migrations.go"))
 	if err != nil {
 		t.Fatalf("read migrations/migrations.go: %v", err)

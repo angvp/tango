@@ -116,7 +116,7 @@ func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bo
 	adminCLIBlock := ""
 	if includeAdmin {
 		adminImport = "\n\t\"github.com/angvp/tango/admin\"\n\t\"github.com/angvp/tango/db\""
-		contextImport = "\n\t\"context\""
+		contextImport = "\"context\"\n\t"
 		storeLine = "store := db.NewStore(sqlDB, dialect)"
 		adminConfig = `InstalledApps: []tango.App{
 			admin.New(store),
@@ -140,10 +140,9 @@ func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bo
 	return fmt.Sprintf(`package main
 
 import (
-	"database/sql"
+	%s"database/sql"
 	"fmt"
 	"os"
-	%s
 
 	"github.com/angvp/tango"%s
 
