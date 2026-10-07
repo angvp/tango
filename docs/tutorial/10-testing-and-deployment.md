@@ -273,22 +273,21 @@ Every setting the board needs is now an environment variable, with sensible loca
 | Variable | What it sets | Default |
 |---|---|---|
 | `TANGO_ADDR` | The address to listen on | `:8000` |
-| `TANGO_DB_DIALECT` | `sqlite` or `postgres` | `sqlite` |
-| `TANGO_DB_DSN` | The database to connect to | `app.db` on SQLite; required on Postgres |
+| `TANGO_DB_DSN` | The database to connect to; its scheme picks SQLite or Postgres | `sqlite://app.db` |
 | `BOARD_JWT_SECRET` | The API token signing secret (part 7) | none — required |
 
 Locally, `.env` fills them in; in production, set them in the environment instead. Real environment variables always win over `.env`, and the app runs fine without a `.env` file at all.
 
 ## PostgreSQL
 
-SQLite is a fine default: one file, nothing to install, and plenty for a small site on one server. When you want a database server — several app instances, managed backups, more concurrent writes — tanGO also supports PostgreSQL. Replace the database setup at the top of `run()` with one that reads the dialect:
+SQLite is a fine default: one file, nothing to install, and plenty for a small site on one server. When you want a database server — several app instances, managed backups, more concurrent writes — tanGO also supports PostgreSQL. Replace the database setup at the top of `run()` with one that reads `TANGO_DB_DSN`:
 
 ```go
-dialect, err := tango.LoadDBDialectFromEnv()
+dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
 if err != nil {
 	return err
 }
-sqlDB, err := openDatabase(dialect, tango.LoadDBDSNFromEnv())
+sqlDB, err := sql.Open(driverName, dsn)
 if err != nil {
 	return err
 }
@@ -297,24 +296,7 @@ defer sqlDB.Close()
 store := db.NewStore(sqlDB, dialect)
 ```
 
-then pass `dialect` instead of `db.SQLite` to `tango.DispatchFlags` and `tango.ServeContext` further down. Add `openDatabase`, which picks the driver:
-
-```go
-// openDatabase connects to SQLite (the default, a local app.db file) or to
-// PostgreSQL, depending on TANGO_DB_DIALECT.
-func openDatabase(dialect db.Dialect, dsn string) (*sql.DB, error) {
-	if dialect == db.Postgres {
-		if dsn == "" {
-			return nil, fmt.Errorf("TANGO_DB_DSN must be set when TANGO_DB_DIALECT=postgres")
-		}
-		return sql.Open("pgx", dsn)
-	}
-	if dsn == "" {
-		dsn = "app.db"
-	}
-	return sql.Open("sqlite", db.SQLiteForeignKeysDSN(dsn))
-}
-```
+then pass `dialect` instead of `db.SQLite` to `tango.DispatchFlags` and `tango.ServeContext` further down. The DSN's scheme picks the database: `sqlite://app.db` (the default) is a file in the working directory, `sqlite:///var/data/app.db` an absolute path, and `postgres://…` a PostgreSQL server. `tango.LoadDBConfigFromEnv` hands back the matching dialect, the driver name for `sql.Open`, and the DSN the driver expects, with SQLite's foreign key enforcement already switched on. A DSN without a scheme, such as a bare `app.db`, is an error.
 
 The Postgres driver needs one more import in `main.go`, next to the SQLite one:
 
@@ -332,7 +314,6 @@ docker run -d --rm --name board-pg -p 5432:5432 \
   -e POSTGRES_USER=board -e POSTGRES_PASSWORD=board -e POSTGRES_DB=board \
   postgres:17-alpine
 
-export TANGO_DB_DIALECT=postgres
 export TANGO_DB_DSN="postgres://board:board@localhost:5432/board?sslmode=disable"
 
 go run . -migrate
@@ -384,7 +365,7 @@ docker run --rm --env-file prod.env board -migrate
 docker run -d --name board -p 8000:8000 --env-file prod.env board
 ```
 
-where `prod.env` sets `TANGO_DB_DIALECT`, `TANGO_DB_DSN`, and `BOARD_JWT_SECRET` for production. (Pointing a container at a database on your own machine? Use `host.docker.internal` instead of `localhost` in the DSN.) `docker stop board` sends `SIGTERM`, and the graceful shutdown from part 9 finishes in-flight requests before the container exits:
+where `prod.env` sets `TANGO_DB_DSN` (with its `postgres://` or `sqlite://` scheme) and `BOARD_JWT_SECRET` for production. (Pointing a container at a database on your own machine? Use `host.docker.internal` instead of `localhost` in the DSN.) `docker stop board` sends `SIGTERM`, and the graceful shutdown from part 9 finishes in-flight requests before the container exits:
 
 ```json
 {"level":"INFO","msg":"stopped","clean":true}
