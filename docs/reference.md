@@ -240,5 +240,5 @@ For tests only. The run's Test dialect comes from `TANGO_TEST_DSN`, with the sam
 |---|---|
 | `func Open(t testing.TB) (*sql.DB, db.Dialect)` | A fresh database for this test, closed by `t.Cleanup`. An unsupported scheme or an unreachable Postgres fails the test; it never skips. |
 | `func Store(t testing.TB) *db.Store` | `db.NewStore` over `Open(t)`. |
-| `func Dialect() db.Dialect` | The run's Test dialect, for per-dialect raw SQL inside a test. |
+| `func Dialect() db.Dialect` | The run's Test dialect, for per-dialect raw SQL inside a test. Panics on an unsupported `TANGO_TEST_DSN`, with the message `Open` fails the test with. |
 | `func SQLiteOnly(t testing.TB, reason string)`, `func PostgresOnly(t testing.TB, reason string)` | Skip the test on the other dialect, with a reason, so every exemption is explicit and greppable. |

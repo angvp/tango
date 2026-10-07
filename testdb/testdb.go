@@ -30,6 +30,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -140,13 +141,13 @@ func newSchemaName(t testing.TB) string {
 	return "tango_test_" + hex.EncodeToString(suffix)
 }
 
-// Dialect reports the run's Test dialect. An unsupported TANGO_TEST_DSN
-// reports SQLite here; Open, Store, SQLiteOnly and PostgresOnly fail the
-// test for it.
+// Dialect reports the run's Test dialect. It has no test to fail, so an
+// unsupported TANGO_TEST_DSN panics with the message Open, Store,
+// SQLiteOnly and PostgresOnly fail the test with.
 func Dialect() db.Dialect {
 	dialect, _, _, err := db.ParseDSN(runDSN())
 	if err != nil {
-		return db.SQLite
+		panic(runDSNError(err))
 	}
 	return dialect
 }
@@ -175,9 +176,15 @@ func parseRunDSN(t testing.TB) (db.Dialect, string) {
 	t.Helper()
 	dialect, _, driverDSN, err := db.ParseDSN(runDSN())
 	if err != nil {
-		t.Fatalf("testdb: %s: %v", envVar, err)
+		t.Fatalf("%s", runDSNError(err))
 	}
 	return dialect, driverDSN
+}
+
+// runDSNError names TANGO_TEST_DSN in a parse failure. It never echoes
+// the DSN itself, which may carry credentials.
+func runDSNError(err error) string {
+	return fmt.Sprintf("testdb: %s: %v", envVar, err)
 }
 
 // runDSN is the run's TANGO_TEST_DSN, with unset meaning in-memory SQLite.

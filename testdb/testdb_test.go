@@ -118,6 +118,27 @@ func TestDialectFollowsTheDSNScheme(t *testing.T) {
 	}
 }
 
+func TestDialectPanicsOnAnUnsupportedScheme(t *testing.T) {
+	t.Setenv("TANGO_TEST_DSN", "mysql://root:secret@localhost/tango")
+
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		got := testdb.Dialect()
+		t.Errorf("Dialect() with a mysql:// DSN returned %v instead of panicking", got)
+	}()
+
+	message := fmt.Sprint(recovered)
+	for _, want := range []string{"TANGO_TEST_DSN", "sqlite://", "postgres://"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("panic message %q does not mention %q", message, want)
+		}
+	}
+	if strings.Contains(message, "secret") {
+		t.Errorf("panic message %q echoes the DSN's password", message)
+	}
+}
+
 func TestExemptionsSkipOnlyTheOtherDialect(t *testing.T) {
 	tests := []struct {
 		name        string
