@@ -1,23 +1,19 @@
 package tango
 
 import (
-	"database/sql"
 	"errors"
 	"testing"
 
 	"github.com/angvp/tango/db"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/internal/migrationtest"
+	"github.com/angvp/tango/testdb"
 )
 
 func TestRegistrySetStoreAndStoreRoundTrip(t *testing.T) {
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	registry := NewRegistry()
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	registry.SetStore(store)
 
 	got, ok := registry.Store()
@@ -49,20 +45,7 @@ type registrySetStoreCascadePost struct {
 }
 
 func TestRegistrySetStoreWiresModelsForCascadeDelete(t *testing.T) {
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
-
-	for _, stmt := range []string{
-		`CREATE TABLE registry_set_store_cascade_author (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`,
-		`CREATE TABLE registry_set_store_cascade_post (id INTEGER PRIMARY KEY AUTOINCREMENT, author_id INTEGER NOT NULL)`,
-	} {
-		if _, err := sqlDB.Exec(stmt); err != nil {
-			t.Fatalf("create table: %v", err)
-		}
-	}
+	sqlDB, dialect := testdb.Open(t)
 
 	registry := NewRegistry()
 	if err := registry.Models().Register(registrySetStoreCascadeAuthor{}); err != nil {
@@ -71,8 +54,9 @@ func TestRegistrySetStoreWiresModelsForCascadeDelete(t *testing.T) {
 	if err := registry.Models().Register(registrySetStoreCascadePost{}); err != nil {
 		t.Fatalf("register post: %v", err)
 	}
+	migrationtest.Apply(t, sqlDB, dialect, registry.Models().All())
 
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	registry.SetStore(store) // must wire Models() into store for cascade to work
 
 	authorMeta, _ := registry.Models().Get("registrySetStoreCascadeAuthor")

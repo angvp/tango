@@ -18,7 +18,7 @@ import (
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
 
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
 
 type configCheckApp struct {
@@ -134,12 +134,8 @@ func TestConfigMiddlewareWrapsBuiltRegistryRoutes(t *testing.T) {
 }
 
 func TestMiddlewareComposesAcrossAppAndAdminTiers(t *testing.T) {
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	store := db.NewStore(sqlDB, db.SQLite)
+	sqlDB, dialect := testdb.Open(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	headerOrder := func(marker string) tango.Middleware {
 		return func(next http.Handler) http.Handler {
@@ -358,11 +354,7 @@ func TestStatusReportsHealthyProjectWithNoPendingMigrations(t *testing.T) {
 	})
 	config := tango.Config{InstalledApps: []tango.App{app}}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	migrations := []migration.Migration{
 		{App: "widgets", Name: "0001_auto", Reversible: true, Up: []migration.Step{
@@ -371,11 +363,11 @@ func TestStatusReportsHealthyProjectWithNoPendingMigrations(t *testing.T) {
 			}},
 		}},
 	}
-	if err := migration.ApplyPending(context.Background(), sqlDB, db.SQLite, migrations); err != nil {
+	if err := migration.ApplyPending(context.Background(), sqlDB, dialect, migrations); err != nil {
 		t.Fatalf("ApplyPending: %v", err)
 	}
 
-	status := tango.Status(context.Background(), config, sqlDB, db.SQLite, migrations)
+	status := tango.Status(context.Background(), config, sqlDB, dialect, migrations)
 
 	if !status.RegistrationOK || status.RegistrationError != "" {
 		t.Fatalf("RegistrationOK/Error = %v/%q, want true/\"\"", status.RegistrationOK, status.RegistrationError)
@@ -395,13 +387,9 @@ func TestStatusReportsRegistrationError(t *testing.T) {
 	})
 	config := tango.Config{InstalledApps: []tango.App{app}}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
-	status := tango.Status(context.Background(), config, sqlDB, db.SQLite, nil)
+	status := tango.Status(context.Background(), config, sqlDB, dialect, nil)
 
 	if status.RegistrationOK {
 		t.Fatal("RegistrationOK = true, want false")
@@ -417,13 +405,10 @@ func TestStatusReportsDatabaseUnreachableWithoutPanicking(t *testing.T) {
 	})
 	config := tango.Config{InstalledApps: []tango.App{app}}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	sqlDB, dialect := testdb.Open(t)
 	sqlDB.Close()
 
-	status := tango.Status(context.Background(), config, sqlDB, db.SQLite, nil)
+	status := tango.Status(context.Background(), config, sqlDB, dialect, nil)
 
 	if status.DatabaseReachable {
 		t.Fatal("DatabaseReachable = true, want false for a closed database")
@@ -439,18 +424,14 @@ func TestStatusIsReadOnlyWhenTrackingTableIsMissing(t *testing.T) {
 	})
 	config := tango.Config{InstalledApps: []tango.App{app}}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	migrations := []migration.Migration{
 		{App: "widgets", Name: "0001_auto", Reversible: true},
 		{App: "widgets", Name: "0002_auto", Reversible: true},
 	}
 
-	status := tango.Status(context.Background(), config, sqlDB, db.SQLite, migrations)
+	status := tango.Status(context.Background(), config, sqlDB, dialect, migrations)
 
 	if !status.DatabaseReachable || status.DatabaseError != "" {
 		t.Fatalf("DatabaseReachable/Error = %v/%q, want true/\"\"", status.DatabaseReachable, status.DatabaseError)
@@ -459,13 +440,10 @@ func TestStatusIsReadOnlyWhenTrackingTableIsMissing(t *testing.T) {
 		t.Fatalf("migration counts = %+v, want total=2 applied=0 pending=2", status)
 	}
 
-	var tableName string
-	err = sqlDB.QueryRowContext(
-		context.Background(),
-		"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tango_migrations'",
-	).Scan(&tableName)
-	if !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("tango_migrations table query error = %v, want sql.ErrNoRows", err)
+	var count int
+	err := sqlDB.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM tango_migrations").Scan(&count)
+	if !migration.IsMissingTrackingTable(err) {
+		t.Fatalf("tango_migrations query error = %v, want the table to be missing", err)
 	}
 }
 
@@ -475,11 +453,7 @@ func TestStatusReportsPendingMigrations(t *testing.T) {
 	})
 	config := tango.Config{InstalledApps: []tango.App{app}}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	applied := []migration.Migration{
 		{App: "widgets", Name: "0001_auto", Reversible: true, Up: []migration.Step{
@@ -488,7 +462,7 @@ func TestStatusReportsPendingMigrations(t *testing.T) {
 			}},
 		}},
 	}
-	if err := migration.ApplyPending(context.Background(), sqlDB, db.SQLite, applied); err != nil {
+	if err := migration.ApplyPending(context.Background(), sqlDB, dialect, applied); err != nil {
 		t.Fatalf("ApplyPending: %v", err)
 	}
 
@@ -498,7 +472,7 @@ func TestStatusReportsPendingMigrations(t *testing.T) {
 		},
 	})
 
-	status := tango.Status(context.Background(), config, sqlDB, db.SQLite, allMigrations)
+	status := tango.Status(context.Background(), config, sqlDB, dialect, allMigrations)
 
 	if status.MigrationsTotal != 2 || status.MigrationsApplied != 1 || status.MigrationsPending != 1 {
 		t.Fatalf("migration counts = %+v, want total=2 applied=1 pending=1", status)
@@ -516,11 +490,7 @@ func TestStatusReportsNonMissingTableDatabaseError(t *testing.T) {
 	})
 	config := tango.Config{InstalledApps: []tango.App{app}}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	// A tracking table that exists but lacks the columns AppliedMigrations
 	// queries: its error message will not contain "no such table".
@@ -528,7 +498,7 @@ func TestStatusReportsNonMissingTableDatabaseError(t *testing.T) {
 		t.Fatalf("create malformed tracking table: %v", err)
 	}
 
-	status := tango.Status(context.Background(), config, sqlDB, db.SQLite, nil)
+	status := tango.Status(context.Background(), config, sqlDB, dialect, nil)
 
 	if status.DatabaseError == "" {
 		t.Fatal("DatabaseError is empty, want the underlying query error")
@@ -727,11 +697,7 @@ func TestDispatchFlagsReportsFailures(t *testing.T) {
 			name: "migrate down reports no applied migrations",
 			args: []string{"tango", "-migrate", "-down"},
 			db: func(t *testing.T) *sql.DB {
-				sqlDB, err := sql.Open("sqlite", ":memory:")
-				if err != nil {
-					t.Fatalf("open sqlite: %v", err)
-				}
-				t.Cleanup(func() { _ = sqlDB.Close() })
+				sqlDB, _ := testdb.Open(t)
 				return sqlDB
 			},
 			check: func(t *testing.T, err error) {
@@ -744,10 +710,7 @@ func TestDispatchFlagsReportsFailures(t *testing.T) {
 			name: "migrate reports apply failure",
 			args: []string{"tango", "-migrate"},
 			db: func(t *testing.T) *sql.DB {
-				sqlDB, err := sql.Open("sqlite", ":memory:")
-				if err != nil {
-					t.Fatalf("open sqlite: %v", err)
-				}
+				sqlDB, _ := testdb.Open(t)
 				sqlDB.Close()
 				return sqlDB
 			},
@@ -765,7 +728,7 @@ func TestDispatchFlagsReportsFailures(t *testing.T) {
 				sqlDB = tt.db(t)
 			}
 			withArgs(t, tt.args, func() {
-				handled, err := tango.DispatchFlags(tt.config, sqlDB, db.SQLite, nil)
+				handled, err := tango.DispatchFlags(tt.config, sqlDB, testdb.Dialect(), nil)
 				if !handled {
 					t.Fatal("handled = false, want true")
 				}

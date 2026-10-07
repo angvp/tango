@@ -12,18 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/angvp/tango/db"
-
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
 
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
+	sqlDB, _ := testdb.Open(t)
 	return sqlDB
 }
 
@@ -31,7 +25,7 @@ func TestWithShutdownTimeoutRejectsNonPositive(t *testing.T) {
 	sqlDB := openTestDB(t)
 	tests := []time.Duration{0, -time.Second}
 	for _, d := range tests {
-		err := ServeContext(context.Background(), Config{Addr: "127.0.0.1:0"}, sqlDB, db.SQLite, WithShutdownTimeout(d))
+		err := ServeContext(context.Background(), Config{Addr: "127.0.0.1:0"}, sqlDB, testdb.Dialect(), WithShutdownTimeout(d))
 		if err == nil {
 			t.Fatalf("WithShutdownTimeout(%s): expected an error, got nil", d)
 		}
@@ -72,7 +66,7 @@ func TestServeContextStartOrderIsForwardStopOrderIsReverse(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -176,7 +170,7 @@ func TestServeContextStartFailureRollsBackAlreadyStartedComponents(t *testing.T)
 		orderedComponent("c", &log, &mu, nil, nil),
 	)
 
-	err := ServeContext(context.Background(), Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+	err := ServeContext(context.Background(), Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	if !errors.Is(err, startErr) {
 		t.Fatalf("errors.Is(err, startErr) = false; err = %v", err)
 	}
@@ -216,7 +210,7 @@ func TestServeContextCallerCancellationDuringStartupRollsBack(t *testing.T) {
 
 	registerAll := tangoAppRegisteringLifecycles(blockThenCancel, unreached)
 
-	err := ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+	err := ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	if err == nil {
 		t.Fatal("expected an error for caller cancellation during startup, got nil")
 	}
@@ -275,7 +269,7 @@ func TestServeContextCallerCancellationWhileStartIsBlockedRollsBackWithoutLeakin
 
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	}()
 
 	<-startRunning
@@ -331,7 +325,7 @@ func TestServeContextListenFailureTriggersRollback(t *testing.T) {
 		orderedComponent("b", &log, &mu, nil, nil),
 	)
 
-	err = ServeContext(context.Background(), Config{Addr: occupied.Addr().String(), InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+	err = ServeContext(context.Background(), Config{Addr: occupied.Addr().String(), InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	if err == nil {
 		t.Fatal("expected a listen error, got nil")
 	}
@@ -371,7 +365,7 @@ func TestServeContextApplicationContextCanceledOnlyAfterDrainBeforeStop(t *testi
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -452,7 +446,7 @@ func TestServeContextDrainTimeoutForcesCloseAndReturnsWrappedDeadlineExceeded(t 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{slowRouteApp, registerAll}}, sqlDB, db.SQLite, WithShutdownTimeout(shutdownTimeout))
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{slowRouteApp, registerAll}}, sqlDB, testdb.Dialect(), WithShutdownTimeout(shutdownTimeout))
 	}()
 	addr := <-addrCh
 
@@ -558,7 +552,7 @@ func TestServeContextStopPhaseSharesOneTimeoutBudgetAcrossComponents(t *testing.
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite, WithShutdownTimeout(shutdownTimeout))
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect(), WithShutdownTimeout(shutdownTimeout))
 	}()
 
 	<-ready
@@ -643,7 +637,7 @@ func TestServeContextServeErrorAfterStartupStopsComponentsAndPreservesError(t *t
 
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(context.Background(), Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+		done <- ServeContext(context.Background(), Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	}()
 
 	addr := <-addrCh
@@ -686,7 +680,7 @@ func TestServeContextErrorsIsFindsEachStageOfError(t *testing.T) {
 
 	registerAll := tangoAppRegisteringLifecycles(alsoFailsOnRollback, failing)
 
-	err := ServeContext(context.Background(), Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+	err := ServeContext(context.Background(), Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	if !errors.Is(err, startErr) {
 		t.Fatalf("errors.Is(err, startErr) = false; err = %v", err)
 	}
@@ -723,7 +717,7 @@ func TestServeContextFullCycleLeavesNoGoroutinesBehind(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite, WithShutdownTimeout(200*time.Millisecond))
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect(), WithShutdownTimeout(200*time.Millisecond))
 	}()
 
 	time.Sleep(50 * time.Millisecond)

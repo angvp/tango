@@ -43,6 +43,9 @@ func TestContributedMigrationsApplyInHostProject(t *testing.T) {
 		t.Fatalf("tango-status does not show exactly one applied migration (expected the contributed greetings migration):\n%s", statusOut)
 	}
 
+	// This reads the host app's own SQLite database, written by the
+	// `go run` above, not a test database: the run's Test dialect does not
+	// apply to it.
 	sqlDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("open %s: %v", dbPath, err)

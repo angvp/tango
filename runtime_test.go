@@ -2,7 +2,6 @@ package tango
 
 import (
 	"context"
-	"database/sql"
 	"io"
 	"os"
 	"strings"
@@ -12,7 +11,7 @@ import (
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
 
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
 
 func captureStdout(t *testing.T, fn func() error) (string, error) {
@@ -42,13 +41,9 @@ func withArgs(t *testing.T, args ...string) {
 
 func TestDispatchFlagsReturnsUnhandledWithoutTangoFlag(t *testing.T) {
 	withArgs(t)
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
-	handled, err := DispatchFlags(Config{}, sqlDB, db.SQLite, nil)
+	handled, err := DispatchFlags(Config{}, sqlDB, dialect, nil)
 	if handled || err != nil {
 		t.Fatalf("handled, err = %v, %v; want false, nil", handled, err)
 	}
@@ -56,14 +51,10 @@ func TestDispatchFlagsReturnsUnhandledWithoutTangoFlag(t *testing.T) {
 
 func TestDispatchFlagsCheck(t *testing.T) {
 	withArgs(t, "-check")
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	output, err := captureStdout(t, func() error {
-		handled, err := DispatchFlags(Config{}, sqlDB, db.SQLite, nil)
+		handled, err := DispatchFlags(Config{}, sqlDB, dialect, nil)
 		if !handled {
 			t.Fatal("handled = false, want true")
 		}
@@ -79,14 +70,10 @@ func TestDispatchFlagsCheck(t *testing.T) {
 
 func TestDispatchFlagsStatusIsJSON(t *testing.T) {
 	withArgs(t, "-tango-status")
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	output, err := captureStdout(t, func() error {
-		handled, err := DispatchFlags(Config{}, sqlDB, db.SQLite, nil)
+		handled, err := DispatchFlags(Config{}, sqlDB, dialect, nil)
 		if !handled {
 			t.Fatal("handled = false, want true")
 		}
@@ -101,18 +88,14 @@ func TestDispatchFlagsStatusIsJSON(t *testing.T) {
 }
 
 func TestDispatchFlagsMigrateAndDown(t *testing.T) {
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 	migrations := []migration.Migration{{App: "widgets", Name: "0001_auto", Reversible: true, Up: []migration.Step{
 		migration.CreateTable{Table: "widget", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 	}, Down: []migration.Step{migration.DropTable{Table: "widget"}}}}
 
 	withArgs(t, "-migrate")
 	output, err := captureStdout(t, func() error {
-		handled, err := DispatchFlags(Config{}, sqlDB, db.SQLite, migrations)
+		handled, err := DispatchFlags(Config{}, sqlDB, dialect, migrations)
 		if !handled {
 			t.Fatal("handled = false, want true")
 		}
@@ -127,7 +110,7 @@ func TestDispatchFlagsMigrateAndDown(t *testing.T) {
 
 	os.Args = []string{"app", "-migrate", "-down"}
 	output, err = captureStdout(t, func() error {
-		handled, err := DispatchFlags(Config{}, sqlDB, db.SQLite, migrations)
+		handled, err := DispatchFlags(Config{}, sqlDB, dialect, migrations)
 		if !handled {
 			t.Fatal("handled = false, want true")
 		}
@@ -142,16 +125,12 @@ func TestDispatchFlagsMigrateAndDown(t *testing.T) {
 }
 
 func TestServeBuildsRegistryAndListens(t *testing.T) {
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0"}, sqlDB, db.SQLite)
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0"}, sqlDB, dialect)
 	}()
 
 	// ServeContext's bind happens synchronously inside it before it ever
@@ -224,14 +203,10 @@ func TestLoadEnvFile(t *testing.T) {
 
 func TestDispatchFlagsDumpModels(t *testing.T) {
 	withArgs(t, "-tango-dump-models")
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	output, err := captureStdout(t, func() error {
-		handled, err := DispatchFlags(Config{}, sqlDB, db.SQLite, nil)
+		handled, err := DispatchFlags(Config{}, sqlDB, dialect, nil)
 		if !handled {
 			t.Fatal("handled = false, want true")
 		}
