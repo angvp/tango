@@ -44,18 +44,18 @@ func run() error {
 		return err
 	}
 
-	dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
+	dsn, err := tango.LoadDBConfigFromEnv()
 	if err != nil {
 		return err
 	}
 
-	sqlDB, err := sql.Open(driverName, dsn)
+	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
 	if err != nil {
 		return err
 	}
 	defer sqlDB.Close()
 
-	store := db.NewStore(sqlDB, dialect)
+	store := db.NewStore(sqlDB, dsn.Dialect)
 	tokens, err := newTokenService()
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func run() error {
 		return err
 	}
 
-	handled, err := tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)
+	handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)
 	if handled || err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func run() error {
 	defer stop()
 
 	logger.Info("listening", "addr", config.Addr)
-	err = tango.ServeContext(ctx, config, sqlDB, dialect,
+	err = tango.ServeContext(ctx, config, sqlDB, dsn.Dialect,
 		tango.WithLogger(logger),
 		tango.WithShutdownTimeout(10*time.Second),
 	)

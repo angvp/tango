@@ -125,7 +125,7 @@ ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SI
 defer stop()
 
 logger.Info("listening", "addr", config.Addr)
-err = tango.ServeContext(ctx, config, sqlDB, dialect,
+err = tango.ServeContext(ctx, config, sqlDB, dsn.Dialect,
 	tango.WithLogger(logger),
 	tango.WithShutdownTimeout(10*time.Second),
 )

@@ -55,7 +55,7 @@ In `main.go`, the generated code already opens the database named by `TANGO_DB_D
 
 ```go
 // main.go (as of part 2)
-store := db.NewStore(sqlDB, dialect)
+store := db.NewStore(sqlDB, dsn.Dialect)
 config := tango.Config{
 	InstalledApps: []tango.App{
 		posts.New(store),
@@ -65,7 +65,7 @@ config := tango.Config{
 }
 ```
 
-(`dialect` comes from `tango.LoadDBConfigFromEnv()` a few lines up, alongside the driver name and DSN passed to `sql.Open`. Changing which app gets constructed with what is the kind of one-line rewiring the "no hidden setup" principle expects you to do by hand.)
+(`dsn` comes from `tango.LoadDBConfigFromEnv()` a few lines up; its `Driver` and `Source` were passed to `sql.Open`. Changing which app gets constructed with what is the kind of one-line rewiring the "no hidden setup" principle expects you to do by hand.)
 
 ## CRUD views
 

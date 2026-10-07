@@ -36,7 +36,7 @@ Call it right after creating the store, and fail at startup rather than at the f
 
 ```go
 // main.go
-store := db.NewStore(sqlDB, dialect)
+store := db.NewStore(sqlDB, dsn.Dialect)
 tokens, err := newTokenService()
 if err != nil {
 	return err

@@ -54,9 +54,8 @@ const connectTimeout = 10 * time.Second
 // Open returns a fresh database for this test and the Dialect to use with it.
 func Open(t testing.TB) (*sql.DB, db.Dialect) {
 	t.Helper()
-	dialect, driverDSN := parseRunDSN(t)
-	if dialect == db.Postgres {
-		return openPostgres(t, driverDSN), db.Postgres
+	if parsed := parseRunDSN(t); parsed.Dialect == db.Postgres {
+		return openPostgres(t, parsed.Source), db.Postgres
 	}
 	return openSQLite(t), db.SQLite
 }
@@ -78,11 +77,11 @@ func openSQLite(t testing.TB) *sql.DB {
 	if !inMemory {
 		dsn = "sqlite://" + filepath.Join(t.TempDir(), "test.db")
 	}
-	_, driverName, driverDSN, err := db.ParseDSN(dsn)
+	parsed, err := db.ParseDSN(dsn)
 	if err != nil {
 		t.Fatalf("testdb: %v", err)
 	}
-	sqlDB, err := sql.Open(driverName, driverDSN)
+	sqlDB, err := sql.Open(parsed.Driver, parsed.Source)
 	if err != nil {
 		t.Fatalf("testdb: open sqlite: %v", err)
 	}
@@ -145,18 +144,18 @@ func newSchemaName(t testing.TB) string {
 // unsupported TANGO_TEST_DSN panics with the message Open, Store,
 // SQLiteOnly and PostgresOnly fail the test with.
 func Dialect() db.Dialect {
-	dialect, _, _, err := db.ParseDSN(runDSN())
+	parsed, err := db.ParseDSN(runDSN())
 	if err != nil {
 		panic(runDSNError(err))
 	}
-	return dialect
+	return parsed.Dialect
 }
 
 // SQLiteOnly skips the test unless the run's Test dialect is SQLite. The
 // reason says what the test needs that PostgreSQL cannot give it.
 func SQLiteOnly(t testing.TB, reason string) {
 	t.Helper()
-	if dialect, _ := parseRunDSN(t); dialect != db.SQLite {
+	if parseRunDSN(t).Dialect != db.SQLite {
 		t.Skipf("testdb: SQLite only: %s", reason)
 	}
 }
@@ -165,20 +164,20 @@ func SQLiteOnly(t testing.TB, reason string) {
 // The reason says what the test needs that SQLite cannot give it.
 func PostgresOnly(t testing.TB, reason string) {
 	t.Helper()
-	if dialect, _ := parseRunDSN(t); dialect != db.Postgres {
+	if parseRunDSN(t).Dialect != db.Postgres {
 		t.Skipf("testdb: PostgreSQL only: %s", reason)
 	}
 }
 
 // parseRunDSN parses the run's TANGO_TEST_DSN, failing the test when its
 // scheme is unsupported.
-func parseRunDSN(t testing.TB) (db.Dialect, string) {
+func parseRunDSN(t testing.TB) db.DSN {
 	t.Helper()
-	dialect, _, driverDSN, err := db.ParseDSN(runDSN())
+	parsed, err := db.ParseDSN(runDSN())
 	if err != nil {
 		t.Fatalf("%s", runDSNError(err))
 	}
-	return dialect, driverDSN
+	return parsed
 }
 
 // runDSNError names TANGO_TEST_DSN in a parse failure. It never echoes

@@ -38,7 +38,7 @@ Like every model name in tanGO, `fk=Author` refers to a bare, unnamespaced model
 
 ## Migrations and the generated constraint
 
-`tango makemigrations` generates a real DB-level `REFERENCES` constraint for a foreign key field — `RESTRICT`/`NO ACTION`, never `CASCADE` at the database level (see below for why). On SQLite, this constraint is only enforced if `PRAGMA foreign_keys=ON` has been set on the connection. `db.ParseDSN` (and `tango.LoadDBConfigFromEnv`, which the generated scaffold uses) already returns a SQLite DSN with the driver's `_foreign_keys=on` parameter, so an app configured through `TANGO_DB_DSN` gets enforcement with no extra step (see [configuration](configuration.md)). If you open your own SQLite connection from a bare path instead, add the parameter with `db.SQLiteForeignKeysDSN`:
+`tango makemigrations` generates a real DB-level `REFERENCES` constraint for a foreign key field — `RESTRICT`/`NO ACTION`, never `CASCADE` at the database level (see below for why). On SQLite, this constraint is only enforced if `PRAGMA foreign_keys=ON` has been set on the connection. `db.ParseDSN` (and `tango.LoadDBConfigFromEnv`, which the generated scaffold uses) already returns a SQLite `Source` with the driver's `_foreign_keys=on` parameter, so an app configured through `TANGO_DB_DSN` gets enforcement with no extra step (see [configuration](configuration.md)). If you open your own SQLite connection from a bare path instead, add the parameter with `db.SQLiteForeignKeysDSN`:
 
 ```go
 sqlDB, err := sql.Open("sqlite", db.SQLiteForeignKeysDSN(path))

@@ -101,31 +101,31 @@ func run() error {
 		return err
 	}
 
-	dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
+	dsn, err := tango.LoadDBConfigFromEnv()
 	if err != nil {
 		return err
 	}
 
-	sqlDB, err := sql.Open(driverName, dsn)
+	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
 	if err != nil {
 		return err
 	}
 	defer sqlDB.Close()
 
-	store := db.NewStore(sqlDB, dialect)
+	store := db.NewStore(sqlDB, dsn.Dialect)
 	config := appConfig(store)
 
 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 		return err
 	}
 
-	handled, err := tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)
+	handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)
 	if handled || err != nil {
 		return err
 	}
 
 	fmt.Println("listening on", config.Addr)
-	return tango.Serve(config, sqlDB, dialect)
+	return tango.Serve(config, sqlDB, dsn.Dialect)
 }
 
 func appConfig(store *db.Store) tango.Config {

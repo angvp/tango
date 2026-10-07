@@ -287,21 +287,21 @@ SQLite is a fine default: one file, nothing to install, and plenty for a small s
 
 ```go
 // main.go
-dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
+dsn, err := tango.LoadDBConfigFromEnv()
 if err != nil {
 	return err
 }
 
-sqlDB, err := sql.Open(driverName, dsn)
+sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
 if err != nil {
 	return err
 }
 defer sqlDB.Close()
 
-store := db.NewStore(sqlDB, dialect)
+store := db.NewStore(sqlDB, dsn.Dialect)
 ```
 
-and `dialect` is what you've been passing to `tango.DispatchFlags` and `tango.ServeContext` all along. The DSN's scheme picks the database: `sqlite://app.db` (the default) is a file in the working directory, `sqlite:///var/data/app.db` an absolute path, and `postgres://…` a PostgreSQL server. `tango.LoadDBConfigFromEnv` hands back the matching dialect, the driver name for `sql.Open`, and the DSN the driver expects, with SQLite's foreign key enforcement already switched on. A DSN without a scheme, such as a bare `app.db`, is an error.
+and `dsn.Dialect` is what you've been passing to `tango.DispatchFlags` and `tango.ServeContext` all along. The DSN's scheme picks the database: `sqlite://app.db` (the default) is a file in the working directory, `sqlite:///var/data/app.db` an absolute path, and `postgres://…` a PostgreSQL server. `tango.LoadDBConfigFromEnv` hands back a `db.DSN` holding the matching `Dialect`, the `Driver` name for `sql.Open`, and the `Source` string the driver expects, with SQLite's foreign key enforcement already switched on. A DSN without a scheme, such as a bare `app.db`, is an error.
 
 The Postgres driver needs one more import in `main.go`, next to the SQLite one:
 

@@ -5,9 +5,9 @@ A tanGO project states which dialect it's using through the `db.Dialect` argumen
 - **The environment** (what `tango newproject` scaffolds): `TANGO_DB_DSN`'s scheme picks the dialect. `tango.LoadDBConfigFromEnv` parses it with `db.ParseDSN`, so the dialect, the driver name, and the connection string all come from one string and can't disagree:
 
   ```go
-  dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv() // default sqlite://app.db
-  sqlDB, err := sql.Open(driverName, dsn)
-  store := db.NewStore(sqlDB, dialect)
+  dsn, err := tango.LoadDBConfigFromEnv() // default sqlite://app.db
+  sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
+  store := db.NewStore(sqlDB, dsn.Dialect)
   ```
 
   `sqlite://app.db`, `sqlite:///var/data/app.db`, `sqlite://:memory:`, and `postgres://…` are the accepted forms; see [configuration](configuration.md#database-env-helpers). The project still imports the driver itself.

@@ -41,25 +41,25 @@ func LoadConfigFromEnv() Config {
 const defaultDBDSN = "sqlite://app.db"
 
 // LoadDBConfigFromEnv parses TANGO_DB_DSN with db.ParseDSN and returns the
-// dialect, database/sql driver name, and driver DSN to open the app's
-// database with. It defaults to sqlite://app.db when TANGO_DB_DSN is unset.
+// dialect, database/sql driver name, and driver data source name to open
+// the app's database with. It defaults to sqlite://app.db when TANGO_DB_DSN is unset.
 // The app still imports and registers the driver itself.
 //
 // It fails when the retired TANGO_DB_DIALECT is set, so a deployment that
 // still relies on it stops at startup instead of opening the wrong database.
-func LoadDBConfigFromEnv() (dialect db.Dialect, driverName, driverDSN string, err error) {
+func LoadDBConfigFromEnv() (db.DSN, error) {
 	if os.Getenv("TANGO_DB_DIALECT") != "" {
-		return db.SQLite, "", "", errors.New("tango: TANGO_DB_DIALECT was removed; put the scheme in TANGO_DB_DSN (e.g. postgres://…)")
+		return db.DSN{}, errors.New("tango: TANGO_DB_DIALECT was removed; put the scheme in TANGO_DB_DSN (e.g. postgres://…)")
 	}
 	dsn := os.Getenv("TANGO_DB_DSN")
 	if dsn == "" {
 		dsn = defaultDBDSN
 	}
-	dialect, driverName, driverDSN, err = db.ParseDSN(dsn)
+	parsed, err := db.ParseDSN(dsn)
 	if err != nil {
-		return db.SQLite, "", "", fmt.Errorf("tango: TANGO_DB_DSN: %w", err)
+		return db.DSN{}, fmt.Errorf("tango: TANGO_DB_DSN: %w", err)
 	}
-	return dialect, driverName, driverDSN, nil
+	return parsed, nil
 }
 
 // LoadEnvFile loads simple KEY=VALUE lines from path into the process

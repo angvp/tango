@@ -31,7 +31,7 @@ config.InstalledApps = []tango.App{posts.New(store)}
 
 The scaffold also uses small standalone helpers, not a separate config language:
 
-- `TANGO_DB_DSN` via `tango.LoadDBConfigFromEnv()`, which parses it with `db.ParseDSN` and returns the dialect, the `database/sql` driver name, and the DSN to pass to `sql.Open`. It defaults to `sqlite://app.db` when unset.
+- `TANGO_DB_DSN` via `tango.LoadDBConfigFromEnv()`, which parses it with `db.ParseDSN` and returns a `db.DSN`: the `Dialect`, plus the `Driver` name and `Source` string to pass to `sql.Open`. It defaults to `sqlite://app.db` when unset.
 
 The DSN's scheme picks the database:
 
@@ -43,7 +43,7 @@ The DSN's scheme picks the database:
 | `sqlite://:memory:` | SQLite, in-memory |
 | `postgres://…` / `postgresql://…` | PostgreSQL; passed to pgx unchanged |
 
-Anything else, including a bare `app.db`, fails at startup with an error naming these forms. For SQLite the returned DSN already enables foreign key enforcement (`db.SQLiteForeignKeysDSN`). The app still imports and registers its own driver: `modernc.org/sqlite` for SQLite, `github.com/jackc/pgx/v5/stdlib` for PostgreSQL. There is no separate dialect variable; setting the retired one is a startup error telling you to put the scheme in `TANGO_DB_DSN`.
+Anything else, including a bare `app.db`, fails at startup with an error naming these forms. For SQLite the returned `Source` already enables foreign key enforcement (`db.SQLiteForeignKeysDSN`). The app still imports and registers its own driver: `modernc.org/sqlite` for SQLite, `github.com/jackc/pgx/v5/stdlib` for PostgreSQL. There is no separate dialect variable; setting the retired one is a startup error telling you to put the scheme in `TANGO_DB_DSN`.
 
 Admin credentials don't go through an env var at all — accounts live in the database, managed by the `tango admin` CLI (see [admin registration](admin-registration.md)).
 

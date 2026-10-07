@@ -7,27 +7,25 @@ import (
 
 func TestParseDSNAcceptsEachDocumentedForm(t *testing.T) {
 	tests := []struct {
-		dsn        string
-		dialect    Dialect
-		driverName string
-		driverDSN  string
+		dsn  string
+		want DSN
 	}{
-		{"sqlite://app.db", SQLite, "sqlite", "app.db?_foreign_keys=on"},
-		{"sqlite://data/app.db", SQLite, "sqlite", "data/app.db?_foreign_keys=on"},
-		{"sqlite:///var/data/app.db", SQLite, "sqlite", "/var/data/app.db?_foreign_keys=on"},
-		{"sqlite://:memory:", SQLite, "sqlite", ":memory:?_foreign_keys=on"},
-		{"sqlite://app.db?_pragma=busy_timeout(1000)", SQLite, "sqlite", "app.db?_pragma=busy_timeout(1000)&_foreign_keys=on"},
-		{"postgres://u:p@localhost:5432/app?sslmode=disable", Postgres, "pgx", "postgres://u:p@localhost:5432/app?sslmode=disable"},
-		{"postgresql://u:p@db.internal/app", Postgres, "pgx", "postgresql://u:p@db.internal/app"},
+		{"sqlite://app.db", DSN{SQLite, "sqlite", "app.db?_foreign_keys=on"}},
+		{"sqlite://data/app.db", DSN{SQLite, "sqlite", "data/app.db?_foreign_keys=on"}},
+		{"sqlite:///var/data/app.db", DSN{SQLite, "sqlite", "/var/data/app.db?_foreign_keys=on"}},
+		{"sqlite://:memory:", DSN{SQLite, "sqlite", ":memory:?_foreign_keys=on"}},
+		{"sqlite://app.db?_pragma=busy_timeout(1000)", DSN{SQLite, "sqlite", "app.db?_pragma=busy_timeout(1000)&_foreign_keys=on"}},
+		{"postgres://u:p@localhost:5432/app?sslmode=disable", DSN{Postgres, "pgx", "postgres://u:p@localhost:5432/app?sslmode=disable"}},
+		{"postgresql://u:p@db.internal/app", DSN{Postgres, "pgx", "postgresql://u:p@db.internal/app"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.dsn, func(t *testing.T) {
-			dialect, driverName, driverDSN, err := ParseDSN(tt.dsn)
+			got, err := ParseDSN(tt.dsn)
 			if err != nil {
 				t.Fatalf("ParseDSN(%q) error = %v", tt.dsn, err)
 			}
-			if dialect != tt.dialect || driverName != tt.driverName || driverDSN != tt.driverDSN {
-				t.Fatalf("ParseDSN(%q) = %v, %q, %q; want %v, %q, %q", tt.dsn, dialect, driverName, driverDSN, tt.dialect, tt.driverName, tt.driverDSN)
+			if got != tt.want {
+				t.Fatalf("ParseDSN(%q) = %+v; want %+v", tt.dsn, got, tt.want)
 			}
 		})
 	}
@@ -48,7 +46,7 @@ func TestParseDSNRejectsUnrecognizedForms(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, _, err := ParseDSN(tt.dsn)
+			_, err := ParseDSN(tt.dsn)
 			if err == nil {
 				t.Fatalf("ParseDSN(%q) error = nil, want an error", tt.dsn)
 			}

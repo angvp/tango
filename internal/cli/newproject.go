@@ -117,7 +117,7 @@ func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bo
 	if includeAdmin {
 		adminImport = "\n\t\"github.com/angvp/tango/admin\"\n\t\"github.com/angvp/tango/db\""
 		contextImport = "\"context\"\n\t"
-		storeLine = "store := db.NewStore(sqlDB, dialect)"
+		storeLine = "store := db.NewStore(sqlDB, dsn.Dialect)"
 		adminConfig = `InstalledApps: []tango.App{
 			admin.New(store),
 		},`
@@ -163,12 +163,12 @@ func run() error {
 		return err
 	}
 %s
-	dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
+	dsn, err := tango.LoadDBConfigFromEnv()
 	if err != nil {
 		return err
 	}
 
-	sqlDB, err := sql.Open(driverName, dsn)
+	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
 	if err != nil {
 		return err
 	}
@@ -180,13 +180,13 @@ func run() error {
 		Addr: ":8000",
 	}
 %s
-	handled, err := tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)
+	handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)
 	if handled || err != nil {
 		return err
 	}
 
 	fmt.Println("listening on", config.Addr)
-	return tango.Serve(config, sqlDB, dialect)
+	return tango.Serve(config, sqlDB, dsn.Dialect)
 }
 `, contextImport, adminImport, module, dialect.DriverImport, defaultDSNBlock, storeLine, adminConfig, adminCLIBlock)
 }

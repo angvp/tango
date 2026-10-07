@@ -62,11 +62,11 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		`"github.com/angvp/tango/db"`,
 		`"myapp/migrations"`,
 		`_ "modernc.org/sqlite"`,
-		`dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()`,
-		`sql.Open(driverName, dsn)`,
-		`store := db.NewStore(sqlDB, dialect)`,
-		`tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)`,
-		`tango.Serve(config, sqlDB, dialect)`,
+		`dsn, err := tango.LoadDBConfigFromEnv()`,
+		`sql.Open(dsn.Driver, dsn.Source)`,
+		`store := db.NewStore(sqlDB, dsn.Dialect)`,
+		`tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)`,
+		`tango.Serve(config, sqlDB, dsn.Dialect)`,
 		`admin.New(store)`,
 		`admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)`,
 	} {
@@ -124,7 +124,7 @@ func TestNewProjectNoAdminSkipsCredentials(t *testing.T) {
 	if strings.Contains(string(mainGo), `"github.com/angvp/tango/db"`) {
 		t.Fatalf("main.go imports the unused db package with --no-admin:\n%s", mainGo)
 	}
-	if !strings.Contains(string(mainGo), "tango.Serve(config, sqlDB, dialect)") {
+	if !strings.Contains(string(mainGo), "tango.Serve(config, sqlDB, dsn.Dialect)") {
 		t.Fatalf("main.go does not serve with the dialect from TANGO_DB_DSN:\n%s", mainGo)
 	}
 	if _, err := os.Stat(filepath.Join(projectDir, ".env")); !os.IsNotExist(err) {
@@ -150,10 +150,10 @@ func TestNewProjectPostgresDialect(t *testing.T) {
 	for _, want := range []string{
 		`_ "github.com/jackc/pgx/v5/stdlib"`,
 		`os.Setenv("TANGO_DB_DSN", "postgres://postgres:postgres@localhost:5432/myapp")`,
-		`dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()`,
-		`sql.Open(driverName, dsn)`,
-		`tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)`,
-		`tango.Serve(config, sqlDB, dialect)`,
+		`dsn, err := tango.LoadDBConfigFromEnv()`,
+		`sql.Open(dsn.Driver, dsn.Source)`,
+		`tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)`,
+		`tango.Serve(config, sqlDB, dsn.Dialect)`,
 	} {
 		if !strings.Contains(source, want) {
 			t.Fatalf("main.go does not contain %q:\n%s", want, source)
