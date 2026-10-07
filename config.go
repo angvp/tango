@@ -37,23 +37,29 @@ func LoadConfigFromEnv() Config {
 	return config
 }
 
-// LoadDBDSNFromEnv returns TANGO_DB_DSN, or an empty string when unset.
-func LoadDBDSNFromEnv() string {
-	return os.Getenv("TANGO_DB_DSN")
-}
+// defaultDBDSN is the database an app opens when TANGO_DB_DSN is unset.
+const defaultDBDSN = "sqlite://app.db"
 
-// LoadDBDialectFromEnv returns the DB dialect selected by TANGO_DB_DIALECT.
-// It defaults to SQLite when unset.
-func LoadDBDialectFromEnv() (db.Dialect, error) {
-	value := strings.ToLower(strings.TrimSpace(os.Getenv("TANGO_DB_DIALECT")))
-	switch value {
-	case "", "sqlite":
-		return db.SQLite, nil
-	case "postgres", "postgresql":
-		return db.Postgres, nil
-	default:
-		return db.SQLite, fmt.Errorf("tango: unsupported TANGO_DB_DIALECT %q", value)
+// LoadDBConfigFromEnv parses TANGO_DB_DSN with db.ParseDSN and returns the
+// dialect, database/sql driver name, and driver DSN to open the app's
+// database with. It defaults to sqlite://app.db when TANGO_DB_DSN is unset.
+// The app still imports and registers the driver itself.
+//
+// It fails when the retired TANGO_DB_DIALECT is set, so a deployment that
+// still relies on it stops at startup instead of opening the wrong database.
+func LoadDBConfigFromEnv() (dialect db.Dialect, driverName, driverDSN string, err error) {
+	if os.Getenv("TANGO_DB_DIALECT") != "" {
+		return db.SQLite, "", "", errors.New("tango: TANGO_DB_DIALECT was removed; put the scheme in TANGO_DB_DSN (e.g. postgres://…)")
 	}
+	dsn := os.Getenv("TANGO_DB_DSN")
+	if dsn == "" {
+		dsn = defaultDBDSN
+	}
+	dialect, driverName, driverDSN, err = db.ParseDSN(dsn)
+	if err != nil {
+		return db.SQLite, "", "", fmt.Errorf("tango: TANGO_DB_DSN: %w", err)
+	}
+	return dialect, driverName, driverDSN, nil
 }
 
 // LoadEnvFile loads simple KEY=VALUE lines from path into the process

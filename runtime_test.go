@@ -170,27 +170,38 @@ func TestServeBuildsRegistryAndListens(t *testing.T) {
 	}
 }
 
-func TestLoadEnvHelpers(t *testing.T) {
-	t.Setenv("TANGO_DB_DSN", "app.db")
-	t.Setenv("TANGO_DB_DIALECT", "postgres")
-	if got := LoadDBDSNFromEnv(); got != "app.db" {
-		t.Fatalf("LoadDBDSNFromEnv = %q", got)
-	}
-	dialect, err := LoadDBDialectFromEnv()
-	if err != nil || dialect != db.Postgres {
-		t.Fatalf("LoadDBDialectFromEnv = %v, %v; want Postgres, nil", dialect, err)
+func TestLoadDBConfigFromEnvDefaultsToSQLiteAppDB(t *testing.T) {
+	t.Setenv("TANGO_DB_DSN", "")
+	t.Setenv("TANGO_DB_DIALECT", "")
+	dialect, driverName, driverDSN, err := LoadDBConfigFromEnv()
+	if err != nil || dialect != db.SQLite || driverName != "sqlite" || driverDSN != "app.db?_foreign_keys=on" {
+		t.Fatalf("LoadDBConfigFromEnv = %v, %q, %q, %v; want SQLite, \"sqlite\", \"app.db?_foreign_keys=on\", nil", dialect, driverName, driverDSN, err)
 	}
 }
 
-func TestLoadDBDialectFromEnvDefaultsAndRejectsUnknown(t *testing.T) {
-	t.Setenv("TANGO_DB_DIALECT", "")
-	dialect, err := LoadDBDialectFromEnv()
-	if err != nil || dialect != db.SQLite {
-		t.Fatalf("LoadDBDialectFromEnv default = %v, %v; want SQLite, nil", dialect, err)
+func TestLoadDBConfigFromEnvSelectsDialectFromScheme(t *testing.T) {
+	const dsn = "postgres://tango:tango@localhost:5432/app?sslmode=disable"
+	t.Setenv("TANGO_DB_DSN", dsn)
+	dialect, driverName, driverDSN, err := LoadDBConfigFromEnv()
+	if err != nil || dialect != db.Postgres || driverName != "pgx" || driverDSN != dsn {
+		t.Fatalf("LoadDBConfigFromEnv = %v, %q, %q, %v; want Postgres, \"pgx\", %q, nil", dialect, driverName, driverDSN, err, dsn)
 	}
-	t.Setenv("TANGO_DB_DIALECT", "oracle")
-	if _, err := LoadDBDialectFromEnv(); err == nil {
-		t.Fatal("LoadDBDialectFromEnv returned nil error for unknown dialect")
+}
+
+func TestLoadDBConfigFromEnvRejectsBarePath(t *testing.T) {
+	t.Setenv("TANGO_DB_DSN", "app.db")
+	if _, _, _, err := LoadDBConfigFromEnv(); err == nil || !strings.Contains(err.Error(), "TANGO_DB_DSN") {
+		t.Fatalf("LoadDBConfigFromEnv error = %v, want an error naming TANGO_DB_DSN", err)
+	}
+}
+
+func TestLoadDBConfigFromEnvFailsWhenRetiredDialectVariableIsSet(t *testing.T) {
+	t.Setenv("TANGO_DB_DSN", "postgres://tango:tango@localhost:5432/app")
+	t.Setenv("TANGO_DB_DIALECT", "postgres")
+	_, _, _, err := LoadDBConfigFromEnv()
+	want := "TANGO_DB_DIALECT was removed; put the scheme in TANGO_DB_DSN (e.g. postgres://…)"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("LoadDBConfigFromEnv error = %v, want it to contain %q", err, want)
 	}
 }
 
