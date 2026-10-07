@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/testdb"
 )
 
 // TestBaseTypeSQLAcrossDialects is a direct, pure string-generation table
@@ -87,9 +88,9 @@ func TestCreateTableSQLGeneratesUniqueAndIndexStatements(t *testing.T) {
 		t.Errorf("statements[2] = %q, want a plain index on category", statements[2])
 	}
 
-	sqlDB := openDDLTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
-	if err := ApplyStep(ctx, sqlDB, db.SQLite, step); err != nil {
+	if err := ApplyStep(ctx, sqlDB, dialect, step); err != nil {
 		t.Fatalf("ApplyStep returned error: %v", err)
 	}
 	if _, err := sqlDB.ExecContext(ctx, "INSERT INTO widget (slug, category) VALUES ('a', 'x')"); err != nil {
@@ -107,60 +108,35 @@ type unknownStep struct{}
 func (unknownStep) isMigrationStep() {}
 
 func TestApplyStepUnsupportedStepTypeReturnsError(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
-	err := ApplyStep(context.Background(), sqlDB, db.SQLite, unknownStep{})
+	sqlDB, dialect := testdb.Open(t)
+	err := ApplyStep(context.Background(), sqlDB, dialect, unknownStep{})
 	if err == nil {
 		t.Fatal("ApplyStep returned nil error for an unsupported step type, want an error")
 	}
 }
 
-// TestApplyStepDropColumnOnPostgresDialectExecutesDirectly exercises
-// ApplyStep's Postgres-dialect DropColumn branch (a direct ALTER TABLE ...
-// DROP COLUMN, unlike SQLite's rebuild-the-table fallback) against the
-// existing SQLite-backed test setup: modernc.org/sqlite supports the same
-// DROP COLUMN syntax Postgres does, so this proves the dialect branch is
-// reached and produces working DDL without needing a live Postgres
-// connection — the live end-to-end Postgres path is already covered
-// separately by TestApplyStepFullLifecyclePostgres.
-func TestApplyStepDropColumnOnPostgresDialectExecutesDirectly(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
-	ctx := context.Background()
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{
-		{Name: "id", Type: "integer", PrimaryKey: true},
-		{Name: "legacy", Type: "text"},
-	}})
-
-	if err := ApplyStep(ctx, sqlDB, db.Postgres, DropColumn{Table: "widget", Column: "legacy"}); err != nil {
-		t.Fatalf("ApplyStep(DropColumn, db.Postgres) returned error: %v", err)
-	}
-
-	names := columnNames(t, sqlDB, "widget")
-	if contains(names, "legacy") {
-		t.Fatalf("columns = %v, want %q dropped", names, "legacy")
-	}
-}
-
 // TestApplyStepDropColumnOnMissingColumnReturnsError covers
-// rebuildTableDroppingColumn's "column does not exist" guard.
+// rebuildTableDroppingColumn's "column does not exist" guard on SQLite and
+// the database's own refusal on PostgreSQL.
 func TestApplyStepDropColumnOnMissingColumnReturnsError(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{
+	sqlDB, dialect := testdb.Open(t)
+	mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{
 		{Name: "id", Type: "integer", PrimaryKey: true},
 	}})
 
-	err := ApplyStep(context.Background(), sqlDB, db.SQLite, DropColumn{Table: "widget", Column: "no_such_column"})
+	err := ApplyStep(context.Background(), sqlDB, dialect, DropColumn{Table: "widget", Column: "no_such_column"})
 	if err == nil {
 		t.Fatal("ApplyStep(DropColumn) for a nonexistent column returned nil error, want an error")
 	}
 }
 
-// TestApplyStepDropColumnSurfacesClosedConnectionError forces
-// sqliteTableColumns' PRAGMA query to fail (a closed connection stands in
-// for any ordinary driver-level failure) and confirms rebuildTableDroppingColumn
-// propagates it instead of panicking or silently doing nothing.
+// TestApplyStepDropColumnSurfacesClosedConnectionError forces DropColumn's
+// first query to fail (a closed connection stands in for any ordinary
+// driver-level failure) and confirms ApplyStep propagates it instead of
+// panicking or silently doing nothing.
 func TestApplyStepDropColumnSurfacesClosedConnectionError(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{
+	sqlDB, dialect := testdb.Open(t)
+	mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{
 		{Name: "id", Type: "integer", PrimaryKey: true},
 		{Name: "legacy", Type: "text"},
 	}})
@@ -168,7 +144,7 @@ func TestApplyStepDropColumnSurfacesClosedConnectionError(t *testing.T) {
 		t.Fatalf("close db: %v", err)
 	}
 
-	err := ApplyStep(context.Background(), sqlDB, db.SQLite, DropColumn{Table: "widget", Column: "legacy"})
+	err := ApplyStep(context.Background(), sqlDB, dialect, DropColumn{Table: "widget", Column: "legacy"})
 	if err == nil {
 		t.Fatal("ApplyStep(DropColumn) on a closed connection returned nil error, want an error")
 	}
@@ -177,7 +153,7 @@ func TestApplyStepDropColumnSurfacesClosedConnectionError(t *testing.T) {
 // TestExecAllStopsAtFirstFailingStatement covers execAll's error return: a
 // later statement never runs once an earlier one fails.
 func TestExecAllStopsAtFirstFailingStatement(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
 	err := execAll(ctx, sqlDB, []string{
@@ -188,7 +164,7 @@ func TestExecAllStopsAtFirstFailingStatement(t *testing.T) {
 	if err == nil {
 		t.Fatal("execAll returned nil error for an invalid statement, want an error")
 	}
-	if tableExists(t, sqlDB, "never_created") {
+	if tableExists(t, sqlDB, dialect, "never_created") {
 		t.Fatal("execAll ran a statement after an earlier one failed")
 	}
 }

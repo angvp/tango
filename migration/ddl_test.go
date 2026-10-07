@@ -10,47 +10,50 @@ import (
 	"github.com/angvp/tango/testdb"
 )
 
-// openDDLTestDB is for the SQLite-backed DDL tests, which apply steps with
-// db.SQLite and inspect the result through sqlite_master and PRAGMA
-// table_info.
-func openDDLTestDB(t *testing.T) *sql.DB {
+// tableExists reports whether table exists in sqlDB, asking the dialect's
+// own catalog: sqlite_master on SQLite, information_schema in the test's
+// schema (the connection's current_schema) on PostgreSQL.
+func tableExists(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table string) bool {
 	t.Helper()
-	testdb.SQLiteOnly(t, "applies steps as db.SQLite and inspects sqlite_master; the *Postgres tests cover PostgreSQL")
-	sqlDB, _ := testdb.Open(t)
-	return sqlDB
-}
-
-func tableExists(t *testing.T, sqlDB *sql.DB, table string) bool {
-	t.Helper()
+	query := "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+	if dialect == db.Postgres {
+		query = "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = $1"
+	}
 	var name string
-	err := sqlDB.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name)
+	err := sqlDB.QueryRow(query, table).Scan(&name)
 	if err == sql.ErrNoRows {
 		return false
 	}
 	if err != nil {
-		t.Fatalf("query sqlite_master: %v", err)
+		t.Fatalf("look up table %q: %v", table, err)
 	}
 	return true
 }
 
-func columnNames(t *testing.T, sqlDB *sql.DB, table string) []string {
+// columnNames lists table's columns in declaration order, through PRAGMA
+// table_info on SQLite and information_schema on PostgreSQL.
+func columnNames(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table string) []string {
 	t.Helper()
-	rows, err := sqlDB.Query("PRAGMA table_info(" + table + ")")
+	query := "SELECT name FROM pragma_table_info(?) ORDER BY cid"
+	if dialect == db.Postgres {
+		query = "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position"
+	}
+	rows, err := sqlDB.Query(query, table)
 	if err != nil {
-		t.Fatalf("PRAGMA table_info: %v", err)
+		t.Fatalf("list columns of %q: %v", table, err)
 	}
 	defer rows.Close()
 
 	var names []string
 	for rows.Next() {
-		var cid int
-		var name, declType string
-		var notNull, pk int
-		var dflt any
-		if err := rows.Scan(&cid, &name, &declType, &notNull, &dflt, &pk); err != nil {
-			t.Fatalf("scan table_info: %v", err)
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan column name: %v", err)
 		}
 		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("list columns of %q: %v", table, err)
 	}
 	return names
 }
@@ -60,9 +63,9 @@ func columnNames(t *testing.T, sqlDB *sql.DB, table string) []string {
 func TestApplyStepBasicOperations(t *testing.T) {
 	cases := []struct {
 		name  string
-		setup func(t *testing.T, sqlDB *sql.DB)
+		setup func(t *testing.T, sqlDB *sql.DB, dialect db.Dialect)
 		step  Step
-		check func(t *testing.T, sqlDB *sql.DB)
+		check func(t *testing.T, sqlDB *sql.DB, dialect db.Dialect)
 	}{
 		{
 			name: "create table creates a new table",
@@ -70,32 +73,32 @@ func TestApplyStepBasicOperations(t *testing.T) {
 				{Name: "id", Type: "integer", PrimaryKey: true},
 				{Name: "name", Type: "text"},
 			}},
-			check: func(t *testing.T, sqlDB *sql.DB) {
-				if !tableExists(t, sqlDB, "widget") {
+			check: func(t *testing.T, sqlDB *sql.DB, dialect db.Dialect) {
+				if !tableExists(t, sqlDB, dialect, "widget") {
 					t.Errorf("table %q was not created", "widget")
 				}
 			},
 		},
 		{
 			name: "drop table removes an existing table",
-			setup: func(t *testing.T, sqlDB *sql.DB) {
-				mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
+			setup: func(t *testing.T, sqlDB *sql.DB, dialect db.Dialect) {
+				mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
 			},
 			step: DropTable{Table: "widget"},
-			check: func(t *testing.T, sqlDB *sql.DB) {
-				if tableExists(t, sqlDB, "widget") {
+			check: func(t *testing.T, sqlDB *sql.DB, dialect db.Dialect) {
+				if tableExists(t, sqlDB, dialect, "widget") {
 					t.Errorf("table %q still exists after DropTable", "widget")
 				}
 			},
 		},
 		{
 			name: "add column adds a new column to an existing table",
-			setup: func(t *testing.T, sqlDB *sql.DB) {
-				mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
+			setup: func(t *testing.T, sqlDB *sql.DB, dialect db.Dialect) {
+				mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
 			},
 			step: AddColumn{Table: "widget", Column: Column{Name: "name", Type: "text"}},
-			check: func(t *testing.T, sqlDB *sql.DB) {
-				names := columnNames(t, sqlDB, "widget")
+			check: func(t *testing.T, sqlDB *sql.DB, dialect db.Dialect) {
+				names := columnNames(t, sqlDB, dialect, "widget")
 				if !contains(names, "name") {
 					t.Errorf("columns = %v, want to contain %q", names, "name")
 				}
@@ -105,29 +108,29 @@ func TestApplyStepBasicOperations(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			sqlDB := openDDLTestDB(t)
+			sqlDB, dialect := testdb.Open(t)
 			if tc.setup != nil {
-				tc.setup(t, sqlDB)
+				tc.setup(t, sqlDB, dialect)
 			}
 
-			if err := ApplyStep(context.Background(), sqlDB, db.SQLite, tc.step); err != nil {
+			if err := ApplyStep(context.Background(), sqlDB, dialect, tc.step); err != nil {
 				t.Fatalf("case %q: ApplyStep returned error: %v", tc.name, err)
 			}
 
-			tc.check(t, sqlDB)
+			tc.check(t, sqlDB, dialect)
 		})
 	}
 }
 
 func TestApplyStepAddColumnWithDefaultBackfillsExistingRows(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
+	mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
 	if _, err := sqlDB.Exec("INSERT INTO widget (id) VALUES (1)"); err != nil {
 		t.Fatalf("seed existing row: %v", err)
 	}
 
-	mustApply(t, sqlDB, AddColumn{Table: "widget", Column: Column{Name: "is_staff", Type: "boolean", Default: "TRUE"}})
+	mustApply(t, sqlDB, dialect, AddColumn{Table: "widget", Column: Column{Name: "is_staff", Type: "boolean", Default: "TRUE"}})
 
 	var isStaff bool
 	if err := sqlDB.QueryRowContext(ctx, "SELECT is_staff FROM widget WHERE id = 1").Scan(&isStaff); err != nil {
@@ -150,8 +153,7 @@ func TestApplyStepAddColumnWithDefaultBackfillsExistingRows(t *testing.T) {
 
 // TestAddColumnDefSQLDefaultAcrossDialects checks Column.Default's generated
 // DDL directly against both dialects' addColumnDefSQL branch, without
-// needing a live Postgres connection (unlike TestApplyStepFullLifecyclePostgres,
-// which runs only when the Test dialect is PostgreSQL). "TRUE"/"FALSE" are the
+// needing a live Postgres connection. "TRUE"/"FALSE" are the
 // only literals this milestone uses, and both SQLite and Postgres accept
 // them for a boolean column — a bare "1"/"0" literal, by contrast, is valid
 // SQLite but rejected by Postgres for a BOOLEAN column, which is exactly
@@ -193,8 +195,8 @@ func TestColumnDefSQLIgnoresDefault(t *testing.T) {
 // Default set, has no DEFAULT/NOT NULL constraint and accepts a NULL insert
 // for it — proving Default has no effect outside AddColumn.
 func TestApplyStepCreateTableIgnoresColumnDefault(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{
+	sqlDB, dialect := testdb.Open(t)
+	mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{
 		{Name: "id", Type: "integer", PrimaryKey: true},
 		{Name: "is_staff", Type: "boolean", Default: "TRUE"},
 	}})
@@ -212,10 +214,12 @@ func TestApplyStepCreateTableIgnoresColumnDefault(t *testing.T) {
 	}
 }
 
-func TestApplyStepDropColumnRebuildsTableAndPreservesData(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
+// TestApplyStepDropColumnRemovesColumnAndPreservesData covers SQLite's
+// table rebuild and PostgreSQL's direct ALTER TABLE ... DROP COLUMN alike.
+func TestApplyStepDropColumnRemovesColumnAndPreservesData(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{
+	mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{
 		{Name: "id", Type: "integer", PrimaryKey: true},
 		{Name: "name", Type: "text"},
 		{Name: "legacy", Type: "text"},
@@ -225,11 +229,11 @@ func TestApplyStepDropColumnRebuildsTableAndPreservesData(t *testing.T) {
 		t.Fatalf("seed insert: %v", err)
 	}
 
-	if err := ApplyStep(ctx, sqlDB, db.SQLite, DropColumn{Table: "widget", Column: "legacy"}); err != nil {
+	if err := ApplyStep(ctx, sqlDB, dialect, DropColumn{Table: "widget", Column: "legacy"}); err != nil {
 		t.Fatalf("ApplyStep returned error: %v", err)
 	}
 
-	names := columnNames(t, sqlDB, "widget")
+	names := columnNames(t, sqlDB, dialect, "widget")
 	if contains(names, "legacy") {
 		t.Fatalf("columns = %v, want %q dropped", names, "legacy")
 	}
@@ -244,14 +248,14 @@ func TestApplyStepDropColumnRebuildsTableAndPreservesData(t *testing.T) {
 }
 
 func TestApplyStepAlterColumnUniqueRoundTrips(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{
+	mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{
 		{Name: "id", Type: "integer", PrimaryKey: true},
 		{Name: "slug", Type: "text"},
 	}})
 
-	if err := ApplyStep(ctx, sqlDB, db.SQLite, AlterColumnUnique{Table: "widget", Column: "slug", Unique: true}); err != nil {
+	if err := ApplyStep(ctx, sqlDB, dialect, AlterColumnUnique{Table: "widget", Column: "slug", Unique: true}); err != nil {
 		t.Fatalf("ApplyStep (add unique) returned error: %v", err)
 	}
 
@@ -262,7 +266,7 @@ func TestApplyStepAlterColumnUniqueRoundTrips(t *testing.T) {
 		t.Fatalf("expected unique constraint violation on duplicate slug")
 	}
 
-	if err := ApplyStep(ctx, sqlDB, db.SQLite, AlterColumnUnique{Table: "widget", Column: "slug", Unique: false}); err != nil {
+	if err := ApplyStep(ctx, sqlDB, dialect, AlterColumnUnique{Table: "widget", Column: "slug", Unique: false}); err != nil {
 		t.Fatalf("ApplyStep (drop unique) returned error: %v", err)
 	}
 	if _, err := sqlDB.ExecContext(ctx, "INSERT INTO widget (slug) VALUES ('a')"); err != nil {
@@ -271,24 +275,24 @@ func TestApplyStepAlterColumnUniqueRoundTrips(t *testing.T) {
 }
 
 func TestApplyStepCreateAndDropIndex(t *testing.T) {
-	sqlDB := openDDLTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
-	mustApply(t, sqlDB, CreateTable{Table: "widget", Columns: []Column{
+	mustApply(t, sqlDB, dialect, CreateTable{Table: "widget", Columns: []Column{
 		{Name: "id", Type: "integer", PrimaryKey: true},
 		{Name: "category", Type: "text"},
 	}})
 
-	if err := ApplyStep(ctx, sqlDB, db.SQLite, CreateIndex{Table: "widget", Column: "category"}); err != nil {
+	if err := ApplyStep(ctx, sqlDB, dialect, CreateIndex{Table: "widget", Column: "category"}); err != nil {
 		t.Fatalf("ApplyStep (CreateIndex) returned error: %v", err)
 	}
-	if err := ApplyStep(ctx, sqlDB, db.SQLite, DropIndex{Table: "widget", Column: "category"}); err != nil {
+	if err := ApplyStep(ctx, sqlDB, dialect, DropIndex{Table: "widget", Column: "category"}); err != nil {
 		t.Fatalf("ApplyStep (DropIndex) returned error: %v", err)
 	}
 }
 
-func mustApply(t *testing.T, sqlDB *sql.DB, step Step) {
+func mustApply(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, step Step) {
 	t.Helper()
-	if err := ApplyStep(context.Background(), sqlDB, db.SQLite, step); err != nil {
+	if err := ApplyStep(context.Background(), sqlDB, dialect, step); err != nil {
 		t.Fatalf("ApplyStep(%T) returned error: %v", step, err)
 	}
 }
@@ -302,15 +306,10 @@ func contains(items []string, target string) bool {
 	return false
 }
 
-func openPostgresDDLTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	testdb.PostgresOnly(t, "applies steps as db.Postgres; the SQLite-backed tests above cover SQLite")
-	sqlDB, _ := testdb.Open(t)
-	return sqlDB
-}
-
-func TestApplyStepFullLifecyclePostgres(t *testing.T) {
-	sqlDB := openPostgresDDLTestDB(t)
+// TestApplyStepFullLifecycle runs every step kind in sequence against one
+// table, the shape a model's migrations take over its lifetime.
+func TestApplyStepFullLifecycle(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
 	steps := []Step{
@@ -328,39 +327,12 @@ func TestApplyStepFullLifecyclePostgres(t *testing.T) {
 	}
 
 	for _, step := range steps {
-		if err := ApplyStep(ctx, sqlDB, db.Postgres, step); err != nil {
+		if err := ApplyStep(ctx, sqlDB, dialect, step); err != nil {
 			t.Fatalf("ApplyStep(%T) returned error: %v", step, err)
 		}
 	}
-}
 
-// TestApplyStepAddColumnWithDefaultBackfillsExistingRowsPostgres is the
-// Postgres counterpart to the SQLite-backed
-// TestApplyStepAddColumnWithDefaultBackfillsExistingRows: it exercises the
-// live NOT NULL DEFAULT TRUE DDL against a real Postgres connection when
-// the Test dialect is PostgreSQL.
-func TestApplyStepAddColumnWithDefaultBackfillsExistingRowsPostgres(t *testing.T) {
-	sqlDB := openPostgresDDLTestDB(t)
-	ctx := context.Background()
-
-	if err := ApplyStep(ctx, sqlDB, db.Postgres, CreateTable{Table: "ddl_widget", Columns: []Column{
-		{Name: "id", Type: "integer", PrimaryKey: true},
-	}}); err != nil {
-		t.Fatalf("ApplyStep(CreateTable) returned error: %v", err)
-	}
-	if _, err := sqlDB.ExecContext(ctx, "INSERT INTO ddl_widget (id) VALUES (1)"); err != nil {
-		t.Fatalf("seed existing row: %v", err)
-	}
-
-	if err := ApplyStep(ctx, sqlDB, db.Postgres, AddColumn{Table: "ddl_widget", Column: Column{Name: "is_staff", Type: "boolean", Default: "TRUE"}}); err != nil {
-		t.Fatalf("ApplyStep(AddColumn) returned error: %v", err)
-	}
-
-	var isStaff bool
-	if err := sqlDB.QueryRowContext(ctx, "SELECT is_staff FROM ddl_widget WHERE id = 1").Scan(&isStaff); err != nil {
-		t.Fatalf("query backfilled column: %v", err)
-	}
-	if !isStaff {
-		t.Fatal("existing row's is_staff = false, want true (backfilled from Default)")
+	if got, want := columnNames(t, sqlDB, dialect, "ddl_widget"), []string{"id", "name", "category"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("columns after lifecycle = %v, want %v", got, want)
 	}
 }

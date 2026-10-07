@@ -5,19 +5,8 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/angvp/tango/db"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
-
-func openTrackingTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	return sqlDB
-}
 
 func countTrackingRows(t *testing.T, sqlDB *sql.DB) int {
 	t.Helper()
@@ -29,21 +18,21 @@ func countTrackingRows(t *testing.T, sqlDB *sql.DB) int {
 }
 
 func TestApplyPendingCreatesTablesAndTracksMigrations(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
 	migrations := []Migration{
-		{Name: "0001_create_user", App: "users", Up: []Step{
-			CreateTable{Table: "user", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+		{Name: "0001_create_account", App: "users", Up: []Step{
+			CreateTable{Table: "account", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 		}},
 	}
 
-	if err := ApplyPending(ctx, sqlDB, db.SQLite, migrations); err != nil {
+	if err := ApplyPending(ctx, sqlDB, dialect, migrations); err != nil {
 		t.Fatalf("ApplyPending returned error: %v", err)
 	}
 
-	if !tableExists(t, sqlDB, "user") {
-		t.Fatalf("table %q was not created", "user")
+	if !tableExists(t, sqlDB, dialect, "account") {
+		t.Fatalf("table %q was not created", "account")
 	}
 
 	if countTrackingRows(t, sqlDB) != 1 {
@@ -54,25 +43,25 @@ func TestApplyPendingCreatesTablesAndTracksMigrations(t *testing.T) {
 	if err := sqlDB.QueryRow("SELECT app, name FROM tango_migrations").Scan(&app, &name); err != nil {
 		t.Fatalf("select tango_migrations: %v", err)
 	}
-	if app != "users" || name != "0001_create_user" {
-		t.Fatalf("got (%q, %q), want (%q, %q)", app, name, "users", "0001_create_user")
+	if app != "users" || name != "0001_create_account" {
+		t.Fatalf("got (%q, %q), want (%q, %q)", app, name, "users", "0001_create_account")
 	}
 }
 
 func TestApplyPendingSkipsAlreadyAppliedMigrations(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
 	migrations := []Migration{
-		{Name: "0001_create_user", App: "users", Up: []Step{
-			CreateTable{Table: "user", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+		{Name: "0001_create_account", App: "users", Up: []Step{
+			CreateTable{Table: "account", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 		}},
 	}
 
-	if err := ApplyPending(ctx, sqlDB, db.SQLite, migrations); err != nil {
+	if err := ApplyPending(ctx, sqlDB, dialect, migrations); err != nil {
 		t.Fatalf("first ApplyPending returned error: %v", err)
 	}
-	if err := ApplyPending(ctx, sqlDB, db.SQLite, migrations); err != nil {
+	if err := ApplyPending(ctx, sqlDB, dialect, migrations); err != nil {
 		t.Fatalf("second ApplyPending returned error: %v", err)
 	}
 
@@ -82,24 +71,24 @@ func TestApplyPendingSkipsAlreadyAppliedMigrations(t *testing.T) {
 }
 
 func TestApplyPendingOnlyAppliesRemainingMigrations(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
-	first := Migration{Name: "0001_create_user", App: "users", Up: []Step{
-		CreateTable{Table: "user", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+	first := Migration{Name: "0001_create_account", App: "users", Up: []Step{
+		CreateTable{Table: "account", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 	}}
 	second := Migration{Name: "0002_add_email", App: "users", Up: []Step{
-		AddColumn{Table: "user", Column: Column{Name: "email", Type: "text"}},
+		AddColumn{Table: "account", Column: Column{Name: "email", Type: "text"}},
 	}}
 
-	if err := ApplyPending(ctx, sqlDB, db.SQLite, []Migration{first}); err != nil {
+	if err := ApplyPending(ctx, sqlDB, dialect, []Migration{first}); err != nil {
 		t.Fatalf("first ApplyPending returned error: %v", err)
 	}
-	if err := ApplyPending(ctx, sqlDB, db.SQLite, []Migration{first, second}); err != nil {
+	if err := ApplyPending(ctx, sqlDB, dialect, []Migration{first, second}); err != nil {
 		t.Fatalf("second ApplyPending returned error: %v", err)
 	}
 
-	names := columnNames(t, sqlDB, "user")
+	names := columnNames(t, sqlDB, dialect, "account")
 	if !contains(names, "email") {
 		t.Fatalf("columns = %v, want %q", names, "email")
 	}
@@ -109,17 +98,17 @@ func TestApplyPendingOnlyAppliesRemainingMigrations(t *testing.T) {
 }
 
 func TestApplyPendingRecordsOneRowPerAppTouched(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
 	usersMigration := Migration{Name: "0001_users", App: "users", Up: []Step{
-		CreateTable{Table: "user", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+		CreateTable{Table: "account", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 	}}
 	postsMigration := Migration{Name: "0001_posts", App: "posts", Up: []Step{
 		CreateTable{Table: "post", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 	}}
 
-	if err := ApplyPending(ctx, sqlDB, db.SQLite, []Migration{usersMigration, postsMigration}); err != nil {
+	if err := ApplyPending(ctx, sqlDB, dialect, []Migration{usersMigration, postsMigration}); err != nil {
 		t.Fatalf("ApplyPending returned error: %v", err)
 	}
 
@@ -129,24 +118,24 @@ func TestApplyPendingRecordsOneRowPerAppTouched(t *testing.T) {
 }
 
 func TestApplyPendingUsesAppAndNameAsIdentity(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
 	usersMigration := Migration{Name: "0001_auto", App: "users", Up: []Step{
-		CreateTable{Table: "user", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+		CreateTable{Table: "account", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 	}}
 	postsMigration := Migration{Name: "0001_auto", App: "posts", Up: []Step{
 		CreateTable{Table: "post", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 	}}
 
-	if err := ApplyPending(ctx, sqlDB, db.SQLite, []Migration{usersMigration}); err != nil {
+	if err := ApplyPending(ctx, sqlDB, dialect, []Migration{usersMigration}); err != nil {
 		t.Fatalf("first ApplyPending returned error: %v", err)
 	}
-	if err := ApplyPending(ctx, sqlDB, db.SQLite, []Migration{usersMigration, postsMigration}); err != nil {
+	if err := ApplyPending(ctx, sqlDB, dialect, []Migration{usersMigration, postsMigration}); err != nil {
 		t.Fatalf("second ApplyPending returned error: %v", err)
 	}
 
-	if !tableExists(t, sqlDB, "post") {
+	if !tableExists(t, sqlDB, dialect, "post") {
 		t.Fatalf("posts migration with same name was skipped")
 	}
 	if countTrackingRows(t, sqlDB) != 2 {

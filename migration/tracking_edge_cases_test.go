@@ -2,27 +2,41 @@ package migration
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/testdb"
 )
 
-// TestEnsureTrackingTableOnPostgresDialectGeneratesTimestamptzColumn is a
-// direct assertion of EnsureTrackingTable's db.Postgres branch (TIMESTAMPTZ
-// instead of TIMESTAMP) executed against the existing SQLite-backed test
-// setup — SQLite accepts an arbitrary declared column type name, so this
-// proves the branch is reached and produces working DDL without a live
-// Postgres connection.
-func TestEnsureTrackingTableOnPostgresDialectGeneratesTimestamptzColumn(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+// TestEnsureTrackingTableCreatesTimestampedTable checks the tracking table
+// exists afterwards and that applied_at has the dialect's timestamp type:
+// TIMESTAMPTZ on PostgreSQL, TIMESTAMP on SQLite.
+func TestEnsureTrackingTableCreatesTimestampedTable(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
-	if err := EnsureTrackingTable(ctx, sqlDB, db.Postgres); err != nil {
-		t.Fatalf("EnsureTrackingTable(db.Postgres) returned error: %v", err)
+	if err := EnsureTrackingTable(ctx, sqlDB, dialect); err != nil {
+		t.Fatalf("EnsureTrackingTable returned error: %v", err)
 	}
-	if !tableExists(t, sqlDB, "tango_migrations") {
+	if !tableExists(t, sqlDB, dialect, "tango_migrations") {
 		t.Fatal("tango_migrations table was not created")
+	}
+
+	query, want := "SELECT type FROM pragma_table_info('tango_migrations') WHERE name = 'applied_at'", "TIMESTAMP"
+	if dialect == db.Postgres {
+		query = "SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'tango_migrations' AND column_name = 'applied_at'"
+		want = "timestamp with time zone"
+	}
+	var got string
+	if err := sqlDB.QueryRowContext(ctx, query).Scan(&got); err != nil {
+		t.Fatalf("look up applied_at type: %v", err)
+	}
+	if got != want {
+		t.Fatalf("applied_at type = %q, want %q", got, want)
 	}
 }
 
@@ -70,19 +84,19 @@ func TestPlaceholderAtAcrossDialects(t *testing.T) {
 }
 
 func TestApplyPendingSurfacesEnsureTrackingTableError(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("close db: %v", err)
 	}
 
-	err := ApplyPending(context.Background(), sqlDB, db.SQLite, nil)
+	err := ApplyPending(context.Background(), sqlDB, dialect, nil)
 	if err == nil {
 		t.Fatal("ApplyPending on a closed connection returned nil error, want an error")
 	}
 }
 
 func TestApplyPendingSurfacesAppliedMigrationsQueryError(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 	// Pre-create a tango_migrations table missing the "name" column so
 	// EnsureTrackingTable's CREATE TABLE IF NOT EXISTS is a no-op, and
@@ -91,14 +105,14 @@ func TestApplyPendingSurfacesAppliedMigrationsQueryError(t *testing.T) {
 		t.Fatalf("create broken tracking table: %v", err)
 	}
 
-	err := ApplyPending(ctx, sqlDB, db.SQLite, nil)
+	err := ApplyPending(ctx, sqlDB, dialect, nil)
 	if err == nil {
 		t.Fatal("ApplyPending with a malformed tango_migrations table returned nil error, want an error")
 	}
 }
 
 func TestApplyPendingSurfacesApplyStepError(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
 	migrations := []Migration{
@@ -108,7 +122,7 @@ func TestApplyPendingSurfacesApplyStepError(t *testing.T) {
 		}},
 	}
 
-	err := ApplyPending(ctx, sqlDB, db.SQLite, migrations)
+	err := ApplyPending(ctx, sqlDB, dialect, migrations)
 	if err == nil {
 		t.Fatal("ApplyPending returned nil error for a failing Up step, want an error")
 	}
@@ -119,30 +133,56 @@ func TestApplyPendingSurfacesApplyStepError(t *testing.T) {
 // already ran, by blocking inserts with an ordinary SQL trigger — a
 // realistic scenario (e.g. an audit trigger) rather than a contrived fault.
 func TestApplyPendingSurfacesTrackingInsertError(t *testing.T) {
-	sqlDB := openTrackingTestDB(t)
+	sqlDB, dialect := testdb.Open(t)
 	ctx := context.Background()
 
-	if err := EnsureTrackingTable(ctx, sqlDB, db.SQLite); err != nil {
+	if err := EnsureTrackingTable(ctx, sqlDB, dialect); err != nil {
 		t.Fatalf("EnsureTrackingTable returned error: %v", err)
 	}
-	if _, err := sqlDB.ExecContext(ctx, `
-		CREATE TRIGGER block_tracking_insert BEFORE INSERT ON tango_migrations
-		BEGIN SELECT RAISE(ABORT, 'insert blocked for test'); END;
-	`); err != nil {
-		t.Fatalf("create trigger: %v", err)
-	}
+	blockTrackingTable(t, sqlDB, dialect, "INSERT")
 
 	migrations := []Migration{
-		{Name: "0001_create_user", App: "users", Up: []Step{
-			CreateTable{Table: "user", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+		{Name: "0001_create_account", App: "users", Up: []Step{
+			CreateTable{Table: "account", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
 		}},
 	}
 
-	err := ApplyPending(ctx, sqlDB, db.SQLite, migrations)
+	err := ApplyPending(ctx, sqlDB, dialect, migrations)
 	if err == nil {
 		t.Fatal("ApplyPending returned nil error when the tracking-row INSERT is blocked, want an error")
 	}
-	if !tableExists(t, sqlDB, "user") {
+	if !tableExists(t, sqlDB, dialect, "account") {
 		t.Fatal("the Up step's CreateTable should still have run before the tracking insert failed")
+	}
+}
+
+// blockTrackingTable installs a trigger that makes every operation
+// ("INSERT" or "DELETE") on tango_migrations fail. Trigger syntax differs
+// by dialect, so each gets its own raw SQL: SQLite raises from the trigger
+// body, PostgreSQL from a PL/pgSQL function (created in the test's schema,
+// so it goes when the schema does).
+func blockTrackingTable(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, operation string) {
+	t.Helper()
+	name := "block_tracking_" + strings.ToLower(operation)
+	statements := []string{fmt.Sprintf(
+		"CREATE TRIGGER %s BEFORE %s ON tango_migrations BEGIN SELECT RAISE(ABORT, '%s blocked for test'); END",
+		name, operation, operation,
+	)}
+	if dialect == db.Postgres {
+		statements = []string{
+			fmt.Sprintf(
+				"CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION '%s blocked for test'; END $$",
+				name, operation,
+			),
+			fmt.Sprintf(
+				"CREATE TRIGGER %s BEFORE %s ON tango_migrations FOR EACH ROW EXECUTE FUNCTION %s()",
+				name, operation, name,
+			),
+		}
+	}
+	for _, statement := range statements {
+		if _, err := sqlDB.Exec(statement); err != nil {
+			t.Fatalf("block %s on tango_migrations: %v", operation, err)
+		}
 	}
 }
