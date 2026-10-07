@@ -34,7 +34,7 @@ tanGO is still early. This page is the honest summary of where it stops, so you 
 
 ## Dialect differences
 
-See the [SQLite/PostgreSQL setup guide](guides/sqlite-and-postgresql-setup.md) for the full list. In short: placeholder syntax, `ALTER TABLE` behavior (SQLite rebuilds tables for drop-column/unique-constraint changes; Postgres alters directly), and timestamp column types differ. None of this should be visible in your model or migration code — only in what DDL actually runs, and in raw SQL you write yourself.
+See the [SQLite/PostgreSQL setup guide](guides/sqlite-and-postgresql-setup.md) for the full list. In short: placeholder syntax, `ALTER TABLE` behavior (SQLite rebuilds a table to drop a column, keeping everything else about it; Postgres alters directly), and timestamp column types differ. None of this should be visible in your model or migration code — only in what DDL actually runs, and in raw SQL you write yourself.
 
 ## Irreversible migrations
 

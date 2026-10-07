@@ -116,7 +116,7 @@ func TestApplyStepUnsupportedStepTypeReturnsError(t *testing.T) {
 }
 
 // TestApplyStepDropColumnOnMissingColumnReturnsError covers
-// rebuildTableDroppingColumn's "column does not exist" guard on SQLite and
+// the SQLite rebuild's "column does not exist" guard and
 // the database's own refusal on PostgreSQL.
 func TestApplyStepDropColumnOnMissingColumnReturnsError(t *testing.T) {
 	sqlDB, dialect := testdb.Open(t)

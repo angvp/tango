@@ -11,10 +11,9 @@ import (
 )
 
 // ApplyStep executes step against sqlDB, translating it into the DDL
-// appropriate for dialect. SQLite steps it cannot express via a direct
-// ALTER TABLE (DropColumn, AlterColumnUnique) are applied via the standard
-// table-rebuild pattern: create a new table with the desired shape, copy
-// data across, drop the old table, and rename the new one into place.
+// appropriate for dialect. A SQLite step it cannot express as a direct
+// ALTER TABLE (DropColumn) is applied by rebuilding the table, keeping
+// everything else about it (see rebuildSQLiteTable).
 // It is exported so ApplyPending and the tango CLI can share DDL translation;
 // application code should use tango migrate rather than calling ApplyStep
 // directly.
@@ -30,7 +29,7 @@ func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		if dialect == db.Postgres {
 			return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", quote(dialect, s.Table), quote(dialect, s.Column)))
 		}
-		return rebuildTableDroppingColumn(ctx, sqlDB, s.Table, s.Column)
+		return rebuildSQLiteTable(ctx, sqlDB, s.Table, dropSQLiteColumn(s.Table, s.Column))
 	case AlterColumnUnique:
 		return applyUniqueIndex(ctx, sqlDB, dialect, s.Table, s.Column, s.Unique)
 	case CreateIndex:
@@ -192,78 +191,4 @@ func baseTypeSQL(dialect db.Dialect, columnType string) string {
 	default:
 		return "TEXT"
 	}
-}
-
-// rebuildTableDroppingColumn implements SQLite's standard table-rebuild
-// pattern for a DropColumn step: create a new table with the desired shape,
-// copy data across, drop the old table, and rename the new one into place.
-func rebuildTableDroppingColumn(ctx context.Context, sqlDB *sql.DB, table, dropColumn string) error {
-	columns, err := sqliteTableColumns(ctx, sqlDB, table)
-	if err != nil {
-		return err
-	}
-
-	var remaining []sqliteColumnInfo
-	for _, c := range columns {
-		if c.name != dropColumn {
-			remaining = append(remaining, c)
-		}
-	}
-	if len(remaining) == len(columns) {
-		return fmt.Errorf("tango migration: column %q does not exist on table %q", dropColumn, table)
-	}
-
-	tempTable := table + "_tango_rebuild"
-
-	defs := make([]string, len(remaining))
-	names := make([]string, len(remaining))
-	for i, c := range remaining {
-		def := quote(db.SQLite, c.name) + " " + c.declType
-		if c.primaryKey {
-			def += " PRIMARY KEY"
-		}
-		defs[i] = def
-		names[i] = c.name
-	}
-
-	quotedNames := sqlident.QuoteAll(identStyle(db.SQLite), names)
-	statements := []string{
-		fmt.Sprintf("CREATE TABLE %s (%s)", quote(db.SQLite, tempTable), strings.Join(defs, ", ")),
-		fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", quote(db.SQLite, tempTable), quotedNames, quotedNames, quote(db.SQLite, table)),
-		fmt.Sprintf("DROP TABLE %s", quote(db.SQLite, table)),
-		fmt.Sprintf("ALTER TABLE %s RENAME TO %s", quote(db.SQLite, tempTable), quote(db.SQLite, table)),
-	}
-
-	return execAll(ctx, sqlDB, statements)
-}
-
-type sqliteColumnInfo struct {
-	name       string
-	declType   string
-	primaryKey bool
-}
-
-func sqliteTableColumns(ctx context.Context, sqlDB *sql.DB, table string) ([]sqliteColumnInfo, error) {
-	rows, err := sqlDB.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", quote(db.SQLite, table)))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var columns []sqliteColumnInfo
-	for rows.Next() {
-		var (
-			cid       int
-			name      string
-			declType  string
-			notNull   int
-			dfltValue any
-			pk        int
-		)
-		if err := rows.Scan(&cid, &name, &declType, &notNull, &dfltValue, &pk); err != nil {
-			return nil, err
-		}
-		columns = append(columns, sqliteColumnInfo{name: name, declType: declType, primaryKey: pk != 0})
-	}
-	return columns, rows.Err()
 }
