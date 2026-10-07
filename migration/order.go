@@ -22,18 +22,39 @@ func applyOrder(migrations []Migration) ([]Migration, error) {
 		return base[i].Name < base[j].Name
 	})
 
-	deps := migrationDependencies(base)
-	ordered := make([]Migration, 0, len(base))
-	done := make([]bool, len(base))
-	for len(ordered) < len(base) {
-		next := firstReady(deps, done)
-		if next < 0 {
-			return nil, orderCycleError(base, done)
-		}
-		done[next] = true
-		ordered = append(ordered, base[next])
+	order, stuck := dependencyOrder(migrationDependencies(base))
+	if len(stuck) > 0 {
+		return nil, orderCycleError(base, stuck)
+	}
+	ordered := make([]Migration, len(order))
+	for i, index := range order {
+		ordered[i] = base[index]
 	}
 	return ordered, nil
+}
+
+// dependencyOrder is the one ordering primitive behind both ApplyPending's
+// migration order and Diff's table order. It orders the indexes of deps so
+// that each comes after every index deps lists for it, and otherwise keeps
+// index order: each step takes the lowest index whose dependencies are all
+// placed. When the indexes left all wait on a cycle, none is ready; it
+// stops there and returns them, in index order, as stuck.
+func dependencyOrder(deps [][]int) (order, stuck []int) {
+	done := make([]bool, len(deps))
+	for len(order) < len(deps) {
+		next := firstReady(deps, done)
+		if next < 0 {
+			for i := range deps {
+				if !done[i] {
+					stuck = append(stuck, i)
+				}
+			}
+			return order, stuck
+		}
+		done[next] = true
+		order = append(order, next)
+	}
+	return order, nil
 }
 
 // migrationDependencies returns, for each migration in base, the indexes of
@@ -105,13 +126,11 @@ func firstReady(deps [][]int, done []bool) int {
 	return -1
 }
 
-func orderCycleError(base []Migration, done []bool) error {
-	var stuck []string
-	for i, m := range base {
-		if !done[i] {
-			stuck = append(stuck, fmt.Sprintf("%s/%s", m.App, m.Name))
-		}
+func orderCycleError(base []Migration, stuck []int) error {
+	names := make([]string, len(stuck))
+	for i, index := range stuck {
+		names[i] = fmt.Sprintf("%s/%s", base[index].App, base[index].Name)
 	}
 	return fmt.Errorf("tango migration: cannot order migrations: foreign keys between apps form a cycle among %s; "+
-		"move one of the foreign keys into a later migration of its app", strings.Join(stuck, ", "))
+		"move one of the foreign keys into a later migration of its app", strings.Join(names, ", "))
 }

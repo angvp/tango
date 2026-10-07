@@ -1,7 +1,9 @@
 package migration
 
 import (
+	"maps"
 	"reflect"
+	"slices"
 	"sort"
 	"time"
 
@@ -104,13 +106,11 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 		desiredTables[meta.Name] = meta
 	}
 
-	desiredNames := make([]string, 0, len(desiredTables))
-	for name := range desiredTables {
-		desiredNames = append(desiredNames, name)
+	desiredReferences := make(map[string][]string, len(desiredTables))
+	for name, meta := range desiredTables {
+		desiredReferences[name] = columnReferences(meta.Columns)
 	}
-	createOrder := referencedFirst(desiredNames, func(table string) []string {
-		return columnReferences(desiredTables[table].Columns)
-	})
+	createOrder := referencedFirst(desiredReferences)
 
 	for _, table := range createOrder {
 		meta := desiredTables[table]
@@ -126,26 +126,18 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 		diffColumns(appMigration(meta.App), table, meta.Columns, existing.Columns)
 	}
 
-	var removedTables []string
-	for name := range state.Tables {
+	removedReferences := make(map[string][]string)
+	for name, existing := range state.Tables {
 		if _, wanted := desiredTables[name]; !wanted {
-			removedTables = append(removedTables, name)
+			removedReferences[name] = columnReferences(existing.Columns)
 		}
 	}
-	createdOrder := referencedFirst(removedTables, func(table string) []string {
-		var references []string
-		for _, c := range state.Tables[table].Columns {
-			if c.References != "" {
-				references = append(references, c.References)
-			}
-		}
-		return references
-	})
+	removedCreationOrder := referencedFirst(removedReferences)
 
 	// Drop in reverse creation order, so a table goes only after every
 	// removed table that references it.
-	for i := len(createdOrder) - 1; i >= 0; i-- {
-		table := createdOrder[i]
+	for i := len(removedCreationOrder) - 1; i >= 0; i-- {
+		table := removedCreationOrder[i]
 		existing := state.Tables[table]
 		m := appMigration(existing.App)
 		m.Up = append(m.Up, DropTable{Table: table})
@@ -169,47 +161,54 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 	return result
 }
 
-// referencedFirst orders tables alphabetically, except that a table always
-// comes after every table in the set it references: PostgreSQL rejects a
-// REFERENCES clause naming a table that does not exist yet. A reference to
-// a table outside the set, to the table itself, or around a cycle does not
-// constrain the order.
-func referencedFirst(tables []string, references func(table string) []string) []string {
-	sorted := append([]string(nil), tables...)
-	sort.Strings(sorted)
-	inSet := make(map[string]bool, len(sorted))
-	for _, table := range sorted {
-		inSet[table] = true
+// referencedFirst orders the tables of references (each table mapped to
+// the tables it references) by name, except that a table comes after every
+// other table in the set it references: PostgreSQL rejects a REFERENCES
+// clause naming a table that does not exist yet. A reference to a table
+// outside the set or to the table itself does not constrain the order.
+// Tables in a reference cycle, and tables waiting on one, come last in
+// name order: no order creates them referenced-first, so Diff leaves the
+// cycle for the database to accept (SQLite) or reject (PostgreSQL) rather
+// than failing makemigrations.
+func referencedFirst(references map[string][]string) []string {
+	tables := slices.Sorted(maps.Keys(references))
+	index := make(map[string]int, len(tables))
+	for i, table := range tables {
+		index[table] = i
 	}
 
-	ordered := make([]string, 0, len(sorted))
-	visited := make(map[string]bool, len(sorted))
-	var visit func(table string)
-	visit = func(table string) {
-		if visited[table] {
-			return
-		}
-		visited[table] = true
-		referenced := append([]string(nil), references(table)...)
-		sort.Strings(referenced)
-		for _, target := range referenced {
-			if inSet[target] {
-				visit(target)
+	deps := make([][]int, len(tables))
+	for i, table := range tables {
+		for _, target := range references[table] {
+			if j, inSet := index[target]; inSet && j != i {
+				deps[i] = append(deps[i], j)
 			}
 		}
-		ordered = append(ordered, table)
 	}
-	for _, table := range sorted {
-		visit(table)
+
+	order, stuck := dependencyOrder(deps)
+	ordered := make([]string, 0, len(tables))
+	for _, i := range slices.Concat(order, stuck) {
+		ordered = append(ordered, tables[i])
 	}
 	return ordered
 }
 
-func columnReferences(columns []Column) []string {
+// referencingColumn is a column shape that may hold a foreign key: a
+// desired Column or a replayed ColumnState.
+type referencingColumn interface {
+	referencedTable() string
+}
+
+func (c Column) referencedTable() string      { return c.References }
+func (c ColumnState) referencedTable() string { return c.References }
+
+// columnReferences lists the tables columns reference.
+func columnReferences[C referencingColumn](columns []C) []string {
 	var references []string
 	for _, c := range columns {
-		if c.References != "" {
-			references = append(references, c.References)
+		if table := c.referencedTable(); table != "" {
+			references = append(references, table)
 		}
 	}
 	return references

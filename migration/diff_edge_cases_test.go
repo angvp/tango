@@ -156,3 +156,79 @@ func TestDiffColumnToggledIndexedTrueToFalseProducesDropIndex(t *testing.T) {
 		t.Fatal("Reversible = false, want true for an index toggle")
 	}
 }
+
+// referenceOrderModels has a table referencing a later one (alpha ->
+// gamma), a self-reference (beta), and a reference cycle (pi <-> rho),
+// which no order creates referenced-first.
+func referenceOrderModels() []Model {
+	id := Column{Name: "id", Type: "integer", PrimaryKey: true}
+	ref := func(table string) Column { return Column{Name: table + "_id", Type: "integer", References: table} }
+	return []Model{
+		{App: "blog", Name: "alpha", Columns: []Column{id, ref("gamma")}},
+		{App: "blog", Name: "beta", Columns: []Column{id, ref("beta")}},
+		{App: "blog", Name: "gamma", Columns: []Column{id}},
+		{App: "blog", Name: "pi", Columns: []Column{id, ref("rho")}},
+		{App: "blog", Name: "rho", Columns: []Column{id, ref("pi")}},
+	}
+}
+
+func stepTables(t *testing.T, steps []Step) []string {
+	t.Helper()
+	var tables []string
+	for _, step := range steps {
+		switch s := step.(type) {
+		case CreateTable:
+			tables = append(tables, s.Table)
+		case DropTable:
+			tables = append(tables, s.Table)
+		default:
+			t.Fatalf("unexpected step %#v", step)
+		}
+	}
+	return tables
+}
+
+func assertEachTableOnceWithBefore(t *testing.T, tables []string, first, second string) {
+	t.Helper()
+	position := make(map[string]int)
+	for i, table := range tables {
+		if _, seen := position[table]; seen {
+			t.Fatalf("table %q appears twice in %v", table, tables)
+		}
+		position[table] = i
+	}
+	for _, table := range []string{"alpha", "beta", "gamma", "pi", "rho"} {
+		if _, ok := position[table]; !ok {
+			t.Fatalf("table %q missing from %v", table, tables)
+		}
+	}
+	if position[first] > position[second] {
+		t.Fatalf("%q comes after %q in %v", first, second, tables)
+	}
+}
+
+func TestDiffCreatesReferencedTablesFirstAndToleratesSelfReferencesAndCycles(t *testing.T) {
+	migrations := DiffModels(referenceOrderModels(), SchemaState{Tables: map[string]TableState{}})
+	if len(migrations) != 1 {
+		t.Fatalf("DiffModels returned %d migrations, want 1", len(migrations))
+	}
+	assertEachTableOnceWithBefore(t, stepTables(t, migrations[0].Up), "gamma", "alpha")
+}
+
+func TestDiffDropsReferencingTablesFirstAndToleratesSelfReferencesAndCycles(t *testing.T) {
+	state, err := Replay([]Migration{{App: "blog", Up: []Step{
+		CreateTable{Table: "gamma", Columns: referenceOrderModels()[2].Columns},
+		CreateTable{Table: "alpha", Columns: referenceOrderModels()[0].Columns},
+		CreateTable{Table: "beta", Columns: referenceOrderModels()[1].Columns},
+		CreateTable{Table: "pi", Columns: referenceOrderModels()[3].Columns},
+		CreateTable{Table: "rho", Columns: referenceOrderModels()[4].Columns},
+	}}})
+	if err != nil {
+		t.Fatalf("Replay returned error: %v", err)
+	}
+	migrations := DiffModels(nil, state)
+	if len(migrations) != 1 {
+		t.Fatalf("DiffModels returned %d migrations, want 1", len(migrations))
+	}
+	assertEachTableOnceWithBefore(t, stepTables(t, migrations[0].Up), "alpha", "gamma")
+}
