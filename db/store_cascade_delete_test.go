@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
-	_ "modernc.org/sqlite"
 )
 
 type cascadeAuthor struct {
@@ -34,46 +34,20 @@ type cascadeEmployee struct {
 	ManagerID int64 `tango:"fk=cascadeEmployee"`
 }
 
-func openCascadeTestDB(t *testing.T) *sql.DB {
+// openCascadeTestDB returns a fresh database holding the cascade models'
+// tables, built by migration DDL (so every foreign key is a real
+// REFERENCES constraint), and the registry they were registered in.
+func openCascadeTestDB(t *testing.T) (*sql.DB, db.Dialect, *model.Registry) {
 	t.Helper()
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	statements := []string{
-		`CREATE TABLE cascade_author (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`,
-		`CREATE TABLE cascade_post (id INTEGER PRIMARY KEY AUTOINCREMENT, author_id INTEGER NOT NULL, title TEXT NOT NULL)`,
-		`CREATE TABLE cascade_comment (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, body TEXT NOT NULL)`,
-		`CREATE TABLE cascade_employee (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, manager_id INTEGER)`,
-	}
-	for _, stmt := range statements {
-		if _, err := sqlDB.ExecContext(context.Background(), stmt); err != nil {
-			t.Fatalf("create table: %v", err)
-		}
-	}
-	return sqlDB
-}
-
-func cascadeTestRegistry(t *testing.T) *model.Registry {
-	t.Helper()
-	registry := model.NewRegistry()
-	for _, v := range []any{cascadeAuthor{}, cascadePost{}, cascadeComment{}, cascadeEmployee{}} {
-		if err := registry.Register(v); err != nil {
-			t.Fatalf("register %T: %v", v, err)
-		}
-	}
-	return registry
+	return openTables(t, cascadeAuthor{}, cascadePost{}, cascadeComment{}, cascadeEmployee{})
 }
 
 func TestStoreDeleteWithoutUseModelsDoesNotCascade(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 	postMeta, _ := registry.Get("cascadePost")
 
-	store := NewStore(sqlDB, SQLite) // UseModels never called
+	store := db.NewStore(sqlDB, dialect) // UseModels never called
 
 	author := cascadeAuthor{Name: "Jane"}
 	if err := store.Create(context.Background(), authorMeta, &author); err != nil {
@@ -84,8 +58,10 @@ func TestStoreDeleteWithoutUseModelsDoesNotCascade(t *testing.T) {
 		t.Fatalf("Create post: %v", err)
 	}
 
-	if err := store.Delete(context.Background(), authorMeta, author.ID); err != nil {
-		t.Fatalf("Delete author returned error: %v", err)
+	// Without the cascade, the database's own REFERENCES constraint (which
+	// migrations generate as RESTRICT/NO ACTION) refuses the delete.
+	if err := store.Delete(context.Background(), authorMeta, author.ID); err == nil {
+		t.Fatal("Delete author returned nil error, want the foreign key constraint to refuse it")
 	}
 
 	var gotPost cascadePost
@@ -95,12 +71,11 @@ func TestStoreDeleteWithoutUseModelsDoesNotCascade(t *testing.T) {
 }
 
 func TestStoreDeleteCascadesOneLevel(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 	postMeta, _ := registry.Get("cascadePost")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	author := cascadeAuthor{Name: "Jane"}
@@ -118,19 +93,18 @@ func TestStoreDeleteCascadesOneLevel(t *testing.T) {
 
 	var gotPost cascadePost
 	err := store.Get(context.Background(), postMeta, post.ID, &gotPost)
-	if !errors.Is(err, ErrNotFound) {
+	if !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("post should have been cascade-deleted, Get error = %v", err)
 	}
 }
 
 func TestStoreDeleteCascadesMultiLevelChain(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 	postMeta, _ := registry.Get("cascadePost")
 	commentMeta, _ := registry.Get("cascadeComment")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	author := cascadeAuthor{Name: "Jane"}
@@ -152,17 +126,16 @@ func TestStoreDeleteCascadesMultiLevelChain(t *testing.T) {
 
 	var gotComment cascadeComment
 	err := store.Get(context.Background(), commentMeta, comment.ID, &gotComment)
-	if !errors.Is(err, ErrNotFound) {
+	if !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("comment should have been cascade-deleted through the chain, Get error = %v", err)
 	}
 }
 
 func TestStoreDeleteCascadeHandlesSelfReferentialCycleWithoutHanging(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	employeeMeta, _ := registry.Get("cascadeEmployee")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	manager := cascadeEmployee{Name: "Boss"}
@@ -194,21 +167,20 @@ func TestStoreDeleteCascadeHandlesSelfReferentialCycleWithoutHanging(t *testing.
 	}
 
 	var gotManager, gotReport cascadeEmployee
-	if err := store.Get(context.Background(), employeeMeta, manager.ID, &gotManager); !errors.Is(err, ErrNotFound) {
+	if err := store.Get(context.Background(), employeeMeta, manager.ID, &gotManager); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("manager should have been deleted, Get error = %v", err)
 	}
-	if err := store.Get(context.Background(), employeeMeta, report.ID, &gotReport); !errors.Is(err, ErrNotFound) {
+	if err := store.Get(context.Background(), employeeMeta, report.ID, &gotReport); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("report should have been deleted via the cycle, Get error = %v", err)
 	}
 }
 
 func TestStoreDeleteCascadeFailureRollsBackCleanly(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 	postMeta, _ := registry.Get("cascadePost")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	author := cascadeAuthor{Name: "Jane"}
@@ -222,8 +194,14 @@ func TestStoreDeleteCascadeFailureRollsBackCleanly(t *testing.T) {
 
 	// Drop the dependent table out from under the cascade after rows exist,
 	// so deleting its row mid-cascade fails and the whole transaction must
-	// roll back — the author row must survive untouched.
-	if _, err := sqlDB.ExecContext(context.Background(), "DROP TABLE cascade_post"); err != nil {
+	// roll back — the author row must survive untouched. PostgreSQL refuses
+	// to drop a table another table's foreign key points at without CASCADE
+	// (which drops only cascade_comment's constraint); SQLite has no CASCADE.
+	drop := map[db.Dialect]string{
+		db.SQLite:   "DROP TABLE cascade_post",
+		db.Postgres: "DROP TABLE cascade_post CASCADE",
+	}[dialect]
+	if _, err := sqlDB.ExecContext(context.Background(), drop); err != nil {
 		t.Fatalf("drop table: %v", err)
 	}
 
@@ -238,15 +216,14 @@ func TestStoreDeleteCascadeFailureRollsBackCleanly(t *testing.T) {
 }
 
 func TestStoreDeleteRootNotFoundStillReturnsErrNotFoundWithModels(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	err := store.Delete(context.Background(), authorMeta, int64(999))
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatalf("error = %v, want it to wrap ErrNotFound", err)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("error = %v, want it to wrap db.ErrNotFound", err)
 	}
 }

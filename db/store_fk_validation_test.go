@@ -1,18 +1,19 @@
-package db
+package db_test
 
 import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/angvp/tango/db"
 )
 
 func TestStoreCreateWithValidForeignKeySucceeds(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 	postMeta, _ := registry.Get("cascadePost")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	author := cascadeAuthor{Name: "Jane"}
@@ -27,17 +28,16 @@ func TestStoreCreateWithValidForeignKeySucceeds(t *testing.T) {
 }
 
 func TestStoreCreateWithInvalidForeignKeyFails(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	postMeta, _ := registry.Get("cascadePost")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	post := cascadePost{AuthorID: 999, Title: "Hello"}
 	err := store.Create(context.Background(), postMeta, &post)
-	if !errors.Is(err, ErrInvalidForeignKey) {
-		t.Fatalf("Create error = %v, want it to wrap ErrInvalidForeignKey", err)
+	if !errors.Is(err, db.ErrInvalidForeignKey) {
+		t.Fatalf("Create error = %v, want it to wrap db.ErrInvalidForeignKey", err)
 	}
 
 	var count int
@@ -50,12 +50,11 @@ func TestStoreCreateWithInvalidForeignKeyFails(t *testing.T) {
 }
 
 func TestStoreUpdateWithInvalidForeignKeyFails(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 	postMeta, _ := registry.Get("cascadePost")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	author := cascadeAuthor{Name: "Jane"}
@@ -69,8 +68,8 @@ func TestStoreUpdateWithInvalidForeignKeyFails(t *testing.T) {
 
 	post.AuthorID = 999
 	err := store.Update(context.Background(), postMeta, &post)
-	if !errors.Is(err, ErrInvalidForeignKey) {
-		t.Fatalf("Update error = %v, want it to wrap ErrInvalidForeignKey", err)
+	if !errors.Is(err, db.ErrInvalidForeignKey) {
+		t.Fatalf("Update error = %v, want it to wrap db.ErrInvalidForeignKey", err)
 	}
 
 	var gotPost cascadePost
@@ -83,11 +82,10 @@ func TestStoreUpdateWithInvalidForeignKeyFails(t *testing.T) {
 }
 
 func TestStoreCreateSkipsForeignKeyValidationForZeroValue(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	employeeMeta, _ := registry.Get("cascadeEmployee")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	// ManagerID left at its zero value: treated as "unset," not a reference
@@ -99,26 +97,30 @@ func TestStoreCreateSkipsForeignKeyValidationForZeroValue(t *testing.T) {
 }
 
 func TestStoreForeignKeyValidationInertWithoutUseModels(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	postMeta, _ := registry.Get("cascadePost")
 
-	store := NewStore(sqlDB, SQLite) // UseModels never called
+	store := db.NewStore(sqlDB, dialect) // UseModels never called
 
+	// The Store doesn't check the reference, so the error comes from the
+	// database's own REFERENCES constraint and is never ErrInvalidForeignKey.
 	post := cascadePost{AuthorID: 999, Title: "Hello"}
-	if err := store.Create(context.Background(), postMeta, &post); err != nil {
-		t.Fatalf("Create without UseModels returned error, want it to behave exactly as before this check existed: %v", err)
+	err := store.Create(context.Background(), postMeta, &post)
+	if err == nil {
+		t.Fatal("Create without UseModels returned nil error, want the database's foreign key constraint to refuse it")
+	}
+	if errors.Is(err, db.ErrInvalidForeignKey) {
+		t.Fatalf("Create without UseModels error = %v, want the driver's constraint error, not ErrInvalidForeignKey", err)
 	}
 }
 
 func TestStoreCreateValidatesMultipleForeignKeyFieldsIndependently(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
-	registry := cascadeTestRegistry(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 	postMeta, _ := registry.Get("cascadePost")
 	commentMeta, _ := registry.Get("cascadeComment")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	author := cascadeAuthor{Name: "Jane"}
@@ -136,7 +138,7 @@ func TestStoreCreateValidatesMultipleForeignKeyFieldsIndependently(t *testing.T)
 	}
 
 	invalid := cascadeComment{PostID: 999, Body: "Orphaned"}
-	if err := store.Create(context.Background(), commentMeta, &invalid); !errors.Is(err, ErrInvalidForeignKey) {
-		t.Fatalf("Create comment error = %v, want it to wrap ErrInvalidForeignKey", err)
+	if err := store.Create(context.Background(), commentMeta, &invalid); !errors.Is(err, db.ErrInvalidForeignKey) {
+		t.Fatalf("Create comment error = %v, want it to wrap db.ErrInvalidForeignKey", err)
 	}
 }

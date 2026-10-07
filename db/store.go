@@ -382,6 +382,12 @@ func (s *Store) cascadeDependents(ctx context.Context, tx execer, meta model.Mod
 			for _, childPK := range childPKs {
 				key := cascadeKey(other.Name, childPK)
 				if visited[key] {
+					// A circular reference back to a row this cascade is
+					// already deleting. Clear it, or the database's
+					// REFERENCES constraint rejects deleting (meta, pk).
+					if err := s.clearReference(ctx, tx, other, otherPKField, field, childPK); err != nil {
+						return err
+					}
 					continue
 				}
 				visited[key] = true
@@ -396,6 +402,21 @@ func (s *Store) cascadeDependents(ctx context.Context, tx execer, meta model.Mod
 		}
 	}
 	return nil
+}
+
+// clearReference sets fkField to NULL on the row of model other whose
+// primary key is pk. The cascade uses it only on rows it is about to delete
+// anyway, and NULL is how an unset foreign key is stored (see columnValue).
+func (s *Store) clearReference(ctx context.Context, tx execer, other model.ModelMeta, otherPKField model.FieldMeta, fkField model.FieldMeta, pk any) error {
+	query := fmt.Sprintf(
+		"UPDATE %s SET %s = NULL WHERE %s = %s",
+		ColumnName(other.Name),
+		ColumnName(fkField.Name),
+		ColumnName(otherPKField.Name),
+		placeholder(s.dialect, 1),
+	)
+	_, err := tx.ExecContext(ctx, query, pk)
+	return err
 }
 
 // referencingPrimaryKeys returns the primary key of every row in model other

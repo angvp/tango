@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"context"
@@ -6,8 +6,21 @@ import (
 	"errors"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/db"
 )
+
+// author and book are the models behind the raw queries' tables; rawAuthor,
+// rawAuthorBookCount and rawBook are plain result shapes for those queries.
+type author struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type book struct {
+	ID       int64 `tango:"pk"`
+	AuthorID int64 `tango:"fk=author"`
+	Title    string
+}
 
 type rawAuthor struct {
 	ID   int64
@@ -25,17 +38,17 @@ type rawBook struct {
 }
 
 func TestStoreQueryRowScansSingleResult(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	var result rawAuthorBookCount
 	err := store.QueryRow(
 		context.Background(),
 		&result,
-		`SELECT authors.name AS name, COUNT(books.id) AS bookcount
-		 FROM authors JOIN books ON books.author_id = authors.id
-		 WHERE authors.name = ?
-		 GROUP BY authors.name`,
+		bind(dialect, `SELECT author.name AS name, COUNT(book.id) AS bookcount
+		 FROM author JOIN book ON book.author_id = author.id
+		 WHERE author.name = ?
+		 GROUP BY author.name`),
 		"Ada",
 	)
 	if err != nil {
@@ -48,22 +61,22 @@ func TestStoreQueryRowScansSingleResult(t *testing.T) {
 }
 
 func TestStoreQueryRowNoResultsReturnsErrNotFound(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	var result rawAuthor
-	err := store.QueryRow(context.Background(), &result, "SELECT id, name FROM authors WHERE name = ?", "Missing")
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatalf("error = %v, want it to wrap ErrNotFound", err)
+	err := store.QueryRow(context.Background(), &result, bind(dialect, "SELECT id, name FROM author WHERE name = ?"), "Missing")
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("error = %v, want it to wrap db.ErrNotFound", err)
 	}
 }
 
 func TestStoreQueryScansMultipleResults(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	var results []rawAuthor
-	err := store.Query(context.Background(), &results, "SELECT id, name FROM authors ORDER BY name")
+	err := store.Query(context.Background(), &results, "SELECT id, name FROM author ORDER BY name")
 	if err != nil {
 		t.Fatalf("Query returned error: %v", err)
 	}
@@ -77,11 +90,11 @@ func TestStoreQueryScansMultipleResults(t *testing.T) {
 }
 
 func TestStoreQueryNoResultsReturnsEmptySliceNotError(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	results := []rawAuthor{}
-	err := store.Query(context.Background(), &results, "SELECT id, name FROM authors WHERE name = ?", "Missing")
+	err := store.Query(context.Background(), &results, bind(dialect, "SELECT id, name FROM author WHERE name = ?"), "Missing")
 	if err != nil {
 		t.Fatalf("Query returned error: %v", err)
 	}
@@ -96,13 +109,13 @@ func TestStoreQueryNoResultsReturnsEmptySliceNotError(t *testing.T) {
 // TestStoreQueryMatchesGeneratedSnakeCaseColumnsWithoutAliasing proves a raw
 // query selecting tanGO's own generated column names (author_id, no "AS")
 // scans straight into the corresponding Go field (AuthorID) — the fix for
-// the gap the bookstore dogfooding app hit twice as a runtime failure.
+// the gap the booktore dogfooding app hit twice as a runtime failure.
 func TestStoreQueryMatchesGeneratedSnakeCaseColumnsWithoutAliasing(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	var results []rawBook
-	err := store.Query(context.Background(), &results, "SELECT author_id, title FROM books ORDER BY title")
+	err := store.Query(context.Background(), &results, "SELECT author_id, title FROM book ORDER BY title")
 	if err != nil {
 		t.Fatalf("Query returned error: %v", err)
 	}
@@ -117,11 +130,11 @@ func TestStoreQueryMatchesGeneratedSnakeCaseColumnsWithoutAliasing(t *testing.T)
 // TestStoreQueryRowMatchesGeneratedSnakeCaseColumnWithoutAliasing is
 // QueryRow's equivalent of the Query case above.
 func TestStoreQueryRowMatchesGeneratedSnakeCaseColumnWithoutAliasing(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	var result rawBook
-	err := store.QueryRow(context.Background(), &result, "SELECT author_id, title FROM books WHERE title = ?", "Notes")
+	err := store.QueryRow(context.Background(), &result, bind(dialect, "SELECT author_id, title FROM book WHERE title = ?"), "Notes")
 	if err != nil {
 		t.Fatalf("QueryRow returned error: %v", err)
 	}
@@ -131,11 +144,11 @@ func TestStoreQueryRowMatchesGeneratedSnakeCaseColumnWithoutAliasing(t *testing.
 }
 
 func TestStoreQueryStillMatchesExactFieldNameAliases(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	var results []rawBook
-	err := store.Query(context.Background(), &results, `SELECT author_id AS AuthorID, title AS Title FROM books ORDER BY title`)
+	err := store.Query(context.Background(), &results, `SELECT author_id AS AuthorID, title AS Title FROM book ORDER BY title`)
 	if err != nil {
 		t.Fatalf("Query returned error: %v", err)
 	}
@@ -145,66 +158,39 @@ func TestStoreQueryStillMatchesExactFieldNameAliases(t *testing.T) {
 }
 
 func TestStoreQueryUnmatchedColumnFails(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	var results []rawAuthor
 	err := store.Query(
 		context.Background(),
 		&results,
-		`SELECT authors.id AS id, authors.name AS name, books.title AS title
-		 FROM authors JOIN books ON books.author_id = authors.id`,
+		`SELECT author.id AS id, author.name AS name, book.title AS title
+		 FROM author JOIN book ON book.author_id = author.id`,
 	)
 	if err == nil {
 		t.Fatal("Query returned nil error for an unmatched column, want non-nil")
 	}
 }
 
-func openRawSQLTestDB(t *testing.T) *sql.DB {
+// openRawSQLTestDB returns a fresh database holding the author and book
+// tables, seeded with two authors (Ada is 1, Grace is 2) and three books.
+func openRawSQLTestDB(t *testing.T) (*sql.DB, db.Dialect) {
 	t.Helper()
-
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = sqlDB.Close()
-	})
-
+	sqlDB, dialect, registry := openTables(t, author{}, book{})
+	store := db.NewStore(sqlDB, dialect)
 	ctx := context.Background()
-	_, err = sqlDB.ExecContext(ctx, `
-		CREATE TABLE authors (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		t.Fatalf("create authors table: %v", err)
-	}
-	_, err = sqlDB.ExecContext(ctx, `
-		CREATE TABLE books (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			author_id INTEGER NOT NULL,
-			title TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		t.Fatalf("create books table: %v", err)
-	}
 
-	_, err = sqlDB.ExecContext(ctx, `INSERT INTO authors (id, name) VALUES (1, 'Ada'), (2, 'Grace')`)
-	if err != nil {
-		t.Fatalf("seed authors: %v", err)
+	authorMeta, bookMeta := metaFor(t, registry, author{}), metaFor(t, registry, book{})
+	for _, a := range []author{{ID: 1, Name: "Ada"}, {ID: 2, Name: "Grace"}} {
+		if err := store.Create(ctx, authorMeta, &a); err != nil {
+			t.Fatalf("seed author: %v", err)
+		}
 	}
-	_, err = sqlDB.ExecContext(ctx, `
-		INSERT INTO books (author_id, title) VALUES
-			(1, 'Notes'),
-			(1, 'Sketches'),
-			(2, 'COBOL Reflections')
-	`)
-	if err != nil {
-		t.Fatalf("seed books: %v", err)
+	for _, b := range []book{{AuthorID: 1, Title: "Notes"}, {AuthorID: 1, Title: "Sketches"}, {AuthorID: 2, Title: "COBOL Reflections"}} {
+		if err := store.Create(ctx, bookMeta, &b); err != nil {
+			t.Fatalf("seed book: %v", err)
+		}
 	}
-
-	return sqlDB
+	return sqlDB, dialect
 }
