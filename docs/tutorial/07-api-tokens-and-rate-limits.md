@@ -15,6 +15,7 @@ echo "BOARD_JWT_SECRET=$(openssl rand -hex 32)" >> .env
 Then build the token service in `main.go`. It needs an issuer and an audience — names that get stamped into every token and checked on the way back in, so a token minted for one service can't be replayed against another:
 
 ```go
+// main.go
 // newTokenService builds the API's token issuer from BOARD_JWT_SECRET.
 func newTokenService() (*jwt.Service, error) {
 	secret := os.Getenv("BOARD_JWT_SECRET")
@@ -34,6 +35,7 @@ func newTokenService() (*jwt.Service, error) {
 Call it right after creating the store, and fail at startup rather than at the first login if the secret is missing:
 
 ```go
+// main.go
 store := db.NewStore(sqlDB, dialect)
 tokens, err := newTokenService()
 if err != nil {
@@ -231,6 +233,7 @@ func New(store *db.Store, tokens *jwt.Service) tango.App {
 `posts` now looks up the `Account` model while registering, so `accounts` has to come first in `InstalledApps`. Update `main.go` (and import `"board/apps/api"`):
 
 ```go
+// main.go (as of part 7)
 InstalledApps: []tango.App{
 	accounts.New(store),
 	posts.New(store, tokens),
@@ -245,6 +248,7 @@ InstalledApps: []tango.App{
 Put the token helpers in `apps/posts/auth.go`:
 
 ```go
+// apps/posts/auth.go
 package posts
 
 import (

@@ -89,6 +89,7 @@ Open the new migration file and you'll find `References: "post"` on the `post_id
 So far every view returns errors straight up, and tanGO turns any returned error into a generic `500`. That's the right default for failures the client can't fix — the real error is logged, never leaked. But "that post doesn't exist" and "you forgot the title" are the client's business. Add two small helpers at the bottom of `views.go`:
 
 ```go
+// apps/posts/views.go
 func notFound(ctx *tango.Context) error {
 	return ctx.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
 }
@@ -101,6 +102,7 @@ func badRequest(ctx *tango.Context, message string) error {
 `db.Store` reports a missing row as `db.ErrNotFound`, so `getPost` can tell the two cases apart with `errors.Is`:
 
 ```go
+// apps/posts/views.go
 func getPost(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		var post Post
@@ -119,6 +121,7 @@ func getPost(store *db.Store, meta model.ModelMeta) tango.View {
 `createPost` gets the same treatment, and fixes something parts 2 and 3 quietly left out: nothing ever set `CreatedAt`, so every post was created at the zero time. A view should also never let the client choose fields the server owns, like the ID:
 
 ```go
+// apps/posts/views.go (as of part 4)
 func createPost(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		var post Post
@@ -145,6 +148,7 @@ func createPost(store *db.Store, meta model.ModelMeta) tango.View {
 A comment's `PostID` comes from the URL, never from the request body — otherwise a client could post to `/posts/1/comments/` and attach the comment to post 2:
 
 ```go
+// apps/posts/views.go
 func createComment(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		postID, err := strconv.ParseInt(ctx.Param("id"), 10, 64)
@@ -179,6 +183,7 @@ You don't have to look the post up first. Before writing, `store.Create` checks 
 Listing a post's comments is a filtered `List`. Conditions name Go fields, not columns:
 
 ```go
+// apps/posts/views.go
 func listComments(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		postID, err := strconv.ParseInt(ctx.Param("id"), 10, 64)
@@ -201,6 +206,7 @@ func listComments(store *db.Store, meta model.ModelMeta) tango.View {
 ## Deleting a post deletes its comments
 
 ```go
+// apps/posts/views.go (as of part 4)
 func deletePost(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		var post Post
@@ -228,6 +234,7 @@ func deletePost(store *db.Store, meta model.ModelMeta) tango.View {
 The post list would be more useful with a comment count per post. That's a join plus an aggregate, which is past what `db.Store`'s typed CRUD does — by design. `store.Query` runs any SQL you write and scans each row into a struct, matching columns to fields by name:
 
 ```go
+// apps/posts/views.go (as of part 4)
 // postSummary is one row of the list endpoint: a post plus how many
 // comments it has. It isn't a registered model — just a shape to scan into.
 type postSummary struct {

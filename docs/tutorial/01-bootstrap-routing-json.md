@@ -36,6 +36,7 @@ tango newapp posts
 This writes `apps/posts/app.go` with a stub `Name()`/`Register()`. It does **not** edit `main.go` for you — wiring a new app in is always one line you write yourself, so nothing about your project's composition is hidden:
 
 ```go
+// main.go (as of part 1)
 config := tango.Config{
 	InstalledApps: []tango.App{
 		posts.App{},
@@ -52,6 +53,7 @@ config := tango.Config{
 Inside `apps/posts/app.go`, `Register` declares routes via `Include`, a namespace prefix, and a list of `Path` declarations:
 
 ```go
+// apps/posts/app.go (as of part 1)
 package posts
 
 import "github.com/angvp/tango"
@@ -75,6 +77,7 @@ Route names are namespace-qualified: the routes above are known internally as `p
 A `View` is `func(*tango.Context) error`. `Context` gives you `Param` (path parameters), `Query` (query string values), `Bind` (decode a request body), and `JSON` (write a JSON response). Views live next to the app in `apps/posts/views.go`, which starts with `package posts` and imports `github.com/angvp/tango`:
 
 ```go
+// apps/posts/views.go (as of part 1)
 func listPosts(ctx *tango.Context) error {
 	return ctx.JSON(200, map[string]string{"posts": "none yet"})
 }

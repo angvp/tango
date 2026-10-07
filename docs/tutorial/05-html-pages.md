@@ -14,6 +14,7 @@ mkdir -p apps/web/templates apps/web/static
 Install it in `main.go` after `posts` — order matters, because `web` looks up models that `posts` registers:
 
 ```go
+// main.go (as of part 5)
 InstalledApps: []tango.App{
 	posts.New(store),
 	web.New(store),
@@ -63,6 +64,7 @@ func Summaries(ctx context.Context, store *db.Store) ([]PostSummary, error) {
 Then replace `postSummary` and `listPosts` in `apps/posts/views.go` with the shorter version:
 
 ```go
+// apps/posts/views.go
 func listPosts(store *db.Store) tango.View {
 	return func(ctx *tango.Context) error {
 		posts, err := Summaries(ctx.Context(), store)
@@ -164,6 +166,7 @@ Routes included under `/` have no namespace, so their names are just `home` and 
 `apps/web/app.go` parses the templates once, while the app registers, so a template syntax error fails `tango check` instead of the first request:
 
 ```go
+// apps/web/app.go (as of part 5)
 // Package web serves the board's HTML pages. It owns no models: it reads
 // the posts app's data and renders it with html/template.
 package web
@@ -290,6 +293,7 @@ func (p *pages) post(ctx *tango.Context) error {
 The `url` template function, at the bottom of `views.go`, is where reverse lookup happens. A `Reverser` can only be built after every installed app has registered its routes — later than `web`'s own `Register` runs — so `url` builds it on first use and keeps it:
 
 ```go
+// apps/web/views.go
 // url lets templates build links from route names:
 // {{url "post" "id" .ID}} renders /p/42/. The Reverser can only be built
 // once every app has registered, so it's created on first use.
@@ -329,6 +333,7 @@ a { color: #013b8a; }
 and the view that serves it, at the bottom of `apps/web/app.go`:
 
 ```go
+// apps/web/app.go
 func serveStatic() tango.View {
 	assets, err := fs.Sub(staticFS, "static")
 	if err != nil {

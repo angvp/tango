@@ -54,6 +54,7 @@ Views can't reach the registry themselves — `Context` deliberately exposes onl
 In `main.go`, the generated code already opens the database named by `TANGO_DB_DSN` (`sqlite://app.db` unless you set it) and builds the store right before the config, so the store is in scope where you list your apps. Replace `posts.App{}` with `posts.New(store)`:
 
 ```go
+// main.go (as of part 2)
 store := db.NewStore(sqlDB, dialect)
 config := tango.Config{
 	InstalledApps: []tango.App{
@@ -71,6 +72,7 @@ config := tango.Config{
 `db.Store`'s `Create`/`Get`/`List`/`Update`/`Delete` take the model's `ModelMeta` (looked up from the registry) and a destination value:
 
 ```go
+// apps/posts/views.go (as of part 2)
 func listPosts(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		var posts []Post
