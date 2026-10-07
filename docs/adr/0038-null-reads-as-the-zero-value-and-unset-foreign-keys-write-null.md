@@ -7,3 +7,5 @@ tanGO model fields are plain Go values, and its one relationship convention alre
 We considered two alternatives. Nullable model fields (pointers or `sql.Null*`) would be more precise, but they push `nil` checks into every view and template for a distinction most apps don't need; they can still come later as an addition. Having `makemigrations` backfill every added column with its zero value would fix old rows but not the foreign key case, since `0` isn't a valid reference, and it would make `Column.Default` a general default system, which it deliberately isn't.
 
 The cost is one ambiguity: a `Where` condition on a zero value doesn't match `NULL` rows, because SQL's `=` never matches `NULL`. Filtering for unset values needs raw SQL with `IS NULL`.
+
+This amends the "zero means unset" convention in [ADR 0012](0012-fk-referential-integrity-check-is-a-non-transactional-preflight.md): the preflight still skips a zero foreign key, and the database now stores it as `NULL` instead of `0`. The `IS NULL` boundary from [ADR 0024](0024-query-filtering-is-a-bounded-where-primitive.md) still holds.

@@ -53,7 +53,7 @@ This API does not support nested boolean groups, automatic wildcard escaping, `I
 
 tanGO fields are plain Go values, never pointers or `sql.Null*` wrappers, so `NULL` and a field's zero value mean the same thing. Every read (`Get`, `List`, `Query`, `QueryRow`) turns a `NULL` column into the field's zero value: `""`, `0`, `false`, or the zero `time.Time`. That's what happens to existing rows when a migration adds a column: they read as the zero value until you write something else. A raw query's `LEFT JOIN` with no match reads the same way. Going the other way, a foreign key field left at `0` is written as `NULL` (see [relationships](relationships-and-admin-foreign-keys.md)); other fields are written as their value.
 
-A `Where` condition compares with `=`, and `NULL` never equals anything, so filtering on a zero value doesn't match `NULL` rows. Use raw SQL with `IS NULL` for that. A raw-SQL destination that needs to tell `NULL` from zero can use a pointer or `sql.Null*` field; those keep their usual meaning. See [ADR 0032](../adr/0032-null-reads-as-the-zero-value-and-unset-foreign-keys-write-null.md).
+A `Where` condition compares with `=`, and `NULL` never equals anything, so filtering on a zero value doesn't match `NULL` rows. Use raw SQL with `IS NULL` for that. A raw-SQL destination that needs to tell `NULL` from zero can use a pointer or `sql.Null*` field; those keep their usual meaning. See [ADR 0038](../adr/0038-null-reads-as-the-zero-value-and-unset-foreign-keys-write-null.md).
 
 ## Raw SQL
 

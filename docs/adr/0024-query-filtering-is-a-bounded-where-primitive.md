@@ -1,0 +1,9 @@
+# Query filtering ships as a bounded WHERE primitive, not a query DSL
+
+`db.Query` gets a `Where []db.Condition` filtering primitive, but a deliberately narrow one: six comparison operators (`Eq`/`Ne`/`Gt`/`Gte`/`Lt`/`Lte`), AND-only (no OR, no grouping), no `Contains`/`StartsWith`, and `Store.List` only — never `Store.Get`, joins, or cross-model filtering (that boundary was already set by [minimal ORM foundations](../guides/relationships-and-admin-foreign-keys.md)). We picked this over a broader query builder or a Django-style `Field__op` convention because it's the smallest primitive that unblocks real single-model filtering without growing `db` into a general ORM.
+
+`Value: nil` is rejected outright, for every operator — no `IS NULL`/`IS NOT NULL` semantics. This follows specifically from tanGO having no general nullable-field mechanism today: [Unset foreign key](../guides/relationships-and-admin-foreign-keys.md) is an explicitly narrow, FK-specific zero-value convention, not a precedent for `NULL` handling elsewhere. Designing `IS NULL` behavior now would mean inventing nullability semantics tanGO doesn't otherwise have, rather than wiring an existing concept into a new mechanism — deferred until (if ever) a real nullable-field design exists to hang it on.
+
+**Amendment:** "AND-only" and "no `Contains`/`StartsWith`" didn't last. Once admin search needed migrating off raw SQL, the bounded shape widened to add `OpLike` and one OR group (`Query.Any`) — see [ADR 0025](0025-query-filtering-gains-like-any-and-count.md). The `IS NULL`/`Store.Get`/joins/cross-model boundaries in this ADR still hold unchanged.
+
+See also [ADR 0038](0038-null-reads-as-the-zero-value-and-unset-foreign-keys-write-null.md): `NULL` columns now read back as the zero value, which still leaves `IS NULL` filtering to raw SQL.

@@ -12,7 +12,7 @@ import (
 // It decides cookies' Secure flag, where trusting the headers is safe:
 // a client that forges "https" only gets a cookie its own browser won't
 // send back over plain HTTP. Don't use it for security decisions that a
-// forged header could weaken. See docs/adr/0033.
+// forged header could weaken. See docs/adr/0039.
 func IsHTTPS(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
