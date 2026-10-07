@@ -38,10 +38,10 @@ Like every model name in tanGO, `fk=Author` refers to a bare, unnamespaced model
 
 ## Migrations and the generated constraint
 
-`tango makemigrations` generates a real DB-level `REFERENCES` constraint for a foreign key field — `RESTRICT`/`NO ACTION`, never `CASCADE` at the database level (see below for why). On SQLite, this constraint is only enforced if `PRAGMA foreign_keys=ON` has been set on the connection; `db.SQLiteForeignKeysDSN(dsn)` appends the driver's `_foreign_keys=on` DSN parameter for you, and `tango newproject --dialect=sqlite`'s generated scaffold already calls it. If you open your own SQLite connection outside the scaffold and want the constraint enforced, call it yourself:
+`tango makemigrations` generates a real DB-level `REFERENCES` constraint for a foreign key field — `RESTRICT`/`NO ACTION`, never `CASCADE` at the database level (see below for why). On SQLite, this constraint is only enforced if `PRAGMA foreign_keys=ON` has been set on the connection. `db.ParseDSN` (and `tango.LoadDBConfigFromEnv`, which the generated scaffold uses) already returns a SQLite DSN with the driver's `_foreign_keys=on` parameter, so an app configured through `TANGO_DB_DSN` gets enforcement with no extra step (see [configuration](configuration.md)). If you open your own SQLite connection from a bare path instead, add the parameter with `db.SQLiteForeignKeysDSN`:
 
 ```go
-sqlDB, err := sql.Open("sqlite", db.SQLiteForeignKeysDSN(dsn))
+sqlDB, err := sql.Open("sqlite", db.SQLiteForeignKeysDSN(path))
 ```
 
 A foreign key to a model in another app works the same way: `tango migrate` creates the referenced app's table first and `tango migrate down` drops it last, regardless of app names or `InstalledApps` order — see [migrations](migrations.md#order-across-apps).
