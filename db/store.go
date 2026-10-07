@@ -223,8 +223,10 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 		strings.Join(placeholders, ", "),
 	)
 
-	if id, ok := explicitIntegerID(primaryKeyValue); s.dialect == Postgres && primaryKeyField.Name != "" && ok {
-		return s.insertWithExplicitID(ctx, meta, primaryKeyField, id, query, args)
+	if s.dialect == Postgres && primaryKeyField.Name != "" {
+		if id, ok := explicitIntegerID(primaryKeyValue); ok {
+			return s.insertWithExplicitID(ctx, meta, primaryKeyField, id, query, args)
+		}
 	}
 
 	result, err := s.db.ExecContext(ctx, query, args...)

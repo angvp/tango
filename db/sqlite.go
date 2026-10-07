@@ -11,12 +11,13 @@ import "strings"
 // already carries other query parameters).
 //
 // ParseDSN applies it to every sqlite:// DSN, so an app that opens its
-// database from ParseDSN's result (as tango.LoadDBConfigFromEnv, and so the
-// generated scaffold, does) already enforces foreign keys. Anyone opening their own *sql.DB with driver
-// "sqlite" from a bare path should call it too if they rely on foreign key
-// constraints. It isn't automatic inside db.NewStore itself: NewStore wraps
-// an already-open *sql.DB and must never touch it, so the flags that don't
-// need a database ("-check", "-tango-dump-models") stay database-free.
+// database from ParseDSN's result (as tango.LoadDBConfigFromEnv, and so
+// the generated scaffold, does) already enforces foreign keys. Anyone
+// opening their own *sql.DB with driver "sqlite" from a bare path should
+// call it too if they rely on foreign key constraints. It isn't automatic
+// inside db.NewStore itself: NewStore wraps an already-open *sql.DB and
+// must never touch it, so the flags that don't need a database ("-check",
+// "-tango-dump-models") stay database-free.
 func SQLiteForeignKeysDSN(dsn string) string {
 	separator := "?"
 	if strings.Contains(dsn, "?") {
