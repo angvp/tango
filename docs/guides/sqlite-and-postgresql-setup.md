@@ -42,6 +42,7 @@ store := db.NewStore(sqlDB, db.Postgres)
 - **Identifier quoting**: every table, column and index name tanGO generates (migration DDL, `Store` statements, admin queries) is quoted — `"user"` on Postgres, `` `user` `` on SQLite — so a model or field named after a reserved word (`User`, `Order`, `Group`) works on both. Raw SQL you write yourself (`Store.Query`/`QueryRow`) is passed through untouched, so quote such names there yourself.
 - **Timestamps**: `tango_migrations.applied_at` is `TIMESTAMP` on SQLite and `TIMESTAMPTZ` on Postgres, matching each dialect's normal convention.
 - **Primary-key backfill**: SQLite backfills via `sql.Result.LastInsertId()`; Postgres uses `INSERT ... RETURNING`, since it has no equivalent. Both happen transparently inside `Store.Create`.
+- **Explicit primary keys**: SQLite's `AUTOINCREMENT` keeps generated IDs past any ID you insert yourself; Postgres's `BIGSERIAL` sequence does not, so `Store.Create` advances it when you supply the primary key. Raw-SQL inserts with explicit IDs on Postgres must advance it themselves — see [explicit primary keys](persistence-crud-and-raw-sql.md#explicit-primary-keys).
 
 ## Testing against Postgres
 

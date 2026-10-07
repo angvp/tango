@@ -18,6 +18,12 @@ Every method takes the model's `model.ModelMeta` (from `registry.Models().Get("P
 
 Table and column names are derived automatically (snake_case of the Go type/field names) — you never configure this mapping.
 
+### Explicit primary keys
+
+`Create` with the primary key already set (`store.Create(ctx, meta, &Post{ID: 100, ...})`) inserts that ID instead of letting the database pick one. A later `Create` without an ID still gets a fresh one past it, on both dialects: SQLite's `AUTOINCREMENT` does this by itself, and on PostgreSQL `Create` advances the table's `BIGSERIAL` sequence to the supplied ID in the same transaction as the insert. It never moves the sequence backwards, so inserting a lower ID than the sequence has already handed out changes nothing. That transaction briefly locks the table against other inserts; a `Create` without an ID takes no extra lock or statement.
+
+Rows you insert with raw SQL (through your own `*sql.DB`) bypass this. On PostgreSQL, if your raw `INSERT` supplies an ID, keeping the sequence ahead of it is your job, for example `SELECT setval(pg_get_serial_sequence('"post"', 'id'), (SELECT MAX(id) FROM "post"))` after a bulk load. Otherwise the next `Create` without an ID can fail with a duplicate-key error.
+
 ## Filtering with `Where`
 
 `Where` is a slice of `db.Condition{Field, Op, Value}`. Each `Field` is a Go model field name; conditions are joined with AND. For example, given a `Post` model with a `CreatedAt time.Time` field:
