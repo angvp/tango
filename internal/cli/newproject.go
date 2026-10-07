@@ -12,37 +12,20 @@ import (
 )
 
 type projectDialect struct {
-	Name         string
-	DriverName   string
 	DriverImport string
-	DialectExpr  string
-	DefaultDSN   string
-	// OpenDSNExpr is the Go expression the generated main.go passes to
-	// sql.Open — plain "dsn" for dialects with no extra per-connection
-	// setup, or a wrapping call (e.g. db.SQLiteForeignKeysDSN(dsn)) for a
-	// dialect that needs one.
-	OpenDSNExpr string
+	// DefaultDSN is the TANGO_DB_DSN the generated main.go falls back to
+	// when the variable is unset, or empty to keep tango.LoadDBConfigFromEnv's
+	// own default (sqlite://app.db).
+	DefaultDSN string
 }
 
 var projectDialects = map[string]projectDialect{
 	"sqlite": {
-		Name:         "sqlite",
-		DriverName:   "sqlite",
 		DriverImport: `modernc.org/sqlite`,
-		DialectExpr:  "db.SQLite",
-		DefaultDSN:   "app.db",
-		// Enables foreign key constraint enforcement on every connection
-		// the driver opens — SQLite treats this as off by default and
-		// per-connection, not a database-wide setting.
-		OpenDSNExpr: "db.SQLiteForeignKeysDSN(dsn)",
 	},
 	"postgres": {
-		Name:         "postgres",
-		DriverName:   "pgx",
 		DriverImport: `github.com/jackc/pgx/v5/stdlib`,
-		DialectExpr:  "db.Postgres",
 		DefaultDSN:   "postgres://postgres:postgres@localhost:5432/THIS_MODULE",
-		OpenDSNExpr:  "dsn",
 	},
 }
 
@@ -132,9 +115,9 @@ func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bo
 	storeLine := ""
 	adminCLIBlock := ""
 	if includeAdmin {
-		adminImport = "\n\t\"github.com/angvp/tango/admin\""
+		adminImport = "\n\t\"github.com/angvp/tango/admin\"\n\t\"github.com/angvp/tango/db\""
 		contextImport = "\n\t\"context\""
-		storeLine = "store := db.NewStore(sqlDB, " + dialect.DialectExpr + ")"
+		storeLine = "store := db.NewStore(sqlDB, dialect)"
 		adminConfig = `InstalledApps: []tango.App{
 			admin.New(store),
 		},`
@@ -143,6 +126,15 @@ func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bo
 		return err
 	}
 `
+	}
+
+	defaultDSNBlock := ""
+	if dialect.DefaultDSN != "" {
+		defaultDSNBlock = fmt.Sprintf(`
+	if os.Getenv("TANGO_DB_DSN") == "" {
+		os.Setenv("TANGO_DB_DSN", %q)
+	}
+`, dialect.DefaultDSN)
 	}
 
 	return fmt.Sprintf(`package main
@@ -154,7 +146,6 @@ import (
 	%s
 
 	"github.com/angvp/tango"%s
-	"github.com/angvp/tango/db"
 
 	"%s/migrations"
 
@@ -172,16 +163,13 @@ func run() error {
 	if err := tango.LoadEnvFile(".env"); err != nil {
 		return err
 	}
-	if os.Getenv("TANGO_DB_DIALECT") == "" {
-		os.Setenv("TANGO_DB_DIALECT", %q)
+%s
+	dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
+	if err != nil {
+		return err
 	}
 
-	dsn := tango.LoadDBDSNFromEnv()
-	if dsn == "" {
-		dsn = %q
-	}
-
-	sqlDB, err := sql.Open(%q, %s)
+	sqlDB, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return err
 	}
@@ -193,13 +181,13 @@ func run() error {
 		Addr: ":8000",
 	}
 %s
-	handled, err := tango.DispatchFlags(config, sqlDB, %s, migrations.Migrations)
+	handled, err := tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)
 	if handled || err != nil {
 		return err
 	}
 
 	fmt.Println("listening on", config.Addr)
-	return tango.Serve(config, sqlDB, %s)
+	return tango.Serve(config, sqlDB, dialect)
 }
-`, contextImport, adminImport, module, dialect.DriverImport, dialect.Name, dialect.DefaultDSN, dialect.DriverName, dialect.OpenDSNExpr, storeLine, adminConfig, adminCLIBlock, dialect.DialectExpr, dialect.DialectExpr)
+`, contextImport, adminImport, module, dialect.DriverImport, defaultDSNBlock, storeLine, adminConfig, adminCLIBlock)
 }

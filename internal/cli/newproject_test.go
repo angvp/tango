@@ -62,9 +62,11 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		`"github.com/angvp/tango/db"`,
 		`"myapp/migrations"`,
 		`_ "modernc.org/sqlite"`,
-		`dsn = "app.db"`,
-		`tango.DispatchFlags(config, sqlDB, db.SQLite, migrations.Migrations)`,
-		`tango.Serve(config, sqlDB, db.SQLite)`,
+		`dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()`,
+		`sql.Open(driverName, dsn)`,
+		`store := db.NewStore(sqlDB, dialect)`,
+		`tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)`,
+		`tango.Serve(config, sqlDB, dialect)`,
 		`admin.New(store)`,
 		`admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)`,
 	} {
@@ -111,6 +113,14 @@ func TestNewProjectNoAdminSkipsCredentials(t *testing.T) {
 	if strings.Contains(string(mainGo), "admin.New") {
 		t.Fatalf("main.go contains admin wiring with --no-admin:\n%s", mainGo)
 	}
+	// Without the admin app nothing uses a db.Store, so importing the db
+	// package would leave the generated project failing to compile.
+	if strings.Contains(string(mainGo), `"github.com/angvp/tango/db"`) {
+		t.Fatalf("main.go imports the unused db package with --no-admin:\n%s", mainGo)
+	}
+	if !strings.Contains(string(mainGo), "tango.Serve(config, sqlDB, dialect)") {
+		t.Fatalf("main.go does not serve with the dialect from TANGO_DB_DSN:\n%s", mainGo)
+	}
 	if _, err := os.Stat(filepath.Join(projectDir, ".env")); !os.IsNotExist(err) {
 		t.Fatalf(".env stat = %v, want not exist", err)
 	}
@@ -133,15 +143,18 @@ func TestNewProjectPostgresDialect(t *testing.T) {
 	source := string(mainGo)
 	for _, want := range []string{
 		`_ "github.com/jackc/pgx/v5/stdlib"`,
-		`os.Setenv("TANGO_DB_DIALECT", "postgres")`,
-		`dsn = "postgres://postgres:postgres@localhost:5432/myapp"`,
-		`sql.Open("pgx", dsn)`,
-		`tango.DispatchFlags(config, sqlDB, db.Postgres, migrations.Migrations)`,
-		`tango.Serve(config, sqlDB, db.Postgres)`,
+		`os.Setenv("TANGO_DB_DSN", "postgres://postgres:postgres@localhost:5432/myapp")`,
+		`dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()`,
+		`sql.Open(driverName, dsn)`,
+		`tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)`,
+		`tango.Serve(config, sqlDB, dialect)`,
 	} {
 		if !strings.Contains(source, want) {
 			t.Fatalf("main.go does not contain %q:\n%s", want, source)
 		}
+	}
+	if strings.Contains(source, "TANGO_DB_DIALECT") {
+		t.Fatalf("main.go still names the retired TANGO_DB_DIALECT:\n%s", source)
 	}
 }
 
