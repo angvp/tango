@@ -1,18 +1,15 @@
 package admin_test
 
 import (
-	"context"
 	"database/sql"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
-	"github.com/angvp/tango/db"
 	_ "modernc.org/sqlite"
 )
 
@@ -55,33 +52,8 @@ func buildAuthorPostAdminWithOptions(t *testing.T, authorOptions admin.Options, 
 		t.Fatalf("register admin fkPost: %v", err)
 	}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	for _, stmt := range []string{
-		`CREATE TABLE fk_author (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`,
-		`CREATE TABLE fk_post (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, author_id INTEGER NOT NULL)`,
-		`CREATE TABLE admin_user (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, active BOOLEAN NOT NULL, is_staff BOOLEAN NOT NULL, is_superuser BOOLEAN NOT NULL, created_at TIMESTAMP NOT NULL)`,
-		`CREATE TABLE admin_session (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, user_id INTEGER NOT NULL, expires_at TIMESTAMP NOT NULL)`,
-	} {
-		if _, err := sqlDB.Exec(stmt); err != nil {
-			t.Fatalf("create table: %v", err)
-		}
-	}
-
-	store := db.NewStore(sqlDB, db.SQLite)
-	if err := admin.CreateAccount(context.Background(), store, "admin", "secret"); err != nil {
-		t.Fatalf("seed admin account: %v", err)
-	}
-	if _, err := sqlDB.Exec(
-		`INSERT INTO admin_session (token, user_id, expires_at) SELECT ?, id, ? FROM admin_user WHERE username = ?`,
-		testSessionToken, time.Now().Add(time.Hour).UTC(), "admin",
-	); err != nil {
-		t.Fatalf("seed admin session: %v", err)
-	}
+	sqlDB, store := migratedAdminDB(t, registry)
+	seedAdminAccountAndSession(t, sqlDB, store)
 	if err := registry.Register(admin.New(store)); err != nil {
 		t.Fatalf("register admin app: %v", err)
 	}
@@ -98,28 +70,12 @@ func buildAuthorPostAdminWithOptions(t *testing.T, authorOptions admin.Options, 
 
 func seedAuthor(t *testing.T, sqlDB *sql.DB, name string) int64 {
 	t.Helper()
-	result, err := sqlDB.Exec(`INSERT INTO fk_author (name) VALUES (?)`, name)
-	if err != nil {
-		t.Fatalf("seed author: %v", err)
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		t.Fatalf("seed author id: %v", err)
-	}
-	return id
+	return insertReturningID(t, sqlDB, `INSERT INTO fk_author (name) VALUES ($1) RETURNING id`, name)
 }
 
 func seedPost(t *testing.T, sqlDB *sql.DB, title string, authorID int64) int64 {
 	t.Helper()
-	result, err := sqlDB.Exec(`INSERT INTO fk_post (title, author_id) VALUES (?, ?)`, title, authorID)
-	if err != nil {
-		t.Fatalf("seed post: %v", err)
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		t.Fatalf("seed post id: %v", err)
-	}
-	return id
+	return insertReturningID(t, sqlDB, `INSERT INTO fk_post (title, author_id) VALUES ($1, $2) RETURNING id`, title, authorID)
 }
 
 func TestCreateViewRendersForeignKeyAsSelectWithRelatedLabel(t *testing.T) {
@@ -177,7 +133,7 @@ func TestCreateViewQuickCreateRoundTripRedirectsBackToOriginatingForm(t *testing
 		t.Fatalf("Location = %q, want /admin/fk_post/new/", got)
 	}
 	var count int
-	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM fk_author WHERE name = ?`, "Ursula").Scan(&count); err != nil {
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM fk_author WHERE name = $1`, "Ursula").Scan(&count); err != nil {
 		t.Fatalf("query author: %v", err)
 	}
 	if count != 1 {
@@ -208,7 +164,7 @@ func TestCreateViewQuickCreateRoundTripPreselectsCreatedRelatedObject(t *testing
 	}
 
 	var authorID int64
-	if err := sqlDB.QueryRow(`SELECT id FROM fk_author WHERE name = ?`, "Ursula").Scan(&authorID); err != nil {
+	if err := sqlDB.QueryRow(`SELECT id FROM fk_author WHERE name = $1`, "Ursula").Scan(&authorID); err != nil {
 		t.Fatalf("query created author: %v", err)
 	}
 
@@ -250,7 +206,7 @@ func TestCreateViewSubmittingForeignKeySelectCreatesRow(t *testing.T) {
 	}
 
 	var gotAuthorID int64
-	if err := sqlDB.QueryRow(`SELECT author_id FROM fk_post WHERE title = ?`, "Hello World").Scan(&gotAuthorID); err != nil {
+	if err := sqlDB.QueryRow(`SELECT author_id FROM fk_post WHERE title = $1`, "Hello World").Scan(&gotAuthorID); err != nil {
 		t.Fatalf("query created post: %v", err)
 	}
 	if gotAuthorID != authorID {
@@ -273,7 +229,7 @@ func TestEditViewSubmittingForeignKeySelectUpdatesRow(t *testing.T) {
 	}
 
 	var gotAuthorID int64
-	if err := sqlDB.QueryRow(`SELECT author_id FROM fk_post WHERE id = ?`, postID).Scan(&gotAuthorID); err != nil {
+	if err := sqlDB.QueryRow(`SELECT author_id FROM fk_post WHERE id = $1`, postID).Scan(&gotAuthorID); err != nil {
 		t.Fatalf("query updated post: %v", err)
 	}
 	if gotAuthorID != secondAuthorID {

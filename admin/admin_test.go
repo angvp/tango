@@ -13,6 +13,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/testdb"
 	_ "modernc.org/sqlite"
 )
 
@@ -149,7 +150,7 @@ func TestAdminSessionGating(t *testing.T) {
 				// active-but-non-staff account. sessionUser's existing
 				// !Active check runs before requireSession ever looks at
 				// IsStaff, so this also confirms that ordering.
-				if _, err := sqlDB.Exec("UPDATE admin_user SET active = 0 WHERE username = 'wasactive'"); err != nil {
+				if _, err := sqlDB.Exec("UPDATE admin_user SET active = FALSE WHERE username = 'wasactive'"); err != nil {
 					t.Fatalf("deactivate row directly: %v", err)
 				}
 
@@ -249,13 +250,7 @@ func TestAdminUnregisteredModelHasNoRoutes(t *testing.T) {
 }
 
 func TestAdminWithMiddlewareWrapsOnlyAdminRoutesAfterGlobalMiddleware(t *testing.T) {
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := testdb.Store(t)
 	publicApp := tango.NewApp("public", func(registry *tango.Registry) error {
 		return registry.Routes().Include("/", tango.URLs{
 			tango.Path(http.MethodGet, "/public/", func(ctx *tango.Context) error {
@@ -325,37 +320,10 @@ func buildAdminHandlerWithStore(t *testing.T) (http.Handler, *db.Store, *sql.DB)
 		t.Fatalf("register admin model: %v", err)
 	}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_shell_user (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL)`); err != nil {
-		t.Fatalf("create table: %v", err)
-	}
+	sqlDB, store := migratedAdminDB(t, registry)
 	if _, err := sqlDB.Exec(`INSERT INTO admin_shell_user (id, email) VALUES (42, 'seed@example.com')`); err != nil {
 		t.Fatalf("seed row: %v", err)
 	}
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_user (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		is_staff BOOLEAN NOT NULL,
-		is_superuser BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_user: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_session: %v", err)
-	}
-	store := db.NewStore(sqlDB, db.SQLite)
 	if err := admin.CreateAccount(context.Background(), store, "admin", "secret"); err != nil {
 		t.Fatalf("seed admin account: %v", err)
 	}

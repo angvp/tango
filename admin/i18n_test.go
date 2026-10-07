@@ -233,10 +233,10 @@ func TestAdminForbiddenTranslatesWithI18nMiddleware(t *testing.T) {
 	i18n.RegisterCatalog(adminI18NLocale, map[string]string{
 		"admin.error.not_staff": "sin acceso staff",
 	})
-	if _, err := sqlDB.Exec("UPDATE admin_user SET is_staff = 0 WHERE username = 'admin'"); err != nil {
+	if _, err := sqlDB.Exec("UPDATE admin_user SET is_staff = FALSE WHERE username = 'admin'"); err != nil {
 		t.Fatalf("make admin non-staff: %v", err)
 	}
-	if _, err := sqlDB.Exec("UPDATE admin_session SET expires_at = ? WHERE token = ?", time.Now().Add(time.Hour).UTC(), testSessionToken); err != nil {
+	if _, err := sqlDB.Exec("UPDATE admin_session SET expires_at = $1 WHERE token = $2", time.Now().Add(time.Hour).UTC(), testSessionToken); err != nil {
 		t.Fatalf("refresh session: %v", err)
 	}
 

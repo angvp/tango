@@ -1,7 +1,6 @@
 package admin_test
 
 import (
-	"context"
 	"database/sql"
 	"net/http"
 	"net/url"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
-	"github.com/angvp/tango/db"
 	_ "modernc.org/sqlite"
 )
 
@@ -43,50 +41,8 @@ func buildGadgetAdmin(t *testing.T) (http.Handler, *sql.DB) {
 		t.Fatalf("register admin model: %v", err)
 	}
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	if _, err := sqlDB.Exec(`CREATE TABLE widget_gadget (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		active BOOLEAN NOT NULL,
-		count INTEGER NOT NULL,
-		score INTEGER NOT NULL,
-		starts_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create table: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_user (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		is_staff BOOLEAN NOT NULL,
-		is_superuser BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_user: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE admin_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create admin_session: %v", err)
-	}
-
-	store := db.NewStore(sqlDB, db.SQLite)
-	if err := admin.CreateAccount(context.Background(), store, "admin", "secret"); err != nil {
-		t.Fatalf("seed admin account: %v", err)
-	}
-	if _, err := sqlDB.Exec(
-		`INSERT INTO admin_session (token, user_id, expires_at) SELECT ?, id, ? FROM admin_user WHERE username = ?`,
-		testSessionToken, time.Now().Add(time.Hour).UTC(), "admin",
-	); err != nil {
-		t.Fatalf("seed admin session: %v", err)
-	}
+	sqlDB, store := migratedAdminDB(t, registry)
+	seedAdminAccountAndSession(t, sqlDB, store)
 	if err := registry.Register(admin.New(store)); err != nil {
 		t.Fatalf("register admin app: %v", err)
 	}
@@ -105,7 +61,7 @@ func readGadget(t *testing.T, sqlDB *sql.DB, id int64) widgetGadget {
 	t.Helper()
 	var g widgetGadget
 	var startsAt string
-	if err := sqlDB.QueryRow(`SELECT id, active, count, score, starts_at FROM widget_gadget WHERE id = ?`, id).
+	if err := sqlDB.QueryRow(`SELECT id, active, count, score, starts_at FROM widget_gadget WHERE id = $1`, id).
 		Scan(&g.ID, &g.Active, &g.Count, &g.Score, &startsAt); err != nil {
 		t.Fatalf("read gadget: %v", err)
 	}
