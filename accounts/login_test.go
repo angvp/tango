@@ -10,7 +10,6 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
-	"github.com/angvp/tango/db"
 )
 
 // buildLoginTestHandler is buildRegisterTestHandler plus the raw *sql.DB,
@@ -20,31 +19,7 @@ import (
 func buildLoginTestHandler(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	if _, err := sqlDB.Exec(`CREATE TABLE account (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		email TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account table: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE account_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account_session table: %v", err)
-	}
-
-	store := db.NewStore(sqlDB, db.SQLite)
+	sqlDB, store := migratedAccountsDB(t)
 	registry := tango.NewRegistry()
 	if err := registry.Register(accounts.New(store)); err != nil {
 		t.Fatalf("register accounts app: %v", err)
@@ -154,7 +129,7 @@ func TestLoginFailuresProduceIdenticalGenericError(t *testing.T) {
 			setup: func(t *testing.T) (http.Handler, url.Values) {
 				handler, sqlDB := buildLoginTestHandler(t)
 				registerAccount(t, handler, "nora@example.com", "correct-password")
-				if _, err := sqlDB.Exec("UPDATE account SET active = 0 WHERE email = ?", "nora@example.com"); err != nil {
+				if _, err := sqlDB.Exec("UPDATE account SET active = FALSE WHERE email = $1", "nora@example.com"); err != nil {
 					t.Fatalf("deactivate account: %v", err)
 				}
 				return handler, url.Values{"email": {"nora@example.com"}, "password": {"correct-password"}}

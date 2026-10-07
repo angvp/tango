@@ -10,9 +10,10 @@ import (
 	"github.com/angvp/tango/accounts"
 	"github.com/angvp/tango/auth"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/migrationtest"
 	"github.com/angvp/tango/migration"
 	"github.com/angvp/tango/model"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
 
 // TestAccountHasNoPermissionShapedField locks in this milestone's boundary:
@@ -33,12 +34,31 @@ func TestAccountHasNoPermissionShapedField(t *testing.T) {
 
 func newTestStore(t *testing.T) *db.Store {
 	t.Helper()
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
+	return testdb.Store(t)
+}
+
+// accountsModels returns the accounts app's models, as its migrations see
+// them.
+func accountsModels(t *testing.T) []model.ModelMeta {
+	t.Helper()
+	registry := model.NewRegistry()
+	for _, m := range []any{accounts.Account{}, accounts.AccountSession{}} {
+		if err := registry.Register(m); err != nil {
+			t.Fatalf("register %T: %v", m, err)
+		}
 	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	return db.NewStore(sqlDB, db.SQLite)
+	return registry.All()
+}
+
+// migratedAccountsDB returns a fresh database for the run's Test dialect,
+// with the accounts tables created by their migrations, and a Store over
+// it. The raw *sql.DB is for tests that flip state accounts has no public
+// API for, such as Active.
+func migratedAccountsDB(t *testing.T) (*sql.DB, *db.Store) {
+	t.Helper()
+	sqlDB, dialect := testdb.Open(t)
+	migrationtest.Apply(t, sqlDB, dialect, accountsModels(t))
+	return sqlDB, db.NewStore(sqlDB, dialect)
 }
 
 func TestNewIsInstallableViaInstalledAppsAndRegistersBothModels(t *testing.T) {
@@ -162,38 +182,27 @@ func wantColumn(t *testing.T, columns []migration.Column, name string, matches f
 // actually apply against a real database and produce the expected schema —
 // the "tango migrate" half of ticket 03's acceptance criteria.
 func TestMigrationsApplyAndProduceExpectedSchema(t *testing.T) {
-	registry := model.NewRegistry()
-	if err := registry.Register(accounts.Account{}); err != nil {
-		t.Fatalf("register Account: %v", err)
-	}
-	if err := registry.Register(accounts.AccountSession{}); err != nil {
-		t.Fatalf("register AccountSession: %v", err)
-	}
-	changes := migration.Diff(registry.All(), migration.SchemaState{Tables: map[string]migration.TableState{}})
+	changes := migration.Diff(accountsModels(t), migration.SchemaState{Tables: map[string]migration.TableState{}})
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	ctx := context.Background()
 	for _, m := range changes {
 		for _, step := range m.Up {
-			if err := migration.ApplyStep(ctx, sqlDB, db.SQLite, step); err != nil {
+			if err := migration.ApplyStep(ctx, sqlDB, dialect, step); err != nil {
 				t.Fatalf("ApplyStep(%T) returned error: %v", step, err)
 			}
 		}
 	}
 
-	if _, err := sqlDB.Exec(`INSERT INTO account (email, password_hash, active, created_at) VALUES ('a@example.com', 'x', 1, '2026-01-01')`); err != nil {
+	if _, err := sqlDB.Exec(`INSERT INTO account (email, password_hash, active, created_at) VALUES ('a@example.com', 'x', TRUE, '2026-01-01')`); err != nil {
 		t.Fatalf("insert into account: %v", err)
 	}
 	if _, err := sqlDB.Exec(`INSERT INTO account_session (token, user_id, expires_at) VALUES ('tok', 1, '2026-01-01')`); err != nil {
 		t.Fatalf("insert into account_session: %v", err)
 	}
 
-	if _, err := sqlDB.Exec(`INSERT INTO account (email, password_hash, active, created_at) VALUES ('a@example.com', 'y', 1, '2026-01-01')`); err == nil {
+	if _, err := sqlDB.Exec(`INSERT INTO account (email, password_hash, active, created_at) VALUES ('a@example.com', 'y', TRUE, '2026-01-01')`); err == nil {
 		t.Fatal("duplicate email insert succeeded, want the unique constraint to reject it")
 	}
 }

@@ -12,7 +12,6 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
-	"github.com/angvp/tango/db"
 )
 
 // buildWhoamiTestHandler installs accounts alongside host routes that call
@@ -23,31 +22,7 @@ import (
 func buildWhoamiTestHandler(t *testing.T, opts ...accounts.Option) (http.Handler, *sql.DB) {
 	t.Helper()
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	if _, err := sqlDB.Exec(`CREATE TABLE account (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		email TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account table: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE account_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account_session table: %v", err)
-	}
-
-	store := db.NewStore(sqlDB, db.SQLite)
+	sqlDB, store := migratedAccountsDB(t)
 
 	hostApp := tango.NewApp("host", func(registry *tango.Registry) error {
 		return registry.Routes().Include("/", tango.URLs{
@@ -209,7 +184,7 @@ func TestCurrentAccountIDLookup(t *testing.T) {
 					t.Fatalf("status before deactivation = %d, want %d", before.Code, http.StatusOK)
 				}
 
-				if _, err := sqlDB.Exec("UPDATE account SET active = 0 WHERE email = ?", "victor@example.com"); err != nil {
+				if _, err := sqlDB.Exec("UPDATE account SET active = FALSE WHERE email = $1", "victor@example.com"); err != nil {
 					t.Fatalf("deactivate account: %v", err)
 				}
 				return handler, sessionCookie

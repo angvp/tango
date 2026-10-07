@@ -9,7 +9,6 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
-	"github.com/angvp/tango/db"
 )
 
 // buildProtectedTestHandler installs accounts alongside a host app
@@ -19,31 +18,7 @@ import (
 func buildProtectedTestHandler(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	if _, err := sqlDB.Exec(`CREATE TABLE account (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		email TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account table: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE account_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account_session table: %v", err)
-	}
-
-	store := db.NewStore(sqlDB, db.SQLite)
+	sqlDB, store := migratedAccountsDB(t)
 
 	protectedApp := tango.NewApp("dashboard", func(registry *tango.Registry) error {
 		protected := accounts.RequireLogin(store, accounts.DefaultSessionCookieName, "/accounts/login/", func(ctx *tango.Context) error {
@@ -102,7 +77,7 @@ func TestActiveIsCheckedOnEveryRequestThroughAValidSession(t *testing.T) {
 		t.Fatalf("status with a valid, active session = %d, want %d", protectedResponse.Code, http.StatusOK)
 	}
 
-	if _, err := sqlDB.Exec("UPDATE account SET active = 0 WHERE email = ?", "quinn@example.com"); err != nil {
+	if _, err := sqlDB.Exec("UPDATE account SET active = FALSE WHERE email = $1", "quinn@example.com"); err != nil {
 		t.Fatalf("deactivate account: %v", err)
 	}
 

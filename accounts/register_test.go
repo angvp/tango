@@ -14,37 +14,14 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
 	"github.com/angvp/tango/db"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/internal/migrationtest"
+	"github.com/angvp/tango/testdb"
 )
 
 func buildRegisterTestHandler(t *testing.T, opts ...accounts.Option) (http.Handler, *db.Store) {
 	t.Helper()
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	if _, err := sqlDB.Exec(`CREATE TABLE account (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		email TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account table: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE account_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account_session table: %v", err)
-	}
-
-	store := db.NewStore(sqlDB, db.SQLite)
+	_, store := migratedAccountsDB(t)
 	registry := tango.NewRegistry()
 	if err := registry.Register(accounts.New(store, opts...)); err != nil {
 		t.Fatalf("register accounts app: %v", err)
@@ -108,7 +85,7 @@ func TestRegisterWithValidDataCreatesAccountWithHashedPassword(t *testing.T) {
 		PasswordHash string
 		Active       bool
 	}
-	if err := store.QueryRow(context.Background(), &row, "SELECT email AS Email, password_hash AS PasswordHash, active AS Active FROM account WHERE email = ?", "alice@example.com"); err != nil {
+	if err := store.QueryRow(context.Background(), &row, "SELECT email AS Email, password_hash AS PasswordHash, active AS Active FROM account WHERE email = $1", "alice@example.com"); err != nil {
 		t.Fatalf("query account row: %v", err)
 	}
 	if row.PasswordHash == "correct-password" {
@@ -227,46 +204,20 @@ func TestRegisterMissingCSRFTokenIsRejected(t *testing.T) {
 	}
 }
 
-// buildRegisterTestHandlerFileBacked is buildRegisterTestHandler but
-// backed by a real file on disk rather than :memory:, so multiple
-// concurrent connections from the same *sql.DB genuinely see the same
-// data — needed to exercise the real race two concurrent registrations
-// for the same email create, which an in-memory, effectively
-// single-connection database wouldn't reliably reproduce.
-func buildRegisterTestHandlerFileBacked(t *testing.T) http.Handler {
+// buildRegisterTestHandlerConcurrent is buildRegisterTestHandler over a
+// database several connections share, needed to exercise the real race two
+// concurrent registrations for the same email create. A PostgreSQL run's
+// database already is one. On SQLite it asks for a file explicitly, since
+// an in-memory database is limited to one connection.
+func buildRegisterTestHandlerConcurrent(t *testing.T) http.Handler {
 	t.Helper()
 
-	dbPath := filepath.Join(t.TempDir(), "accounts.db")
-	// busy_timeout makes a connection wait for a held write lock instead of
-	// immediately erroring with SQLITE_BUSY — needed so this test's real
-	// concurrent connections exercise the actual application-level
-	// duplicate-email race rather than an unrelated SQLite file-locking
-	// error under contention.
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
+	var store *db.Store
+	if testdb.Dialect() == db.SQLite {
+		store = sharedSQLiteFileStore(t)
+	} else {
+		_, store = migratedAccountsDB(t)
 	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	if _, err := sqlDB.Exec(`CREATE TABLE account (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		email TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		active BOOLEAN NOT NULL,
-		created_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account table: %v", err)
-	}
-	if _, err := sqlDB.Exec(`CREATE TABLE account_session (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT NOT NULL UNIQUE,
-		user_id INTEGER NOT NULL,
-		expires_at TIMESTAMP NOT NULL
-	)`); err != nil {
-		t.Fatalf("create account_session table: %v", err)
-	}
-
-	store := db.NewStore(sqlDB, db.SQLite)
 	registry := tango.NewRegistry()
 	if err := registry.Register(accounts.New(store)); err != nil {
 		t.Fatalf("register accounts app: %v", err)
@@ -281,8 +232,28 @@ func buildRegisterTestHandlerFileBacked(t *testing.T) http.Handler {
 	return handler
 }
 
+// sharedSQLiteFileStore returns a Store over a SQLite file under the test's
+// temporary directory, with the accounts tables migrated, that several
+// connections can use at once.
+func sharedSQLiteFileStore(t *testing.T) *db.Store {
+	t.Helper()
+	// busy_timeout makes a connection wait for a held write lock instead of
+	// immediately erroring with SQLITE_BUSY — needed so this test's real
+	// concurrent connections exercise the actual application-level
+	// duplicate-email race rather than an unrelated SQLite file-locking
+	// error under contention.
+	dbPath := filepath.Join(t.TempDir(), "accounts.db")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	migrationtest.Apply(t, sqlDB, db.SQLite, accountsModels(t))
+	return db.NewStore(sqlDB, db.SQLite)
+}
+
 func TestConcurrentRegistrationsForSameEmailNeverBothSucceed(t *testing.T) {
-	handler := buildRegisterTestHandlerFileBacked(t)
+	handler := buildRegisterTestHandlerConcurrent(t)
 
 	const attempts = 8
 	responses := make([]*httptest.ResponseRecorder, attempts)

@@ -80,7 +80,7 @@ func TestRegisterSessionDurationIsConfigurable(t *testing.T) {
 	}
 
 	var row struct{ ExpiresAt time.Time }
-	if err := store.QueryRow(t.Context(), &row, "SELECT expires_at AS ExpiresAt FROM account_session WHERE token = ?", token); err != nil {
+	if err := store.QueryRow(t.Context(), &row, "SELECT expires_at AS ExpiresAt FROM account_session WHERE token = $1", token); err != nil {
 		t.Fatalf("query session: %v", err)
 	}
 
