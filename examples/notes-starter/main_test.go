@@ -2,33 +2,26 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/testdb"
 
 	"notes-starter/migrations"
-
-	_ "modernc.org/sqlite"
 )
 
 func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
 
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	if err := migration.ApplyPending(t.Context(), sqlDB, db.SQLite, migrations.Migrations); err != nil {
+	sqlDB, dialect := testdb.Open(t)
+	if err := migration.ApplyPending(t.Context(), sqlDB, dialect, migrations.Migrations); err != nil {
 		t.Fatalf("apply migrations: %v", err)
 	}
 
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	handler, err := buildHandler(appConfig(store), store)
 	if err != nil {
 		t.Fatalf("buildHandler: %v", err)
