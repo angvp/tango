@@ -1,13 +1,11 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,13 +16,14 @@ import (
 	"github.com/angvp/tango/auth/jwt"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/testdb"
 
 	"board/apps/live"
 	"board/migrations"
 )
 
 // testApp is the real application — same apps, routes, and middleware as
-// main — on a fresh, fully migrated SQLite database.
+// main — on a fresh, fully migrated database.
 type testApp struct {
 	handler  http.Handler
 	store    *db.Store
@@ -35,17 +34,12 @@ func newTestApp(t *testing.T) *testApp {
 	t.Helper()
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil))) // keep test output quiet
 
-	path := filepath.Join(t.TempDir(), "test.db")
-	sqlDB, err := sql.Open("sqlite", db.SQLiteForeignKeysDSN(path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-	if err := migration.ApplyPending(t.Context(), sqlDB, db.SQLite, migrations.Migrations); err != nil {
+	sqlDB, dialect := testdb.Open(t)
+	if err := migration.ApplyPending(t.Context(), sqlDB, dialect, migrations.Migrations); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	tokens, err := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", jwt.MinimumSecretBytes))}, nil, "board", "board-api")
 	if err != nil {
 		t.Fatal(err)

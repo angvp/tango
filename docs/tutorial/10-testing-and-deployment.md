@@ -34,19 +34,17 @@ In `run()`, the config literal becomes one line: `config := appConfig(store, tok
 
 ## Tests that drive the real app
 
-Everything a test needs is a fresh database and the app's `http.Handler`. `main_test.go` builds both: a new SQLite file in a temporary directory, with every migration applied, and the app compiled from `appConfig` exactly the way `ServeContext` does it:
+Everything a test needs is a fresh database and the app's `http.Handler`. `main_test.go` builds both: a database from `testdb.Open`, with every migration applied, and the app compiled from `appConfig` exactly the way `ServeContext` does it:
 
 ```go
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -57,13 +55,14 @@ import (
 	"github.com/angvp/tango/auth/jwt"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/testdb"
 
 	"board/apps/live"
 	"board/migrations"
 )
 
 // testApp is the real application — same apps, routes, and middleware as
-// main — on a fresh, fully migrated SQLite database.
+// main — on a fresh, fully migrated database.
 type testApp struct {
 	handler  http.Handler
 	store    *db.Store
@@ -74,17 +73,12 @@ func newTestApp(t *testing.T) *testApp {
 	t.Helper()
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil))) // keep test output quiet
 
-	path := filepath.Join(t.TempDir(), "test.db")
-	sqlDB, err := sql.Open("sqlite", db.SQLiteForeignKeysDSN(path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-	if err := migration.ApplyPending(t.Context(), sqlDB, db.SQLite, migrations.Migrations); err != nil {
+	sqlDB, dialect := testdb.Open(t)
+	if err := migration.ApplyPending(t.Context(), sqlDB, dialect, migrations.Migrations); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	tokens, err := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", jwt.MinimumSecretBytes))}, nil, "board", "board-api")
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +143,7 @@ func (a *testApp) token(t *testing.T, email, password string) string {
 }
 ```
 
-`httptest.NewRecorder` captures a response without opening a network socket, so requests go straight through tanGO's routing, middleware, and views in microseconds. Each test gets its own database file, so tests never see each other's data and can run in any order.
+`httptest.NewRecorder` captures a response without opening a network socket, so requests go straight through tanGO's routing, middleware, and views in microseconds. `testdb.Open` gives each test its own empty database — in-memory SQLite by default — and cleans it up when the test ends, so tests never see each other's data and can run in any order.
 
 Now the tests themselves. Each one pins down a behavior from an earlier part — the kind of thing that's easy to break with an innocent-looking refactor:
 
@@ -255,6 +249,12 @@ Run them:
 
 ```sh
 go test ./...
+```
+
+The same tests run against PostgreSQL when `TANGO_TEST_DSN` names a server; `testdb` then gives each test a schema of its own and drops it afterwards. It reads the same scheme-qualified DSNs as `TANGO_DB_DSN` (see [PostgreSQL](#postgresql) below):
+
+```sh
+TANGO_TEST_DSN="postgres://board:board@localhost:5432/board?sslmode=disable" go test ./...
 ```
 
 To see that they're worth having, break something on purpose: flip the ownership check in `deletePost` from `post.AccountID != account.ID` to `==` and run the tests again. `TestOnlyTheOwnerCanDeleteAPost` fails with `someone else's post: status = 204, want 403`.
