@@ -1,13 +1,11 @@
-package db
+package db_test
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
-	"github.com/angvp/tango/model"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/db"
 )
 
 type createWidget struct {
@@ -26,11 +24,9 @@ type createUserProfile struct {
 }
 
 func TestStoreCreateInsertsRow(t *testing.T) {
-	sqlDB := openCreateTestDB(t)
-	createWidgetTable(t, sqlDB)
-
-	meta := registerModel(t, createWidget{})
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect, registry := openTables(t, createWidget{})
+	meta := metaFor(t, registry, createWidget{})
+	store := db.NewStore(sqlDB, dialect)
 	createdAt := time.Date(2026, 9, 11, 12, 30, 0, 0, time.UTC)
 	widget := createWidget{
 		Name:      "alpha",
@@ -51,7 +47,7 @@ func TestStoreCreateInsertsRow(t *testing.T) {
 	var gotCreatedAt time.Time
 	err := sqlDB.QueryRowContext(
 		context.Background(),
-		"SELECT name, active, count, score, created_at FROM create_widget WHERE id = ?",
+		bind(dialect, "SELECT name, active, count, score, created_at FROM create_widget WHERE id = ?"),
 		widget.ID,
 	).Scan(&name, &active, &count, &score, &gotCreatedAt)
 	if err != nil {
@@ -76,11 +72,9 @@ func TestStoreCreateInsertsRow(t *testing.T) {
 }
 
 func TestStoreCreateBackfillsGeneratedPrimaryKey(t *testing.T) {
-	sqlDB := openCreateTestDB(t)
-	createWidgetTable(t, sqlDB)
-
-	meta := registerModel(t, createWidget{})
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect, registry := openTables(t, createWidget{})
+	meta := metaFor(t, registry, createWidget{})
+	store := db.NewStore(sqlDB, dialect)
 	widget := createWidget{Name: "generated"}
 
 	if err := store.Create(context.Background(), meta, &widget); err != nil {
@@ -93,11 +87,9 @@ func TestStoreCreateBackfillsGeneratedPrimaryKey(t *testing.T) {
 }
 
 func TestStoreCreateDoesNotOverwriteSuppliedPrimaryKey(t *testing.T) {
-	sqlDB := openCreateTestDB(t)
-	createWidgetTable(t, sqlDB)
-
-	meta := registerModel(t, createWidget{})
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect, registry := openTables(t, createWidget{})
+	meta := metaFor(t, registry, createWidget{})
+	store := db.NewStore(sqlDB, dialect)
 	widget := createWidget{ID: 42, Name: "supplied"}
 
 	if err := store.Create(context.Background(), meta, &widget); err != nil {
@@ -109,7 +101,7 @@ func TestStoreCreateDoesNotOverwriteSuppliedPrimaryKey(t *testing.T) {
 	}
 
 	var id int64
-	if err := sqlDB.QueryRowContext(context.Background(), "SELECT id FROM create_widget WHERE name = ?", "supplied").Scan(&id); err != nil {
+	if err := sqlDB.QueryRowContext(context.Background(), bind(dialect, "SELECT id FROM create_widget WHERE name = ?"), "supplied").Scan(&id); err != nil {
 		t.Fatalf("query inserted row: %v", err)
 	}
 	if id != 42 {
@@ -118,20 +110,9 @@ func TestStoreCreateDoesNotOverwriteSuppliedPrimaryKey(t *testing.T) {
 }
 
 func TestStoreCreateDerivesSnakeCaseTableAndColumnNames(t *testing.T) {
-	sqlDB := openCreateTestDB(t)
-	_, err := sqlDB.ExecContext(context.Background(), `
-		CREATE TABLE create_user_profile (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			full_name TEXT NOT NULL,
-			created_at TIMESTAMP NOT NULL
-		)
-	`)
-	if err != nil {
-		t.Fatalf("create table: %v", err)
-	}
-
-	meta := registerModel(t, createUserProfile{})
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect, registry := openTables(t, createUserProfile{})
+	meta := metaFor(t, registry, createUserProfile{})
+	store := db.NewStore(sqlDB, dialect)
 	createdAt := time.Date(2026, 9, 11, 14, 0, 0, 0, time.UTC)
 	profile := createUserProfile{
 		FullName:  "Ada Lovelace",
@@ -144,9 +125,9 @@ func TestStoreCreateDerivesSnakeCaseTableAndColumnNames(t *testing.T) {
 
 	var fullName string
 	var gotCreatedAt time.Time
-	err = sqlDB.QueryRowContext(
+	err := sqlDB.QueryRowContext(
 		context.Background(),
-		"SELECT full_name, created_at FROM create_user_profile WHERE id = ?",
+		bind(dialect, "SELECT full_name, created_at FROM create_user_profile WHERE id = ?"),
 		profile.ID,
 	).Scan(&fullName, &gotCreatedAt)
 	if err != nil {
@@ -158,64 +139,5 @@ func TestStoreCreateDerivesSnakeCaseTableAndColumnNames(t *testing.T) {
 	}
 	if !gotCreatedAt.Equal(createdAt) {
 		t.Fatalf("created_at = %v, want %v", gotCreatedAt, createdAt)
-	}
-}
-
-func openCreateTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = sqlDB.Close()
-	})
-
-	return sqlDB
-}
-
-func createWidgetTable(t *testing.T, sqlDB *sql.DB) {
-	t.Helper()
-
-	_, err := sqlDB.ExecContext(context.Background(), `
-		CREATE TABLE create_widget (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			active BOOLEAN NOT NULL,
-			count INTEGER NOT NULL,
-			score REAL NOT NULL,
-			created_at TIMESTAMP NOT NULL
-		)
-	`)
-	if err != nil {
-		t.Fatalf("create table: %v", err)
-	}
-}
-
-func registerModel(t *testing.T, value any) model.ModelMeta {
-	t.Helper()
-
-	registry := model.NewRegistry()
-	if err := registry.Register(value); err != nil {
-		t.Fatalf("register model: %v", err)
-	}
-
-	meta, ok := registry.Get(modelName(value))
-	if !ok {
-		t.Fatalf("registered model metadata not found")
-	}
-
-	return meta
-}
-
-func modelName(value any) string {
-	switch value.(type) {
-	case createWidget:
-		return "createWidget"
-	case createUserProfile:
-		return "createUserProfile"
-	default:
-		return ""
 	}
 }
