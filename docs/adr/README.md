@@ -28,7 +28,7 @@ New records take the next free number here. This directory is the single, public
 | [0020](0020-accounts-is-a-conventional-identity-app-not-an-app-permissions-framework.md) | `accounts` is a conventional identity app, not an app-permissions framework | Accepted |
 | [0021](0021-accounts-security-defaults-differ-from-admin-where-the-trust-boundary-differs.md) | Public `accounts` uses stricter/different security defaults than admin where the trust boundary differs | Accepted |
 | [0022](0022-i18n-is-an-opt-in-override-layer-plain-go-maps-not-a-locale-framework.md) | `i18n` is an opt-in text-override layer built on plain Go maps, not a locale framework | Accepted |
-| [0023](0023-agent-facing-docs-are-vendor-neutral-best-effort-and-reference-not-duplicate-canonical-examples.md) | Agent-facing docs are vendor-neutral, best-effort, and reference canonical examples rather than duplicating code or building sync tooling | Accepted |
+| [0023](0023-agent-facing-docs-are-vendor-neutral-best-effort-and-reference-not-duplicate-canonical-examples.md) | Agent-facing docs are vendor-neutral, best-effort, and reference canonical examples rather than duplicating code or building sync tooling | Accepted; amended (see note) |
 | [0024](0024-query-filtering-is-a-bounded-where-primitive.md) | Query filtering ships as a bounded WHERE primitive, not a query DSL | Accepted; amended by 0025 and 0038 |
 | [0025](0025-query-filtering-gains-like-any-and-count.md) | Query filtering gains `OpLike`, one OR group, and `Store.Count` | Accepted |
 | [0026](0026-jwt-access-tokens-are-stateless-and-non-revocable.md) | JWT access tokens are stateless and non-revocable | Accepted |
