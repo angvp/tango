@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/db"
-	"github.com/angvp/tango/model"
-	"github.com/angvp/tango/testdb"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -17,20 +15,10 @@ type uniquenessWidget struct {
 }
 
 func TestIsUniqueConstraintViolation(t *testing.T) {
-	sqlDB, dialect := testdb.Open(t)
-	createTable := map[db.Dialect]string{
-		db.SQLite:   `CREATE TABLE uniqueness_widget (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE)`,
-		db.Postgres: `CREATE TABLE uniqueness_widget (id BIGSERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE)`,
-	}[dialect]
-	if _, err := sqlDB.Exec(createTable); err != nil {
-		t.Fatalf("create table: %v", err)
-	}
-
-	registry := model.NewRegistry()
-	if err := registry.Register(uniquenessWidget{}); err != nil {
-		t.Fatalf("register model: %v", err)
-	}
-	meta, _ := registry.Get("uniquenessWidget")
+	// Migrations enforce tango:"unique" with a unique index, not a column
+	// constraint; both dialects report a violation of it the same way.
+	sqlDB, dialect, registry := openTables(t, uniquenessWidget{})
+	meta := metaFor(t, registry, uniquenessWidget{})
 
 	store := db.NewStore(sqlDB, dialect)
 	ctx := context.Background()
