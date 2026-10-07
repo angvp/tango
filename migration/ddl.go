@@ -34,7 +34,7 @@ func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 	case AlterColumnUnique:
 		return applyUniqueIndex(ctx, sqlDB, dialect, s.Table, s.Column, s.Unique)
 	case CreateIndex:
-		return exec(ctx, sqlDB, createIndexSQL(dialect, "CREATE INDEX", indexName(s.Table, s.Column), s.Table, s.Column))
+		return exec(ctx, sqlDB, createIndexSQL(dialect, false, indexName(s.Table, s.Column), s.Table, s.Column))
 	case DropIndex:
 		return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", quote(dialect, indexName(s.Table, s.Column))))
 	default:
@@ -81,9 +81,13 @@ func uniqueIndexName(table, column string) string {
 	return "uniq_" + table + "_" + column
 }
 
-// createIndexSQL returns "<verb> name ON table (column)" with every
-// identifier quoted; verb is "CREATE INDEX" or "CREATE UNIQUE INDEX".
-func createIndexSQL(dialect db.Dialect, verb, name, table, column string) string {
+// createIndexSQL returns "CREATE [UNIQUE] INDEX name ON table (column)"
+// with every identifier quoted.
+func createIndexSQL(dialect db.Dialect, unique bool, name, table, column string) string {
+	verb := "CREATE INDEX"
+	if unique {
+		verb = "CREATE UNIQUE INDEX"
+	}
 	return fmt.Sprintf("%s %s ON %s (%s)", verb, quote(dialect, name), quote(dialect, table), quote(dialect, column))
 }
 
@@ -93,7 +97,7 @@ func createIndexSQL(dialect db.Dialect, verb, name, table, column string) string
 func applyUniqueIndex(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, table, column string, unique bool) error {
 	name := uniqueIndexName(table, column)
 	if unique {
-		return exec(ctx, sqlDB, createIndexSQL(dialect, "CREATE UNIQUE INDEX", name, table, column))
+		return exec(ctx, sqlDB, createIndexSQL(dialect, true, name, table, column))
 	}
 	return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", quote(dialect, name)))
 }
@@ -104,10 +108,10 @@ func createTableSQL(dialect db.Dialect, s CreateTable) []string {
 	for i, c := range s.Columns {
 		defs[i] = columnDefSQL(dialect, c)
 		if c.Unique {
-			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, "CREATE UNIQUE INDEX", uniqueIndexName(s.Table, c.Name), s.Table, c.Name))
+			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, true, uniqueIndexName(s.Table, c.Name), s.Table, c.Name))
 		}
 		if c.Indexed {
-			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, "CREATE INDEX", indexName(s.Table, c.Name), s.Table, c.Name))
+			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, false, indexName(s.Table, c.Name), s.Table, c.Name))
 		}
 	}
 
