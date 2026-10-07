@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -75,10 +74,15 @@ func touchedApps(m Migration) []string {
 	return []string{m.App}
 }
 
-// ApplyPending applies every migration in migrations whose Name is not
-// already recorded in tango_migrations, in slice order, translating each
-// Up step via ApplyStep and recording one tango_migrations row per
-// (app, name) pair the migration touches.
+// ApplyPending applies every migration in migrations whose (App, Name) is
+// not already recorded in tango_migrations, translating each Up step via
+// ApplyStep and recording one tango_migrations row per (app, name) pair the
+// migration touches. Slice order does not matter: pending migrations run by
+// Name then App, except that a migration adding a foreign key to another
+// app's table runs after the migration creating that table, so cross-app
+// foreign keys work regardless of app names or InstalledApps order. Each
+// app's own migrations always run in Name order. Foreign keys between apps
+// that form a cycle are an error, and nothing is applied.
 func ApplyPending(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrations []Migration) error {
 	if err := EnsureTrackingTable(ctx, sqlDB, dialect); err != nil {
 		return err
@@ -89,20 +93,18 @@ func ApplyPending(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrat
 		return err
 	}
 
-	sorted := append([]Migration(nil), migrations...)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].Name == sorted[j].Name {
-			return sorted[i].App < sorted[j].App
+	var pending []Migration
+	for _, m := range migrations {
+		if !applied[MigrationKey{App: m.App, Name: m.Name}] {
+			pending = append(pending, m)
 		}
-		return sorted[i].Name < sorted[j].Name
-	})
+	}
+	ordered, err := applyOrder(pending)
+	if err != nil {
+		return err
+	}
 
-	for _, m := range sorted {
-		key := MigrationKey{App: m.App, Name: m.Name}
-		if applied[key] {
-			continue
-		}
-
+	for _, m := range ordered {
 		for _, step := range m.Up {
 			if err := ApplyStep(ctx, sqlDB, dialect, step); err != nil {
 				return fmt.Errorf("migration %q: %w", m.Name, err)

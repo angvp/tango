@@ -7,6 +7,7 @@ Continuing from [part 9](09-jobs-logging-and-shutdown.md), this last part makes 
 Tests should exercise the same app `main` runs — same apps, same order, same middleware — not a hand-assembled lookalike. Pull the config out of `run()` into a function both can call. While you're at it, read the address from the environment with `tango.LoadConfigFromEnv()`, which uses `TANGO_ADDR` and defaults to `:8000`:
 
 ```go
+// main.go
 // appConfig is the whole application: which apps are installed, in which
 // order, and the middleware around every request. The tests build the
 // exact same config.
@@ -34,19 +35,18 @@ In `run()`, the config literal becomes one line: `config := appConfig(store, tok
 
 ## Tests that drive the real app
 
-Everything a test needs is a fresh database and the app's `http.Handler`. `main_test.go` builds both: a new SQLite file in a temporary directory, with every migration applied, and the app compiled from `appConfig` exactly the way `ServeContext` does it:
+Everything a test needs is a fresh database and the app's `http.Handler`. `main_test.go` builds both: a database from `testdb.Open`, with every migration applied, and the app compiled from `appConfig` exactly the way `ServeContext` does it:
 
 ```go
+// main_test.go
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -57,13 +57,14 @@ import (
 	"github.com/angvp/tango/auth/jwt"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/testdb"
 
 	"board/apps/live"
 	"board/migrations"
 )
 
 // testApp is the real application — same apps, routes, and middleware as
-// main — on a fresh, fully migrated SQLite database.
+// main — on a fresh, fully migrated database.
 type testApp struct {
 	handler  http.Handler
 	store    *db.Store
@@ -74,17 +75,12 @@ func newTestApp(t *testing.T) *testApp {
 	t.Helper()
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil))) // keep test output quiet
 
-	path := filepath.Join(t.TempDir(), "test.db")
-	sqlDB, err := sql.Open("sqlite", db.SQLiteForeignKeysDSN(path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-	if err := migration.ApplyPending(t.Context(), sqlDB, db.SQLite, migrations.Migrations); err != nil {
+	sqlDB, dialect := testdb.Open(t)
+	if err := migration.ApplyPending(t.Context(), sqlDB, dialect, migrations.Migrations); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	tokens, err := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", jwt.MinimumSecretBytes))}, nil, "board", "board-api")
 	if err != nil {
 		t.Fatal(err)
@@ -149,11 +145,12 @@ func (a *testApp) token(t *testing.T, email, password string) string {
 }
 ```
 
-`httptest.NewRecorder` captures a response without opening a network socket, so requests go straight through tanGO's routing, middleware, and views in microseconds. Each test gets its own database file, so tests never see each other's data and can run in any order.
+`httptest.NewRecorder` captures a response without opening a network socket, so requests go straight through tanGO's routing, middleware, and views in microseconds. `testdb.Open` gives each test its own empty database — in-memory SQLite by default — and cleans it up when the test ends, so tests never see each other's data and can run in any order.
 
 Now the tests themselves. Each one pins down a behavior from an earlier part — the kind of thing that's easy to break with an innocent-looking refactor:
 
 ```go
+// main_test.go
 func TestAppPassesChecks(t *testing.T) {
 	app := newTestApp(t)
 	tokens, _ := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", 32))}, nil, "board", "board-api")
@@ -257,6 +254,12 @@ Run them:
 go test ./...
 ```
 
+The same tests run against PostgreSQL when `TANGO_TEST_DSN` names a server; `testdb` then gives each test a schema of its own and drops it afterwards. It reads the same scheme-qualified DSNs as `TANGO_DB_DSN` (see [PostgreSQL](#postgresql) below):
+
+```sh
+TANGO_TEST_DSN="postgres://board:board@localhost:5432/board?sslmode=disable" go test ./...
+```
+
 To see that they're worth having, break something on purpose: flip the ownership check in `deletePost` from `post.AccountID != account.ID` to `==` and run the tests again. `TestOnlyTheOwnerCanDeleteAPost` fails with `someone else's post: status = 204, want 403`.
 
 `TestAppPassesChecks` runs the same validation as `go run . -check`: every route compiles, every foreign key points at a registered model, every template parses. Since the check is one of the tests, CI only needs two commands on every change:
@@ -283,6 +286,7 @@ Locally, `.env` fills them in; in production, set them in the environment instea
 SQLite is a fine default: one file, nothing to install, and plenty for a small site on one server. When you want a database server — several app instances, managed backups, more concurrent writes — tanGO also supports PostgreSQL, and the database setup `tango newproject` generated at the top of `run()` already reads `TANGO_DB_DSN`:
 
 ```go
+// main.go
 dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
 if err != nil {
 	return err
@@ -302,6 +306,7 @@ and `dialect` is what you've been passing to `tango.DispatchFlags` and `tango.Se
 The Postgres driver needs one more import in `main.go`, next to the SQLite one:
 
 ```go
+// main.go
 _ "github.com/jackc/pgx/v5/stdlib"
 _ "modernc.org/sqlite"
 ```

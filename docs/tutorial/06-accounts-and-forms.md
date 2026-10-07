@@ -7,6 +7,7 @@ Continuing from [part 5](05-html-pages.md), this part lets people sign up, log i
 `accounts` is an optional app that ships with tanGO: email-and-password sign-up, login, and logout pages, with sessions stored in the database. Install it in `main.go`, before `web` (which will look up its model):
 
 ```go
+// main.go (as of part 6)
 InstalledApps: []tango.App{
 	posts.New(store),
 	accounts.New(store),
@@ -54,7 +55,7 @@ This writes and applies two migrations: the `accounts` tables, and a new `accoun
 The JSON API's `createPost` can no longer create a post without an owner. For now it uses the same login as the browser: `accounts.CurrentAccountID` reads the session cookie and answers with the logged-in account, or `ok == false` if there isn't one:
 
 ```go
-// apps/posts/views.go
+// apps/posts/views.go (as of part 6)
 func createPost(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		accountID, ok, err := accounts.CurrentAccountID(ctx, store, accounts.DefaultSessionCookieName)
@@ -90,6 +91,7 @@ func createPost(store *db.Store, meta model.ModelMeta) tango.View {
 Put the login-related helpers in their own file, `apps/web/session.go`:
 
 ```go
+// apps/web/session.go
 package web
 
 import (
@@ -242,6 +244,7 @@ The new-post page is a form, `apps/web/templates/new_post.gohtml`:
 Two views serve it: `GET /new/` shows the form, and `POST /new/` handles it. Both are wrapped in `requireLogin`, and the routes list in `apps/web/app.go` now reads:
 
 ```go
+// apps/web/app.go
 return registry.Routes().Include("/", tango.URLs{
 	tango.Path("GET", "/", p.home, tango.Name("home")),
 	tango.Path("GET", "/p/{id}/", p.post, tango.Name("post")),
@@ -255,6 +258,7 @@ return registry.Routes().Include("/", tango.URLs{
 The handler checks the CSRF token first, then validates. When the title is missing, it renders the same form again with a message and what the visitor typed, and a `400` — nobody likes retyping a post. On success it redirects to the new post, using the same reverse lookup the templates use:
 
 ```go
+// apps/web/views.go (as of part 6)
 func (p *pages) newPost(ctx *tango.Context) error {
 	return p.render(ctx, http.StatusOK, "new_post", page{Title: "New post"})
 }
@@ -332,6 +336,7 @@ The post page shows the author and, for logged-in visitors, a comment form. The 
 The comment view follows the same shape. The author's name comes from their account, not from a form field:
 
 ```go
+// apps/web/views.go
 func (p *pages) createComment(ctx *tango.Context) error {
 	if !validCSRF(ctx) {
 		return ctx.JSON(http.StatusForbidden, map[string]string{"error": "invalid CSRF token"})
@@ -373,6 +378,7 @@ func (p *pages) createComment(ctx *tango.Context) error {
 The post view looks up the author's account to show their name. That's a second `store.Get`, on a model registered by another app:
 
 ```go
+// apps/web/views.go
 func (p *pages) post(ctx *tango.Context) error {
 	id, err := strconv.ParseInt(ctx.Param("id"), 10, 64)
 	if err != nil {
@@ -414,6 +420,7 @@ func (p *pages) post(ctx *tango.Context) error {
 `accounts` doesn't register its models with the admin for you. Do it in `web`'s `New`, before the routes (add `github.com/angvp/tango/accounts` and `github.com/angvp/tango/admin` to the imports in `apps/web/app.go`):
 
 ```go
+// apps/web/app.go
 // Accounts are managed from the admin like any other model.
 if err := registry.Admin().Register(accounts.Account{}, admin.Options{
 	ListDisplay: []string{"Email", "Active", "CreatedAt"},

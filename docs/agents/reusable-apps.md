@@ -11,7 +11,7 @@ Canonical examples: `examples/reusable-greetings/` and `examples/reusable-greeti
 - Register models, routes, admin options, checks, templates, and static assets inside the app's `Register(*tango.Registry)` path.
 - Let the host install the app explicitly in `InstalledApps`.
 - If the app needs host dependencies such as `*db.Store`, accept them through `New(...)`.
-- If the app ships migrations, expose them as a normal Go value and have the host combine them with host migrations in a deliberate order.
+- If the app ships migrations, expose them as a normal Go value and have the host combine them with host migrations; slice order doesn't matter, because `ApplyPending` runs a migration that references another app's table after the migration creating it.
 
 Tiny shape:
 

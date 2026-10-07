@@ -11,6 +11,7 @@ tango newapp housekeeping
 ```
 
 ```go
+// apps/housekeeping/app.go
 // Package housekeeping runs the board's background maintenance jobs.
 package housekeeping
 
@@ -69,6 +70,7 @@ A `tango.Job` is a name, an interval, and a function. tanGO runs it on a ticker 
 Install it in `main.go`, anywhere after `accounts` (and import `"board/apps/housekeeping"`):
 
 ```go
+// main.go
 feed.App(),
 housekeeping.New(store),
 admin.New(store),
@@ -81,6 +83,7 @@ To watch it work without waiting an hour, temporarily set `Interval: 5 * time.Se
 tanGO logs with the standard library's `log/slog`, and doesn't need a logging library of its own. At the top of `run()` in `main.go`, create one JSON logger and make it the default:
 
 ```go
+// main.go
 // One structured JSON logger for the whole app. slog.SetDefault makes
 // it the logger for tanGO's middleware and for slog calls in your code.
 logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -90,6 +93,7 @@ slog.SetDefault(logger)
 Then add three built-in middleware to `Config`, which run on every request:
 
 ```go
+// main.go (as of part 9)
 Middleware: []tango.Middleware{
 	tango.RequestID(),
 	tango.Recoverer(),
@@ -114,6 +118,7 @@ Note that `route` is the route's *pattern* (`/posts/{id}`), not the actual URL, 
 Until now, `main.go` ended with `tango.Serve`, which runs forever: stopping the process drops whatever requests were in flight. Replace the end of `run()` with `tango.ServeContext`, and let an OS signal cancel its context:
 
 ```go
+// main.go
 // Ctrl-C or SIGTERM (what `docker stop` and most process managers send)
 // cancels ctx, and ServeContext shuts down gracefully.
 ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

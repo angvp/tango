@@ -15,6 +15,7 @@ echo "BOARD_JWT_SECRET=$(openssl rand -hex 32)" >> .env
 Then build the token service in `main.go`. It needs an issuer and an audience — names that get stamped into every token and checked on the way back in, so a token minted for one service can't be replayed against another:
 
 ```go
+// main.go
 // newTokenService builds the API's token issuer from BOARD_JWT_SECRET.
 func newTokenService() (*jwt.Service, error) {
 	secret := os.Getenv("BOARD_JWT_SECRET")
@@ -34,6 +35,7 @@ func newTokenService() (*jwt.Service, error) {
 Call it right after creating the store, and fail at startup rather than at the first login if the secret is missing:
 
 ```go
+// main.go
 store := db.NewStore(sqlDB, dialect)
 tokens, err := newTokenService()
 if err != nil {
@@ -162,7 +164,7 @@ Three details worth noticing:
 In `posts`, two pieces work together. `tokens.Middleware(jwt.BearerToken)` runs on every `/posts/` request: it reads `Authorization: Bearer …`, verifies the token, and puts its claims on the request. A missing token is fine — reading posts stays public — but an invalid one is rejected with a `401`. Then `jwt.Require` wraps the views that need a token.
 
 ```go
-// apps/posts/app.go
+// apps/posts/app.go (as of part 7)
 package posts
 
 import (
@@ -231,6 +233,7 @@ func New(store *db.Store, tokens *jwt.Service) tango.App {
 `posts` now looks up the `Account` model while registering, so `accounts` has to come first in `InstalledApps`. Update `main.go` (and import `"board/apps/api"`):
 
 ```go
+// main.go (as of part 7)
 InstalledApps: []tango.App{
 	accounts.New(store),
 	posts.New(store, tokens),
@@ -245,6 +248,7 @@ InstalledApps: []tango.App{
 Put the token helpers in `apps/posts/auth.go`:
 
 ```go
+// apps/posts/auth.go
 package posts
 
 import (
@@ -306,7 +310,7 @@ func unauthorized(ctx *tango.Context) error {
 `createPost` takes the owner from the token, and `deletePost` refuses to delete someone else's post:
 
 ```go
-// apps/posts/views.go
+// apps/posts/views.go (as of part 7)
 func createPost(store *db.Store, meta, accountMeta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		account, ok, err := tokenAccount(ctx, store, accountMeta)

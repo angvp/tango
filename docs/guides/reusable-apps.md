@@ -61,7 +61,7 @@ var Migrations = []migration.Migration{
 
 An app generates this slice by running `tango makemigrations` against a small, throwaway generation harness kept inside the app's own repository — effectively treating the app's own repo as a single-app "host" purely so `tango makemigrations` has something to diff against. This harness's `Config` (or whatever local config type it uses) is scoped to the app only: it never defines or overrides host-level general configuration such as DB dialect or DSN. The harness needs a `*db.Store` to satisfy `DumpModels`'s dependencies even though `DumpModels` performs no DB I/O; use a real but throwaway in-memory SQLite store (`db.NewStore` over a `:memory:` `sql.DB`) rather than a `nil` store, since `db.NewStore`'s nil-safety isn't a documented guarantee.
 
-The host project's `main.go` then concatenates the app's `Migrations` with its own host-generated migrations, in `InstalledApps` order, before handing the combined slice to `DispatchFlags`/`ApplyPending`/`RollbackLast`:
+The host project's `main.go` then concatenates the app's `Migrations` with its own host-generated migrations, in any order, before handing the combined slice to `DispatchFlags`/`ApplyPending`/`RollbackLast`:
 
 ```go
 var allMigrations []migration.Migration
@@ -71,7 +71,7 @@ allMigrations = append(allMigrations, migrations.Migrations...) // the host's ow
 tango.DispatchFlags(config, sqlDB, dialect, allMigrations)
 ```
 
-`tango_migrations` already tracks applied migrations by `(App, Name)` via `migration.MigrationKey`, so contributed and host migrations coexist in the same tracking table without ambiguity as long as each migration's `App` field is set to the owning app's name.
+`tango_migrations` already tracks applied migrations by `(App, Name)` via `migration.MigrationKey`, so contributed and host migrations coexist in the same tracking table without ambiguity as long as each migration's `App` field is set to the owning app's name. If a host model has a foreign key to one of the app's models (or the other way round), `ApplyPending` creates the referenced table first and `RollbackLast` drops it last — see [migrations](migrations.md#order-across-apps).
 
 ## App-owned templates and static assets
 
