@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -108,15 +110,31 @@ import "github.com/angvp/tango/migration"
 var Migrations = []migration.Migration{}
 `
 
+// renderImports renders an import block with one sorted group per entry
+// of groups, the way goimports leaves them, followed by blankImport (the
+// database driver) imported for its side effects in a group of its own.
+func renderImports(groups [][]string, blankImport string) string {
+	var b strings.Builder
+	b.WriteString("import (\n")
+	for _, group := range groups {
+		for _, path := range slices.Sorted(slices.Values(group)) {
+			b.WriteString("\t" + strconv.Quote(path) + "\n")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\t_ " + strconv.Quote(blankImport) + "\n)")
+	return b.String()
+}
+
 func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bool) string {
-	adminImport := ""
+	stdImports := []string{"database/sql", "fmt", "os"}
+	tangoImports := []string{"github.com/angvp/tango"}
 	adminConfig := "InstalledApps: []tango.App{},"
-	contextImport := ""
 	storeLine := ""
 	adminCLIBlock := ""
 	if includeAdmin {
-		adminImport = "\n\t\"github.com/angvp/tango/admin\"\n\t\"github.com/angvp/tango/db\""
-		contextImport = "\"context\"\n\t"
+		stdImports = append(stdImports, "context")
+		tangoImports = append(tangoImports, "github.com/angvp/tango/admin", "github.com/angvp/tango/db")
 		storeLine = "store := db.NewStore(sqlDB, dsn.Dialect)"
 		adminConfig = `InstalledApps: []tango.App{
 			admin.New(store),
@@ -137,19 +155,14 @@ func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bo
 `, dialect.DefaultDSN)
 	}
 
+	imports := renderImports(
+		[][]string{stdImports, tangoImports, {module + "/migrations"}},
+		dialect.DriverImport,
+	)
+
 	return fmt.Sprintf(`package main
 
-import (
-	%s"database/sql"
-	"fmt"
-	"os"
-
-	"github.com/angvp/tango"%s
-
-	"%s/migrations"
-
-	_ "%s"
-)
+%s
 
 func main() {
 	if err := run(); err != nil {
@@ -188,5 +201,5 @@ func run() error {
 	fmt.Println("listening on", config.Addr)
 	return tango.Serve(config, sqlDB, dsn.Dialect)
 }
-`, contextImport, adminImport, module, dialect.DriverImport, defaultDSNBlock, storeLine, adminConfig, adminCLIBlock)
+`, imports, defaultDSNBlock, storeLine, adminConfig, adminCLIBlock)
 }

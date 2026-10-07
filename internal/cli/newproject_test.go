@@ -75,10 +75,13 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		}
 	}
 
-	// The generated file is the first code a reader sees, so its standard
-	// library imports form one sorted group, the way goimports leaves them.
-	if !strings.Contains(mainSource, "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\n") {
-		t.Fatalf("main.go standard library imports are not one sorted group:\n%s", mainSource)
+	// The generated file is the first code a reader sees, so its imports
+	// form sorted groups, the way goimports leaves them.
+	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\n" +
+		"\t\"github.com/angvp/tango\"\n\t\"github.com/angvp/tango/admin\"\n\t\"github.com/angvp/tango/db\"\n\n" +
+		"\t\"myapp/migrations\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
+	if !strings.Contains(mainSource, wantImports) {
+		t.Fatalf("main.go imports are not %q:\n%s", wantImports, mainSource)
 	}
 
 	migrationsGo, err := os.ReadFile(filepath.Join(projectDir, "migrations", "migrations.go"))
@@ -126,6 +129,10 @@ func TestNewProjectNoAdminSkipsCredentials(t *testing.T) {
 	}
 	if !strings.Contains(string(mainGo), "tango.Serve(config, sqlDB, dsn.Dialect)") {
 		t.Fatalf("main.go does not serve with the dialect from TANGO_DB_DSN:\n%s", mainGo)
+	}
+	wantImports := "import (\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\n\t\"github.com/angvp/tango\"\n\n\t\"myapp/migrations\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
+	if !strings.Contains(string(mainGo), wantImports) {
+		t.Fatalf("main.go imports are not %q:\n%s", wantImports, mainGo)
 	}
 	if _, err := os.Stat(filepath.Join(projectDir, ".env")); !os.IsNotExist(err) {
 		t.Fatalf(".env stat = %v, want not exist", err)
