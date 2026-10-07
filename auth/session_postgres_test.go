@@ -1,22 +1,19 @@
 package auth_test
 
-// Postgres coverage for the session helpers. These tests only run when
-// TANGO_TEST_POSTGRES_DSN is set to a reachable PostgreSQL connection
-// string, so `go test ./...` needs no Postgres server by default:
+// Postgres coverage for the session helpers. These tests run when the
+// Test dialect is PostgreSQL (see package testdb):
 //
-//	TANGO_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/tango_test?sslmode=disable" go test ./auth/...
+//	TANGO_TEST_DSN="postgres://user:pass@localhost:5432/tango_test?sslmode=disable" go test ./auth/...
 
 import (
 	"context"
-	"database/sql"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/angvp/tango/auth"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/angvp/tango/testdb"
 )
 
 func TestSessionCreateLookupAndDeletePostgres(t *testing.T) {
@@ -46,10 +43,7 @@ func TestSessionCreateLookupAndDeletePostgres(t *testing.T) {
 
 func buildAuthPostgresStore(t *testing.T) (*db.Store, model.ModelMeta, int64) {
 	t.Helper()
-	dsn := os.Getenv("TANGO_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("TANGO_TEST_POSTGRES_DSN not set")
-	}
+	testdb.PostgresOnly(t, "Postgres twin of TestSessionCreateLookupAndDelete in session_test.go")
 
 	models := model.NewRegistry()
 	if err := models.Register(authTestUser{}); err != nil {
@@ -61,26 +55,15 @@ func buildAuthPostgresStore(t *testing.T) (*db.Store, model.ModelMeta, int64) {
 	userMeta, _ := models.Get("authTestUser")
 	sessionMeta, _ := models.Get("authTestSession")
 
-	sqlDB, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	drop := []string{`DROP TABLE IF EXISTS auth_test_session`, `DROP TABLE IF EXISTS auth_test_user`}
-	for _, stmt := range append(drop,
+	sqlDB, _ := testdb.Open(t)
+	for _, stmt := range []string{
 		`CREATE TABLE auth_test_user (id BIGSERIAL PRIMARY KEY, email TEXT NOT NULL, password_hash TEXT NOT NULL)`,
 		`CREATE TABLE auth_test_session (id BIGSERIAL PRIMARY KEY, token TEXT NOT NULL UNIQUE, user_id BIGINT NOT NULL, expires_at TIMESTAMPTZ NOT NULL)`,
-	) {
+	} {
 		if _, err := sqlDB.Exec(stmt); err != nil {
 			t.Fatalf("setup %q: %v", stmt, err)
 		}
 	}
-	t.Cleanup(func() {
-		for _, stmt := range drop {
-			_, _ = sqlDB.Exec(stmt)
-		}
-	})
 
 	store := db.NewStore(sqlDB, db.Postgres)
 	user := authTestUser{Email: "ada@example.test", PasswordHash: "hash"}

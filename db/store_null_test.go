@@ -1,13 +1,14 @@
-package db
+package db_test
 
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
+	"github.com/angvp/tango/testdb"
 )
 
 // These tests pin down how the Store treats SQL NULL. tanGO has no nullable
@@ -31,23 +32,29 @@ type nullPost struct {
 	CreatedAt time.Time
 }
 
-// openNullTestDB builds the tables the way migrations do — the foreign key
-// is a real REFERENCES constraint, enforced because foreign keys are on —
-// and returns a Store with the models registered.
-func openNullTestDB(t *testing.T) (*sql.DB, *Store, model.ModelMeta, model.ModelMeta) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite", SQLiteForeignKeysDSN("file:"+t.Name()+"?mode=memory&cache=shared"))
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	sqlDB.SetMaxOpenConns(1)
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	for _, stmt := range []string{
+// nullSchema is the tables the way migrations build them for each dialect —
+// the foreign key is a real REFERENCES constraint, enforced on SQLite
+// because testdb turns foreign keys on — with every column but the key
+// nullable, as after `tango migrate` adds columns to a table with data.
+var nullSchema = map[db.Dialect][]string{
+	db.SQLite: {
 		`CREATE TABLE null_author (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)`,
 		`CREATE TABLE null_post (id INTEGER PRIMARY KEY AUTOINCREMENT, author_id INTEGER REFERENCES null_author,
 			title TEXT, views INTEGER, score REAL, published BOOLEAN, created_at TIMESTAMP)`,
-	} {
+	},
+	db.Postgres: {
+		`CREATE TABLE null_author (id BIGSERIAL PRIMARY KEY, name TEXT)`,
+		`CREATE TABLE null_post (id BIGSERIAL PRIMARY KEY, author_id BIGINT REFERENCES null_author,
+			title TEXT, views BIGINT, score DOUBLE PRECISION, published BOOLEAN, created_at TIMESTAMPTZ)`,
+	},
+}
+
+// openNullTestDB builds nullSchema in a fresh database for the run's Test
+// dialect and returns a Store with the models registered.
+func openNullTestDB(t *testing.T) (*sql.DB, *db.Store, model.ModelMeta, model.ModelMeta) {
+	t.Helper()
+	sqlDB, dialect := testdb.Open(t)
+	for _, stmt := range nullSchema[dialect] {
 		if _, err := sqlDB.Exec(stmt); err != nil {
 			t.Fatalf("setup %q: %v", stmt, err)
 		}
@@ -62,9 +69,24 @@ func openNullTestDB(t *testing.T) (*sql.DB, *Store, model.ModelMeta, model.Model
 	authorMeta, _ := registry.Get("nullAuthor")
 	postMeta, _ := registry.Get("nullPost")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 	return sqlDB, store, authorMeta, postMeta
+}
+
+// readAuthorID reads null_post.author_id for id straight from the table,
+// bypassing the Store's NULL handling.
+func readAuthorID(t *testing.T, sqlDB *sql.DB, id int64) sql.NullInt64 {
+	t.Helper()
+	query := `SELECT author_id FROM null_post WHERE id = ?`
+	if testdb.Dialect() == db.Postgres {
+		query = `SELECT author_id FROM null_post WHERE id = $1`
+	}
+	var authorID sql.NullInt64
+	if err := sqlDB.QueryRow(query, id).Scan(&authorID); err != nil {
+		t.Fatalf("read author_id: %v", err)
+	}
+	return authorID
 }
 
 func TestStoreCreateWritesZeroForeignKeyAsNull(t *testing.T) {
@@ -76,10 +98,7 @@ func TestStoreCreateWritesZeroForeignKeyAsNull(t *testing.T) {
 		t.Fatalf("Create with an unset foreign key: %v", err)
 	}
 
-	var authorID sql.NullInt64
-	if err := sqlDB.QueryRow(`SELECT author_id FROM null_post WHERE id = ?`, post.ID).Scan(&authorID); err != nil {
-		t.Fatalf("read author_id: %v", err)
-	}
+	authorID := readAuthorID(t, sqlDB, post.ID)
 	if authorID.Valid {
 		t.Fatalf("author_id = %d, want NULL for a zero foreign key", authorID.Int64)
 	}
@@ -111,10 +130,7 @@ func TestStoreUpdateWritesZeroForeignKeyAsNull(t *testing.T) {
 		t.Fatalf("Update clearing the foreign key: %v", err)
 	}
 
-	var authorID sql.NullInt64
-	if err := sqlDB.QueryRow(`SELECT author_id FROM null_post WHERE id = ?`, post.ID).Scan(&authorID); err != nil {
-		t.Fatalf("read author_id: %v", err)
-	}
+	authorID := readAuthorID(t, sqlDB, post.ID)
 	if authorID.Valid {
 		t.Fatalf("author_id = %d, want NULL after clearing the foreign key", authorID.Int64)
 	}
@@ -126,11 +142,10 @@ func TestStoreReadsNullColumnsAsZeroValues(t *testing.T) {
 
 	// A row as it looks after `tango migrate` added columns to a table that
 	// already had data: every column but the key is NULL.
-	result, err := sqlDB.Exec(`INSERT INTO null_post (title) VALUES (NULL)`)
-	if err != nil {
+	var id int64
+	if err := sqlDB.QueryRow(`INSERT INTO null_post DEFAULT VALUES RETURNING id`).Scan(&id); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	id, _ := result.LastInsertId()
 
 	var got nullPost
 	if err := store.Get(ctx, postMeta, id, &got); err != nil {
@@ -141,7 +156,7 @@ func TestStoreReadsNullColumnsAsZeroValues(t *testing.T) {
 	}
 
 	var listed []nullPost
-	if err := store.List(ctx, postMeta, Query{}, &listed); err != nil {
+	if err := store.List(ctx, postMeta, db.Query{}, &listed); err != nil {
 		t.Fatalf("List rows with NULL columns: %v", err)
 	}
 	if len(listed) != 1 || listed[0] != (nullPost{ID: id}) {
@@ -208,61 +223,5 @@ func TestStoreNullScanKeepsScannerAndPointerFieldsWorking(t *testing.T) {
 	}
 	if !got.Name.Valid || got.Name.String != "ada" || got.Nickname == nil || *got.Nickname != "a" || got.Count != 4 {
 		t.Fatalf("QueryRow = %+v, want the selected values", got)
-	}
-}
-
-func TestStoreNullHandlingPostgres(t *testing.T) {
-	dsn := os.Getenv("TANGO_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("TANGO_TEST_POSTGRES_DSN not set")
-	}
-	sqlDB, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	ctx := context.Background()
-
-	drop := []string{`DROP TABLE IF EXISTS null_post`, `DROP TABLE IF EXISTS null_author`}
-	for _, stmt := range append(drop,
-		`CREATE TABLE null_author (id BIGSERIAL PRIMARY KEY, name TEXT)`,
-		`CREATE TABLE null_post (id BIGSERIAL PRIMARY KEY, author_id BIGINT REFERENCES null_author,
-			title TEXT, views BIGINT, score DOUBLE PRECISION, published BOOLEAN, created_at TIMESTAMPTZ)`,
-	) {
-		if _, err := sqlDB.ExecContext(ctx, stmt); err != nil {
-			t.Fatalf("setup %q: %v", stmt, err)
-		}
-	}
-	t.Cleanup(func() {
-		for _, stmt := range drop {
-			_, _ = sqlDB.ExecContext(ctx, stmt)
-		}
-	})
-
-	registry := model.NewRegistry()
-	for _, v := range []any{nullAuthor{}, nullPost{}} {
-		if err := registry.Register(v); err != nil {
-			t.Fatalf("register %T: %v", v, err)
-		}
-	}
-	postMeta, _ := registry.Get("nullPost")
-	store := NewStore(sqlDB, Postgres)
-	store.UseModels(registry)
-
-	post := nullPost{Title: "No author"}
-	if err := store.Create(ctx, postMeta, &post); err != nil {
-		t.Fatalf("Create with an unset foreign key: %v", err)
-	}
-
-	var bare int64
-	if err := sqlDB.QueryRowContext(ctx, `INSERT INTO null_post DEFAULT VALUES RETURNING id`).Scan(&bare); err != nil {
-		t.Fatalf("insert all-NULL row: %v", err)
-	}
-	var got nullPost
-	if err := store.Get(ctx, postMeta, bare, &got); err != nil {
-		t.Fatalf("Get a row with NULL columns: %v", err)
-	}
-	if got != (nullPost{ID: bare}) {
-		t.Fatalf("Get = %+v, want zero values", got)
 	}
 }

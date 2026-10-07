@@ -1,22 +1,21 @@
-package db
+package db_test
 
-// Postgres coverage for Store. These tests only run when
-// TANGO_TEST_POSTGRES_DSN is set to a reachable PostgreSQL connection
-// string, so `go test ./...` needs no Postgres server by default:
+// Postgres coverage for Store. These tests run when the Test dialect is
+// PostgreSQL (see package testdb):
 //
-//	TANGO_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/tango_test?sslmode=disable" go test ./db/...
+//	TANGO_TEST_DSN="postgres://user:pass@localhost:5432/tango_test?sslmode=disable" go test ./db/...
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/angvp/tango/testdb"
 )
 
 type postgresWidget struct {
@@ -31,7 +30,7 @@ type postgresWidget struct {
 func TestStoreCreateBackfillsGeneratedPrimaryKeyPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	createdAt := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	widget := postgresWidget{Name: "alpha", Active: true, Count: 3, Score: 1.5, CreatedAt: createdAt}
@@ -47,7 +46,7 @@ func TestStoreCreateBackfillsGeneratedPrimaryKeyPostgres(t *testing.T) {
 func TestStoreCreatePreservesCallerSuppliedPrimaryKeyPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	widget := postgresWidget{ID: 42, Name: "beta", Active: false, Count: 1, Score: 2.5, CreatedAt: time.Now().UTC()}
 	if err := store.Create(context.Background(), meta, &widget); err != nil {
@@ -62,7 +61,7 @@ func TestStoreCreatePreservesCallerSuppliedPrimaryKeyPostgres(t *testing.T) {
 func TestStoreGetScansMatchingRowIntoDestPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	widget := postgresWidget{Name: "gamma", Active: true, Count: 5, Score: 9.5, CreatedAt: time.Now().UTC()}
 	if err := store.Create(context.Background(), meta, &widget); err != nil {
@@ -81,19 +80,19 @@ func TestStoreGetScansMatchingRowIntoDestPostgres(t *testing.T) {
 func TestStoreGetUnknownPrimaryKeyReturnsErrNotFoundPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	var got postgresWidget
 	err := store.Get(context.Background(), meta, int64(999999), &got)
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatalf("error = %v, want it to wrap ErrNotFound", err)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("error = %v, want it to wrap db.ErrNotFound", err)
 	}
 }
 
 func TestStoreUpdatePersistsFieldChangesPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	widget := postgresWidget{Name: "delta", Active: true, Count: 1, Score: 1, CreatedAt: time.Now().UTC()}
 	if err := store.Create(context.Background(), meta, &widget); err != nil {
@@ -118,19 +117,19 @@ func TestStoreUpdatePersistsFieldChangesPostgres(t *testing.T) {
 func TestStoreUpdateUnknownPrimaryKeyReturnsErrNotFoundPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	widget := postgresWidget{ID: 999999, Name: "missing"}
 	err := store.Update(context.Background(), meta, &widget)
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatalf("error = %v, want it to wrap ErrNotFound", err)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("error = %v, want it to wrap db.ErrNotFound", err)
 	}
 }
 
 func TestStoreDeleteRemovesRowPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	widget := postgresWidget{Name: "epsilon", CreatedAt: time.Now().UTC()}
 	if err := store.Create(context.Background(), meta, &widget); err != nil {
@@ -143,26 +142,26 @@ func TestStoreDeleteRemovesRowPostgres(t *testing.T) {
 
 	var got postgresWidget
 	err := store.Get(context.Background(), meta, widget.ID, &got)
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatalf("Get after Delete error = %v, want ErrNotFound", err)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("Get after Delete error = %v, want db.ErrNotFound", err)
 	}
 }
 
 func TestStoreDeleteUnknownPrimaryKeyReturnsErrNotFoundPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	err := store.Delete(context.Background(), meta, int64(999999))
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatalf("error = %v, want it to wrap ErrNotFound", err)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("error = %v, want it to wrap db.ErrNotFound", err)
 	}
 }
 
 func TestStoreListOrdersAndPaginatesRowsPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	for i, name := range []string{"zeta", "eta", "theta"} {
 		widget := postgresWidget{Name: name, Count: i, CreatedAt: time.Now().UTC()}
@@ -172,7 +171,7 @@ func TestStoreListOrdersAndPaginatesRowsPostgres(t *testing.T) {
 	}
 
 	var got []postgresWidget
-	err := store.List(context.Background(), meta, Query{OrderBy: []string{"Name"}, Limit: 2}, &got)
+	err := store.List(context.Background(), meta, db.Query{OrderBy: []string{"Name"}, Limit: 2}, &got)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -187,10 +186,10 @@ func TestStoreListOrdersAndPaginatesRowsPostgres(t *testing.T) {
 func TestStoreListRejectsUnknownOrderByFieldPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 
 	var got []postgresWidget
-	err := store.List(context.Background(), meta, Query{OrderBy: []string{"Nonexistent"}}, &got)
+	err := store.List(context.Background(), meta, db.Query{OrderBy: []string{"Nonexistent"}}, &got)
 	if err == nil {
 		t.Fatalf("List with unknown OrderBy field returned nil error")
 	}
@@ -199,7 +198,7 @@ func TestStoreListRejectsUnknownOrderByFieldPostgres(t *testing.T) {
 func TestStoreListWherePostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 	createdAt := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	for _, widget := range []postgresWidget{
 		{Name: "first", Count: 0, CreatedAt: createdAt},
@@ -212,22 +211,22 @@ func TestStoreListWherePostgres(t *testing.T) {
 	}
 	tests := []struct {
 		name  string
-		where []Condition
+		where []db.Condition
 		want  int
 	}{
-		{"eq", []Condition{{"Count", OpEq, 0}}, 1},
-		{"ne", []Condition{{"Count", OpNe, 0}}, 2},
-		{"gt", []Condition{{"Count", OpGt, 5}}, 1},
-		{"gte", []Condition{{"Count", OpGte, 5}}, 2},
-		{"lt", []Condition{{"Count", OpLt, 5}}, 1},
-		{"lte", []Condition{{"Count", OpLte, 5}}, 2},
-		{"and", []Condition{{"CreatedAt", OpGte, createdAt.Add(time.Hour)}, {"Count", OpLte, 5}}, 1},
-		{"time range", []Condition{{"CreatedAt", OpGte, createdAt}, {"CreatedAt", OpLte, createdAt.Add(time.Hour)}}, 2},
+		{"eq", []db.Condition{{Field: "Count", Op: db.OpEq, Value: 0}}, 1},
+		{"ne", []db.Condition{{Field: "Count", Op: db.OpNe, Value: 0}}, 2},
+		{"gt", []db.Condition{{Field: "Count", Op: db.OpGt, Value: 5}}, 1},
+		{"gte", []db.Condition{{Field: "Count", Op: db.OpGte, Value: 5}}, 2},
+		{"lt", []db.Condition{{Field: "Count", Op: db.OpLt, Value: 5}}, 1},
+		{"lte", []db.Condition{{Field: "Count", Op: db.OpLte, Value: 5}}, 2},
+		{"and", []db.Condition{{Field: "CreatedAt", Op: db.OpGte, Value: createdAt.Add(time.Hour)}, {Field: "Count", Op: db.OpLte, Value: 5}}, 1},
+		{"time range", []db.Condition{{Field: "CreatedAt", Op: db.OpGte, Value: createdAt}, {Field: "CreatedAt", Op: db.OpLte, Value: createdAt.Add(time.Hour)}}, 2},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var got []postgresWidget
-			if err := store.List(context.Background(), meta, Query{Where: test.where}, &got); err != nil {
+			if err := store.List(context.Background(), meta, db.Query{Where: test.where}, &got); err != nil {
 				t.Fatal(err)
 			}
 			if len(got) != test.want {
@@ -236,8 +235,8 @@ func TestStoreListWherePostgres(t *testing.T) {
 		})
 	}
 	var got []postgresWidget
-	for _, condition := range []Condition{{Field: "Count", Op: OpEq, Value: nil}, {Field: "Count", Op: OpEq, Value: "5"}} {
-		err := store.List(context.Background(), meta, Query{Where: []Condition{condition}}, &got)
+	for _, condition := range []db.Condition{{Field: "Count", Op: db.OpEq, Value: nil}, {Field: "Count", Op: db.OpEq, Value: "5"}} {
+		err := store.List(context.Background(), meta, db.Query{Where: []db.Condition{condition}}, &got)
 		if err == nil {
 			t.Fatalf("condition %+v unexpectedly succeeded", condition)
 		}
@@ -247,7 +246,7 @@ func TestStoreListWherePostgres(t *testing.T) {
 func TestStoreAnyLikeAndCountPostgres(t *testing.T) {
 	sqlDB := openPostgresTestDB(t)
 	meta := registerPostgresModel(t, postgresWidget{})
-	store := NewStore(sqlDB, Postgres)
+	store := db.NewStore(sqlDB, db.Postgres)
 	for _, widget := range []postgresWidget{
 		{Name: "Alpha", Active: true},
 		{Name: "Beta", Active: true},
@@ -257,11 +256,11 @@ func TestStoreAnyLikeAndCountPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	query := Query{
-		Where: []Condition{{Field: "Active", Op: OpEq, Value: true}},
-		Any: []Condition{
-			{Field: "Name", Op: OpLike, Value: "Al%"},
-			{Field: "Name", Op: OpLike, Value: "%eta"},
+	query := db.Query{
+		Where: []db.Condition{{Field: "Active", Op: db.OpEq, Value: true}},
+		Any: []db.Condition{
+			{Field: "Name", Op: db.OpLike, Value: "Al%"},
+			{Field: "Name", Op: db.OpLike, Value: "%eta"},
 		},
 		OrderBy: []string{"Name"},
 		Limit:   1,
@@ -279,37 +278,12 @@ func TestStoreAnyLikeAndCountPostgres(t *testing.T) {
 	}
 }
 
-func postgresTestDSN(t *testing.T) string {
-	t.Helper()
-
-	dsn := os.Getenv("TANGO_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("TANGO_TEST_POSTGRES_DSN not set; skipping Postgres-backed Store tests")
-	}
-	return dsn
-}
-
 func openPostgresTestDB(t *testing.T) *sql.DB {
 	t.Helper()
+	testdb.PostgresOnly(t, "Postgres twins of the SQLite Store tests in store_test.go")
 
-	sqlDB, err := sql.Open("pgx", postgresTestDSN(t))
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = sqlDB.Close()
-	})
-
-	if err := sqlDB.Ping(); err != nil {
-		t.Fatalf("ping postgres: %v", err)
-	}
-
-	_, err = sqlDB.ExecContext(context.Background(), `DROP TABLE IF EXISTS postgres_widget`)
-	if err != nil {
-		t.Fatalf("drop table: %v", err)
-	}
-
-	_, err = sqlDB.ExecContext(context.Background(), `
+	sqlDB, _ := testdb.Open(t)
+	_, err := sqlDB.ExecContext(context.Background(), `
 		CREATE TABLE postgres_widget (
 			id BIGSERIAL PRIMARY KEY,
 			name TEXT NOT NULL,
@@ -322,10 +296,6 @@ func openPostgresTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("create table: %v", err)
 	}
-	t.Cleanup(func() {
-		_, _ = sqlDB.ExecContext(context.Background(), `DROP TABLE IF EXISTS postgres_widget`)
-	})
-
 	return sqlDB
 }
 

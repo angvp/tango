@@ -3,22 +3,20 @@ package migration
 import (
 	"context"
 	"database/sql"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/angvp/tango/db"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
 
+// openDDLTestDB is for the SQLite-backed DDL tests, which apply steps with
+// db.SQLite and inspect the result through sqlite_master and PRAGMA
+// table_info.
 func openDDLTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	testdb.SQLiteOnly(t, "applies steps as db.SQLite and inspects sqlite_master; the *Postgres tests cover PostgreSQL")
+	sqlDB, _ := testdb.Open(t)
 	return sqlDB
 }
 
@@ -153,7 +151,7 @@ func TestApplyStepAddColumnWithDefaultBackfillsExistingRows(t *testing.T) {
 // TestAddColumnDefSQLDefaultAcrossDialects checks Column.Default's generated
 // DDL directly against both dialects' addColumnDefSQL branch, without
 // needing a live Postgres connection (unlike TestApplyStepFullLifecyclePostgres,
-// which is skipped without TANGO_TEST_POSTGRES_DSN). "TRUE"/"FALSE" are the
+// which runs only when the Test dialect is PostgreSQL). "TRUE"/"FALSE" are the
 // only literals this milestone uses, and both SQLite and Postgres accept
 // them for a boolean column — a bare "1"/"0" literal, by contrast, is valid
 // SQLite but rejected by Postgres for a BOOLEAN column, which is exactly
@@ -304,29 +302,10 @@ func contains(items []string, target string) bool {
 	return false
 }
 
-func postgresDDLTestDSN(t *testing.T) string {
-	t.Helper()
-	dsn := os.Getenv("TANGO_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("TANGO_TEST_POSTGRES_DSN not set; skipping Postgres-backed migration DDL tests")
-	}
-	return dsn
-}
-
 func openPostgresDDLTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	sqlDB, err := sql.Open("pgx", postgresDDLTestDSN(t))
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err := sqlDB.Ping(); err != nil {
-		t.Fatalf("ping postgres: %v", err)
-	}
-	_, _ = sqlDB.ExecContext(context.Background(), "DROP TABLE IF EXISTS ddl_widget")
-	t.Cleanup(func() {
-		_, _ = sqlDB.ExecContext(context.Background(), "DROP TABLE IF EXISTS ddl_widget")
-	})
+	testdb.PostgresOnly(t, "applies steps as db.Postgres; the SQLite-backed tests above cover SQLite")
+	sqlDB, _ := testdb.Open(t)
 	return sqlDB
 }
 
@@ -359,7 +338,7 @@ func TestApplyStepFullLifecyclePostgres(t *testing.T) {
 // Postgres counterpart to the SQLite-backed
 // TestApplyStepAddColumnWithDefaultBackfillsExistingRows: it exercises the
 // live NOT NULL DEFAULT TRUE DDL against a real Postgres connection when
-// TANGO_TEST_POSTGRES_DSN is set, skipped otherwise.
+// the Test dialect is PostgreSQL.
 func TestApplyStepAddColumnWithDefaultBackfillsExistingRowsPostgres(t *testing.T) {
 	sqlDB := openPostgresDDLTestDB(t)
 	ctx := context.Background()

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/testdb"
 )
 
 func TestApplyStepCreateTableWithForeignKeyEmitsReferencesClause(t *testing.T) {
@@ -106,7 +107,13 @@ func TestSQLiteForeignKeyConstraintIsNotEnforcedWithoutPragmaDSN(t *testing.T) {
 	// Documents the baseline this ticket changes: without the pragma DSN,
 	// SQLite accepts a dangling foreign key value — proving the pragma in
 	// the test above is actually doing something, not passing vacuously.
-	sqlDB := openDDLTestDB(t)
+	// testdb always turns the pragma on, so this opens its own database.
+	testdb.SQLiteOnly(t, "needs SQLite without the foreign-key pragma")
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	ctx := context.Background()
 
 	mustApply(t, sqlDB, CreateTable{Table: "author", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}})
