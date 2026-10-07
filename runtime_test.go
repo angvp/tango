@@ -153,7 +153,7 @@ func TestLoadDBConfigFromEnvDefaultsToSQLiteAppDB(t *testing.T) {
 	t.Setenv("TANGO_DB_DSN", "")
 	t.Setenv("TANGO_DB_DIALECT", "")
 	got, err := LoadDBConfigFromEnv()
-	want := db.DSN{Dialect: db.SQLite, Driver: "sqlite", Source: "app.db?_foreign_keys=on"}
+	want := db.DSN{Dialect: db.SQLite, Driver: "sqlite", Source: "app.db?_pragma=busy_timeout(5000)&_foreign_keys=on"}
 	if err != nil || got != want {
 		t.Fatalf("LoadDBConfigFromEnv = %+v, %v; want %+v, nil", got, err, want)
 	}

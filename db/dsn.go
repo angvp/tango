@@ -32,7 +32,9 @@ type DSN struct {
 //
 // Anything else, including a bare path such as "app.db", is an error. For
 // SQLite the returned Source already enables foreign key enforcement (see
-// SQLiteForeignKeysDSN). ParseDSN never imports or registers a driver: the
+// SQLiteForeignKeysDSN) and makes a writer wait up to 5 seconds for another
+// connection's write lock instead of failing with SQLITE_BUSY, unless the
+// DSN sets its own busy_timeout. ParseDSN never imports or registers a driver: the
 // app still imports modernc.org/sqlite ("sqlite") or
 // github.com/jackc/pgx/v5/stdlib ("pgx") itself.
 func ParseDSN(dsn string) (DSN, error) {
@@ -43,5 +45,5 @@ func ParseDSN(dsn string) (DSN, error) {
 	if !ok || path == "" || strings.HasPrefix(path, "?") {
 		return DSN{}, errUnsupportedDSN
 	}
-	return DSN{Dialect: SQLite, Driver: "sqlite", Source: SQLiteForeignKeysDSN(path)}, nil
+	return DSN{Dialect: SQLite, Driver: "sqlite", Source: SQLiteForeignKeysDSN(withSQLiteBusyTimeout(path))}, nil
 }

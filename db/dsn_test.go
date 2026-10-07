@@ -10,10 +10,10 @@ func TestParseDSNAcceptsEachDocumentedForm(t *testing.T) {
 		dsn  string
 		want DSN
 	}{
-		{"sqlite://app.db", DSN{SQLite, "sqlite", "app.db?_foreign_keys=on"}},
-		{"sqlite://data/app.db", DSN{SQLite, "sqlite", "data/app.db?_foreign_keys=on"}},
-		{"sqlite:///var/data/app.db", DSN{SQLite, "sqlite", "/var/data/app.db?_foreign_keys=on"}},
-		{"sqlite://:memory:", DSN{SQLite, "sqlite", ":memory:?_foreign_keys=on"}},
+		{"sqlite://app.db", DSN{SQLite, "sqlite", "app.db?_pragma=busy_timeout(5000)&_foreign_keys=on"}},
+		{"sqlite://data/app.db", DSN{SQLite, "sqlite", "data/app.db?_pragma=busy_timeout(5000)&_foreign_keys=on"}},
+		{"sqlite:///var/data/app.db", DSN{SQLite, "sqlite", "/var/data/app.db?_pragma=busy_timeout(5000)&_foreign_keys=on"}},
+		{"sqlite://:memory:", DSN{SQLite, "sqlite", ":memory:?_pragma=busy_timeout(5000)&_foreign_keys=on"}},
 		{"sqlite://app.db?_pragma=busy_timeout(1000)", DSN{SQLite, "sqlite", "app.db?_pragma=busy_timeout(1000)&_foreign_keys=on"}},
 		{"postgres://u:p@localhost:5432/app?sslmode=disable", DSN{Postgres, "pgx", "postgres://u:p@localhost:5432/app?sslmode=disable"}},
 		{"postgresql://u:p@db.internal/app", DSN{Postgres, "pgx", "postgresql://u:p@db.internal/app"}},

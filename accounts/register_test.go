@@ -207,8 +207,9 @@ func TestRegisterMissingCSRFTokenIsRejected(t *testing.T) {
 // buildRegisterTestHandlerConcurrent is buildRegisterTestHandler over a
 // database several connections share, needed to exercise the real race two
 // concurrent registrations for the same email create. A PostgreSQL run's
-// database already is one. On SQLite it asks for a file explicitly, since
-// an in-memory database is limited to one connection.
+// database already is one. A SQLite run asks for a file explicitly even in
+// file-backed mode, so the in-memory run, whose database is limited to one
+// connection, exercises the race too.
 func buildRegisterTestHandlerConcurrent(t *testing.T) http.Handler {
 	t.Helper()
 
@@ -234,22 +235,22 @@ func buildRegisterTestHandlerConcurrent(t *testing.T) http.Handler {
 
 // sharedSQLiteFileStore returns a Store over a SQLite file under the test's
 // temporary directory, with the accounts tables migrated, that several
-// connections can use at once.
+// connections can use at once. It opens the file through db.ParseDSN, as an
+// app does, so a writer waits for another's lock instead of failing with
+// SQLITE_BUSY.
 func sharedSQLiteFileStore(t *testing.T) *db.Store {
 	t.Helper()
-	// busy_timeout makes a connection wait for a held write lock instead of
-	// immediately erroring with SQLITE_BUSY — needed so this test's real
-	// concurrent connections exercise the actual application-level
-	// duplicate-email race rather than an unrelated SQLite file-locking
-	// error under contention.
-	dbPath := filepath.Join(t.TempDir(), "accounts.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
+	parsed, err := db.ParseDSN("sqlite://" + filepath.Join(t.TempDir(), "accounts.db"))
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	sqlDB, err := sql.Open(parsed.Driver, parsed.Source)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	migrationtest.Apply(t, sqlDB, db.SQLite, accountsModels(t))
-	return db.NewStore(sqlDB, db.SQLite)
+	migrationtest.Apply(t, sqlDB, parsed.Dialect, accountsModels(t))
+	return db.NewStore(sqlDB, parsed.Dialect)
 }
 
 func TestConcurrentRegistrationsForSameEmailNeverBothSucceed(t *testing.T) {

@@ -19,9 +19,28 @@ import "strings"
 // must never touch it, so the flags that don't need a database ("-check",
 // "-tango-dump-models") stay database-free.
 func SQLiteForeignKeysDSN(dsn string) string {
+	return withSQLiteParam(dsn, "_foreign_keys=on")
+}
+
+// sqliteBusyTimeoutParam makes a connection that finds another
+// connection's write lock held wait up to 5 seconds for it (Django's SQLite
+// default) instead of failing at once with SQLITE_BUSY.
+const sqliteBusyTimeoutParam = "_pragma=busy_timeout(5000)"
+
+// withSQLiteBusyTimeout adds sqliteBusyTimeoutParam to dsn unless dsn
+// already sets a busy timeout of its own.
+func withSQLiteBusyTimeout(dsn string) string {
+	if strings.Contains(dsn, "busy_timeout") {
+		return dsn
+	}
+	return withSQLiteParam(dsn, sqliteBusyTimeoutParam)
+}
+
+// withSQLiteParam appends one query parameter to a SQLite DSN.
+func withSQLiteParam(dsn, param string) string {
 	separator := "?"
 	if strings.Contains(dsn, "?") {
 		separator = "&"
 	}
-	return dsn + separator + "_foreign_keys=on"
+	return dsn + separator + param
 }

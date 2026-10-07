@@ -15,3 +15,5 @@ Rejected:
 - **A database per test.** Creating databases is much slower than creating schemas, and it needs privileges a test role often lacks.
 
 The cost: `testdb` imports both the SQLite and pgx drivers, so a test binary that uses it links both. Only test binaries do. A Postgres run also needs a role allowed to create schemas in the target database. Tests that inspect SQLite internals (`sqlite_master`, `PRAGMA`) stay SQLite-only until they're rewritten against both dialects.
+
+**Later addition:** because tests and apps share `db.ParseDSN`, a file-backed test run found a gap apps had too: a SQLite file opened from its DSN failed concurrent writes at once with `SQLITE_BUSY`, since nothing set a busy timeout. `ParseDSN` now gives every SQLite DSN a 5-second busy timeout (Django's SQLite default), unless the DSN sets its own `busy_timeout`. A writer that finds the lock held waits for it; one still waiting after 5 seconds fails as before. The alternative, setting it only in `testdb`, would have hidden the failure in tests and left it in apps.
