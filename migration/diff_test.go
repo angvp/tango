@@ -31,6 +31,26 @@ func registerDiffModel(t *testing.T, app string, value any) model.ModelMeta {
 	return meta
 }
 
+// mustDiff is Diff for a change every step can express.
+func mustDiff(t *testing.T, models []model.ModelMeta, state SchemaState) []Migration {
+	t.Helper()
+	migrations, err := Diff(models, state)
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+	return migrations
+}
+
+// mustDiffModels is DiffModels for a change every step can express.
+func mustDiffModels(t *testing.T, models []Model, state SchemaState) []Migration {
+	t.Helper()
+	migrations, err := DiffModels(models, state)
+	if err != nil {
+		t.Fatalf("DiffModels: %v", err)
+	}
+	return migrations
+}
+
 func modelName(value any) string {
 	switch value.(type) {
 	case diffUser:
@@ -45,7 +65,7 @@ func modelName(value any) string {
 func TestDiffNewModelProducesCreateTable(t *testing.T) {
 	meta := registerDiffModel(t, "users", diffUser{})
 
-	migrations := Diff([]model.ModelMeta{meta}, SchemaState{Tables: map[string]TableState{}})
+	migrations := mustDiff(t, []model.ModelMeta{meta}, SchemaState{Tables: map[string]TableState{}})
 	if len(migrations) != 1 {
 		t.Fatalf("got %d migrations, want 1", len(migrations))
 	}
@@ -81,7 +101,7 @@ func TestDiffRemovedModelProducesIrreversibleDropTable(t *testing.T) {
 		}},
 	})
 
-	migrations := Diff(nil, state)
+	migrations := mustDiff(t, nil, state)
 	if len(migrations) != 1 {
 		t.Fatalf("got %d migrations, want 1", len(migrations))
 	}
@@ -102,7 +122,7 @@ func TestDiffAddedFieldProducesAddColumn(t *testing.T) {
 	})
 
 	meta := registerDiffModel(t, "users", diffUser{})
-	migrations := Diff([]model.ModelMeta{meta}, state)
+	migrations := mustDiff(t, []model.ModelMeta{meta}, state)
 	if len(migrations) != 1 {
 		t.Fatalf("got %d migrations, want 1", len(migrations))
 	}
@@ -133,7 +153,7 @@ func TestDiffRemovedFieldProducesIrreversibleDropColumn(t *testing.T) {
 	})
 
 	meta := registerDiffModel(t, "users", diffUser{})
-	migrations := Diff([]model.ModelMeta{meta}, state)
+	migrations := mustDiff(t, []model.ModelMeta{meta}, state)
 	if len(migrations) != 1 {
 		t.Fatalf("got %d migrations, want 1", len(migrations))
 	}
@@ -164,7 +184,7 @@ func TestDiffToggledUniqueAndIndexedProducesAlterSteps(t *testing.T) {
 	})
 
 	meta := registerDiffModel(t, "posts", diffPost{})
-	migrations := Diff([]model.ModelMeta{meta}, state)
+	migrations := mustDiff(t, []model.ModelMeta{meta}, state)
 	if len(migrations) != 1 {
 		t.Fatalf("got %d migrations, want 1", len(migrations))
 	}
@@ -195,7 +215,7 @@ func TestDiffNoChangesProducesNoMigrations(t *testing.T) {
 	})
 
 	meta := registerDiffModel(t, "users", diffUser{})
-	migrations := Diff([]model.ModelMeta{meta}, state)
+	migrations := mustDiff(t, []model.ModelMeta{meta}, state)
 	if len(migrations) != 0 {
 		t.Fatalf("got %d migrations, want 0", len(migrations))
 	}
@@ -205,7 +225,7 @@ func TestDiffSpansMultipleAppsIndependently(t *testing.T) {
 	userMeta := registerDiffModel(t, "users", diffUser{})
 	postMeta := registerDiffModel(t, "posts", diffPost{})
 
-	migrations := Diff([]model.ModelMeta{userMeta, postMeta}, SchemaState{Tables: map[string]TableState{}})
+	migrations := mustDiff(t, []model.ModelMeta{userMeta, postMeta}, SchemaState{Tables: map[string]TableState{}})
 	if len(migrations) != 2 {
 		t.Fatalf("got %d migrations, want 2", len(migrations))
 	}

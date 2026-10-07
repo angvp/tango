@@ -1,10 +1,13 @@
 package migration
 
 import (
+	"errors"
+	"fmt"
 	"maps"
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/angvp/tango/db"
@@ -20,6 +23,31 @@ type Model struct {
 	App     string
 	Name    string
 	Columns []Column
+	// Struct and Fields are the Go names behind Name and each column's
+	// name (column name to Go field name), so makemigrations can name a
+	// model or field the way the developer wrote it.
+	Struct string
+	Fields map[string]string
+}
+
+// ErrUnsupportedChange is returned by Diff when the models changed in a way
+// no migration step can express: a column's type, which column is the
+// primary key, or a foreign key's target. Generating nothing would leave
+// the database silently out of step with the models, so Diff refuses.
+var ErrUnsupportedChange = errors.New("tango migration: a model change cannot be expressed as a migration")
+
+// fieldName names column of model the way the developer wrote it
+// ("posts.Post.Views"), falling back to the table and column names when
+// the Go names are unknown.
+func (m Model) fieldName(column string) string {
+	structName, field := m.Struct, m.Fields[column]
+	if structName == "" {
+		structName = m.Name
+	}
+	if field == "" {
+		field = column
+	}
+	return m.App + "." + structName + "." + field
 }
 
 // sqlType returns the dialect-agnostic type token Diff stores in Column.Type
@@ -69,10 +97,16 @@ func ModelsFromMeta(models []model.ModelMeta) []Model {
 		for j, field := range meta.Fields {
 			columns[j] = desiredColumn(field)
 		}
+		fields := make(map[string]string, len(meta.Fields))
+		for j, field := range meta.Fields {
+			fields[columns[j].Name] = field.Name
+		}
 		migrationModels[i] = Model{
 			App:     meta.App,
 			Name:    db.ColumnName(meta.Name),
 			Columns: columns,
+			Struct:  meta.Name,
+			Fields:  fields,
 		}
 	}
 	return migrationModels
@@ -82,14 +116,17 @@ func ModelsFromMeta(models []model.ModelMeta) []Model {
 // replayed result of existing migrations) and returns one Migration per app
 // with detected changes, keyed by ModelMeta.App. A model whose App is empty
 // is grouped under the empty-string key. Returns no migrations if nothing
-// changed. It is exported only for the tango CLI's makemigrations machinery.
-func Diff(models []model.ModelMeta, state SchemaState) []Migration {
+// changed. A change no step can express fails with ErrUnsupportedChange,
+// naming every such field, and returns no migrations. It is exported only
+// for the tango CLI's makemigrations machinery.
+func Diff(models []model.ModelMeta, state SchemaState) ([]Migration, error) {
 	return DiffModels(ModelsFromMeta(models), state)
 }
 
-// DiffModels compares desired model shapes against a replayed migration state.
-// It is exported only for the tango CLI's makemigrations machinery.
-func DiffModels(models []Model, state SchemaState) []Migration {
+// DiffModels compares desired model shapes against a replayed migration
+// state, as Diff does. It is exported only for the tango CLI's
+// makemigrations machinery.
+func DiffModels(models []Model, state SchemaState) ([]Migration, error) {
 	byApp := make(map[string]*Migration)
 
 	appMigration := func(app string) *Migration {
@@ -112,6 +149,7 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 	}
 	createOrder := referencedFirst(desiredReferences)
 
+	var unsupported []string
 	for _, table := range createOrder {
 		meta := desiredTables[table]
 		existing, exists := state.Tables[table]
@@ -123,7 +161,11 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 			continue
 		}
 
+		unsupported = append(unsupported, unsupportedChanges(meta, existing.Columns)...)
 		diffColumns(appMigration(meta.App), table, meta.Columns, existing.Columns)
+	}
+	if len(unsupported) > 0 {
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedChange, strings.Join(unsupported, "; "))
 	}
 
 	removedReferences := make(map[string][]string)
@@ -158,7 +200,43 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 			result = append(result, *m)
 		}
 	}
-	return result
+	return result, nil
+}
+
+// unsupportedChanges describes each change between model's columns and the
+// same columns in history that no step can express.
+func unsupportedChanges(model Model, existing []ColumnState) []string {
+	existingByName := make(map[string]ColumnState, len(existing))
+	for _, c := range existing {
+		existingByName[c.Name] = c
+	}
+	var changes []string
+	for _, column := range model.Columns {
+		current, exists := existingByName[column.Name]
+		if !exists {
+			continue
+		}
+		name := model.fieldName(column.Name)
+		if current.Type != column.Type {
+			changes = append(changes, fmt.Sprintf("%s changes type from %s to %s", name, current.Type, column.Type))
+		}
+		switch {
+		case current.PrimaryKey && !column.PrimaryKey:
+			changes = append(changes, name+" stops being the primary key")
+		case !current.PrimaryKey && column.PrimaryKey:
+			changes = append(changes, name+" becomes the primary key")
+		}
+		switch {
+		case current.References == column.References:
+		case current.References == "":
+			changes = append(changes, fmt.Sprintf("%s gains a foreign key to %s", name, column.References))
+		case column.References == "":
+			changes = append(changes, fmt.Sprintf("%s loses its foreign key to %s", name, current.References))
+		default:
+			changes = append(changes, fmt.Sprintf("%s changes its foreign key target from %s to %s", name, current.References, column.References))
+		}
+	}
+	return changes
 }
 
 // referencedFirst orders the tables of references (each table mapped to

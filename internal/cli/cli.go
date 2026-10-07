@@ -218,7 +218,11 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 		return 1
 	}
 
-	changes := migration.DiffModels(models, state)
+	changes, err := migration.DiffModels(models, state)
+	if err != nil {
+		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
+		return 1
+	}
 	if len(changes) == 0 {
 		fmt.Fprintln(stdout, "no changes detected")
 		return 0

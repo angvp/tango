@@ -133,7 +133,10 @@ func TestMigrationsProduceExpectedSchema(t *testing.T) {
 		t.Fatalf("register AccountSession: %v", err)
 	}
 
-	changes := migration.Diff(registry.All(), migration.SchemaState{Tables: map[string]migration.TableState{}})
+	changes, err := migration.Diff(registry.All(), migration.SchemaState{Tables: map[string]migration.TableState{}})
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
 
 	var accountColumns, sessionColumns []migration.Column
 	for _, m := range changes {
@@ -182,7 +185,10 @@ func wantColumn(t *testing.T, columns []migration.Column, name string, matches f
 // actually apply against a real database and produce the expected schema —
 // the "tango migrate" half of ticket 03's acceptance criteria.
 func TestMigrationsApplyAndProduceExpectedSchema(t *testing.T) {
-	changes := migration.Diff(accountsModels(t), migration.SchemaState{Tables: map[string]migration.TableState{}})
+	changes, err := migration.Diff(accountsModels(t), migration.SchemaState{Tables: map[string]migration.TableState{}})
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
 
 	sqlDB, dialect := testdb.Open(t)
 

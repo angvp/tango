@@ -17,7 +17,7 @@ Each generated file expresses a small, dialect-agnostic step vocabulary:
 - `AlterColumnUnique`
 - `CreateIndex`, `DropIndex`
 
-There's no rename step and no column-type-change step — both are indistinguishable from a drop+add given what model metadata currently tracks; a rename shows up as a migration dropping the old column and adding the new one.
+There's no rename step and no column-type-change step. A rename is indistinguishable from a drop+add given what model metadata tracks, so it shows up as a migration dropping the old column and adding the new one. A change no step can express — a field's column type (`int` to `string`; `int` to `int64` is the same column type, so it isn't a change), which field is the primary key, or a foreign key's target, including adding or removing `fk=` on an existing field — makes `tango makemigrations` fail with an error naming every such field (`shop.Widget.Stock changes type from integer to text`) and write nothing, rather than leave the database silently out of step with your models.
 
 A generated file's `var M####Xxx = []migration.Migration{...}` is for human readability of the diff — the file an app's `main.go` actually imports is `migrations/migrations.go`, whose `Migrations` slice is regenerated (aggregating every file) on each `tango makemigrations` run. Never hand-edit `migrations.go`.
 

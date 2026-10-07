@@ -26,7 +26,10 @@ const initialName = "0001_initial"
 // empty schema. It fails the test if they do not apply.
 func Apply(t testing.TB, sqlDB *sql.DB, dialect db.Dialect, models []model.ModelMeta) {
 	t.Helper()
-	migrations := migration.Diff(models, migration.SchemaState{})
+	migrations, err := migration.Diff(models, migration.SchemaState{})
+	if err != nil {
+		t.Fatalf("migrationtest: diff: %v", err)
+	}
 	named := make([]migration.Migration, len(migrations))
 	for i, m := range migrations {
 		m.Name = initialName

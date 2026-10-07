@@ -34,7 +34,10 @@ func TestAdminRegistersAdminUserAndAdminSessionAsOrdinaryModels(t *testing.T) {
 		}
 	}
 
-	migrations := migration.Diff(registry.Models().All(), migration.SchemaState{})
+	migrations, err := migration.Diff(registry.Models().All(), migration.SchemaState{})
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
 
 	wantTables := map[string]bool{"admin_user": false, "admin_session": false}
 	for _, m := range migrations {

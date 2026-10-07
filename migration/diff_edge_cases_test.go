@@ -86,7 +86,7 @@ func TestDiffColumnToggledUniqueFalseToTrueProducesAlterColumnUnique(t *testing.
 	})
 
 	meta := registerDiffModel(t, "users", diffUser{}) // diffUser's Email is tango:"unique"
-	migrations := Diff([]model.ModelMeta{meta}, state)
+	migrations := mustDiff(t, []model.ModelMeta{meta}, state)
 	if len(migrations) != 1 {
 		t.Fatalf("got %d migrations, want 1", len(migrations))
 	}
@@ -129,7 +129,7 @@ func TestDiffColumnToggledIndexedTrueToFalseProducesDropIndex(t *testing.T) {
 		{Name: "category", Type: "text", Indexed: false},
 	}}}
 
-	migrations := DiffModels(desired, state)
+	migrations := mustDiffModels(t, desired, state)
 	if len(migrations) != 1 {
 		t.Fatalf("got %d migrations, want 1", len(migrations))
 	}
@@ -208,7 +208,7 @@ func assertEachTableOnceWithBefore(t *testing.T, tables []string, first, second 
 }
 
 func TestDiffCreatesReferencedTablesFirstAndToleratesSelfReferencesAndCycles(t *testing.T) {
-	migrations := DiffModels(referenceOrderModels(), SchemaState{Tables: map[string]TableState{}})
+	migrations := mustDiffModels(t, referenceOrderModels(), SchemaState{Tables: map[string]TableState{}})
 	if len(migrations) != 1 {
 		t.Fatalf("DiffModels returned %d migrations, want 1", len(migrations))
 	}
@@ -226,7 +226,7 @@ func TestDiffDropsReferencingTablesFirstAndToleratesSelfReferencesAndCycles(t *t
 	if err != nil {
 		t.Fatalf("Replay returned error: %v", err)
 	}
-	migrations := DiffModels(nil, state)
+	migrations := mustDiffModels(t, nil, state)
 	if len(migrations) != 1 {
 		t.Fatalf("DiffModels returned %d migrations, want 1", len(migrations))
 	}

@@ -181,7 +181,7 @@ func TestDiffedMigrationAppliesAndRollsBackWhenAModelReferencesALaterTable(t *te
 			t.Fatalf("Register(%T) returned error: %v", value, err)
 		}
 	}
-	migrations := Diff(registry.All(), SchemaState{Tables: map[string]TableState{}})
+	migrations := mustDiff(t, registry.All(), SchemaState{Tables: map[string]TableState{}})
 	if len(migrations) != 1 {
 		t.Fatalf("Diff returned %d migrations, want 1", len(migrations))
 	}
@@ -223,7 +223,7 @@ func TestDiffedMigrationDropsARemovedReferencedTableAfterItsReferrers(t *testing
 	if err != nil {
 		t.Fatalf("Replay returned error: %v", err)
 	}
-	removal := Diff(nil, state)
+	removal := mustDiff(t, nil, state)
 	if len(removal) != 1 {
 		t.Fatalf("Diff returned %d migrations, want 1", len(removal))
 	}
