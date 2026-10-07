@@ -13,6 +13,7 @@ tango newapp live
 Replace `apps/live/app.go` with:
 
 ```go
+// apps/live/app.go
 // Package live pushes new posts to every open front page over a WebSocket.
 package live
 
@@ -131,6 +132,7 @@ By default the WebSocket view only accepts connections from pages served by the 
 The feed is created in `main.go` and handed to the apps that publish, the same way the store and token service are:
 
 ```go
+// main.go (as of part 8)
 feed, err := live.NewFeed()
 if err != nil {
 	return err
@@ -156,6 +158,7 @@ config := tango.Config{
 In both places a post is created — `createPost` in `apps/posts/views.go` and in `apps/web/views.go` — publish right after `store.Create` succeeds. The API's version:
 
 ```go
+// apps/posts/views.go
 if err := store.Create(ctx.Context(), meta, &post); err != nil {
 	return err
 }
@@ -168,6 +171,7 @@ return ctx.JSON(http.StatusCreated, post)
 and the form's, in `apps/web/views.go`:
 
 ```go
+// apps/web/views.go
 if err := p.store.Create(ctx.Context(), p.postMeta, &post); err != nil {
 	return err
 }

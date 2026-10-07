@@ -7,7 +7,7 @@ Continuing from [part 2](02-persistence-migrations.md), this section registers `
 Admin registration is separate from model registration, and lives alongside it in `posts.New`'s `Register` function:
 
 ```go
-// apps/posts/app.go
+// apps/posts/app.go (as of part 3)
 import "github.com/angvp/tango/admin"
 
 func New(store *db.Store) tango.App {

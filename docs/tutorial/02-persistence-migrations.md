@@ -7,7 +7,7 @@ Continuing from [part 1](01-bootstrap-routing-json.md), this section adds a real
 Models are plain Go structs. Add a `Post` type to `apps/posts`:
 
 ```go
-// apps/posts/models.go
+// apps/posts/models.go (as of part 2)
 package posts
 
 import "time"
@@ -27,7 +27,7 @@ type Post struct {
 `main.go` already opens `*sql.DB` and constructs a `db.Store` (from part 1's scaffolding). To let `posts`'s views use it, change the app from a bare struct to a constructor that closes over the store — the same pattern tanGO's own admin app uses:
 
 ```go
-// apps/posts/app.go
+// apps/posts/app.go (as of part 2)
 package posts
 
 import "github.com/angvp/tango"
@@ -54,6 +54,7 @@ Views can't reach the registry themselves — `Context` deliberately exposes onl
 In `main.go`, the generated code already opens the database named by `TANGO_DB_DSN` (`sqlite://app.db` unless you set it) and builds the store right before the config, so the store is in scope where you list your apps. Replace `posts.App{}` with `posts.New(store)`:
 
 ```go
+// main.go (as of part 2)
 store := db.NewStore(sqlDB, dialect)
 config := tango.Config{
 	InstalledApps: []tango.App{
@@ -71,6 +72,7 @@ config := tango.Config{
 `db.Store`'s `Create`/`Get`/`List`/`Update`/`Delete` take the model's `ModelMeta` (looked up from the registry) and a destination value:
 
 ```go
+// apps/posts/views.go (as of part 2)
 func listPosts(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		var posts []Post

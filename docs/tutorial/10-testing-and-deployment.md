@@ -7,6 +7,7 @@ Continuing from [part 9](09-jobs-logging-and-shutdown.md), this last part makes 
 Tests should exercise the same app `main` runs — same apps, same order, same middleware — not a hand-assembled lookalike. Pull the config out of `run()` into a function both can call. While you're at it, read the address from the environment with `tango.LoadConfigFromEnv()`, which uses `TANGO_ADDR` and defaults to `:8000`:
 
 ```go
+// main.go
 // appConfig is the whole application: which apps are installed, in which
 // order, and the middleware around every request. The tests build the
 // exact same config.
@@ -283,6 +284,7 @@ Locally, `.env` fills them in; in production, set them in the environment instea
 SQLite is a fine default: one file, nothing to install, and plenty for a small site on one server. When you want a database server — several app instances, managed backups, more concurrent writes — tanGO also supports PostgreSQL, and the database setup `tango newproject` generated at the top of `run()` already reads `TANGO_DB_DSN`:
 
 ```go
+// main.go
 dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
 if err != nil {
 	return err
@@ -302,6 +304,7 @@ and `dialect` is what you've been passing to `tango.DispatchFlags` and `tango.Se
 The Postgres driver needs one more import in `main.go`, next to the SQLite one:
 
 ```go
+// main.go
 _ "github.com/jackc/pgx/v5/stdlib"
 _ "modernc.org/sqlite"
 ```
