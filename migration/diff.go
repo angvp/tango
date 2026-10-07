@@ -209,6 +209,21 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 	return result, nil
 }
 
+// typeChangeProblems explains why current cannot become column's type, or
+// returns nothing for a Widening type change whose default converts.
+func typeChangeProblems(name string, current ColumnState, column Column) []string {
+	switch {
+	case current.PrimaryKey || column.PrimaryKey:
+		return []string{fmt.Sprintf("%s changes type from %s to %s, but a primary key's type cannot change", name, current.Type, column.Type)}
+	case !isWideningTypeChange(current.Type, column.Type):
+		return []string{fmt.Sprintf("%s changes type from %s to %s, which is not a widening type change", name, current.Type, column.Type)}
+	}
+	if _, ok := convertDefault(current.Type, column.Type, current.Default); !ok {
+		return []string{fmt.Sprintf("%s changes type from %s to %s, but its default %s cannot be converted", name, current.Type, column.Type, current.Default)}
+	}
+	return nil
+}
+
 // unsupportedChanges describes each change between model's columns and the
 // same columns in history that no step can express.
 func unsupportedChanges(model Model, existing []ColumnState) []string {
@@ -224,7 +239,7 @@ func unsupportedChanges(model Model, existing []ColumnState) []string {
 		}
 		name := model.fieldName(column.Name)
 		if current.Type != column.Type {
-			changes = append(changes, fmt.Sprintf("%s changes type from %s to %s", name, current.Type, column.Type))
+			changes = append(changes, typeChangeProblems(name, current, column)...)
 		}
 		switch {
 		case current.PrimaryKey && !column.PrimaryKey:
@@ -328,6 +343,12 @@ func diffColumns(m *Migration, table string, columns []Column, existing []Column
 			m.Up = append(m.Up, AddColumn{Table: table, Column: column})
 			m.Down = append(m.Down, DropColumn{Table: table, Column: column.Name})
 			continue
+		}
+
+		if current.Type != column.Type {
+			def, _ := convertDefault(current.Type, column.Type, current.Default)
+			m.Up = append(m.Up, AlterColumnType{Table: table, Column: column.Name, From: current.Type, To: column.Type, Default: def})
+			m.Reversible = false
 		}
 
 		if current.Unique != column.Unique {

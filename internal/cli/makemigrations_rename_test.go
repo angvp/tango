@@ -92,3 +92,36 @@ func TestUsageDocumentsRename(t *testing.T) {
 		t.Fatalf("usage does not document --rename:\n%s", stdout.String())
 	}
 }
+
+func TestMakeMigrationsWidensAFieldAndRoundTripsTheStep(t *testing.T) {
+	dir := t.TempDir()
+	makeInitialMigration(t, dir, shopModels(false, false))
+	widened := renamedStockModels()
+	widened[0].Columns[1].Type = "real"
+
+	code, stderr := runMakeMigrations(t, dir, widened, "--rename", "shop.Widget.Stock=Quantity")
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr: %s", code, stderr)
+	}
+	files, err := filepath.Glob(filepath.Join(dir, "migrations", "0002_*.go"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("second migration files = %v (%v), want one", files, err)
+	}
+	content, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	rename := strings.Index(string(content), `migration.RenameColumn{Table: "widget", From: "stock", To: "quantity"}`)
+	alter := strings.Index(string(content), `migration.AlterColumnType{Table: "widget", Column: "quantity", From: "integer", To: "real"}`)
+	if rename == -1 || alter == -1 || rename > alter || !strings.Contains(string(content), "Reversible: false") {
+		t.Fatalf("migration does not rename then widen, irreversibly:\n%s", content)
+	}
+
+	var stdout strings.Builder
+	if code := Run(context.Background(), []string{"makemigrations"}, dir, &stdout, &strings.Builder{}, dumpModelsRunner{models: widened}); code != 0 {
+		t.Fatalf("follow-up run exit code = %d, want 0", code)
+	}
+	if !strings.Contains(stdout.String(), "no changes detected") {
+		t.Fatalf("follow-up run stdout = %q, want no changes detected", stdout.String())
+	}
+}

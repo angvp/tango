@@ -50,9 +50,9 @@ func TestDiffRefusesChangesAMigrationCannotExpress(t *testing.T) {
 		want   []string
 	}{
 		{
-			name:   "type change",
-			change: func(c []Column) { c[3].Type = "text" },
-			want:   []string{"posts.Post.Views", "integer", "text"},
+			name:   "type change that is not widening",
+			change: func(c []Column) { c[2].Type = "integer" },
+			want:   []string{"posts.Post.Slug", "text", "integer"},
 		},
 		{
 			name:   "primary key moves",
@@ -95,10 +95,10 @@ func TestDiffRefusesChangesAMigrationCannotExpress(t *testing.T) {
 
 func TestDiffReportsEveryUnsupportedChangeAtOnce(t *testing.T) {
 	_, err := DiffModels(postModels(func(c []Column) {
-		c[3].Type = "real"
+		c[2].Type = "boolean"
 		c[1].References = "editor"
 	}), postState())
-	for _, want := range []string{"posts.Post.Views", "posts.Post.AuthorID"} {
+	for _, want := range []string{"posts.Post.Slug", "posts.Post.AuthorID"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %v does not mention %q", err, want)
 		}

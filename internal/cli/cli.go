@@ -238,6 +238,13 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
 		return 1
 	}
+	// Encode every change before writing any file, so a step that cannot be
+	// written fails the run with nothing on disk rather than after another
+	// app's file is already there.
+	if _, err := encodeMigrations(changes); err != nil {
+		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
+		return 1
+	}
 	if len(changes) == 0 {
 		fmt.Fprintln(stdout, "no changes detected")
 		return 0
@@ -544,6 +551,12 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 		fmt.Fprintf(builder, "migration.DropIndex{Table: %q, Column: %q},\n", s.Table, s.Column)
 	case migration.RenameColumn:
 		fmt.Fprintf(builder, "migration.RenameColumn{Table: %q, From: %q, To: %q},\n", s.Table, s.From, s.To)
+	case migration.AlterColumnType:
+		fmt.Fprintf(builder, "migration.AlterColumnType{Table: %q, Column: %q, From: %q, To: %q", s.Table, s.Column, s.From, s.To)
+		if s.Default != "" {
+			fmt.Fprintf(builder, ", Default: %q", s.Default)
+		}
+		builder.WriteString("},\n")
 	}
 }
 

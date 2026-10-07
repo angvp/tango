@@ -17,7 +17,7 @@ Each generated file expresses a small, dialect-agnostic step vocabulary:
 - `AlterColumnUnique`
 - `CreateIndex`, `DropIndex`
 
-There's no column-type-change step. A field rename is a step (`RenameColumn`), but only when you say so: see [renaming a field](#renaming-a-field). A change no step can express — a field's column type (`int` to `string`; `int` to `int64` is the same column type, so it isn't a change), which field is the primary key, or a foreign key's target, including adding or removing `fk=` on an existing field — makes `tango makemigrations` fail with an error naming every such field (`shop.Widget.Stock changes type from integer to text`) and write nothing, rather than leave the database silently out of step with your models.
+A field rename is a step (`RenameColumn`), but only when you say so: see [renaming a field](#renaming-a-field). A Widening type change is a step too (`AlterColumnType`): see [changing a field's type](#changing-a-fields-type). A change no step can express — any other type change (`int` to `int64` is the same column type, so it isn't a change), which field is the primary key, or a foreign key's target, including adding or removing `fk=` on an existing field — makes `tango makemigrations` fail with an error naming every such field (`shop.Widget.Stock changes type from integer to boolean, which is not a widening type change`) and write nothing, rather than leave the database silently out of step with your models.
 
 A generated file's `var M####Xxx = []migration.Migration{...}` is for human readability of the diff — the file an app's `main.go` actually imports is `migrations/migrations.go`, whose `Migrations` slice is regenerated (aggregating every file) on each `tango makemigrations` run. Never hand-edit `migrations.go`.
 
@@ -32,6 +32,24 @@ tango makemigrations --rename shop.Widget.Stock=Quantity
 The migration renames the column in place (`ALTER TABLE … RENAME COLUMN` on both SQLite and PostgreSQL), so every row keeps its value, and the column's indexes, uniqueness and foreign key come with it. It's reversible: `tango migrate down` renames it back. A renamed field needs no `--allow-drop`.
 
 Every `--rename` is checked against migration history and your models before anything is written: the old name must be in history and gone from the models, the new name must be in the models and not in history, and no old or new name may appear in two mappings. A mapping that fails any of these makes the run fail, naming what you asked for and what history and the models actually have, and nothing is written.
+
+## Changing a field's type
+
+`makemigrations` generates a type change only when every value the column holds converts without loss: a **Widening type change**. These are the only ones:
+
+| From | To | Each value becomes |
+|---|---|---|
+| `integer` (Go `int`, `int64`, …) | `real` (`float64`) | the same number |
+| `integer` | `text` (`string`) | its decimal digits, `42` → `"42"` |
+| `real` | `text` | PostgreSQL's float text form on both databases: `1.0` → `"1"`, `1.5` → `"1.5"`, `1e20` → `"1e+20"` |
+| `boolean` (`bool`) | `integer` | `true` → `1`, `false` → `0` |
+| `boolean` | `text` | `"true"` / `"false"` |
+
+`NULL` stays `NULL`. Every other type change — anything from `text` or `timestamp`, anything narrowing, and any change to a primary key's type — fails `makemigrations` before anything is written; do it by hand in steps you control (add a new field, copy and convert the data, then rename and drop).
+
+The conversion is explicit SQL for each database, never an implicit cast. If the column has a default (from an `AddColumn` with `Default`), the default is converted the same way (`TRUE` becomes `1` for `boolean` to `integer`) and the column keeps it and its `NOT NULL`; a default that isn't a plain literal of the old type makes `makemigrations` refuse, naming the column and the default. A type change never stops halfway: PostgreSQL changes the type and default in one `ALTER TABLE` statement, and SQLite rebuilds the table in one transaction, so on any failure the column, its values and its default are left as they were.
+
+A migration with a type change is **irreversible**, even if it also renames fields: going back would be a narrowing change. Renaming and widening the same field in one run is fine — the rename comes first, then the type change under the new name.
 
 ## Dropping a model or field
 
@@ -85,7 +103,7 @@ If foreign keys between apps form a cycle (app A's initial migration references 
 tango migrate down
 ```
 
-Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. Migrations recorded with the same `applied_at` are rolled back in the reverse of the order they were applied in, so another app's table that a foreign key references is dropped only after the table referencing it. `Down` steps are generated automatically for reversible operations (`CreateTable`↔`DropTable`, `AddColumn`↔`DropColumn`, `CreateIndex`↔`DropIndex`). A migration containing a lossy step (`DropColumn`, `DropTable`) is marked **irreversible**: `tango migrate down` on it fails explicitly with a clear error rather than attempting to "restore" data it can no longer recover.
+Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. Migrations recorded with the same `applied_at` are rolled back in the reverse of the order they were applied in, so another app's table that a foreign key references is dropped only after the table referencing it. `Down` steps are generated automatically for reversible operations (`CreateTable`↔`DropTable`, `AddColumn`↔`DropColumn`, `CreateIndex`↔`DropIndex`). A migration containing a lossy step (`DropColumn`, `DropTable`) or a type change (`AlterColumnType`) is marked **irreversible**: `tango migrate down` on it fails explicitly with a clear error rather than attempting to "restore" data it can no longer recover.
 
 ## Migration identity
 

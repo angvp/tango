@@ -11,6 +11,10 @@ type ColumnState struct {
 	Unique     bool
 	Indexed    bool
 	References string
+	// Default is the column's database default as a raw SQL literal, set
+	// only by an AddColumn that carried one: CreateTable never writes a
+	// default (see columnDefSQL), so replay must not invent one.
+	Default string
 }
 
 // TableState is a table's shape as reconstructed by Replay. It is exported
@@ -74,6 +78,7 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		table.Columns = append(table.Columns, ColumnState{
 			Name: s.Column.Name, Type: s.Column.Type, PrimaryKey: s.Column.PrimaryKey,
 			Unique: s.Column.Unique, Indexed: s.Column.Indexed, References: s.Column.References,
+			Default: s.Column.Default,
 		})
 		state.Tables[s.Table] = table
 
@@ -111,6 +116,17 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 			return err
 		}
 		table.Columns[index].Indexed = false
+		state.Tables[s.Table] = table
+
+	case AlterColumnType:
+		table, index, err := requireColumn(state, s.Table, s.Column)
+		if err != nil {
+			return err
+		}
+		columns := append([]ColumnState(nil), table.Columns...)
+		columns[index].Type = s.To
+		columns[index].Default = s.Default
+		table.Columns = columns
 		state.Tables[s.Table] = table
 
 	case RenameColumn:

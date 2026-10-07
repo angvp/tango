@@ -54,19 +54,19 @@ func makeInitialMigration(t *testing.T, dir string, models []migration.Model) {
 	}
 }
 
-func TestMakeMigrationsRefusesATypeChangeAndWritesNothing(t *testing.T) {
+func TestMakeMigrationsRefusesANarrowingTypeChangeAndWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	makeInitialMigration(t, dir, widgetModel(func([]migration.Column) {}))
 	before := migrationsDirContents(t, dir)
 
 	var stderr strings.Builder
-	runner := dumpModelsRunner{models: widgetModel(func(c []migration.Column) { c[1].Type = "text" })}
+	runner := dumpModelsRunner{models: widgetModel(func(c []migration.Column) { c[1].Type = "boolean" })}
 	code := Run(context.Background(), []string{"makemigrations"}, dir, io.Discard, &stderr, runner)
 
 	if code == 0 {
 		t.Fatal("makemigrations exit code = 0 for a type change, want non-zero")
 	}
-	for _, want := range []string{"shop.Widget.Stock", "integer", "text"} {
+	for _, want := range []string{"shop.Widget.Stock", "integer", "boolean"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Fatalf("stderr %q does not mention %q", stderr.String(), want)
 		}
