@@ -38,6 +38,7 @@ In `run()`, the config literal becomes one line: `config := appConfig(store, tok
 Everything a test needs is a fresh database and the app's `http.Handler`. `main_test.go` builds both: a database from `testdb.Open`, with every migration applied, and the app compiled from `appConfig` exactly the way `ServeContext` does it:
 
 ```go
+// main_test.go
 package main
 
 import (
@@ -149,6 +150,7 @@ func (a *testApp) token(t *testing.T, email, password string) string {
 Now the tests themselves. Each one pins down a behavior from an earlier part — the kind of thing that's easy to break with an innocent-looking refactor:
 
 ```go
+// main_test.go
 func TestAppPassesChecks(t *testing.T) {
 	app := newTestApp(t)
 	tokens, _ := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", 32))}, nil, "board", "board-api")
