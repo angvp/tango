@@ -36,8 +36,6 @@ tanGO is still early. This page is the honest summary of where it stops, so you 
 
 See the [SQLite/PostgreSQL setup guide](guides/sqlite-and-postgresql-setup.md) for the full list. In short: placeholder syntax, `ALTER TABLE` behavior (SQLite rebuilds tables for drop-column/unique-constraint changes; Postgres alters directly), and timestamp column types differ. None of this should be visible in your model or migration code — only in what DDL actually runs, and in raw SQL you write yourself.
 
-Table and column names are not quoted in generated SQL, so a model or field whose snake_case name is a PostgreSQL reserved word (`User` → `user`, `Order` → `order`) works on SQLite but fails on PostgreSQL with a syntax error. Until identifiers are quoted, pick a non-reserved name such as `Account` or `AppUser`.
-
 ## Irreversible migrations
 
 A migration containing `DropColumn` or `DropTable` is marked irreversible. `tango migrate down` on one fails explicitly with a clear error rather than attempting to restore data it has no way to recover. If you need to test a rollback path, do it in a disposable database before applying the same migration to data you care about.

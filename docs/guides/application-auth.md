@@ -58,8 +58,8 @@ func Login(store *db.Store, userMeta, sessionMeta model.ModelMeta) tango.View {
 		}
 
 		var users []User
-		err := store.Query(ctx.Context(), &users, "SELECT id, email, password_hash FROM user WHERE email = ?", input.Email)
-		if err != nil {
+		query := db.Query{Where: []db.Condition{{Field: "Email", Op: db.OpEq, Value: input.Email}}, Limit: 1}
+		if err := store.List(ctx.Context(), userMeta, query, &users); err != nil {
 			return err
 		}
 		if len(users) != 1 || !auth.VerifyPassword(users[0].PasswordHash, input.Password) {

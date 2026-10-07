@@ -39,6 +39,7 @@ store := db.NewStore(sqlDB, db.Postgres)
 
 - **Placeholders**: SQLite uses `?`; Postgres uses positional `$1, $2, ...`. This only matters for raw SQL you write yourself (`Store.Query`/`QueryRow`) — CRUD methods handle it internally.
 - **`ALTER TABLE`**: SQLite can't drop a column or add a unique constraint directly, so the migration runner rebuilds the table (create new, copy data, drop old, rename) for those steps. Postgres steps map straight to `ALTER TABLE`/`CREATE INDEX`. This is invisible in your model/migration code — it only affects what DDL actually runs.
+- **Identifier quoting**: every table, column and index name tanGO generates (migration DDL, `Store` statements, admin queries) is quoted — `"user"` on Postgres, `` `user` `` on SQLite — so a model or field named after a reserved word (`User`, `Order`, `Group`) works on both. Raw SQL you write yourself (`Store.Query`/`QueryRow`) is passed through untouched, so quote such names there yourself.
 - **Timestamps**: `tango_migrations.applied_at` is `TIMESTAMP` on SQLite and `TIMESTAMPTZ` on Postgres, matching each dialect's normal convention.
 - **Primary-key backfill**: SQLite backfills via `sql.Result.LastInsertId()`; Postgres uses `INSERT ... RETURNING`, since it has no equivalent. Both happen transparently inside `Store.Create`.
 
