@@ -104,11 +104,16 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 		desiredTables[meta.Name] = meta
 	}
 
-	sortedModels := append([]Model(nil), models...)
-	sort.Slice(sortedModels, func(i, j int) bool { return sortedModels[i].Name < sortedModels[j].Name })
+	desiredNames := make([]string, 0, len(desiredTables))
+	for name := range desiredTables {
+		desiredNames = append(desiredNames, name)
+	}
+	createOrder := referencedFirst(desiredNames, func(table string) []string {
+		return columnReferences(desiredTables[table].Columns)
+	})
 
-	for _, meta := range sortedModels {
-		table := meta.Name
+	for _, table := range createOrder {
+		meta := desiredTables[table]
 		existing, exists := state.Tables[table]
 
 		if !exists {
@@ -121,16 +126,26 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 		diffColumns(appMigration(meta.App), table, meta.Columns, existing.Columns)
 	}
 
-	tableNames := make([]string, 0, len(state.Tables))
+	var removedTables []string
 	for name := range state.Tables {
-		tableNames = append(tableNames, name)
-	}
-	sort.Strings(tableNames)
-
-	for _, table := range tableNames {
-		if _, wanted := desiredTables[table]; wanted {
-			continue
+		if _, wanted := desiredTables[name]; !wanted {
+			removedTables = append(removedTables, name)
 		}
+	}
+	createdOrder := referencedFirst(removedTables, func(table string) []string {
+		var references []string
+		for _, c := range state.Tables[table].Columns {
+			if c.References != "" {
+				references = append(references, c.References)
+			}
+		}
+		return references
+	})
+
+	// Drop in reverse creation order, so a table goes only after every
+	// removed table that references it.
+	for i := len(createdOrder) - 1; i >= 0; i-- {
+		table := createdOrder[i]
 		existing := state.Tables[table]
 		m := appMigration(existing.App)
 		m.Up = append(m.Up, DropTable{Table: table})
@@ -147,10 +162,71 @@ func DiffModels(models []Model, state SchemaState) []Migration {
 	for _, app := range apps {
 		m := byApp[app]
 		if len(m.Up) > 0 {
+			m.Down = reversedSteps(m.Down)
 			result = append(result, *m)
 		}
 	}
 	return result
+}
+
+// referencedFirst orders tables alphabetically, except that a table always
+// comes after every table in the set it references: PostgreSQL rejects a
+// REFERENCES clause naming a table that does not exist yet. A reference to
+// a table outside the set, to the table itself, or around a cycle does not
+// constrain the order.
+func referencedFirst(tables []string, references func(table string) []string) []string {
+	sorted := append([]string(nil), tables...)
+	sort.Strings(sorted)
+	inSet := make(map[string]bool, len(sorted))
+	for _, table := range sorted {
+		inSet[table] = true
+	}
+
+	ordered := make([]string, 0, len(sorted))
+	visited := make(map[string]bool, len(sorted))
+	var visit func(table string)
+	visit = func(table string) {
+		if visited[table] {
+			return
+		}
+		visited[table] = true
+		referenced := append([]string(nil), references(table)...)
+		sort.Strings(referenced)
+		for _, target := range referenced {
+			if inSet[target] {
+				visit(target)
+			}
+		}
+		ordered = append(ordered, table)
+	}
+	for _, table := range sorted {
+		visit(table)
+	}
+	return ordered
+}
+
+func columnReferences(columns []Column) []string {
+	var references []string
+	for _, c := range columns {
+		if c.References != "" {
+			references = append(references, c.References)
+		}
+	}
+	return references
+}
+
+// reversedSteps returns steps in reverse order. Diff records each Up step's
+// inverse as it goes, so a migration's Down undoes its Up last-first:
+// a table is dropped only after the tables and columns referencing it.
+func reversedSteps(steps []Step) []Step {
+	if len(steps) == 0 {
+		return steps
+	}
+	reversed := make([]Step, len(steps))
+	for i, step := range steps {
+		reversed[len(steps)-1-i] = step
+	}
+	return reversed
 }
 
 func diffColumns(m *Migration, table string, columns []Column, existing []ColumnState) {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/angvp/tango/model"
 	"github.com/angvp/tango/testdb"
 )
 
@@ -151,5 +152,89 @@ func TestApplyPendingUsesAppAndNameAsIdentity(t *testing.T) {
 	}
 	if !applied[MigrationKey{App: "posts", Name: "0001_auto"}] {
 		t.Fatalf("posts/0001_auto missing from applied migrations")
+	}
+}
+
+type diffAuthor struct {
+	ID int64 `tango:"pk"`
+}
+
+type diffArticle struct {
+	ID       int64 `tango:"pk"`
+	AuthorID int64 `tango:"fk=diffAuthor"`
+}
+
+// TestDiffedMigrationAppliesAndRollsBackWhenAModelReferencesALaterTable
+// covers a model whose table sorts before the table it references
+// (diff_article -> diff_author): PostgreSQL refuses a REFERENCES clause
+// naming a table that does not exist yet, and refuses to drop a table
+// another table still references, so Diff's Up and Down steps must follow
+// the foreign keys rather than table-name order.
+func TestDiffedMigrationAppliesAndRollsBackWhenAModelReferencesALaterTable(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
+	ctx := context.Background()
+
+	registry := model.NewRegistry()
+	registry.SetCurrentApp("blog")
+	for _, value := range []any{diffArticle{}, diffAuthor{}} {
+		if err := registry.Register(value); err != nil {
+			t.Fatalf("Register(%T) returned error: %v", value, err)
+		}
+	}
+	migrations := Diff(registry.All(), SchemaState{Tables: map[string]TableState{}})
+	if len(migrations) != 1 {
+		t.Fatalf("Diff returned %d migrations, want 1", len(migrations))
+	}
+	migrations[0].Name = "0001_initial"
+
+	if err := ApplyPending(ctx, sqlDB, dialect, migrations); err != nil {
+		t.Fatalf("ApplyPending returned error: %v", err)
+	}
+	if _, err := sqlDB.ExecContext(ctx, "INSERT INTO diff_article (author_id) VALUES (999)"); err == nil {
+		t.Fatal("insert with dangling author_id succeeded, want a foreign-key violation")
+	}
+
+	if err := RollbackLast(ctx, sqlDB, dialect, migrations); err != nil {
+		t.Fatalf("RollbackLast returned error: %v", err)
+	}
+	for _, table := range []string{"diff_article", "diff_author"} {
+		if tableExists(t, sqlDB, dialect, table) {
+			t.Fatalf("table %q still exists after rollback", table)
+		}
+	}
+}
+
+// TestDiffedMigrationDropsARemovedReferencedTableAfterItsReferrers covers
+// removing two models at once where the referencing table sorts after the
+// one it references (ref_post -> ref_author): PostgreSQL refuses to drop
+// ref_author while ref_post still references it.
+func TestDiffedMigrationDropsARemovedReferencedTableAfterItsReferrers(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
+	ctx := context.Background()
+
+	initial := Migration{Name: "0001_initial", App: "blog", Reversible: true, Up: []Step{
+		CreateTable{Table: "ref_author", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+		CreateTable{Table: "ref_post", Columns: []Column{
+			{Name: "id", Type: "integer", PrimaryKey: true},
+			{Name: "author_id", Type: "integer", References: "ref_author"},
+		}},
+	}}
+	state, err := Replay([]Migration{initial})
+	if err != nil {
+		t.Fatalf("Replay returned error: %v", err)
+	}
+	removal := Diff(nil, state)
+	if len(removal) != 1 {
+		t.Fatalf("Diff returned %d migrations, want 1", len(removal))
+	}
+	removal[0].Name = "0002_remove_blog"
+
+	if err := ApplyPending(ctx, sqlDB, dialect, []Migration{initial, removal[0]}); err != nil {
+		t.Fatalf("ApplyPending returned error: %v", err)
+	}
+	for _, table := range []string{"ref_author", "ref_post"} {
+		if tableExists(t, sqlDB, dialect, table) {
+			t.Fatalf("table %q still exists after its model was removed", table)
+		}
 	}
 }
