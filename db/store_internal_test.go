@@ -38,7 +38,7 @@ func TestStoreWhereClausePostgresPlaceholderOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantClause := " WHERE (active = $1) AND (name LIKE $2 OR name LIKE $3)"
+	wantClause := ` WHERE ("active" = $1) AND ("name" LIKE $2 OR "name" LIKE $3)`
 	if clause != wantClause || !reflect.DeepEqual(args, []any{true, "Al%", "Be%"}) {
 		t.Fatalf("clause = %q, args = %#v; want %q and ordered args", clause, args, wantClause)
 	}

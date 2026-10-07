@@ -45,24 +45,24 @@ func TestBaseTypeSQLAcrossDialects(t *testing.T) {
 // plain string assertion requiring no live Postgres connection.
 func TestColumnDefSQLPrimaryKeyBranches(t *testing.T) {
 	integerPK := Column{Name: "id", Type: "integer", PrimaryKey: true}
-	if got := columnDefSQL(db.SQLite, integerPK); got != "id INTEGER PRIMARY KEY AUTOINCREMENT" {
+	if got := columnDefSQL(db.SQLite, integerPK); got != "`id` INTEGER PRIMARY KEY AUTOINCREMENT" {
 		t.Errorf("columnDefSQL(SQLite, integer PK) = %q", got)
 	}
-	if got := columnDefSQL(db.Postgres, integerPK); got != "id BIGSERIAL PRIMARY KEY" {
+	if got := columnDefSQL(db.Postgres, integerPK); got != `"id" BIGSERIAL PRIMARY KEY` {
 		t.Errorf("columnDefSQL(Postgres, integer PK) = %q", got)
 	}
 
 	textPK := Column{Name: "slug", Type: "text", PrimaryKey: true}
-	if got := columnDefSQL(db.SQLite, textPK); got != "slug TEXT PRIMARY KEY" {
-		t.Errorf("columnDefSQL(SQLite, text PK) = %q, want %q", got, "slug TEXT PRIMARY KEY")
+	if got := columnDefSQL(db.SQLite, textPK); got != "`slug` TEXT PRIMARY KEY" {
+		t.Errorf("columnDefSQL(SQLite, text PK) = %q, want %q", got, "`slug` TEXT PRIMARY KEY")
 	}
-	if got := columnDefSQL(db.Postgres, textPK); got != "slug TEXT PRIMARY KEY" {
-		t.Errorf("columnDefSQL(Postgres, text PK) = %q, want %q", got, "slug TEXT PRIMARY KEY")
+	if got := columnDefSQL(db.Postgres, textPK); got != `"slug" TEXT PRIMARY KEY` {
+		t.Errorf("columnDefSQL(Postgres, text PK) = %q, want %q", got, `"slug" TEXT PRIMARY KEY`)
 	}
 
 	referencing := Column{Name: "author_id", Type: "integer", PrimaryKey: true, References: "author"}
-	if got := columnDefSQL(db.Postgres, referencing); !strings.Contains(got, "REFERENCES author") {
-		t.Errorf("columnDefSQL with References = %q, want it to contain REFERENCES author", got)
+	if got := columnDefSQL(db.Postgres, referencing); !strings.Contains(got, `REFERENCES "author"`) {
+		t.Errorf("columnDefSQL with References = %q, want it to contain REFERENCES \"author\"", got)
 	}
 }
 
@@ -81,10 +81,10 @@ func TestCreateTableSQLGeneratesUniqueAndIndexStatements(t *testing.T) {
 	if len(statements) != 3 {
 		t.Fatalf("createTableSQL returned %d statements, want 3 (create table + unique index + index): %v", len(statements), statements)
 	}
-	if !strings.Contains(statements[1], "CREATE UNIQUE INDEX uniq_widget_slug ON widget (slug)") {
+	if !strings.Contains(statements[1], "CREATE UNIQUE INDEX `uniq_widget_slug` ON `widget` (`slug`)") {
 		t.Errorf("statements[1] = %q, want a unique index on slug", statements[1])
 	}
-	if !strings.Contains(statements[2], "CREATE INDEX idx_widget_category ON widget (category)") {
+	if !strings.Contains(statements[2], "CREATE INDEX `idx_widget_category` ON `widget` (`category`)") {
 		t.Errorf("statements[2] = %q, want a plain index on category", statements[2])
 	}
 

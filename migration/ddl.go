@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/sqlident"
 )
 
 // ApplyStep executes step against sqlDB, translating it into the DDL
@@ -22,20 +23,20 @@ func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 	case CreateTable:
 		return execAll(ctx, sqlDB, createTableSQL(dialect, s))
 	case DropTable:
-		return exec(ctx, sqlDB, fmt.Sprintf("DROP TABLE %s", s.Table))
+		return exec(ctx, sqlDB, fmt.Sprintf("DROP TABLE %s", quote(dialect, s.Table)))
 	case AddColumn:
-		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", s.Table, addColumnDefSQL(dialect, s.Column)))
+		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", quote(dialect, s.Table), addColumnDefSQL(dialect, s.Column)))
 	case DropColumn:
 		if dialect == db.Postgres {
-			return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", s.Table, s.Column))
+			return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", quote(dialect, s.Table), quote(dialect, s.Column)))
 		}
 		return rebuildTableDroppingColumn(ctx, sqlDB, s.Table, s.Column)
 	case AlterColumnUnique:
-		return applyUniqueIndex(ctx, sqlDB, s.Table, s.Column, s.Unique)
+		return applyUniqueIndex(ctx, sqlDB, dialect, s.Table, s.Column, s.Unique)
 	case CreateIndex:
-		return exec(ctx, sqlDB, fmt.Sprintf("CREATE INDEX %s ON %s (%s)", indexName(s.Table, s.Column), s.Table, s.Column))
+		return exec(ctx, sqlDB, createIndexSQL(dialect, "CREATE INDEX", indexName(s.Table, s.Column), s.Table, s.Column))
 	case DropIndex:
-		return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", indexName(s.Table, s.Column)))
+		return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", quote(dialect, indexName(s.Table, s.Column))))
 	default:
 		return fmt.Errorf("tango migration: unsupported step type %T", step)
 	}
@@ -55,19 +56,46 @@ func execAll(ctx context.Context, sqlDB *sql.DB, queries []string) error {
 	return nil
 }
 
+// quote quotes a table, column or index name for dialect. Every identifier
+// in the DDL ApplyStep generates goes through it, so a reserved word such as
+// "user" or "order" is a valid name. Users' own raw SQL is not quoted for
+// them. The tango_migrations tracking table's SQL is a fixed literal, not
+// generated from names, and none of its names are reserved, so it is left
+// as is (AppliedMigrations has no dialect to quote with).
+func quote(dialect db.Dialect, name string) string {
+	return sqlident.Quote(identStyle(dialect), name)
+}
+
+func identStyle(dialect db.Dialect) sqlident.Style {
+	if dialect == db.Postgres {
+		return sqlident.DoubleQuote
+	}
+	return sqlident.Backtick
+}
+
 func indexName(table, column string) string {
 	return fmt.Sprintf("idx_%s_%s", table, column)
+}
+
+func uniqueIndexName(table, column string) string {
+	return "uniq_" + table + "_" + column
+}
+
+// createIndexSQL returns "<verb> name ON table (column)" with every
+// identifier quoted; verb is "CREATE INDEX" or "CREATE UNIQUE INDEX".
+func createIndexSQL(dialect db.Dialect, verb, name, table, column string) string {
+	return fmt.Sprintf("%s %s ON %s (%s)", verb, quote(dialect, name), quote(dialect, table), quote(dialect, column))
 }
 
 // applyUniqueIndex enforces (or lifts) uniqueness via a unique index rather
 // than a table constraint, so it applies identically and directly on both
 // SQLite and Postgres with no table-rebuild required.
-func applyUniqueIndex(ctx context.Context, sqlDB *sql.DB, table, column string, unique bool) error {
-	name := "uniq_" + table + "_" + column
+func applyUniqueIndex(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, table, column string, unique bool) error {
+	name := uniqueIndexName(table, column)
 	if unique {
-		return exec(ctx, sqlDB, fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s (%s)", name, table, column))
+		return exec(ctx, sqlDB, createIndexSQL(dialect, "CREATE UNIQUE INDEX", name, table, column))
 	}
-	return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", name))
+	return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", quote(dialect, name)))
 }
 
 func createTableSQL(dialect db.Dialect, s CreateTable) []string {
@@ -76,18 +104,14 @@ func createTableSQL(dialect db.Dialect, s CreateTable) []string {
 	for i, c := range s.Columns {
 		defs[i] = columnDefSQL(dialect, c)
 		if c.Unique {
-			uniqueIndexes = append(uniqueIndexes, fmt.Sprintf(
-				"CREATE UNIQUE INDEX uniq_%s_%s ON %s (%s)", s.Table, c.Name, s.Table, c.Name,
-			))
+			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, "CREATE UNIQUE INDEX", uniqueIndexName(s.Table, c.Name), s.Table, c.Name))
 		}
 		if c.Indexed {
-			uniqueIndexes = append(uniqueIndexes, fmt.Sprintf(
-				"CREATE INDEX %s ON %s (%s)", indexName(s.Table, c.Name), s.Table, c.Name,
-			))
+			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, "CREATE INDEX", indexName(s.Table, c.Name), s.Table, c.Name))
 		}
 	}
 
-	statements := []string{fmt.Sprintf("CREATE TABLE %s (%s)", s.Table, strings.Join(defs, ", "))}
+	statements := []string{fmt.Sprintf("CREATE TABLE %s (%s)", quote(dialect, s.Table), strings.Join(defs, ", "))}
 	return append(statements, uniqueIndexes...)
 }
 
@@ -100,18 +124,19 @@ func createTableSQL(dialect db.Dialect, s CreateTable) []string {
 // Default a narrow AddColumn-only escape hatch rather than a general
 // default-value system.
 func columnDefSQL(dialect db.Dialect, c Column) string {
+	name := quote(dialect, c.Name)
 	if c.PrimaryKey && c.Type == "integer" {
 		if dialect == db.Postgres {
-			return c.Name + " BIGSERIAL PRIMARY KEY" + referencesSQL(c)
+			return name + " BIGSERIAL PRIMARY KEY" + referencesSQL(dialect, c)
 		}
-		return c.Name + " INTEGER PRIMARY KEY AUTOINCREMENT" + referencesSQL(c)
+		return name + " INTEGER PRIMARY KEY AUTOINCREMENT" + referencesSQL(dialect, c)
 	}
 
 	typ := baseTypeSQL(dialect, c.Type)
 	if c.PrimaryKey {
 		typ += " PRIMARY KEY"
 	}
-	return c.Name + " " + typ + referencesSQL(c)
+	return name + " " + typ + referencesSQL(dialect, c)
 }
 
 // addColumnDefSQL generates a column definition for AddColumn, honoring
@@ -132,11 +157,11 @@ func addColumnDefSQL(dialect db.Dialect, c Column) string {
 // action, so it defaults to RESTRICT/NO ACTION on both dialects — cascade
 // delete is implemented in application code by Store.Delete, never by the
 // database.
-func referencesSQL(c Column) string {
+func referencesSQL(dialect db.Dialect, c Column) string {
 	if c.References == "" {
 		return ""
 	}
-	return " REFERENCES " + c.References
+	return " REFERENCES " + quote(dialect, c.References)
 }
 
 func baseTypeSQL(dialect db.Dialect, columnType string) string {
@@ -189,7 +214,7 @@ func rebuildTableDroppingColumn(ctx context.Context, sqlDB *sql.DB, table, dropC
 	defs := make([]string, len(remaining))
 	names := make([]string, len(remaining))
 	for i, c := range remaining {
-		def := c.name + " " + c.declType
+		def := quote(db.SQLite, c.name) + " " + c.declType
 		if c.primaryKey {
 			def += " PRIMARY KEY"
 		}
@@ -197,11 +222,12 @@ func rebuildTableDroppingColumn(ctx context.Context, sqlDB *sql.DB, table, dropC
 		names[i] = c.name
 	}
 
+	quotedNames := sqlident.QuoteAll(identStyle(db.SQLite), names)
 	statements := []string{
-		fmt.Sprintf("CREATE TABLE %s (%s)", tempTable, strings.Join(defs, ", ")),
-		fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", tempTable, strings.Join(names, ", "), strings.Join(names, ", "), table),
-		fmt.Sprintf("DROP TABLE %s", table),
-		fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tempTable, table),
+		fmt.Sprintf("CREATE TABLE %s (%s)", quote(db.SQLite, tempTable), strings.Join(defs, ", ")),
+		fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", quote(db.SQLite, tempTable), quotedNames, quotedNames, quote(db.SQLite, table)),
+		fmt.Sprintf("DROP TABLE %s", quote(db.SQLite, table)),
+		fmt.Sprintf("ALTER TABLE %s RENAME TO %s", quote(db.SQLite, tempTable), quote(db.SQLite, table)),
 	}
 
 	return execAll(ctx, sqlDB, statements)
@@ -214,7 +240,7 @@ type sqliteColumnInfo struct {
 }
 
 func sqliteTableColumns(ctx context.Context, sqlDB *sql.DB, table string) ([]sqliteColumnInfo, error) {
-	rows, err := sqlDB.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", table))
+	rows, err := sqlDB.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", quote(db.SQLite, table)))
 	if err != nil {
 		return nil, err
 	}

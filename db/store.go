@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/angvp/tango/internal/sqlident"
 	"github.com/angvp/tango/model"
 )
 
@@ -91,6 +92,19 @@ type execer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
+// ident returns the quoted SQL identifier for a model or field name: its
+// ColumnName, quoted for s's dialect. Every table and column name Store puts
+// in a statement goes through it, so a model or field named after a reserved
+// word ("User", "Order", "Group") works. SQL passed to Query and QueryRow is
+// the caller's own and is not rewritten.
+func (s *Store) ident(name string) string {
+	style := sqlident.Backtick
+	if s.dialect == Postgres {
+		style = sqlident.DoubleQuote
+	}
+	return sqlident.Quote(style, ColumnName(name))
+}
+
 // validateForeignKeys checks that every set (non-zero) foreign key field on
 // structValue references an existing row of its related model, returning
 // ErrInvalidForeignKey for the first one that doesn't. A no-op unless
@@ -121,8 +135,8 @@ func (s *Store) validateForeignKeys(ctx context.Context, meta model.ModelMeta, s
 
 		query := fmt.Sprintf(
 			"SELECT 1 FROM %s WHERE %s = %s",
-			ColumnName(relatedMeta.Name),
-			ColumnName(relatedPKField.Name),
+			s.ident(relatedMeta.Name),
+			s.ident(relatedPKField.Name),
 			placeholder(s.dialect, 1),
 		)
 
@@ -152,7 +166,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 		return err
 	}
 
-	tableName := ColumnName(meta.Name)
+	tableName := s.ident(meta.Name)
 
 	var primaryKeyField model.FieldMeta
 	var primaryKeyValue reflect.Value
@@ -174,7 +188,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 			}
 		}
 
-		columns = append(columns, ColumnName(field.Name))
+		columns = append(columns, s.ident(field.Name))
 		placeholders = append(placeholders, placeholder(s.dialect, len(placeholders)+1))
 		args = append(args, columnValue(field, fieldValue))
 	}
@@ -187,7 +201,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 			tableName,
 			strings.Join(columns, ", "),
 			strings.Join(placeholders, ", "),
-			ColumnName(primaryKeyField.Name),
+			s.ident(primaryKeyField.Name),
 		)
 
 		var id int64
@@ -237,14 +251,14 @@ func (s *Store) Get(ctx context.Context, meta model.ModelMeta, pk any, dest any)
 
 	columns := make([]string, len(meta.Fields))
 	for i, field := range meta.Fields {
-		columns[i] = ColumnName(field.Name)
+		columns[i] = s.ident(field.Name)
 	}
 
 	query := fmt.Sprintf(
 		"SELECT %s FROM %s WHERE %s = %s",
 		strings.Join(columns, ", "),
-		ColumnName(meta.Name),
-		ColumnName(primaryKeyField.Name),
+		s.ident(meta.Name),
+		s.ident(primaryKeyField.Name),
 		placeholder(s.dialect, 1),
 	)
 
@@ -288,16 +302,16 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 		if !fieldValue.IsValid() {
 			return fmt.Errorf("tango db: field %q not found on %s", field.Name, meta.Name)
 		}
-		assignments = append(assignments, ColumnName(field.Name)+" = "+placeholder(s.dialect, len(assignments)+1))
+		assignments = append(assignments, s.ident(field.Name)+" = "+placeholder(s.dialect, len(assignments)+1))
 		args = append(args, columnValue(field, fieldValue))
 	}
 	args = append(args, primaryKeyValue)
 
 	query := fmt.Sprintf(
 		"UPDATE %s SET %s WHERE %s = %s",
-		ColumnName(meta.Name),
+		s.ident(meta.Name),
 		strings.Join(assignments, ", "),
-		ColumnName(primaryKeyField.Name),
+		s.ident(primaryKeyField.Name),
 		placeholder(s.dialect, len(assignments)+1),
 	)
 
@@ -410,9 +424,9 @@ func (s *Store) cascadeDependents(ctx context.Context, tx execer, meta model.Mod
 func (s *Store) clearReference(ctx context.Context, tx execer, other model.ModelMeta, otherPKField model.FieldMeta, fkField model.FieldMeta, pk any) error {
 	query := fmt.Sprintf(
 		"UPDATE %s SET %s = NULL WHERE %s = %s",
-		ColumnName(other.Name),
-		ColumnName(fkField.Name),
-		ColumnName(otherPKField.Name),
+		s.ident(other.Name),
+		s.ident(fkField.Name),
+		s.ident(otherPKField.Name),
 		placeholder(s.dialect, 1),
 	)
 	_, err := tx.ExecContext(ctx, query, pk)
@@ -424,9 +438,9 @@ func (s *Store) clearReference(ctx context.Context, tx execer, other model.Model
 func (s *Store) referencingPrimaryKeys(ctx context.Context, tx execer, other model.ModelMeta, otherPKField model.FieldMeta, fkField model.FieldMeta, pk any) ([]any, error) {
 	query := fmt.Sprintf(
 		"SELECT %s FROM %s WHERE %s = %s",
-		ColumnName(otherPKField.Name),
-		ColumnName(other.Name),
-		ColumnName(fkField.Name),
+		s.ident(otherPKField.Name),
+		s.ident(other.Name),
+		s.ident(fkField.Name),
 		placeholder(s.dialect, 1),
 	)
 	rows, err := tx.QueryContext(ctx, query, pk)
@@ -453,8 +467,8 @@ func (s *Store) referencingPrimaryKeys(ctx context.Context, tx execer, other mod
 func (s *Store) execDelete(ctx context.Context, exec execer, meta model.ModelMeta, pkField model.FieldMeta, pk any, checkAffected bool) error {
 	query := fmt.Sprintf(
 		"DELETE FROM %s WHERE %s = %s",
-		ColumnName(meta.Name),
-		ColumnName(pkField.Name),
+		s.ident(meta.Name),
+		s.ident(pkField.Name),
 		placeholder(s.dialect, 1),
 	)
 
@@ -492,10 +506,10 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 
 	columns := make([]string, len(meta.Fields))
 	for i, field := range meta.Fields {
-		columns[i] = ColumnName(field.Name)
+		columns[i] = s.ident(field.Name)
 	}
 
-	sqlQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(columns, ", "), ColumnName(meta.Name))
+	sqlQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(columns, ", "), s.ident(meta.Name))
 	whereSQL, args, err := s.whereClause(meta, query)
 	if err != nil {
 		return err
@@ -516,7 +530,7 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 				return fmt.Errorf("tango db: unknown OrderBy field %q for model %s", fieldName, meta.Name)
 			}
 
-			orderClauses[i] = ColumnName(fieldName) + " " + direction
+			orderClauses[i] = s.ident(fieldName) + " " + direction
 		}
 		sqlQuery += " ORDER BY " + strings.Join(orderClauses, ", ")
 	}
@@ -558,7 +572,7 @@ func (s *Store) Count(ctx context.Context, meta model.ModelMeta, query Query) (i
 	if err != nil {
 		return 0, err
 	}
-	sqlQuery := "SELECT COUNT(*) FROM " + ColumnName(meta.Name) + whereSQL
+	sqlQuery := "SELECT COUNT(*) FROM " + s.ident(meta.Name) + whereSQL
 	var count int
 	if err := s.db.QueryRowContext(ctx, sqlQuery, args...).Scan(&count); err != nil {
 		return 0, err
@@ -583,7 +597,7 @@ func (s *Store) whereClause(meta model.ModelMeta, query Query) (string, []any, e
 		}
 		clauses := make([]string, len(conditions.items))
 		for i, condition := range conditions.items {
-			clauses[i] = ColumnName(condition.Field) + " " + string(condition.Op) + " " + placeholder(s.dialect, len(args)+1)
+			clauses[i] = s.ident(condition.Field) + " " + string(condition.Op) + " " + placeholder(s.dialect, len(args)+1)
 			args = append(args, condition.Value)
 		}
 		groups = append(groups, "("+strings.Join(clauses, conditions.join)+")")
