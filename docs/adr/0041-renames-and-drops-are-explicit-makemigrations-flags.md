@@ -1,0 +1,12 @@
+# Renames and drops are explicit `makemigrations` flags, and drops are refused by default
+
+`migration.Diff` matches tables and columns by name, so before this decision renaming `Post.Body` to `Post.Content` generated a drop of `body` and an add of `content`: applying it deleted every post's body, with no warning. Now `tango makemigrations` never writes a migration that drops a table or column unless the developer said so. A rename is stated with a repeatable `--rename` flag naming one Rename mapping per occurrence (`--rename posts.Post.Body=Content` for a field, `--rename posts.Post=Article` for a model), which generates a `RenameColumn` or `RenameTable` step that keeps the data. A real drop is authorised with a repeatable `--allow-drop` naming exactly one field or model (`--allow-drop posts.Post.Body`, `--allow-drop posts.Draft`). Any drop without a matching flag fails the run, and so does a flag that matches nothing; every mapping and authorisation is checked before anything is generated, and a failed run writes no file. The refusal lists each drop and prints the exact `--rename` and `--allow-drop` commands to choose between.
+
+Rejected:
+
+- **Inferring renames** ("one column dropped and one added with the same type, so it's a rename"). A wrong guess corrupts data the other way, by keeping a column that was meant to go. tanGO prefers explicit over magic (ADR 0001).
+- **Django's interactive prompt** ("Did you rename post.body to post.content? [y/N]"). It makes `makemigrations` unusable from scripts and CI, and the answer is lost once given.
+- **A tag naming the old field** (`tango:"was=Body"`). It stays in the model after the migration exists, and a later rename that reuses the name makes it ambiguous.
+- **One bare `--allow-drop` for the whole run.** It lets a second, accidental drop through alongside the intended one.
+
+Consequences: a rename lives only in the generated migration, so `SchemaState` replay must apply it, including rewriting every foreign key that references a renamed table, or later diffs would see false changes. Both dialects rename natively (`ALTER TABLE … RENAME COLUMN` / `RENAME TO`), so renames never use SQLite's table rebuild. A rename is reversible; a migration that also changes a column's type is not. Renaming a model changes its admin URL, which is derived from the table name.

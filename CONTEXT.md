@@ -71,3 +71,15 @@ Do not conflate this with Application context: the long-lived Start-time context
 The single SQL dialect one `go test` run targets — SQLite or PostgreSQL — chosen by the environment, never by an individual test. One variable, `TANGO_TEST_DSN`, selects it by scheme, using the same grammar as the runtime `TANGO_DB_DSN`: unset or `sqlite://:memory:` is an in-memory SQLite run, any other `sqlite://` path is a file-backed SQLite run (a fresh file per test; the path itself is not used), and `postgres://…`/`postgresql://…` is a PostgreSQL run. Any other scheme is an error. A test that cannot run on one dialect says so explicitly (`testdb.SQLiteOnly` / `testdb.PostgresOnly`) with a reason. In a Postgres run, an unreachable database is a failure, not a skip.
 
 Do not confuse this with `db.Dialect`, the value a `Store` uses to generate SQL: the Test dialect decides which `db.Dialect` every test in the run receives.
+
+## Rename mapping
+
+A developer's explicit statement, given when generating migrations, that a model or field now carries a new name but is the same thing: its table or column, and the rows in it, are kept and renamed rather than dropped and recreated. tanGO never infers a rename from a drop and an add that look alike; without a Rename mapping, a name that disappears from the models is a drop, and a drop needs its own explicit permission.
+
+Do not confuse this with a drop plus an add: a drop destroys the data, a rename keeps it. Do not read a Rename mapping as touching the Go code: the developer renames the struct or field themselves; the mapping only tells the migration what happened.
+
+## Widening type change
+
+A change to a field's Go type whose new column type can hold every value the old one could, so existing rows convert without loss or failure: `integer` to `real` or `text`, `real` to `text`, and `boolean` to `integer` or `text`. These are the only column type changes a generated migration expresses; any other type change is refused when migrations are generated.
+
+Do not confuse this with a narrowing change (for example `text` to `integer`), where some existing values cannot convert. Changes within one column type, such as `int` to `int64`, are not type changes at all.
