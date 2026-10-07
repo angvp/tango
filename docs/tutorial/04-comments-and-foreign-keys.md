@@ -82,7 +82,7 @@ tango makemigrations
 tango migrate
 ```
 
-Open the new migration file and you'll find `References: "post"` on the `post_id` column: tanGO creates a real database-level foreign key constraint too. On SQLite that constraint is only enforced when foreign keys are switched on for the connection, which is what the `db.SQLiteForeignKeysDSN(dsn)` call in your generated `main.go` does.
+Open the new migration file and you'll find `References: "post"` on the `post_id` column: tanGO creates a real database-level foreign key constraint too. On SQLite that constraint is only enforced when foreign keys are switched on for the connection; `tango.LoadDBConfigFromEnv()` in your generated `main.go` switches them on whenever `TANGO_DB_DSN` names a SQLite database.
 
 ## Errors a client can act on
 

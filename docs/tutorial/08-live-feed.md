@@ -149,7 +149,7 @@ config := tango.Config{
 }
 ```
 
-(import `"board/apps/live"`.) `posts.New` and `web.New` take the feed as a new parameter: store it on `pages` in `web` (`feed *live.Feed`), and pass it through to `createPost` in `posts`.
+(import `"board/apps/live"`.) `posts.New` and `web.New` take the feed as a new parameter. In `web`, store it on `pages` (a `feed *live.Feed` field, set in `New` alongside `store`); in `posts`, pass it through to `createPost`, which gains a `feed *live.Feed` parameter. Each file that names `*live.Feed` imports `"board/apps/live"` too.
 
 ## Publish when a post is created
 

@@ -170,19 +170,14 @@ package web
 
 import (
 	"embed"
-	"errors"
-	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
-	"strconv"
 	"sync"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
-
-	"board/apps/posts"
 )
 
 //go:embed templates/*.gohtml
@@ -225,9 +220,24 @@ func New(store *db.Store) tango.App {
 }
 ```
 
-Every template gets the same `page` struct, filled in with whatever that page needs; a small `render` helper wraps `ctx.HTML(status, templates, name, data)`. `ctx.HTML` renders into a buffer first, so a template that fails halfway through becomes an ordinary error — a clean `500` — rather than half a page:
+The views go in `apps/web/views.go`. Every template gets the same `page` struct, filled in with whatever that page needs; a small `render` helper wraps `ctx.HTML(status, templates, name, data)`. `ctx.HTML` renders into a buffer first, so a template that fails halfway through becomes an ordinary error — a clean `500` — rather than half a page:
 
 ```go
+// apps/web/views.go
+package web
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/angvp/tango"
+	"github.com/angvp/tango/db"
+
+	"board/apps/posts"
+)
+
 // page is what every template receives.
 type page struct {
 	Title    string
@@ -277,7 +287,7 @@ func (p *pages) post(ctx *tango.Context) error {
 }
 ```
 
-The `url` template function is where reverse lookup happens. A `Reverser` can only be built after every installed app has registered its routes — later than `web`'s own `Register` runs — so `url` builds it on first use and keeps it:
+The `url` template function, at the bottom of `views.go`, is where reverse lookup happens. A `Reverser` can only be built after every installed app has registered its routes — later than `web`'s own `Register` runs — so `url` builds it on first use and keeps it:
 
 ```go
 // url lets templates build links from route names:

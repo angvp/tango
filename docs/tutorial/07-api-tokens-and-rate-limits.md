@@ -34,14 +34,14 @@ func newTokenService() (*jwt.Service, error) {
 Call it right after creating the store, and fail at startup rather than at the first login if the secret is missing:
 
 ```go
-store := db.NewStore(sqlDB, db.SQLite)
+store := db.NewStore(sqlDB, dialect)
 tokens, err := newTokenService()
 if err != nil {
 	return err
 }
 ```
 
-Everything reading `.env` includes `go run . -check` and the `tango` CLI commands that build your app, so they'll need the secret too. The JWT package brings in one new dependency; fetch it with:
+(`main.go` now imports `"github.com/angvp/tango/auth/jwt"` and `"time"`.) Everything reading `.env` includes `go run . -check` and the `tango` CLI commands that build your app, so they'll need the secret too. The JWT package brings in one new dependency; fetch it with:
 
 ```sh
 go mod tidy
@@ -228,7 +228,7 @@ func New(store *db.Store, tokens *jwt.Service) tango.App {
 
 `tango.WithMiddleware` attaches middleware to everything in an `Include`. Middleware nests from the outside in — `Config.Middleware`, then `Include`'s `WithMiddleware`, then a route's `Use` — so by the time the rate limiter on `POST /posts/` runs, the token has already been verified. That's what lets the limiter key on the account, not the IP.
 
-`posts` now looks up the `Account` model while registering, so `accounts` has to come first in `InstalledApps`. Update `main.go`:
+`posts` now looks up the `Account` model while registering, so `accounts` has to come first in `InstalledApps`. Update `main.go` (and import `"board/apps/api"`):
 
 ```go
 InstalledApps: []tango.App{

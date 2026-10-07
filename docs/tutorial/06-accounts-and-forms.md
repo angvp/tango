@@ -83,7 +83,7 @@ func createPost(store *db.Store, meta model.ModelMeta) tango.View {
 }
 ```
 
-As before, the owner comes from the server's side of the request, never the JSON body — a client sending `"AccountID": 999` is simply overwritten. Using the browser's session cookie for a JSON endpoint is safe here because `accounts` sets it `SameSite=Lax`, so other sites can't make a visitor's browser send it with a cross-site `POST`. [Part 7](07-api-tokens-and-rate-limits.md) gives the API its own tokens, which is what non-browser clients need.
+(add `"github.com/angvp/tango/accounts"` to the imports in `views.go`.) As before, the owner comes from the server's side of the request, never the JSON body — a client sending `"AccountID": 999` is simply overwritten. Using the browser's session cookie for a JSON endpoint is safe here because `accounts` sets it `SameSite=Lax`, so other sites can't make a visitor's browser send it with a cross-site `POST`. [Part 7](07-api-tokens-and-rate-limits.md) gives the API its own tokens, which is what non-browser clients need.
 
 ## Sessions and CSRF in the `web` app
 
@@ -407,11 +407,11 @@ func (p *pages) post(ctx *tango.Context) error {
 }
 ```
 
-`displayName` shows only the part of the email before the `@`, so the board never publishes anyone's address. Add an `accountMeta model.ModelMeta` field to `pages`, and look it up in `New` next to the other two: `p.accountMeta, _ = registry.Models().Get("Account")`.
+`displayName` shows only the part of the email before the `@`, so the board never publishes anyone's address. Add an `accountMeta model.ModelMeta` field to `pages`, and look it up in `New` next to the other two: `p.accountMeta, _ = registry.Models().Get("Account")`. The new views need `strings`, `time`, and `github.com/angvp/tango/accounts` added to the imports in `views.go`.
 
 ## Manage accounts in the admin
 
-`accounts` doesn't register its models with the admin for you. Do it in `web`'s `New`, before the routes:
+`accounts` doesn't register its models with the admin for you. Do it in `web`'s `New`, before the routes (add `github.com/angvp/tango/accounts` and `github.com/angvp/tango/admin` to the imports in `apps/web/app.go`):
 
 ```go
 // Accounts are managed from the admin like any other model.

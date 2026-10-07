@@ -66,7 +66,7 @@ A `tango.Job` is a name, an interval, and a function. tanGO runs it on a ticker 
 
 `pruneSessions` deletes a bounded batch per run with the same typed `List` and `Delete` you've used all along, so it works unchanged on SQLite and Postgres. If a run returns an error or panics, tanGO logs it (as a `tango.scheduler.job_failed` event) and the next run happens on schedule anyway.
 
-Install it in `main.go`, anywhere after `accounts`:
+Install it in `main.go`, anywhere after `accounts` (and import `"board/apps/housekeeping"`):
 
 ```go
 feed.App(),
@@ -120,7 +120,7 @@ ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SI
 defer stop()
 
 logger.Info("listening", "addr", config.Addr)
-err = tango.ServeContext(ctx, config, sqlDB, db.SQLite,
+err = tango.ServeContext(ctx, config, sqlDB, dialect,
 	tango.WithLogger(logger),
 	tango.WithShutdownTimeout(10*time.Second),
 )
@@ -128,7 +128,7 @@ logger.Info("stopped", "clean", err == nil)
 return err
 ```
 
-(new imports: `log/slog`, `os/signal`, `syscall`, `time`.) When you press Ctrl-C — or a deployment sends `SIGTERM` — `ServeContext`:
+(new imports: `log/slog`, `os/signal`, `syscall`; `context` and `time` are already there.) When you press Ctrl-C — or a deployment sends `SIGTERM` — `ServeContext`:
 
 1. stops accepting new connections and waits for requests in flight to finish, for up to the shutdown timeout;
 2. stops the job scheduler, letting a running job see its `ctx` canceled;

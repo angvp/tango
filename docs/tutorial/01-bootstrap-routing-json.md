@@ -72,7 +72,7 @@ Route names are namespace-qualified: the routes above are known internally as `p
 
 ## JSON views
 
-A `View` is `func(*tango.Context) error`. `Context` gives you `Param` (path parameters), `Query` (query string values), `Bind` (decode a request body), and `JSON` (write a JSON response):
+A `View` is `func(*tango.Context) error`. `Context` gives you `Param` (path parameters), `Query` (query string values), `Bind` (decode a request body), and `JSON` (write a JSON response). Views live next to the app in `apps/posts/views.go`, which starts with `package posts` and imports `github.com/angvp/tango`:
 
 ```go
 func listPosts(ctx *tango.Context) error {

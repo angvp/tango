@@ -257,7 +257,7 @@ Run them:
 go test ./...
 ```
 
-To see that they're worth having, break something on purpose: comment out the ownership check in `deletePost` and run the tests again. `TestOnlyTheOwnerCanDeleteAPost` fails with `someone else's post: status = 204, want 403`.
+To see that they're worth having, break something on purpose: flip the ownership check in `deletePost` from `post.AccountID != account.ID` to `==` and run the tests again. `TestOnlyTheOwnerCanDeleteAPost` fails with `someone else's post: status = 204, want 403`.
 
 `TestAppPassesChecks` runs the same validation as `go run . -check`: every route compiles, every foreign key points at a registered model, every template parses. Since the check is one of the tests, CI only needs two commands on every change:
 
@@ -280,13 +280,14 @@ Locally, `.env` fills them in; in production, set them in the environment instea
 
 ## PostgreSQL
 
-SQLite is a fine default: one file, nothing to install, and plenty for a small site on one server. When you want a database server — several app instances, managed backups, more concurrent writes — tanGO also supports PostgreSQL. Replace the database setup at the top of `run()` with one that reads `TANGO_DB_DSN`:
+SQLite is a fine default: one file, nothing to install, and plenty for a small site on one server. When you want a database server — several app instances, managed backups, more concurrent writes — tanGO also supports PostgreSQL, and the database setup `tango newproject` generated at the top of `run()` already reads `TANGO_DB_DSN`:
 
 ```go
 dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
 if err != nil {
 	return err
 }
+
 sqlDB, err := sql.Open(driverName, dsn)
 if err != nil {
 	return err
@@ -296,7 +297,7 @@ defer sqlDB.Close()
 store := db.NewStore(sqlDB, dialect)
 ```
 
-then pass `dialect` instead of `db.SQLite` to `tango.DispatchFlags` and `tango.ServeContext` further down. The DSN's scheme picks the database: `sqlite://app.db` (the default) is a file in the working directory, `sqlite:///var/data/app.db` an absolute path, and `postgres://…` a PostgreSQL server. `tango.LoadDBConfigFromEnv` hands back the matching dialect, the driver name for `sql.Open`, and the DSN the driver expects, with SQLite's foreign key enforcement already switched on. A DSN without a scheme, such as a bare `app.db`, is an error.
+and `dialect` is what you've been passing to `tango.DispatchFlags` and `tango.ServeContext` all along. The DSN's scheme picks the database: `sqlite://app.db` (the default) is a file in the working directory, `sqlite:///var/data/app.db` an absolute path, and `postgres://…` a PostgreSQL server. `tango.LoadDBConfigFromEnv` hands back the matching dialect, the driver name for `sql.Open`, and the DSN the driver expects, with SQLite's foreign key enforcement already switched on. A DSN without a scheme, such as a bare `app.db`, is an error.
 
 The Postgres driver needs one more import in `main.go`, next to the SQLite one:
 

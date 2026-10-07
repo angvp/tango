@@ -13,7 +13,7 @@ package posts
 import "time"
 
 type Post struct {
-	ID        int64  `tango:"pk"`
+	ID        int64 `tango:"pk"`
 	Title     string
 	Body      string
 	CreatedAt time.Time
@@ -51,20 +51,20 @@ func New(store *db.Store) tango.App {
 
 Views can't reach the registry themselves — `Context` deliberately exposes only the request/response surface (`Param`, `Query`, `Bind`, `JSON`, `Redirect`, plus raw escape hatches), not the framework's internals. So `ModelMeta` (looked up once, after registration) and `store` are both captured by closure when building each route's view, exactly like tanGO's own admin package does internally.
 
-Update `main.go` to construct the store before building the app list, and use `posts.New(store)`:
+In `main.go`, the generated code already opens the database named by `TANGO_DB_DSN` (`sqlite://app.db` unless you set it) and builds the store right before the config, so the store is in scope where you list your apps. Replace `posts.App{}` with `posts.New(store)`:
 
 ```go
-sqlDB, err := sql.Open("sqlite", "app.db")
-// ... error handling ...
-store := db.NewStore(sqlDB, db.SQLite)
-
+store := db.NewStore(sqlDB, dialect)
 config := tango.Config{
-	InstalledApps: []tango.App{posts.New(store)},
-	Addr:          ":8000",
+	InstalledApps: []tango.App{
+		posts.New(store),
+		admin.New(store),
+	},
+	Addr: ":8000",
 }
 ```
 
-(`tango newproject`'s generated `main.go` constructs the store later, right before starting the server; move that construction earlier so it's available when building `InstalledApps`. This is the kind of one-line rewiring the "no hidden setup" principle expects you to do by hand.)
+(`dialect` comes from `tango.LoadDBConfigFromEnv()` a few lines up, alongside the driver name and DSN passed to `sql.Open`. Changing which app gets constructed with what is the kind of one-line rewiring the "no hidden setup" principle expects you to do by hand.)
 
 ## CRUD views
 
