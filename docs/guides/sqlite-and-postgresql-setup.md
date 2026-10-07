@@ -51,7 +51,7 @@ The test suite runs against one Test dialect per `go test` run, chosen by `TANGO
 ```sh
 go test ./...                                    # unset: in-memory SQLite
 TANGO_TEST_DSN="sqlite://test.db" go test ./...  # SQLite, a fresh file per test (the path is not used)
-TANGO_TEST_DSN="postgres://user:pass@localhost:5432/tango_test?sslmode=disable" go test ./db/...
+TANGO_TEST_DSN="postgres://user:pass@localhost:5432/tango_test?sslmode=disable" go test ./...
 ```
 
-A contributor without a local Postgres instance still gets a full, green SQLite run. In a Postgres run each test gets its own schema, dropped when the test ends, and an unreachable database fails the run instead of skipping. Your own app's tests can use the same helper: `testdb.Open(t)` or `testdb.Store(t)` from `github.com/angvp/tango/testdb`.
+Every package's tests, and every example module's, run this way; CI runs the suite once on each dialect. A contributor without a local Postgres instance still gets a full, green SQLite run. In a Postgres run each test gets its own schema, dropped when the test ends, and an unreachable database fails the run instead of skipping. Your own app's tests can use the same helper: `testdb.Open(t)` or `testdb.Store(t)` from `github.com/angvp/tango/testdb`.
