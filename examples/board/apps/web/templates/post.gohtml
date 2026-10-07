@@ -1,0 +1,27 @@
+{{define "post"}}
+{{template "header" .}}
+<article>
+  <h1>{{.Post.Title}}</h1>
+  <p class="meta">{{with .Author}}by {{.}} · {{end}}{{.Post.CreatedAt.Format "Jan 2, 2006"}}</p>
+  <p>{{.Post.Body}}</p>
+</article>
+<section id="comments">
+  <h2>Comments</h2>
+  {{range .Comments}}
+    <div class="comment"><strong>{{.Author}}</strong> {{.Body}}</div>
+  {{else}}
+    <p>No comments yet.</p>
+  {{end}}
+  {{if .Account}}
+    <form method="post" action="{{url "add_comment" "id" .Post.ID}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <label>Add a comment <textarea name="body" rows="3" required></textarea></label>
+      <button type="submit">Comment</button>
+    </form>
+  {{else}}
+    <p><a href="/accounts/login/?next={{.Path}}">Log in</a> to comment.</p>
+  {{end}}
+</section>
+<p><a href="{{url "home"}}">← All posts</a></p>
+{{template "footer" .}}
+{{end}}

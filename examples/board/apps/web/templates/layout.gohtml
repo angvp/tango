@@ -1,0 +1,31 @@
+{{define "header"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{with .Title}}{{.}} · {{end}}Board</title>
+  <link rel="stylesheet" href="/static/board.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="{{url "home"}}">Board</a>
+    <nav>
+      {{if .Account}}
+        <a href="{{url "new_post"}}">New post</a>
+        <form method="post" action="/accounts/logout/">
+          <button type="submit">Log out {{.Account.Email}}</button>
+        </form>
+      {{else}}
+        <a href="/accounts/login/?next={{.Path}}">Log in</a>
+        <a href="/accounts/register/">Sign up</a>
+      {{end}}
+    </nav>
+  </header>
+  <main>
+{{end}}
+
+{{define "footer"}}
+  </main>
+</body>
+</html>
+{{end}}

@@ -2,8 +2,9 @@ package tango_test
 
 // This file enforces Milestone 9's documentation-verification deliverable:
 // every checked-in example under examples/ must compile as its own module,
-// and must depend on the real module path — so a doc snippet quoting these
-// examples can never silently drift from what actually builds.
+// pass its own -check and `go test ./...`, and must depend on the real
+// module path — so a doc snippet quoting these examples can never silently
+// drift from what actually builds.
 
 import (
 	"os"
@@ -54,7 +55,12 @@ func TestExamplesAreIndependentModulesThatCompile(t *testing.T) {
 
 		checkCmd := exec.Command("go", "run", ".", "-check")
 		checkCmd.Dir = exampleDir
-		checkCmd.Env = append(os.Environ(), "TANGO_ADMIN_PASSWORD=test-password")
+		checkCmd.Env = append(os.Environ(),
+			"TANGO_ADMIN_PASSWORD=test-password",
+			// examples/board (the tutorial app) refuses to start without its
+			// API token secret, which lives in an untracked .env locally.
+			"BOARD_JWT_SECRET="+strings.Repeat("s", 32),
+		)
 		var checkOut strings.Builder
 		checkCmd.Stdout = &checkOut
 		checkCmd.Stderr = &checkOut
@@ -63,6 +69,18 @@ func TestExamplesAreIndependentModulesThatCompile(t *testing.T) {
 		}
 		if !strings.Contains(checkOut.String(), "check passed") {
 			t.Fatalf("go run . -check in %s did not report success:\n%s", exampleDir, checkOut.String())
+		}
+
+		// Each example's own tests run with the caller's environment, so a
+		// dialect-aware example sees the same TANGO_TEST_DSN as the suite.
+		testCmd := exec.Command("go", "test", "./...")
+		testCmd.Dir = exampleDir
+		testCmd.Env = os.Environ()
+		var testOut strings.Builder
+		testCmd.Stdout = &testOut
+		testCmd.Stderr = &testOut
+		if err := testCmd.Run(); err != nil {
+			t.Fatalf("go test ./... in %s failed: %v\n%s", exampleDir, err, testOut.String())
 		}
 	}
 

@@ -1,0 +1,45 @@
+{{define "home"}}
+{{template "header" .}}
+<h1>Latest posts</h1>
+<div id="posts" data-feed="{{url "live:ws"}}" data-post-link="{{url "post" "id" "{id}"}}">
+{{range .Posts}}
+  <article class="summary">
+    <h2><a href="{{url "post" "id" .ID}}">{{.Title}}</a></h2>
+    <p class="meta">{{.CreatedAt.Format "Jan 2, 2006"}} · {{.CommentCount}} comment{{if ne .CommentCount 1}}s{{end}}</p>
+  </article>
+{{else}}
+  <p id="no-posts">No posts yet.</p>
+{{end}}
+</div>
+<script>
+  // Prepend posts as they're published, without reloading the page.
+  (() => {
+    const list = document.getElementById("posts");
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(scheme + "//" + location.host + list.dataset.feed);
+    socket.binaryType = "arraybuffer"; // tanGO sends payloads as binary frames
+
+    socket.addEventListener("message", (event) => {
+      const msg = JSON.parse(new TextDecoder().decode(event.data));
+      if (msg.type !== "post") return;
+
+      // Build the entry with textContent, never innerHTML: titles come from users.
+      const link = document.createElement("a");
+      link.href = list.dataset.postLink.replace("{id}", msg.id);
+      link.textContent = msg.title;
+      const heading = document.createElement("h2");
+      heading.append(link);
+      const meta = document.createElement("p");
+      meta.className = "meta";
+      meta.textContent = "Just now · 0 comments";
+      const article = document.createElement("article");
+      article.className = "summary new";
+      article.append(heading, meta);
+
+      document.getElementById("no-posts")?.remove();
+      list.prepend(article);
+    });
+  })();
+</script>
+{{template "footer" .}}
+{{end}}

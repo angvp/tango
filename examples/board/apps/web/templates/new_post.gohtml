@@ -1,0 +1,12 @@
+{{define "new_post"}}
+{{template "header" .}}
+<h1>New post</h1>
+{{with .Error}}<p class="error">{{.}}</p>{{end}}
+<form method="post" action="{{url "new_post"}}">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <label>Title <input name="title" value="{{.Form.Title}}" required></label>
+  <label>Body <textarea name="body" rows="6">{{.Form.Body}}</textarea></label>
+  <button type="submit">Publish</button>
+</form>
+{{template "footer" .}}
+{{end}}
