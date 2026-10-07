@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/testdb"
 )
 
 func noopJob(name string) Job {
@@ -120,7 +120,7 @@ func TestServeContextRunsSchedulerLifecycleLastToStartFirstToStop(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, db.SQLite)
+		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect())
 	}()
 
 	time.Sleep(50 * time.Millisecond)

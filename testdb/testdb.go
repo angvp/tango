@@ -23,6 +23,9 @@
 //
 // testdb imports the modernc.org/sqlite and pgx drivers itself, so tests
 // need no driver imports of their own.
+//
+// Raw SQL in a test can use PostgreSQL's numbered placeholders ($1, $2, …)
+// and TRUE/FALSE on either dialect: modernc.org/sqlite binds $N by number.
 package testdb
 
 import (
