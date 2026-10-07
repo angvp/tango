@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,27 +23,68 @@ jobs:
         run: go vet ./...
       - name: go build
         run: go build ./...
+
+  test:
+    name: test (${{ matrix.dialect }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # An empty TANGO_TEST_DSN selects SQLite, in-memory.
+          - dialect: sqlite
+            postgres-image: ""
+            dsn: ""
+          - dialect: postgres
+            postgres-image: postgres:17-alpine
+            dsn: postgres://tango:tango@localhost:5432/tango_test?sslmode=disable
+    # An empty image skips the service, so only the postgres leg starts it.
+    services:
+      postgres:
+        image: ${{ matrix.postgres-image }}
+        env:
+          POSTGRES_USER: tango
+          POSTGRES_PASSWORD: tango
+          POSTGRES_DB: tango_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tango -d tango_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TANGO_TEST_DSN: ${{ matrix.dsn }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
       - name: go test
         run: |
           go run gotest.tools/gotestsum@v1.13.0 \
-            --junitfile junit.xml \
+            --junitfile "junit-${{ matrix.dialect }}.xml" \
             --format testname \
-            -- ./... -count=1 -coverprofile=coverage.out -covermode=atomic
+            -- ./... -count=1 -coverprofile="coverage-${{ matrix.dialect }}.out" -covermode=atomic
       - name: Upload coverage to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
-          files: coverage.out
+          files: coverage-${{ matrix.dialect }}.out
+          flags: ${{ matrix.dialect }}
+          name: coverage-${{ matrix.dialect }}
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          files: junit.xml
+          files: junit-${{ matrix.dialect }}.xml
+          flags: ${{ matrix.dialect }}
+          name: junit-${{ matrix.dialect }}
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload JUnit report artifact
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: junit-results
-          path: junit.xml
+          name: junit-results-${{ matrix.dialect }}
+          path: junit-${{ matrix.dialect }}.xml
