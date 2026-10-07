@@ -1,18 +1,18 @@
-package db
+package db_test
 
 import (
 	"context"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/angvp/tango/db"
 )
 
-func TestStoreListWhereSQLite(t *testing.T) {
-	sqlDB := openCreateTestDB(t)
-	createWidgetTable(t, sqlDB)
-	meta := registerModel(t, createWidget{})
-	store := NewStore(sqlDB, SQLite)
+func TestStoreListWhere(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, createWidget{})
+	meta := metaFor(t, registry, createWidget{})
+	store := db.NewStore(sqlDB, dialect)
 	firstTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, widget := range []createWidget{
 		{Name: "", Active: false, Count: 0, Score: 0, CreatedAt: firstTime},
@@ -26,26 +26,26 @@ func TestStoreListWhereSQLite(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		where []Condition
+		where []db.Condition
 		want  int
 	}{
 		{"nil", nil, 3},
-		{"empty", []Condition{}, 3},
-		{"eq false", []Condition{{"Active", OpEq, false}}, 1},
-		{"eq zero", []Condition{{"Count", OpEq, 0}}, 1},
-		{"eq empty", []Condition{{"Name", OpEq, ""}}, 1},
-		{"ne", []Condition{{"Name", OpNe, "later"}}, 2},
-		{"gt", []Condition{{"Count", OpGt, 5}}, 1},
-		{"gte", []Condition{{"Count", OpGte, 5}}, 2},
-		{"lt", []Condition{{"Score", OpLt, float64(1.5)}}, 1},
-		{"lte", []Condition{{"Score", OpLte, float64(1.5)}}, 2},
-		{"time range", []Condition{{"CreatedAt", OpGte, firstTime}, {"CreatedAt", OpLte, firstTime.Add(time.Hour)}}, 2},
-		{"and fields", []Condition{{"Active", OpEq, true}, {"Count", OpGt, 5}}, 1},
+		{"empty", []db.Condition{}, 3},
+		{"eq false", []db.Condition{{"Active", db.OpEq, false}}, 1},
+		{"eq zero", []db.Condition{{"Count", db.OpEq, 0}}, 1},
+		{"eq empty", []db.Condition{{"Name", db.OpEq, ""}}, 1},
+		{"ne", []db.Condition{{"Name", db.OpNe, "later"}}, 2},
+		{"gt", []db.Condition{{"Count", db.OpGt, 5}}, 1},
+		{"gte", []db.Condition{{"Count", db.OpGte, 5}}, 2},
+		{"lt", []db.Condition{{"Score", db.OpLt, float64(1.5)}}, 1},
+		{"lte", []db.Condition{{"Score", db.OpLte, float64(1.5)}}, 2},
+		{"time range", []db.Condition{{"CreatedAt", db.OpGte, firstTime}, {"CreatedAt", db.OpLte, firstTime.Add(time.Hour)}}, 2},
+		{"and fields", []db.Condition{{"Active", db.OpEq, true}, {"Count", db.OpGt, 5}}, 1},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var got []createWidget
-			if err := store.List(context.Background(), meta, Query{Where: test.where}, &got); err != nil {
+			if err := store.List(context.Background(), meta, db.Query{Where: test.where}, &got); err != nil {
 				t.Fatal(err)
 			}
 			if len(got) != test.want {
@@ -55,46 +55,27 @@ func TestStoreListWhereSQLite(t *testing.T) {
 	}
 }
 
-func TestStoreWhereClausePostgresPlaceholderOrder(t *testing.T) {
-	meta := registerModel(t, createWidget{})
-	store := NewStore(nil, Postgres)
-	clause, args, err := store.whereClause(meta, Query{
-		Where: []Condition{{Field: "Active", Op: OpEq, Value: true}},
-		Any: []Condition{
-			{Field: "Name", Op: OpLike, Value: "Al%"},
-			{Field: "Name", Op: OpLike, Value: "Be%"},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantClause := " WHERE (active = $1) AND (name LIKE $2 OR name LIKE $3)"
-	if clause != wantClause || !reflect.DeepEqual(args, []any{true, "Al%", "Be%"}) {
-		t.Fatalf("clause = %q, args = %#v; want %q and ordered args", clause, args, wantClause)
-	}
-}
-
 func TestStoreListWhereValidation(t *testing.T) {
 	meta := registerModel(t, createWidget{})
-	store := NewStore(nil, SQLite)
+	store := db.NewStore(nil, db.SQLite)
 	tests := []struct {
 		name      string
-		condition Condition
+		condition db.Condition
 		want      string
 	}{
-		{"unknown field", Condition{"Missing", OpEq, 1}, "unknown Where field"},
-		{"unknown operator", Condition{"Count", Op("oops"), 1}, "unsupported Where operator"},
-		{"string comparison", Condition{"Name", OpGt, "a"}, "not supported"},
-		{"bool comparison", Condition{"Active", OpLt, true}, "not supported"},
-		{"nil value", Condition{"Name", OpEq, nil}, "nil Where value"},
-		{"wrong kind", Condition{"Count", OpEq, "1"}, "has type"},
-		{"wrong width", Condition{"ID", OpEq, int(1)}, "has type"},
-		{"wrong time type", Condition{"CreatedAt", OpEq, struct{}{}}, "has type"},
+		{"unknown field", db.Condition{"Missing", db.OpEq, 1}, "unknown Where field"},
+		{"unknown operator", db.Condition{"Count", db.Op("oops"), 1}, "unsupported Where operator"},
+		{"string comparison", db.Condition{"Name", db.OpGt, "a"}, "not supported"},
+		{"bool comparison", db.Condition{"Active", db.OpLt, true}, "not supported"},
+		{"nil value", db.Condition{"Name", db.OpEq, nil}, "nil Where value"},
+		{"wrong kind", db.Condition{"Count", db.OpEq, "1"}, "has type"},
+		{"wrong width", db.Condition{"ID", db.OpEq, int(1)}, "has type"},
+		{"wrong time type", db.Condition{"CreatedAt", db.OpEq, struct{}{}}, "has type"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var got []createWidget
-			err := store.List(context.Background(), meta, Query{Where: []Condition{test.condition}}, &got)
+			err := store.List(context.Background(), meta, db.Query{Where: []db.Condition{test.condition}}, &got)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want %q", err, test.want)
 			}
@@ -102,11 +83,10 @@ func TestStoreListWhereValidation(t *testing.T) {
 	}
 }
 
-func TestStoreListAnyLikeAndCountSQLite(t *testing.T) {
-	sqlDB := openCreateTestDB(t)
-	createWidgetTable(t, sqlDB)
-	meta := registerModel(t, createWidget{})
-	store := NewStore(sqlDB, SQLite)
+func TestStoreListAnyLikeAndCount(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, createWidget{})
+	meta := metaFor(t, registry, createWidget{})
+	store := db.NewStore(sqlDB, dialect)
 	for _, widget := range []createWidget{
 		{Name: "Alpha", Active: true},
 		{Name: "Beta", Active: true},
@@ -116,11 +96,11 @@ func TestStoreListAnyLikeAndCountSQLite(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	query := Query{
-		Where: []Condition{{Field: "Active", Op: OpEq, Value: true}},
-		Any: []Condition{
-			{Field: "Name", Op: OpLike, Value: "Al%"},
-			{Field: "Name", Op: OpLike, Value: "%eta"},
+	query := db.Query{
+		Where: []db.Condition{{Field: "Active", Op: db.OpEq, Value: true}},
+		Any: []db.Condition{
+			{Field: "Name", Op: db.OpLike, Value: "Al%"},
+			{Field: "Name", Op: db.OpLike, Value: "%eta"},
 		},
 		OrderBy: []string{"Name"},
 		Limit:   1,
@@ -139,13 +119,13 @@ func TestStoreListAnyLikeAndCountSQLite(t *testing.T) {
 	}
 	for _, test := range []struct {
 		name  string
-		query Query
+		query db.Query
 		want  int
 	}{
-		{"no filter", Query{}, 3},
-		{"empty Any", Query{Any: []Condition{}}, 3},
-		{"only Any", Query{Any: []Condition{{Field: "Name", Op: OpLike, Value: "Al%"}}}, 2},
-		{"only Where", Query{Where: []Condition{{Field: "Active", Op: OpEq, Value: false}}}, 1},
+		{"no filter", db.Query{}, 3},
+		{"empty Any", db.Query{Any: []db.Condition{}}, 3},
+		{"only Any", db.Query{Any: []db.Condition{{Field: "Name", Op: db.OpLike, Value: "Al%"}}}, 2},
+		{"only Where", db.Query{Where: []db.Condition{{Field: "Active", Op: db.OpEq, Value: false}}}, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			count, err := store.Count(context.Background(), meta, test.query)
@@ -158,19 +138,19 @@ func TestStoreListAnyLikeAndCountSQLite(t *testing.T) {
 
 func TestStoreAnyLikeValidation(t *testing.T) {
 	meta := registerModel(t, createWidget{})
-	store := NewStore(nil, SQLite)
+	store := db.NewStore(nil, db.SQLite)
 	for _, test := range []struct {
 		name      string
-		condition Condition
+		condition db.Condition
 		want      string
 	}{
-		{"unknown field", Condition{"Missing", OpLike, "x%"}, "unknown Where field"},
-		{"nonstring field", Condition{"Count", OpLike, "1%"}, "only supported for string"},
-		{"wrong value", Condition{"Name", OpLike, 1}, "has type"},
-		{"nil value", Condition{"Name", OpLike, nil}, "nil Where value"},
+		{"unknown field", db.Condition{"Missing", db.OpLike, "x%"}, "unknown Where field"},
+		{"nonstring field", db.Condition{"Count", db.OpLike, "1%"}, "only supported for string"},
+		{"wrong value", db.Condition{"Name", db.OpLike, 1}, "has type"},
+		{"nil value", db.Condition{"Name", db.OpLike, nil}, "nil Where value"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			query := Query{Any: []Condition{test.condition}}
+			query := db.Query{Any: []db.Condition{test.condition}}
 			_, err := store.Count(context.Background(), meta, query)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Count error = %v, want %q", err, test.want)

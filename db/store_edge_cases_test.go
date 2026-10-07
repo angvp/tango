@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"context"
@@ -7,8 +7,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
-	_ "modernc.org/sqlite"
+	"github.com/angvp/tango/testdb"
 )
 
 // edgeWidget is a plain model used across the destination-validation and
@@ -18,39 +19,26 @@ type edgeWidget struct {
 	Name string
 }
 
-func openEdgeCaseTestDB(t *testing.T) *sql.DB {
+// openEdgeCaseTestDB returns a fresh database holding the edge_widget
+// table and the dialect to use with it.
+func openEdgeCaseTestDB(t *testing.T) (*sql.DB, db.Dialect) {
 	t.Helper()
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	if _, err := sqlDB.ExecContext(context.Background(), `CREATE TABLE edge_widget (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`); err != nil {
-		t.Fatalf("create table: %v", err)
-	}
-	return sqlDB
+	sqlDB, dialect, _ := openTables(t, edgeWidget{})
+	return sqlDB, dialect
 }
 
 func edgeWidgetMeta(t *testing.T) model.ModelMeta {
 	t.Helper()
-	registry := model.NewRegistry()
-	if err := registry.Register(edgeWidget{}); err != nil {
-		t.Fatalf("register model: %v", err)
-	}
-	meta, ok := registry.Get("edgeWidget")
-	if !ok {
-		t.Fatal("registered model metadata not found")
-	}
-	return meta
+	return registerModel(t, edgeWidget{})
 }
 
 // TestStoreMutatorsRejectNonPointerOrNilDestinations covers the "destination
 // must be a non-nil pointer" guard shared by Create, Get, Update, List,
 // QueryRow and Query.
 func TestStoreMutatorsRejectNonPointerOrNilDestinations(t *testing.T) {
-	sqlDB := openEdgeCaseTestDB(t)
+	sqlDB, dialect := openEdgeCaseTestDB(t)
 	meta := edgeWidgetMeta(t)
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	ctx := context.Background()
 
 	var nilPtr *edgeWidget
@@ -64,8 +52,8 @@ func TestStoreMutatorsRejectNonPointerOrNilDestinations(t *testing.T) {
 		{"Get non-pointer", func() error { return store.Get(ctx, meta, int64(1), edgeWidget{}) }},
 		{"Update nil pointer", func() error { return store.Update(ctx, meta, nilPtr) }},
 		{"Update non-pointer", func() error { return store.Update(ctx, meta, edgeWidget{}) }},
-		{"List nil pointer", func() error { var dest *[]edgeWidget; return store.List(ctx, meta, Query{}, dest) }},
-		{"List non-slice pointer", func() error { var dest edgeWidget; return store.List(ctx, meta, Query{}, &dest) }},
+		{"List nil pointer", func() error { var dest *[]edgeWidget; return store.List(ctx, meta, db.Query{}, dest) }},
+		{"List non-slice pointer", func() error { var dest edgeWidget; return store.List(ctx, meta, db.Query{}, &dest) }},
 		{"QueryRow nil pointer", func() error { return store.QueryRow(ctx, nilPtr, "SELECT 1") }},
 		{"Query nil pointer", func() error { var dest *[]edgeWidget; return store.Query(ctx, dest, "SELECT 1") }},
 		{"Query non-slice pointer", func() error { var dest edgeWidget; return store.Query(ctx, &dest, "SELECT 1") }},
@@ -100,14 +88,10 @@ func noPKMeta() model.ModelMeta {
 // Update and Delete all surface findPrimaryKeyField's error for a model with
 // no primary key field, rather than panicking or silently doing nothing.
 func TestFindPrimaryKeyFieldErrorPropagatesThroughGetUpdateDelete(t *testing.T) {
-	sqlDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer sqlDB.Close()
+	sqlDB, dialect := testdb.Open(t)
 
 	meta := noPKMeta()
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	ctx := context.Background()
 
 	var dest noPKModel
@@ -137,8 +121,8 @@ func phantomFieldMeta() model.ModelMeta {
 }
 
 func TestStoreCreateAndUpdateFieldNotFoundReturnsError(t *testing.T) {
-	sqlDB := openEdgeCaseTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openEdgeCaseTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 	ctx := context.Background()
 	meta := phantomFieldMeta()
 
@@ -151,12 +135,12 @@ func TestStoreCreateAndUpdateFieldNotFoundReturnsError(t *testing.T) {
 }
 
 func TestStoreGetAndListScanFieldNotFoundReturnsError(t *testing.T) {
-	sqlDB := openEdgeCaseTestDB(t)
+	sqlDB, dialect := openEdgeCaseTestDB(t)
 	ctx := context.Background()
 	if _, err := sqlDB.ExecContext(ctx, `INSERT INTO edge_widget (name) VALUES ('a')`); err != nil {
 		t.Fatalf("seed insert: %v", err)
 	}
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	meta := phantomFieldMeta()
 
 	var got edgeWidget
@@ -165,7 +149,7 @@ func TestStoreGetAndListScanFieldNotFoundReturnsError(t *testing.T) {
 	}
 
 	var list []edgeWidget
-	if err := store.List(ctx, meta, Query{}, &list); err == nil {
+	if err := store.List(ctx, meta, db.Query{}, &list); err == nil {
 		t.Fatal("List scanning into a phantom field returned nil error, want an error")
 	}
 }
@@ -183,7 +167,7 @@ func TestStoreGetAndListScanFieldNotFoundReturnsError(t *testing.T) {
 // through the public Registry API and would require hand-constructing a
 // Registry in a way no real caller can.
 func TestStoreCreateForeignKeyValidationSkipsUnregisteredTarget(t *testing.T) {
-	sqlDB := openEdgeCaseTestDB(t)
+	sqlDB, dialect := openEdgeCaseTestDB(t)
 	ctx := context.Background()
 
 	registry := model.NewRegistry()
@@ -200,7 +184,7 @@ func TestStoreCreateForeignKeyValidationSkipsUnregisteredTarget(t *testing.T) {
 		},
 	}
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	widget := edgeWidget{Name: "1"} // non-zero so validation actually runs
@@ -212,9 +196,9 @@ func TestStoreCreateForeignKeyValidationSkipsUnregisteredTarget(t *testing.T) {
 // TestStoreCreateForeignKeyValidationSurfacesUnderlyingSQLError confirms
 // that a genuine SQL error while checking a foreign key reference (as
 // opposed to sql.ErrNoRows, which means "not found") is returned as-is
-// rather than mistaken for ErrInvalidForeignKey.
+// rather than mistaken for db.ErrInvalidForeignKey.
 func TestStoreCreateForeignKeyValidationSurfacesUnderlyingSQLError(t *testing.T) {
-	sqlDB := openEdgeCaseTestDB(t)
+	sqlDB, dialect := openEdgeCaseTestDB(t)
 	ctx := context.Background()
 
 	registry := model.NewRegistry()
@@ -240,15 +224,15 @@ func TestStoreCreateForeignKeyValidationSurfacesUnderlyingSQLError(t *testing.T)
 		},
 	}
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	err := store.Create(ctx, referencing, &edgeWidget{Name: "1"})
 	if err == nil {
 		t.Fatal("Create returned nil error, want the underlying SQL error surfaced")
 	}
-	if errors.Is(err, ErrInvalidForeignKey) {
-		t.Fatalf("error = %v, want a plain SQL error, not ErrInvalidForeignKey", err)
+	if errors.Is(err, db.ErrInvalidForeignKey) {
+		t.Fatalf("error = %v, want a plain SQL error, not db.ErrInvalidForeignKey", err)
 	}
 }
 
@@ -259,7 +243,7 @@ func TestStoreCreateForeignKeyValidationSurfacesUnderlyingSQLError(t *testing.T)
 // needed — this is a plain database/sql failure mode common to every
 // dialect.
 func TestStoreMethodsSurfaceUnderlyingSQLErrorsOnClosedConnection(t *testing.T) {
-	sqlDB := openEdgeCaseTestDB(t)
+	sqlDB, dialect := openEdgeCaseTestDB(t)
 	meta := edgeWidgetMeta(t)
 	ctx := context.Background()
 
@@ -267,7 +251,7 @@ func TestStoreMethodsSurfaceUnderlyingSQLErrorsOnClosedConnection(t *testing.T) 
 		t.Fatalf("close db: %v", err)
 	}
 
-	storeNoModels := NewStore(sqlDB, SQLite)
+	storeNoModels := db.NewStore(sqlDB, dialect)
 
 	cases := []struct {
 		name string
@@ -277,7 +261,7 @@ func TestStoreMethodsSurfaceUnderlyingSQLErrorsOnClosedConnection(t *testing.T) 
 		{"Get", func() error { var dest edgeWidget; return storeNoModels.Get(ctx, meta, int64(1), &dest) }},
 		{"Update", func() error { return storeNoModels.Update(ctx, meta, &edgeWidget{ID: 1, Name: "a"}) }},
 		{"Delete without UseModels", func() error { return storeNoModels.Delete(ctx, meta, int64(1)) }},
-		{"List", func() error { var dest []edgeWidget; return storeNoModels.List(ctx, meta, Query{}, &dest) }},
+		{"List", func() error { var dest []edgeWidget; return storeNoModels.List(ctx, meta, db.Query{}, &dest) }},
 		{"QueryRow", func() error { var dest edgeWidget; return storeNoModels.QueryRow(ctx, &dest, "SELECT 1") }},
 		{"Query", func() error { var dest []edgeWidget; return storeNoModels.Query(ctx, &dest, "SELECT 1") }},
 	}
@@ -294,141 +278,10 @@ func TestStoreMethodsSurfaceUnderlyingSQLErrorsOnClosedConnection(t *testing.T) 
 	if err := registry.Register(edgeWidget{}); err != nil {
 		t.Fatalf("register model: %v", err)
 	}
-	storeWithModels := NewStore(sqlDB, SQLite)
+	storeWithModels := db.NewStore(sqlDB, dialect)
 	storeWithModels.UseModels(registry)
 	if err := storeWithModels.Delete(ctx, meta, int64(1)); err == nil {
 		t.Fatal("Delete (cascade path, BeginTx) on a closed connection returned nil error, want an error")
-	}
-}
-
-// TestSetPrimaryKeyValue is a direct, white-box table of
-// setPrimaryKeyValue's backfill branches: every supported Go kind, its
-// overflow/negative-value error cases, an unsupported kind, and a
-// non-settable destination.
-func TestSetPrimaryKeyValue(t *testing.T) {
-	addressable := func(v any) reflect.Value {
-		p := reflect.New(reflect.TypeOf(v))
-		p.Elem().Set(reflect.ValueOf(v))
-		return p.Elem()
-	}
-
-	cases := []struct {
-		name    string
-		value   reflect.Value
-		id      int64
-		wantErr bool
-		check   func(t *testing.T, v reflect.Value)
-	}{
-		{
-			name:  "int64 backfills normally",
-			value: addressable(int64(0)),
-			id:    42,
-			check: func(t *testing.T, v reflect.Value) {
-				if v.Int() != 42 {
-					t.Fatalf("got %d, want 42", v.Int())
-				}
-			},
-		},
-		{
-			name:    "int8 overflow returns error",
-			value:   addressable(int8(0)),
-			id:      1000,
-			wantErr: true,
-		},
-		{
-			name:  "uint64 backfills normally",
-			value: addressable(uint64(0)),
-			id:    42,
-			check: func(t *testing.T, v reflect.Value) {
-				if v.Uint() != 42 {
-					t.Fatalf("got %d, want 42", v.Uint())
-				}
-			},
-		},
-		{
-			name:    "uint negative id returns error",
-			value:   addressable(uint64(0)),
-			id:      -1,
-			wantErr: true,
-		},
-		{
-			name:    "uint8 overflow returns error",
-			value:   addressable(uint8(0)),
-			id:      1000,
-			wantErr: true,
-		},
-		{
-			name:  "string backfills the decimal id",
-			value: addressable(""),
-			id:    42,
-			check: func(t *testing.T, v reflect.Value) {
-				if v.String() != "42" {
-					t.Fatalf("got %q, want %q", v.String(), "42")
-				}
-			},
-		},
-		{
-			name:    "unsupported kind returns error",
-			value:   addressable(float64(0)),
-			id:      42,
-			wantErr: true,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := setPrimaryKeyValue(tc.value, tc.id)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("got nil error, want an error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("got error %v, want nil", err)
-			}
-			tc.check(t, tc.value)
-		})
-	}
-}
-
-func TestSetPrimaryKeyValueNotSettableReturnsError(t *testing.T) {
-	// A value obtained without going through a pointer's Elem() is not
-	// addressable, hence not settable.
-	notSettable := reflect.ValueOf(edgeWidget{ID: 1}).FieldByName("ID")
-	if err := setPrimaryKeyValue(notSettable, 42); err == nil {
-		t.Fatal("got nil error for a non-settable value, want an error")
-	}
-}
-
-// TestFindFieldByColumnUnknownColumnReturnsError is findFieldByColumn's
-// direct counterpart to TestStoreQueryUnmatchedColumnFails in
-// store_raw_sql_test.go, confirming the not-found path by name rather than
-// through a full Query round trip.
-func TestFindFieldByColumnUnknownColumnReturnsError(t *testing.T) {
-	structValue := reflect.ValueOf(&edgeWidget{}).Elem()
-	if _, err := findFieldByColumn(structValue, structValue.Type(), "no_such_column"); err == nil {
-		t.Fatal("got nil error for an unmatched column, want an error")
-	}
-}
-
-// TestFindFieldByColumnSkipsUnexportedFieldsThenMatchesNextExported covers
-// findFieldByColumn's "skip unexported fields" branch: a column that
-// happens to share a name with an unexported field must still match the
-// next, exported field rather than being rejected.
-func TestFindFieldByColumnSkipsUnexportedFieldsThenMatchesNextExported(t *testing.T) {
-	type withUnexported struct {
-		hidden string //nolint:unused // exercised via reflection only
-		Name   string
-	}
-	structValue := reflect.ValueOf(&withUnexported{}).Elem()
-
-	got, err := findFieldByColumn(structValue, structValue.Type(), "name")
-	if err != nil {
-		t.Fatalf("findFieldByColumn returned error: %v", err)
-	}
-	if !got.CanSet() {
-		t.Fatal("findFieldByColumn returned a field that cannot be set")
 	}
 }
 
@@ -437,14 +290,14 @@ func TestFindFieldByColumnSkipsUnexportedFieldsThenMatchesNextExported(t *testin
 // selecting a column with no corresponding destination field must fail
 // rather than silently drop data.
 func TestStoreQueryRowUnmatchedColumnFails(t *testing.T) {
-	sqlDB := openRawSQLTestDB(t)
-	store := NewStore(sqlDB, SQLite)
+	sqlDB, dialect := openRawSQLTestDB(t)
+	store := db.NewStore(sqlDB, dialect)
 
 	var result rawAuthor
 	err := store.QueryRow(
 		context.Background(),
 		&result,
-		`SELECT authors.id AS id, authors.name AS name, 'x' AS extra FROM authors WHERE authors.name = ?`,
+		bind(dialect, `SELECT author.id AS id, author.name AS name, 'x' AS extra FROM author WHERE author.name = ?`),
 		"Ada",
 	)
 	if err == nil {
@@ -458,7 +311,7 @@ func TestStoreQueryRowUnmatchedColumnFails(t *testing.T) {
 // destination struct type, so the SELECT itself succeeds and the failure
 // surfaces only once List tries to scan the row into the struct.
 func TestStoreListScanFieldNotFoundReturnsError(t *testing.T) {
-	sqlDB := openEdgeCaseTestDB(t)
+	sqlDB, dialect := openEdgeCaseTestDB(t)
 	ctx := context.Background()
 	if _, err := sqlDB.ExecContext(ctx, `ALTER TABLE edge_widget ADD COLUMN extra TEXT`); err != nil {
 		t.Fatalf("add column: %v", err)
@@ -476,9 +329,9 @@ func TestStoreListScanFieldNotFoundReturnsError(t *testing.T) {
 		},
 	}
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	var list []edgeWidget
-	if err := store.List(ctx, meta, Query{}, &list); err == nil {
+	if err := store.List(ctx, meta, db.Query{}, &list); err == nil {
 		t.Fatal("List scanning a valid SQL column into a missing struct field returned nil error, want an error")
 	}
 }
@@ -489,13 +342,12 @@ func TestStoreListScanFieldNotFoundReturnsError(t *testing.T) {
 // ordinary SQL trigger — a realistic scenario (e.g. a DB-level constraint or
 // audit trigger) rather than a contrived fault injection.
 func TestStoreDeleteCascadeExecDeleteFailureSurfacesAndRollsBack(t *testing.T) {
-	sqlDB := openCascadeTestDB(t)
+	sqlDB, dialect, registry := openCascadeTestDB(t)
 	ctx := context.Background()
-	registry := cascadeTestRegistry(t)
 	authorMeta, _ := registry.Get("cascadeAuthor")
 	postMeta, _ := registry.Get("cascadePost")
 
-	store := NewStore(sqlDB, SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
 
 	author := cascadeAuthor{Name: "Jane"}
@@ -507,11 +359,24 @@ func TestStoreDeleteCascadeExecDeleteFailureSurfacesAndRollsBack(t *testing.T) {
 		t.Fatalf("Create post: %v", err)
 	}
 
-	if _, err := sqlDB.ExecContext(ctx, `
-		CREATE TRIGGER block_post_delete BEFORE DELETE ON cascade_post
-		BEGIN SELECT RAISE(ABORT, 'delete blocked for test'); END;
-	`); err != nil {
-		t.Fatalf("create trigger: %v", err)
+	// The trigger's function lives in the test's own schema on PostgreSQL,
+	// so testdb's schema drop removes it.
+	trigger := map[db.Dialect][]string{
+		db.SQLite: {`
+			CREATE TRIGGER block_post_delete BEFORE DELETE ON cascade_post
+			BEGIN SELECT RAISE(ABORT, 'delete blocked for test'); END;`,
+		},
+		db.Postgres: {`
+			CREATE FUNCTION block_post_delete() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN RAISE EXCEPTION 'delete blocked for test'; END; $$`, `
+			CREATE TRIGGER block_post_delete BEFORE DELETE ON cascade_post
+			FOR EACH ROW EXECUTE FUNCTION block_post_delete()`,
+		},
+	}[dialect]
+	for _, stmt := range trigger {
+		if _, err := sqlDB.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("create trigger: %v", err)
+		}
 	}
 
 	if err := store.Delete(ctx, authorMeta, author.ID); err == nil {
@@ -529,7 +394,7 @@ func TestStoreDeleteCascadeExecDeleteFailureSurfacesAndRollsBack(t *testing.T) {
 // letters where the second is immediately followed by a lowercase letter
 // (an acronym ending right before a new word, e.g. "APIKey").
 func TestShouldInsertUnderscoreBeforeAcronymFollowedByLowercase(t *testing.T) {
-	if got := ColumnName("APIKey"); got != "api_key" {
+	if got := db.ColumnName("APIKey"); got != "api_key" {
 		t.Fatalf("ColumnName(%q) = %q, want %q", "APIKey", got, "api_key")
 	}
 }

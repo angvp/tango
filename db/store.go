@@ -382,6 +382,12 @@ func (s *Store) cascadeDependents(ctx context.Context, tx execer, meta model.Mod
 			for _, childPK := range childPKs {
 				key := cascadeKey(other.Name, childPK)
 				if visited[key] {
+					// A circular reference back to a row this cascade is
+					// already deleting. Clear it, or the database's
+					// REFERENCES constraint rejects deleting (meta, pk).
+					if err := s.clearReference(ctx, tx, other, otherPKField, field, childPK); err != nil {
+						return err
+					}
 					continue
 				}
 				visited[key] = true
@@ -396,6 +402,21 @@ func (s *Store) cascadeDependents(ctx context.Context, tx execer, meta model.Mod
 		}
 	}
 	return nil
+}
+
+// clearReference sets fkField to NULL on the row of model other whose
+// primary key is pk. The cascade uses it only on rows it is about to delete
+// anyway, and NULL is how an unset foreign key is stored (see columnValue).
+func (s *Store) clearReference(ctx context.Context, tx execer, other model.ModelMeta, otherPKField model.FieldMeta, fkField model.FieldMeta, pk any) error {
+	query := fmt.Sprintf(
+		"UPDATE %s SET %s = NULL WHERE %s = %s",
+		ColumnName(other.Name),
+		ColumnName(fkField.Name),
+		ColumnName(otherPKField.Name),
+		placeholder(s.dialect, 1),
+	)
+	_, err := tx.ExecContext(ctx, query, pk)
+	return err
 }
 
 // referencingPrimaryKeys returns the primary key of every row in model other
@@ -597,7 +618,7 @@ func validateCondition(meta model.ModelMeta, condition Condition) (model.FieldMe
 	if condition.Op == OpLike && fieldKind != reflect.String {
 		return field, fmt.Errorf("tango db: Where operator %q is only supported for string fields, got %q", condition.Op, field.Name)
 	}
-	if condition.Op != OpEq && condition.Op != OpNe && condition.Op != OpLike && field.Type != reflect.TypeFor[time.Time]() {
+	if condition.Op != OpEq && condition.Op != OpNe && condition.Op != OpLike && field.Type != timeType {
 		switch fieldKind {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
@@ -675,15 +696,39 @@ func scanNullAsZero(scanner rowScanner, fields []reflect.Value) error {
 
 	for i, holder := range holders {
 		if !holder.IsValid() {
+			normalizeTimePointer(fields[i])
 			continue
 		}
 		if value := holder.Elem(); value.IsNil() {
 			fields[i].SetZero()
 		} else {
 			fields[i].Set(value.Elem())
+			normalizeTime(fields[i])
 		}
 	}
 	return nil
+}
+
+var timeType = reflect.TypeFor[time.Time]()
+
+// normalizeTime converts a scanned time.Time field to UTC. Drivers disagree
+// on the zone they read a time back in (pgx uses the process's local zone
+// for TIMESTAMPTZ, modernc.org/sqlite the zone stored in the text), so
+// without this the same stored instant would come back, and serialise,
+// differently per dialect and per machine.
+func normalizeTime(field reflect.Value) {
+	if field.Type() == timeType {
+		field.Set(reflect.ValueOf(field.Interface().(time.Time).UTC()))
+	}
+}
+
+// normalizeTimePointer is normalizeTime for a non-nil *time.Time field.
+func normalizeTimePointer(field reflect.Value) {
+	if field.Type().Elem() != timeType || field.IsNil() {
+		return
+	}
+	utc := field.Elem().Interface().(time.Time).UTC()
+	field.Set(reflect.ValueOf(&utc))
 }
 
 // findPrimaryKeyField returns the FieldMeta flagged PrimaryKey in meta.

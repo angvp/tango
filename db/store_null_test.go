@@ -32,58 +32,26 @@ type nullPost struct {
 	CreatedAt time.Time
 }
 
-// nullSchema is the tables the way migrations build them for each dialect —
-// the foreign key is a real REFERENCES constraint, enforced on SQLite
-// because testdb turns foreign keys on — with every column but the key
-// nullable, as after `tango migrate` adds columns to a table with data.
-var nullSchema = map[db.Dialect][]string{
-	db.SQLite: {
-		`CREATE TABLE null_author (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)`,
-		`CREATE TABLE null_post (id INTEGER PRIMARY KEY AUTOINCREMENT, author_id INTEGER REFERENCES null_author,
-			title TEXT, views INTEGER, score REAL, published BOOLEAN, created_at TIMESTAMP)`,
-	},
-	db.Postgres: {
-		`CREATE TABLE null_author (id BIGSERIAL PRIMARY KEY, name TEXT)`,
-		`CREATE TABLE null_post (id BIGSERIAL PRIMARY KEY, author_id BIGINT REFERENCES null_author,
-			title TEXT, views BIGINT, score DOUBLE PRECISION, published BOOLEAN, created_at TIMESTAMPTZ)`,
-	},
-}
-
-// openNullTestDB builds nullSchema in a fresh database for the run's Test
-// dialect and returns a Store with the models registered.
+// openNullTestDB builds the tables the way migrations do, in a fresh
+// database for the run's Test dialect, and returns a Store with the models
+// registered. The foreign key is a real REFERENCES constraint (enforced on
+// SQLite because testdb turns foreign keys on), and migrations leave every
+// column but the key nullable, as after `tango migrate` adds columns to a
+// table with data.
 func openNullTestDB(t *testing.T) (*sql.DB, *db.Store, model.ModelMeta, model.ModelMeta) {
 	t.Helper()
-	sqlDB, dialect := testdb.Open(t)
-	for _, stmt := range nullSchema[dialect] {
-		if _, err := sqlDB.Exec(stmt); err != nil {
-			t.Fatalf("setup %q: %v", stmt, err)
-		}
-	}
-
-	registry := model.NewRegistry()
-	for _, v := range []any{nullAuthor{}, nullPost{}} {
-		if err := registry.Register(v); err != nil {
-			t.Fatalf("register %T: %v", v, err)
-		}
-	}
-	authorMeta, _ := registry.Get("nullAuthor")
-	postMeta, _ := registry.Get("nullPost")
-
+	sqlDB, dialect, registry := openTables(t, nullAuthor{}, nullPost{})
 	store := db.NewStore(sqlDB, dialect)
 	store.UseModels(registry)
-	return sqlDB, store, authorMeta, postMeta
+	return sqlDB, store, metaFor(t, registry, nullAuthor{}), metaFor(t, registry, nullPost{})
 }
 
 // readAuthorID reads null_post.author_id for id straight from the table,
 // bypassing the Store's NULL handling.
 func readAuthorID(t *testing.T, sqlDB *sql.DB, id int64) sql.NullInt64 {
 	t.Helper()
-	query := `SELECT author_id FROM null_post WHERE id = ?`
-	if testdb.Dialect() == db.Postgres {
-		query = `SELECT author_id FROM null_post WHERE id = $1`
-	}
 	var authorID sql.NullInt64
-	if err := sqlDB.QueryRow(query, id).Scan(&authorID); err != nil {
+	if err := sqlDB.QueryRow(bind(testdb.Dialect(), `SELECT author_id FROM null_post WHERE id = ?`), id).Scan(&authorID); err != nil {
 		t.Fatalf("read author_id: %v", err)
 	}
 	return authorID
