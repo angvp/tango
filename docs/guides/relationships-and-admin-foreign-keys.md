@@ -44,6 +44,8 @@ Like every model name in tanGO, `fk=Author` refers to a bare, unnamespaced model
 sqlDB, err := sql.Open("sqlite", db.SQLiteForeignKeysDSN(path))
 ```
 
+A foreign key to a model in another app works the same way: `tango migrate` creates the referenced app's table first and `tango migrate down` drops it last, regardless of app names or `InstalledApps` order — see [migrations](migrations.md#order-across-apps).
+
 Postgres enforces the constraint natively with no extra step.
 
 ## Cascade delete

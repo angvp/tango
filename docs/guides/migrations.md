@@ -45,13 +45,22 @@ tango migrate
 
 Runs every not-yet-applied migration's `Up` steps in order, translating each dialect-agnostic step into real DDL for your configured `Dialect` (SQLite uses a table-rebuild pattern for anything it can't `ALTER TABLE` directly, like `DropColumn`; Postgres steps map straight to `ALTER TABLE`/`CREATE INDEX`). Applied migrations are tracked in a `tango_migrations` table — `(app, name, applied_at)`, primary keyed on `(app, name)` — deliberately Django-inspired, like `django_migrations`.
 
+### Order across apps
+
+The order of the migrations slice you pass doesn't matter. Pending migrations run by `Name`, then `App`, with two rules on top:
+
+- Each app's own migrations always run in `Name` order (`0001_…` before `0002_…`).
+- A migration that adds a foreign key to another app's table (a `CreateTable` or `AddColumn` column with `References`) runs after that app's migration creating the table — whatever the two apps are called and wherever they sit in `InstalledApps`. PostgreSQL refuses a `REFERENCES` clause naming a table that doesn't exist yet, so this is what lets a cross-app foreign key migrate there at all. It matches how foreign keys already ignore `InstalledApps` order at registration ([ADR 0011](../adr/0011-fk-target-validated-after-registration-not-at-register-time.md)).
+
+If foreign keys between apps form a cycle (app A's initial migration references app B's table and B's references A's), no order works on PostgreSQL. `tango migrate` then fails before applying anything, naming every migration in the cycle. Break the cycle by moving one of the foreign key columns into a later migration of its app, as an `AddColumn`.
+
 ## Rolling back
 
 ```sh
 tango migrate down
 ```
 
-Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. `Down` steps are generated automatically for reversible operations (`CreateTable`↔`DropTable`, `AddColumn`↔`DropColumn`, `CreateIndex`↔`DropIndex`). A migration containing a lossy step (`DropColumn`, `DropTable`) is marked **irreversible**: `tango migrate down` on it fails explicitly with a clear error rather than attempting to "restore" data it can no longer recover.
+Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. Migrations recorded with the same `applied_at` are rolled back in the reverse of the order they were applied in, so another app's table that a foreign key references is dropped only after the table referencing it. `Down` steps are generated automatically for reversible operations (`CreateTable`↔`DropTable`, `AddColumn`↔`DropColumn`, `CreateIndex`↔`DropIndex`). A migration containing a lossy step (`DropColumn`, `DropTable`) is marked **irreversible**: `tango migrate down` on it fails explicitly with a clear error rather than attempting to "restore" data it can no longer recover.
 
 ## Migration identity
 

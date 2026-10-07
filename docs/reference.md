@@ -215,7 +215,7 @@ Stable runtime contract:
 
 | Symbol | What it's for |
 |---|---|
-| `func ApplyPending(ctx, sqlDB, dialect, migrations) error` | Backs `-migrate`. |
+| `func ApplyPending(ctx, sqlDB, dialect, migrations) error` | Backs `-migrate`. Runs pending migrations by name, each app's in sequence, and a migration referencing another app's table after the one creating it — see [migrations](guides/migrations.md#order-across-apps). |
 | `func RollbackLast(ctx, sqlDB, dialect, migrations) error` | Backs `-migrate -down`. Returns `ErrNoAppliedMigrations` or `ErrIrreversibleMigration` for their respective cases. |
 | `func AppliedMigrations(ctx, sqlDB) (map[MigrationKey]bool, error)` | Reads the applied migration keys from an existing `tango_migrations` table. |
 | `type MigrationKey struct{ App, Name string }` | The app-scoped identity used by `tango_migrations`. |
