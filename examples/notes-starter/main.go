@@ -100,35 +100,32 @@ func run() error {
 	if err := tango.LoadEnvFile(".env"); err != nil {
 		return err
 	}
-	if os.Getenv("TANGO_DB_DIALECT") == "" {
-		os.Setenv("TANGO_DB_DIALECT", "sqlite")
+
+	dialect, driverName, dsn, err := tango.LoadDBConfigFromEnv()
+	if err != nil {
+		return err
 	}
 
-	dsn := tango.LoadDBDSNFromEnv()
-	if dsn == "" {
-		dsn = "app.db"
-	}
-
-	sqlDB, err := sql.Open("sqlite", dsn)
+	sqlDB, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return err
 	}
 	defer sqlDB.Close()
 
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dialect)
 	config := appConfig(store)
 
 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 		return err
 	}
 
-	handled, err := tango.DispatchFlags(config, sqlDB, db.SQLite, migrations.Migrations)
+	handled, err := tango.DispatchFlags(config, sqlDB, dialect, migrations.Migrations)
 	if handled || err != nil {
 		return err
 	}
 
 	fmt.Println("listening on", config.Addr)
-	return tango.Serve(config, sqlDB, db.SQLite)
+	return tango.Serve(config, sqlDB, dialect)
 }
 
 func appConfig(store *db.Store) tango.Config {

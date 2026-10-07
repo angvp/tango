@@ -27,7 +27,6 @@ curl http://localhost:8000/api/notes/
 
 ## Configuration
 
-- `TANGO_DB_DSN` defaults to `app.db`.
-- `TANGO_DB_DIALECT` defaults to `sqlite`.
+- `TANGO_DB_DSN` picks the database by its scheme and defaults to `sqlite://app.db` (a file in the working directory). `sqlite:///var/data/app.db` is an absolute path and `sqlite://:memory:` an in-memory database.
 
-To adapt this example to Postgres, switch the driver import, `sql.Open` driver name, `db.Dialect`, and set `TANGO_DB_DSN`/`TANGO_DB_DIALECT`. New projects can generate that shape directly with `tango newproject --dialect=postgres`.
+To adapt this example to Postgres, swap the `modernc.org/sqlite` driver import for `github.com/jackc/pgx/v5/stdlib` and set `TANGO_DB_DSN=postgres://user:password@host:5432/dbname`; the dialect and driver name come from the DSN. New projects can generate that shape directly with `tango newproject --dialect=postgres`.
