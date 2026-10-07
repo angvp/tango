@@ -4,12 +4,12 @@ go 1.27.1
 
 require (
 	github.com/angvp/tango v0.0.0
+	github.com/coder/websocket v1.8.15
 	github.com/jackc/pgx/v5 v5.11.0
 	modernc.org/sqlite v1.60.1
 )
 
 require (
-	github.com/coder/websocket v1.8.15 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-chi/chi/v5 v5.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
