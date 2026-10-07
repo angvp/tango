@@ -101,8 +101,9 @@ func printUsage(w io.Writer) {
 	fmt.Fprint(w, `Usage:
   tango run [args...]      Run the current Go app with go run .
   tango check [args...]    Run the current Go app with -check
-  tango makemigrations [--name <name>]
-                           Generate a migration from current model metadata
+  tango makemigrations [--name <name>] [--allow-drop <app.Model[.Field]>]...
+                           Generate a migration from current model metadata;
+                           each model or field it drops needs its own --allow-drop
   tango migrate            Apply pending migrations (go run . -migrate)
   tango migrate down       Roll back the last applied migration
   tango newproject [--dialect=sqlite|postgres] [--no-admin] <name>
@@ -176,6 +177,8 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 	flags := flag.NewFlagSet("makemigrations", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	explicitName := flags.String("name", "", "use a descriptive migration name")
+	var allowDrops stringList
+	flags.Var(&allowDrops, "allow-drop", "allow dropping one model (app.Model) or field (app.Model.Field) and its data; repeat for each")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -220,6 +223,10 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 
 	changes, err := migration.DiffModels(models, state)
 	if err != nil {
+		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
+		return 1
+	}
+	if err := checkDrops(changes, state, allowDrops); err != nil {
 		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
 		return 1
 	}

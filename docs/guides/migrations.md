@@ -21,6 +21,19 @@ There's no rename step and no column-type-change step. A rename is indistinguish
 
 A generated file's `var M####Xxx = []migration.Migration{...}` is for human readability of the diff — the file an app's `main.go` actually imports is `migrations/migrations.go`, whose `Migrations` slice is regenerated (aggregating every file) on each `tango makemigrations` run. Never hand-edit `migrations.go`.
 
+## Dropping a model or field
+
+A migration that drops a model's table or a field's column destroys its data, so `tango makemigrations` never writes one on its own. If your models no longer have a model or field that migration history does, the run fails, lists each one, and writes nothing:
+
+```
+tango makemigrations: refusing to drop data no --allow-drop authorises:
+  field shop.widget.stock
+    renamed? keep its data: --rename shop.widget.stock=<NewField>
+to drop them and their data: tango makemigrations --allow-drop shop.widget.stock
+```
+
+To drop it, name each model (`app.Model`) or field (`app.Model.Field`) with its own `--allow-drop`; Go names (`shop.Widget.Stock`) and table/column names (`shop.widget.stock`) both work. Every drop needs one, and the run also fails, writing nothing, if an `--allow-drop` names something the change doesn't drop or names the same thing twice. One flag never covers a second, accidental drop.
+
 ## Naming migrations
 
 By default, tanGO combines the next sequence number with `auto` and the current UTC timestamp:
