@@ -162,7 +162,7 @@ Three details worth noticing:
 In `posts`, two pieces work together. `tokens.Middleware(jwt.BearerToken)` runs on every `/posts/` request: it reads `Authorization: Bearer …`, verifies the token, and puts its claims on the request. A missing token is fine — reading posts stays public — but an invalid one is rejected with a `401`. Then `jwt.Require` wraps the views that need a token.
 
 ```go
-// apps/posts/app.go
+// apps/posts/app.go (as of part 7)
 package posts
 
 import (
@@ -306,7 +306,7 @@ func unauthorized(ctx *tango.Context) error {
 `createPost` takes the owner from the token, and `deletePost` refuses to delete someone else's post:
 
 ```go
-// apps/posts/views.go
+// apps/posts/views.go (as of part 7)
 func createPost(store *db.Store, meta, accountMeta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		account, ok, err := tokenAccount(ctx, store, accountMeta)

@@ -223,7 +223,7 @@ func New(store *db.Store) tango.App {
 The views go in `apps/web/views.go`. Every template gets the same `page` struct, filled in with whatever that page needs; a small `render` helper wraps `ctx.HTML(status, templates, name, data)`. `ctx.HTML` renders into a buffer first, so a template that fails halfway through becomes an ordinary error — a clean `500` — rather than half a page:
 
 ```go
-// apps/web/views.go
+// apps/web/views.go (as of part 5)
 package web
 
 import (

@@ -54,7 +54,7 @@ This writes and applies two migrations: the `accounts` tables, and a new `accoun
 The JSON API's `createPost` can no longer create a post without an owner. For now it uses the same login as the browser: `accounts.CurrentAccountID` reads the session cookie and answers with the logged-in account, or `ok == false` if there isn't one:
 
 ```go
-// apps/posts/views.go
+// apps/posts/views.go (as of part 6)
 func createPost(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
 		accountID, ok, err := accounts.CurrentAccountID(ctx, store, accounts.DefaultSessionCookieName)

@@ -7,7 +7,7 @@ Continuing from [part 3](03-admin.md), this part lets people comment on posts. Y
 A foreign key field is named after the column it stores — `PostID`, with the same `ID` suffix as a primary key — and tagged with the model it points at:
 
 ```go
-// apps/posts/models.go
+// apps/posts/models.go (as of part 4)
 package posts
 
 import "time"
@@ -35,7 +35,7 @@ Tags combine with commas: `fk=Post,index` declares the relationship and indexes 
 Register `Comment` next to `Post`. While you're in the admin registration, give `Post` a `Label`: it's what the admin shows wherever a post is *referenced*, so the comment form's `PostID` field becomes a dropdown of post titles rather than bare numbers:
 
 ```go
-// apps/posts/app.go
+// apps/posts/app.go (as of part 4)
 func New(store *db.Store) tango.App {
 	return tango.NewApp("posts", func(registry *tango.Registry) error {
 		if err := registry.Models().Register(Post{}); err != nil {
