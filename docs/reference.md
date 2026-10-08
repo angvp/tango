@@ -158,9 +158,11 @@ Independent of `admin`/`accounts`' existing failed-login-attempt limiter, which 
 |---|---|
 | `type Sender interface{ Send(ctx context.Context, message Message) error }` | Delivers one message. `Send` is synchronous and truthful: `nil` only once the message is handed on. An interface because real alternatives exist from day one: SMTP, a provider's HTTP API, and a test double. See [ADR 0044](adr/0044-mail-is-a-sender-interface-with-tls-required-smtp.md). |
 | `type Message struct{ From, To, Subject, Text string; Attachments []Attachment }` | One plain-text email to one recipient. `From` and `To` are single addresses, optionally with a display name. |
-| `type Attachment struct{ Filename, ContentType string; Data []byte }` | One in-memory file attached to a `Message`. |
+| `type Attachment struct{ Filename, ContentType string; Data []byte }` | One in-memory file attached to a `Message`. A message with attachments is sent as `multipart/mixed`, with base64 attachments; without, it stays plain text. An empty `ContentType` is sent as `application/octet-stream`; empty `Data` is valid. |
 | `var ErrInvalidMessage` | A message no sender will send: a missing or malformed address, or a line break in a header value (header injection). Nothing is sent. |
 | `func WriterSender(w io.Writer, opts ...Option) Sender` | Writes each message to `w` in the exact wire format SMTP would send, for development. Nothing falls back to it automatically; don't point it at production logs, since messages carry live links. |
+| `var ErrInvalidAttachment` | An attachment with an empty filename, a control character in its filename, or a malformed content type. Also matches `ErrInvalidMessage`. |
+| `var ErrMessageTooLarge`, `const DefaultMaxAttachmentSize`, `func WithMaxAttachmentSize(n int64) Option` | A message whose attachments together exceed the limit, 10 MiB of raw bytes by default, fails with `ErrMessageTooLarge`, which doesn't match `ErrInvalidMessage`. Base64 makes attachments about a third larger on the wire; the limit bounds what is sent, not memory already allocated. `WithMaxAttachmentSize` panics unless `n` is positive. |
 | `type Option` | Configures a sender. |
 
 ## `mail/mailtest` (`github.com/angvp/tango/mail/mailtest`)

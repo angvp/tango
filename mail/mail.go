@@ -10,6 +10,7 @@ package mail
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // Sender delivers a Message. Send is synchronous and truthful: it returns
@@ -42,13 +43,42 @@ type Attachment struct {
 // missing or malformed address, or a line break in a header value.
 var ErrInvalidMessage = errors.New("mail: invalid message")
 
+// ErrInvalidAttachment is returned for an attachment no sender will send:
+// a missing filename, a control character in its filename, or a malformed
+// content type. An error matching it also matches ErrInvalidMessage.
+var ErrInvalidAttachment = errors.New("mail: invalid attachment")
+
+// ErrMessageTooLarge is returned when a message's attachments together
+// exceed the sender's limit (see WithMaxAttachmentSize). It is a configured
+// policy, not a malformed message, so it doesn't match ErrInvalidMessage.
+var ErrMessageTooLarge = errors.New("mail: message too large")
+
+// DefaultMaxAttachmentSize is the most raw attachment bytes, all of a
+// message's attachments together, a sender accepts unless configured
+// otherwise: 10 MiB.
+const DefaultMaxAttachmentSize = 10 << 20
+
 // Option configures a sender.
 type Option func(*options)
 
-type options struct{}
+type options struct {
+	maxAttachmentSize int64
+}
+
+// WithMaxAttachmentSize sets the most raw attachment bytes, all of a
+// message's attachments together, a sender accepts; a larger message fails
+// with ErrMessageTooLarge. On the wire, base64 makes attachments about a
+// third larger. The limit bounds what is sent, not memory the caller has
+// already allocated. It panics unless n is positive.
+func WithMaxAttachmentSize(n int64) Option {
+	if n <= 0 {
+		panic(fmt.Sprintf("mail: WithMaxAttachmentSize needs a positive size, got %d", n))
+	}
+	return func(o *options) { o.maxAttachmentSize = n }
+}
 
 func newOptions(opts []Option) options {
-	var o options
+	o := options{maxAttachmentSize: DefaultMaxAttachmentSize}
 	for _, opt := range opts {
 		opt(&o)
 	}
