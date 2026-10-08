@@ -1,7 +1,7 @@
 # Realtime chat example
 
 This example shows a broadcast chat room built on tanGO's `realtime` and
-`realtime/websocket` packages, authenticated with `auth/jwt` (Milestone 26).
+`realtime/websocket` packages, authenticated with `auth/jwt`.
 It demonstrates:
 
 - one `realtime.Hub` serving one room type (`chatLogic`), mounted at
@@ -12,8 +12,7 @@ It demonstrates:
 - `auth/jwt.QueryToken` for authentication, since a browser WebSocket
   handshake cannot set a custom `Authorization` header the way an ordinary
   HTTP client can — this is the concrete transport `QueryToken` exists for
-  (see Milestone 26's `docs/limitations.md` note on query-token logging
-  exposure);
+  (see the `docs/limitations.md` note on query-token logging exposure);
 - reconnecting within the room's reconnect window restores membership and
   delivers a fresh `Logic.Snapshot`;
 - graceful shutdown: `hub.Close` is registered as a `tango.Lifecycle`

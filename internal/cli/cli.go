@@ -68,7 +68,7 @@ func Run(ctx context.Context, args []string, dir string, stdout io.Writer, stder
 	case "tui":
 		return tui(ctx, runner, dir, stdout, stderr, isInteractiveTerminal)
 	case "shell":
-		fmt.Fprintln(stderr, "tango shell is not implemented yet; Milestone 6 records Yaegi as the intended direction.")
+		fmt.Fprintln(stderr, "tango shell is not implemented yet; ADR 0005 records Yaegi as the intended direction.")
 		return 2
 	case "migrate":
 		if len(args) > 1 && args[1] == "down" {
@@ -253,7 +253,7 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 	// One file per app: each element of changes is already one app's
 	// Migration (Diff groups by app), so each gets its own sequential
 	// name and its own file rather than sharing one name/file across
-	// apps (see Milestone 8.1).
+	// apps.
 	for _, change := range changes {
 		sequence, err := nextMigrationSequence(dir)
 		if err != nil {

@@ -215,8 +215,7 @@ func checkAppChecks(checks []AppCheck) error {
 // the dialect-agnostic shape `tango makemigrations` diffs against. This is
 // the documented convention behind the "-tango-dump-models" flag: an app's
 // main.go handling that flag calls DumpModels, JSON-encodes the result to
-// stdout, and exits — mirroring the "-check" flag convention from
-// Milestone 6.
+// stdout, and exits — mirroring the "-check" flag convention.
 func DumpModels(config Config) ([]migration.Model, error) {
 	registry, err := BuildRegistry(config)
 	if err != nil {
@@ -232,7 +231,7 @@ func DumpModels(config Config) ([]migration.Model, error) {
 
 // ProjectStatus is a snapshot of a project's registration, database, and
 // migration state, produced by Status. It is the payload behind the
-// documented "-tango-status" flag convention (see Milestone 8.3).
+// documented "-tango-status" flag convention, which `tango tui` reads.
 type ProjectStatus struct {
 	RegistrationOK    bool   `json:"registrationOk"`
 	RegistrationError string `json:"registrationError,omitempty"`

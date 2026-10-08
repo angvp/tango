@@ -18,7 +18,7 @@ func New() tango.App {
 			Ordering:    []string{"Name"},
 			// Label lets admin show "Jane Doe" wherever an Author is
 			// referenced elsewhere (e.g. posts.Post.AuthorID) instead of a
-			// raw row ID — see Milestone 14.
+			// raw row ID — see docs/guides/relationships-and-admin-foreign-keys.md.
 			Label: "Name",
 		})
 	})

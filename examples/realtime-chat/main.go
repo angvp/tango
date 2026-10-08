@@ -96,7 +96,7 @@ func newChatHub() (*realtime.Hub, error) {
 // authenticate verifies a JWT carried as a query-string token — WebSocket
 // handshakes are initiated by browser client code that cannot always set a
 // custom Authorization header, which is exactly the case jwt.QueryToken
-// exists for (see Milestone 26). Prefer jwt.BearerToken wherever the
+// exists for (see docs/guides/jwt-auth.md). Prefer jwt.BearerToken wherever the
 // transport allows it; this example demonstrates the query-token path
 // specifically because WebSocket is the concrete case that needs it.
 func authenticate(jwtService *tangojwt.Service) realtimews.Authenticate {

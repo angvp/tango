@@ -63,9 +63,8 @@ func (a App) Register(registry *tango.Registry) error {
 		Search:      []string{"Name"},
 		Ordering:    []string{"CreatedAt"},
 		// Widgets demonstrates a reusable app contributing its own
-		// admin.Widget (Milestone 16) — no admin-internals access, no new
-		// framework API, the same "ordinary Go import" story Milestone 13
-		// established. See widget.go.
+		// admin.Widget — no admin-internals access, no new framework API,
+		// the same "ordinary Go import" story as the rest of a reusable app. See widget.go.
 		Widgets: map[string]admin.Widget{"Name": NameWidget()},
 	}); err != nil {
 		return err

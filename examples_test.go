@@ -1,6 +1,6 @@
 package tango_test
 
-// This file enforces Milestone 9's documentation-verification deliverable:
+// This file keeps the documentation's examples honest:
 // every checked-in example under examples/ must compile as its own module,
 // pass its own -check and `go test ./...`, and must depend on the real
 // module path — so a doc snippet quoting these examples can never silently
@@ -38,7 +38,7 @@ func TestExamplesAreIndependentModulesThatCompile(t *testing.T) {
 		found++
 
 		if !strings.Contains(string(content), "module ") {
-			t.Fatalf("%s does not declare its own module — examples must be separate Go modules, per Milestone 9's settled decision", goModPath)
+			t.Fatalf("%s does not declare its own module — examples must be separate Go modules", goModPath)
 		}
 		if !strings.Contains(string(content), "github.com/angvp/tango") {
 			t.Fatalf("%s does not depend on github.com/angvp/tango — a documented example must import the real module path", goModPath)

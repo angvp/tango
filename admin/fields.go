@@ -192,7 +192,7 @@ func widgetForField(field model.FieldMeta, opts adminregistry.Options, fc FieldC
 // buildFormFields builds the rendered form field descriptors for a model,
 // optionally pre-filled from an existing instance (zero Value if instance
 // is the zero reflect.Value). Each field is rendered by its Widget, backed
-// by store/models/adminReg for foreign-key fields (Milestone 14) — pass
+// by store/models/adminReg for foreign-key fields — pass
 // nil for all three from a caller that never registers foreign keys.
 func buildFormFields(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, meta model.ModelMeta, opts adminregistry.Options, instance reflect.Value, formOpts formContextOptions) []formField {
 	var fields []formField

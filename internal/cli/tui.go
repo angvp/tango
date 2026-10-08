@@ -63,7 +63,7 @@ var isInteractiveTerminal = func() bool {
 
 // tui implements `tango tui`: a read-only status dashboard with a menu of
 // actions, falling back to a plain-text status print in non-interactive
-// environments (CI, pipes, unsupported terminals). See Milestone 8.3.
+// environments (CI, pipes, unsupported terminals).
 func tui(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, interactive func() bool) int {
 	status, err := fetchStatus(ctx, runner, dir, stderr)
 	if err != nil {

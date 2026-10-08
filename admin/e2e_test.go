@@ -15,7 +15,7 @@ import (
 	"github.com/angvp/tango/admin"
 )
 
-// TestAdminSecurityJourney exercises the full Milestone 12 security
+// TestAdminSecurityJourney exercises the full admin security
 // surface as one connected flow, rather than only per-ticket unit tests
 // in isolation: account creation, login, an authenticated CRUD round
 // trip (including its CSRF token), logout, that the old session is truly

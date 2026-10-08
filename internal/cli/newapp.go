@@ -9,7 +9,7 @@ import (
 
 // newApp scaffolds a stub app package (apps/<name>/app.go) implementing the
 // App interface, without touching any existing file. Wiring the new app
-// into InstalledApps remains a manual, documented step (see Milestone 8.2).
+// into InstalledApps remains a manual, documented step (see docs/guides/project-structure.md).
 func newApp(dir string, name string, stdout io.Writer, stderr io.Writer) int {
 	if name == "" {
 		fmt.Fprintln(stderr, "tango newapp: an app name is required")

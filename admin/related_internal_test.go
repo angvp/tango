@@ -34,8 +34,8 @@ func setupRelatedStore(t *testing.T) *db.Store {
 // fallback branches: the foreign key's target model name isn't known to the
 // model.Registry passed in at all (distinct from not being
 // admin-registered, which the Label-unset branch already covers elsewhere),
-// and a foreign key value that no longer has a matching row (Milestone 14,
-// Q17, the related record was deleted). Both must fall back to the raw
+// and a foreign key value that no longer has a matching row (the
+// related record was deleted). Both must fall back to the raw
 // value rather than erroring.
 func TestRelatedLabelFallsBackToRawValue(t *testing.T) {
 	tests := []struct {

@@ -95,7 +95,7 @@ var selectWidgetTemplate = template.Must(template.New("selectWidget").Parse(
 </div>`))
 
 // foreignKeySelectWidget is the built-in foreign key field: a <select>
-// populated from every row of the related model (Milestone 14). Parsing is
+// populated from every row of the related model. Parsing is
 // identical to inputWidget's — the submitted value is still just the
 // related row's primary key as a string.
 type foreignKeySelectWidget struct{}

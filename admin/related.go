@@ -23,7 +23,7 @@ func labelFieldFor(adminReg *adminregistry.Registry, targetName string) string {
 // relatedLabel resolves the display label for a foreign key value: the
 // related row's configured Label field, or the raw value itself if the
 // target model is unregistered, has no Label configured, or the referenced
-// row no longer exists — never a hard error (Milestone 14, Q17).
+// row no longer exists — never a hard error.
 func relatedLabel(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, targetName string, value any) string {
 	fallback := fmt.Sprint(value)
 

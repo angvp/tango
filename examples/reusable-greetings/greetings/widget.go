@@ -10,7 +10,7 @@ import (
 
 // trimmedNameWidgetTemplate renders a plain text input for Name, plus this
 // app's own JS asset — served via its own embed.FS route (see serveStatic),
-// the same convention Milestone 13 established for app-owned static
+// the same convention every reusable app uses for its own static
 // assets. This demonstrates that a reusable app needs no new framework API
 // to contribute an admin.Widget: it's a plain Go type implementing
 // admin.Widget, set via admin.Options.Widgets in the app's own Register.

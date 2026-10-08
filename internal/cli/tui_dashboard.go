@@ -140,7 +140,7 @@ func (m dashboardModel) View() string {
 
 // runDashboard runs the interactive dashboard, performing the selected
 // action (outside bubbletea's event loop) and looping with a refreshed
-// status after any state-changing action, per Milestone 8.3.
+// status after any state-changing action.
 func runDashboard(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, status tango.ProjectStatus) int {
 	for {
 		program := tea.NewProgram(newDashboardModel(status))

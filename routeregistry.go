@@ -34,8 +34,8 @@ type includedRoute struct {
 	middleware    []Middleware
 }
 
-// RouteRegistry is the Milestone 2 sub-registry apps contribute routes to,
-// mirroring the shape of Milestone 1's Registry sub-APIs.
+// RouteRegistry is the sub-registry apps contribute routes to, mirroring
+// the shape of Registry's other sub-APIs.
 type RouteRegistry struct {
 	registry        *Registry
 	included        []includedRoute

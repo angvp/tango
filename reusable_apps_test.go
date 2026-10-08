@@ -1,6 +1,6 @@
 package tango_test
 
-// This file enforces Milestone 13's exit criterion: a host project can
+// This file enforces the reusable-app promise: a host project can
 // install a reusable tanGO app — distributed as its own separate Go module
 // — into its own InstalledApps and get that app's model, routes, admin
 // registration, and checks, with no internals copied. examples_test.go

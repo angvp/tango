@@ -3,7 +3,7 @@ package posts
 import "time"
 
 // Post is the shared model exposed by both the JSON API and the admin. It
-// references Author via a foreign key (Milestone 14) — see
+// references Author via a foreign key — see
 // docs/guides/relationships-and-admin-foreign-keys.md.
 type Post struct {
 	ID        int64 `tango:"pk"`

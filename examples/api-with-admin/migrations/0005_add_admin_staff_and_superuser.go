@@ -6,7 +6,7 @@ import "github.com/angvp/tango/migration"
 // is_staff and is_superuser each carry a Default of "TRUE" (a raw SQL
 // literal, not a typed Go value — see migration.Column.Default) so this
 // AddColumn backfills every pre-existing admin_user row to true instead of
-// leaving it NULL. Milestone 18 hand-authored this Default; makemigrations'
+// leaving it NULL. This Default was written by hand; makemigrations'
 // model-tag diffing never produces one on its own.
 var M0005AddAdminStaffAndSuperuser = []migration.Migration{
 	{App: "admin", Name: "0005_add_admin_staff_and_superuser", Reversible: true,

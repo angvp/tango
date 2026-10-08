@@ -98,8 +98,8 @@ func TestShellDocumentsDeferredImplementation(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "Yaegi") {
-		t.Fatalf("stderr = %q, want Yaegi direction", stderr.String())
+	if !strings.Contains(stderr.String(), "Yaegi") || !strings.Contains(stderr.String(), "ADR 0005") {
+		t.Fatalf("stderr = %q, want Yaegi direction citing ADR 0005", stderr.String())
 	}
 }
 

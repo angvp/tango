@@ -1,10 +1,9 @@
 package tango_test
 
-// This file enforces the asset-serving half of Milestone 16's reusable-app
-// exit criterion: examples/reusable-greetings' admin.Widget for its Name
+// This file enforces the asset-serving half of a reusable app's admin
+// widget: examples/reusable-greetings' admin.Widget for its Name
 // field (widget.go, trimmedNameWidget) references its own JS asset, served
-// via the exact same embed.FS + routes convention Milestone 13 already
-// proved in reusable_assets_test.go. The widget's render/parse behavior
+// via the exact same embed.FS + routes convention already proved in reusable_assets_test.go. The widget's render/parse behavior
 // itself is covered by a fast unit test inside the reusable app's own
 // module (examples/reusable-greetings/greetings/widget_test.go); this test
 // only proves the asset it references is actually reachable through a real
