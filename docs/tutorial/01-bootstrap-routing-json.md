@@ -33,7 +33,7 @@ Scaffold one:
 tango newapp posts
 ```
 
-This writes `apps/posts/app.go` with a stub `Name()`/`Register()`. It does **not** edit `main.go` for you — wiring a new app in is always one line you write yourself, so nothing about your project's composition is hidden:
+This writes `apps/posts/app.go` with a stub `Name()`/`Register()`, and prints the line to add to `main.go`. It does **not** edit `main.go` for you — wiring a new app in is always one line you write yourself, so nothing about your project's composition is hidden:
 
 ```go
 // main.go (as of part 1)

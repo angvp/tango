@@ -31,6 +31,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Fixed
 
+- `tango newapp` now prints how to install the new app: the import path read from `go.mod` and the `InstalledApps` entry to add to `main.go`. A new app used to be created silently and answer 404 until wired in.
 - The compatibility page promised a JSON body for every `403`, `405` and `429` from `/accounts/*`. It now promises only the JSON `accounts` sends, for a rejected CSRF token (`403`) and rate limiting (`429`, with `Retry-After`). Closed registration's `403` is an HTML page, and the router's `405` has no body. A test pins that contract.
 
 ## [0.1.0] - 2026-10-08

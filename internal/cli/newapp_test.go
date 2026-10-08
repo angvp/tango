@@ -181,3 +181,31 @@ func TestNewAppReportsFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestNewAppSaysHowToInstallTheApp(t *testing.T) {
+	tests := []struct {
+		name, goMod, want string
+	}{
+		{"in a module", "module shop\n\ngo 1.27\n",
+			`Install it in main.go: import "shop/apps/greetings" and add greetings.App{} to config.InstalledApps.`},
+		{"without a go.mod", "",
+			`Install it in main.go: import the apps/greetings package and add greetings.App{} to config.InstalledApps.`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tt.goMod != "" {
+				if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(tt.goMod), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var stdout, stderr strings.Builder
+			if code := Run(context.Background(), []string{"newapp", "greetings"}, dir, &stdout, &stderr, nil); code != 0 {
+				t.Fatalf("exit code = %d: %s", code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), tt.want+"\n") {
+				t.Fatalf("stdout = %q, want it to contain %q", stdout.String(), tt.want)
+			}
+		})
+	}
+}
