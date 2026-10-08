@@ -52,6 +52,13 @@ func verifyPreSessionCSRF(r *http.Request) bool {
 	return submitted != "" && subtle.ConstantTimeCompare([]byte(submitted), []byte(cookie.Value)) == 1
 }
 
+// submittedCSRFToken is the csrf_token a request submitted, for
+// re-rendering its form. Call it only after verifyPreSessionCSRF accepted
+// the request, when it equals the pre-session cookie's value.
+func submittedCSRFToken(r *http.Request) string {
+	return r.PostFormValue(csrfFieldName)
+}
+
 // forbiddenCSRF writes a generic 403 for a rejected CSRF token.
 func forbiddenCSRF(ctx *tango.Context) error {
 	return ctx.JSON(http.StatusForbidden, map[string]string{"error": "invalid or missing CSRF token"})

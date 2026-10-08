@@ -1,6 +1,8 @@
 package accounts
 
 import (
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/angvp/tango/model"
@@ -68,21 +70,30 @@ type AccountSession struct {
 	ExpiresAt time.Time
 }
 
-// accountModelMetas returns Account/AccountSession's model metadata,
-// independent of any project's own model registry — accounts's own views
-// operate directly against store, without depending on the host project's
-// full registration having already run, mirroring admin's own
-// adminModelMetas.
-func accountModelMetas() (accountMeta, sessionMeta, tokenMeta model.ModelMeta) {
+// modelMetas is the metadata of accounts' own models, independent of any
+// project's model registry: accounts' views operate directly against the
+// store without waiting for the host's registration to run, mirroring
+// admin's own adminModelMetas. The models are known-good (accounts.New
+// registers the same ones), so a failure here is a bug in this package.
+var modelMetas = sync.OnceValue(func() map[string]model.ModelMeta {
 	registry := model.NewRegistry()
-	// Account and AccountSession are known-good models (accounts.New
-	// registers them the same way at app registration time), so these
-	// errors cannot occur here in practice.
-	_ = registry.Register(Account{})
-	_ = registry.Register(AccountSession{})
-	_ = registry.Register(AccountToken{})
-	accountMeta, _ = registry.Get("Account")
-	sessionMeta, _ = registry.Get("AccountSession")
-	tokenMeta, _ = registry.Get("AccountToken")
-	return accountMeta, sessionMeta, tokenMeta
-}
+	metas := map[string]model.ModelMeta{}
+	for name, m := range map[string]any{"Account": Account{}, "AccountSession": AccountSession{}, "AccountToken": AccountToken{}} {
+		if err := registry.Register(m); err != nil {
+			panic(fmt.Sprintf("accounts: built-in model %s is invalid: %v", name, err))
+		}
+		meta, ok := registry.Get(name)
+		if !ok {
+			panic("accounts: built-in model " + name + " didn't register")
+		}
+		metas[name] = meta
+	}
+	return metas
+})
+
+func accountMeta() model.ModelMeta { return modelMetas()["Account"] }
+func sessionMeta() model.ModelMeta { return modelMetas()["AccountSession"] }
+func tokenMeta() model.ModelMeta   { return modelMetas()["AccountToken"] }
+
+func (s AccountSession) primaryKey() int64 { return s.ID }
+func (t AccountToken) primaryKey() int64   { return t.ID }

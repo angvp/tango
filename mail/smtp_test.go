@@ -3,6 +3,7 @@ package mail_test
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -90,6 +91,8 @@ func TestPlaintextOnlyToLoopback(t *testing.T) {
 	}
 
 	for _, rawURL := range []string{
+		"smtp+insecure://localhost", // the port must be explicit
+		"smtp+insecure://127.0.0.1",
 		"smtp+insecure://mail.example.com:25",
 		"smtp+insecure://10.0.0.5:1025",
 		"smtp+insecure://user:pass@127.0.0.1:1025", // never credentials in plaintext
@@ -180,5 +183,41 @@ func TestSMTPErrorsNeverContainCredentialsOrText(t *testing.T) {
 	err := sender.Send(context.Background(), invoice)
 	if err == nil || strings.Contains(err.Error(), "hunter2") || strings.Contains(err.Error(), "secret link") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestSMTPErrorsNeverEchoWhatTheServerEchoes(t *testing.T) {
+	tests := []struct{ name, failOn string }{
+		{"AUTH", "AUTH"},
+		{"RCPT", "RCPT"},
+		{"DATA", "DATA"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := smtpServer{startTLS: true, failOn: tt.failOn}
+			pool := startSMTPServer(t, &server)
+			sender, err := tangomail.NewSMTPSender("smtp://mail%2Bbox:hunter%402@"+server.addr, tangomail.WithRootCAs(pool))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = sender.Send(context.Background(), invoice)
+			if err == nil {
+				t.Fatal("the server refused, but Send succeeded")
+			}
+			for _, secret := range []string{"mail+box", "mail%2Bbox", "hunter@2", "hunter%402", "alice@example.com", "secret link", "AG1haWwrYm94AGh1bnRlckAy"} {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatalf("error %q contains %q", err, secret)
+				}
+			}
+		})
+	}
+}
+
+func TestARedactedSMTPErrorStillMatchesItsCause(t *testing.T) {
+	server := smtpServer{stall: true}
+	startSMTPServer(t, &server)
+	sender, _ := tangomail.NewSMTPSender("smtp+insecure://"+server.addr, tangomail.WithDefaultTimeout(100*time.Millisecond))
+	if err := sender.Send(context.Background(), invoice); !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("error = %v, want it to match a timeout", err)
 	}
 }

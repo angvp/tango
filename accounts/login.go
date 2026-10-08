@@ -40,48 +40,46 @@ func loginView(store *db.Store, cfg accountsConfig, limiter *security.RateLimite
 				CSRFToken:     token,
 				SignupEnabled: !cfg.signupDisabled,
 			})
-
 		case http.MethodPost:
-			if err := ctx.Request().ParseForm(); err != nil {
-				return err
-			}
-			if !verifyPreSessionCSRF(ctx.Request()) {
-				return forbiddenCSRF(ctx)
-			}
-
-			key := rateLimitKey(ctx.Request())
-			if !limiter.Allow(key) {
-				return tooManyRequests(ctx)
-			}
-
-			email := normalizeEmail(ctx.Request().PostForm.Get("email"))
-			password := ctx.Request().PostForm.Get("password")
-			next := ctx.Request().PostForm.Get("next")
-			csrfCookie, _ := ctx.Request().Cookie(preSessionCSRFCookieName)
-
-			account, exists, err := findAccountByEmail(ctx.Context(), store, email)
-			if err != nil {
-				return err
-			}
-			valid := exists && account.Active && auth.VerifyPassword(account.PasswordHash, password)
-			if !valid {
-				limiter.RecordFailure(key)
-				return render(ctx, http.StatusUnauthorized, loginTemplate, loginPageData{
-					Next:          next,
-					Email:         email,
-					Error:         genericLoginError,
-					CSRFToken:     csrfCookie.Value,
-					SignupEnabled: !cfg.signupDisabled,
-				})
-			}
-
-			if err := createAccountSession(ctx.Context(), store, cfg, ctx.ResponseWriter(), ctx.Request(), account.ID); err != nil {
-				return err
-			}
-			return ctx.Redirect(safeAccountsNext(next, defaultPostLoginRedirect))
-
+			return logIn(ctx, store, cfg, limiter)
 		default:
 			return methodNotAllowed(ctx)
 		}
 	}
+}
+
+// logIn handles a submitted login form.
+func logIn(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *security.RateLimiter) error {
+	if err := ctx.Request().ParseForm(); err != nil {
+		return err
+	}
+	if !verifyPreSessionCSRF(ctx.Request()) {
+		return forbiddenCSRF(ctx)
+	}
+	key := rateLimitKey(ctx.Request())
+	if !limiter.Allow(key) {
+		return tooManyRequests(ctx)
+	}
+
+	email := normalizeEmail(ctx.Request().PostForm.Get("email"))
+	password := ctx.Request().PostForm.Get("password")
+	next := ctx.Request().PostForm.Get("next")
+	account, exists, err := findAccountByEmail(ctx.Context(), store, email)
+	if err != nil {
+		return err
+	}
+	if !exists || !account.Active || !auth.VerifyPassword(account.PasswordHash, password) {
+		limiter.RecordFailure(key)
+		return render(ctx, http.StatusUnauthorized, loginTemplate, loginPageData{
+			Next:          next,
+			Email:         email,
+			Error:         genericLoginError,
+			CSRFToken:     submittedCSRFToken(ctx.Request()),
+			SignupEnabled: !cfg.signupDisabled,
+		})
+	}
+	if err := createAccountSession(ctx.Context(), store, cfg, ctx.ResponseWriter(), ctx.Request(), account.ID); err != nil {
+		return err
+	}
+	return ctx.Redirect(safeAccountsNext(next, defaultPostLoginRedirect))
 }

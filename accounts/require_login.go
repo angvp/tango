@@ -21,8 +21,7 @@ func accountFromToken(ctx context.Context, store *db.Store, token string) (Accou
 		return Account{}, false, nil
 	}
 
-	_, sessionMeta, _ := accountModelMetas()
-	userID, ok, err := auth.SessionUser(ctx, store, sessionMeta, token)
+	userID, ok, err := auth.SessionUser(ctx, store, sessionMeta(), token)
 	if err != nil {
 		return Account{}, false, err
 	}
@@ -30,10 +29,9 @@ func accountFromToken(ctx context.Context, store *db.Store, token string) (Accou
 		return Account{}, false, nil
 	}
 
-	meta, _, _ := accountModelMetas()
 	var rows []Account
 	query := db.Query{Where: []db.Condition{{Field: "ID", Op: db.OpEq, Value: userID}}, Limit: 1}
-	if err := store.List(ctx, meta, query, &rows); err != nil {
+	if err := store.List(ctx, accountMeta(), query, &rows); err != nil {
 		return Account{}, false, err
 	}
 	if len(rows) == 0 || !rows[0].Active {

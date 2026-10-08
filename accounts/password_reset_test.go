@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -58,6 +59,8 @@ func TestResetResponsesNeverRevealAnAccount(t *testing.T) {
 		{"unknown", "nobody@example.com"},
 		{"inactive", "bob@example.com"},
 		{"in its cooldown", "alice@example.com"},
+		{"in its cooldown, spelled differently", "  ALICE@example.com "},
+		{"unknown, with a display name", "Nobody <nobody@example.com>"},
 	}
 	var first *httptest.ResponseRecorder
 	for i, tt := range tests {
@@ -251,4 +254,119 @@ func TestWithoutMailNoResetRouteOrOutboxExists(t *testing.T) {
 	}
 }
 
-var _ = errors.New
+func TestAnInvalidEmailIsAFormError(t *testing.T) {
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	for i, email := range []string{"", "   ", "not an address", "a@b@c", "alice@example.com, bob@example.com"} {
+		response := site.askForReset(email, func(r *http.Request) { r.RemoteAddr = fmt.Sprintf("192.0.2.%d:1", i+1) })
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("%q = %d, want a 400 form error", email, response.Code)
+		}
+	}
+	site.stop()
+	if got := len(site.sender.Messages()); got != 0 {
+		t.Fatalf("sent %d for invalid input", got)
+	}
+}
+
+func TestADroppedEmailGivesBackItsCooldown(t *testing.T) {
+	site := newMailSite(t, &mailtest.Sender{}, false, accounts.WithOutboxCapacity(1))
+	site.createAccount("alice@example.com", true)
+	site.createAccount("carol@example.com", true)
+	site.askForReset("alice@example.com")
+	site.askForReset("carol@example.com", func(r *http.Request) { r.RemoteAddr = "192.0.2.20:1" }) // dropped: the outbox is full
+	site.start()
+	site.sent(1)
+	site.askForReset("carol@example.com", func(r *http.Request) { r.RemoteAddr = "192.0.2.21:1" })
+	if got := site.sent(2)[1].To; got != "carol@example.com" {
+		t.Fatalf("second email went to %q, want carol, whose dropped email shouldn't hold a cooldown", got)
+	}
+}
+
+// blockingSender blocks every Send until ctx is done, counting sends in
+// progress.
+type blockingSender struct {
+	mu              sync.Mutex
+	active, started int
+}
+
+func (s *blockingSender) Send(ctx context.Context, _ mail.Message) error {
+	s.mu.Lock()
+	s.active++
+	s.started++
+	s.mu.Unlock()
+	<-ctx.Done()
+	s.mu.Lock()
+	s.active--
+	s.mu.Unlock()
+	return ctx.Err()
+}
+
+func TestShutdownEndsAnInFlightSendAtItsDeadline(t *testing.T) {
+	sender := &blockingSender{}
+	site := newMailSite(t, sender, true)
+	site.createAccount("alice@example.com", true)
+	site.createAccount("carol@example.com", true)
+	site.askForReset("alice@example.com")
+	site.askForReset("carol@example.com", func(r *http.Request) { r.RemoteAddr = "192.0.2.30:1" })
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		sender.mu.Lock()
+		started := sender.started
+		sender.mu.Unlock()
+		if started == 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	var stopErr error
+	for _, l := range site.lifecycles {
+		stopErr = l.Stop(ctx)
+	}
+	site.lifecycles = nil
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("Stop took %s, want it bounded by its 200ms deadline", elapsed)
+	}
+	if !errors.Is(stopErr, context.DeadlineExceeded) {
+		t.Fatalf("Stop = %v, want the deadline's error: carol's email was lost", stopErr)
+	}
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	if sender.active != 0 || sender.started != 1 {
+		t.Fatalf("after Stop: %d sends in progress, %d started; want 0 and 1", sender.active, sender.started)
+	}
+}
+
+func TestAFailedPreparationLogsOnlyAnErrorClass(t *testing.T) {
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	site.createAccount("alice@example.com", true)
+	if err := site.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	site.askForReset("alice@example.com")
+	site.stop()
+	logs := site.logs.byMessage(accounts.EventMailFailed)
+	if len(logs) != 1 {
+		t.Fatalf("mail_failed logs = %+v, want one", logs)
+	}
+	got := logs[0].attrs["error"]
+	if got == "" || strings.Contains(got, "alice") || strings.Contains(strings.ToLower(got), "sql") || strings.Contains(got, "closed") {
+		t.Fatalf("mail_failed error = %q, want only a class of error", got)
+	}
+}
+
+func TestAResetLinkDiesWhenTheEmailChanges(t *testing.T) {
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	account := site.createAccount("alice@example.com", true)
+	token := site.resetToken("alice@example.com")
+	site.updateAccount(account.ID, func(a *accounts.Account) { a.Email = "alice@new.example.com" })
+	if response := site.get(confirmPath + token); response.Code != http.StatusBadRequest {
+		t.Fatalf("GET after the email changed = %d, want the invalid-link page", response.Code)
+	}
+	if response := site.setPassword(token, "new-password"); response.Code != http.StatusBadRequest {
+		t.Fatalf("POST after the email changed = %d, want the invalid-link page", response.Code)
+	}
+}

@@ -3,6 +3,7 @@ package accounts_test
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"log/slog"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 type mailSite struct {
 	t          *testing.T
 	handler    http.Handler
+	db         *sql.DB
 	store      *db.Store
 	sender     *mailtest.Sender
 	logs       *capturedLogs
@@ -53,7 +55,7 @@ func newMailSite(t *testing.T, sender mail.Sender, start bool, opts ...accounts.
 		accounts.WithMail(accounts.MailConfig{Sender: sender, From: "Shop <noreply@example.com>", BaseURL: testBaseURL, Logger: logger}),
 		accounts.WithClock(site.clock),
 	}, opts...)
-	_, site.store = migratedAccountsDB(t)
+	site.db, site.store = migratedAccountsDB(t)
 	registry := tango.NewRegistry()
 	if err := registry.Register(accounts.New(site.store, opts...)); err != nil {
 		t.Fatal(err)

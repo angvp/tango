@@ -27,13 +27,6 @@ const (
 	registerRateLimitWindow   = time.Minute
 )
 
-// resetRateLimitAttempts and resetRateLimitWindow bound how many reset
-// links one source IP may ask for, on top of the per-address cooldown.
-const (
-	resetRateLimitAttempts = 5
-	resetRateLimitWindow   = time.Minute
-)
-
 // Option configures accounts.New.
 type Option func(*accountsConfig)
 
@@ -119,38 +112,4 @@ func New(store *db.Store, opts ...Option) tango.App {
 
 		return registry.Routes().Include("/", routes)
 	})
-}
-
-// newMailer validates cfg.mail and registers the outbox's worker.
-func newMailer(registry *tango.Registry, store *db.Store, cfg accountsConfig) (*mailer, error) {
-	baseURL, err := cfg.mail.validate()
-	if err != nil {
-		return nil, err
-	}
-	m := &mailer{
-		store:    store,
-		cfg:      cfg,
-		from:     cfg.mail.From,
-		baseURL:  baseURL,
-		outbox:   newOutbox(cfg.outboxCapacity, cfg.mail.Sender, cfg.mail.Logger),
-		cooldown: newCooldown(mailCooldown),
-	}
-	if err := registry.RegisterLifecycle(m.outbox.lifecycle()); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-// routes are the mail flows' routes, mounted only with WithMail.
-func (m *mailer) routes() tango.URLs {
-	resetLimiter := security.NewRateLimiter(resetRateLimitAttempts, resetRateLimitWindow)
-	return tango.URLs{
-		tango.Path(http.MethodGet, "/accounts/password-reset/", passwordResetView(m, resetLimiter)),
-		tango.Path(http.MethodPost, "/accounts/password-reset/", passwordResetView(m, resetLimiter)),
-		tango.Path(http.MethodGet, "/accounts/password-reset/confirm/", passwordResetConfirmView(m)),
-		tango.Path(http.MethodPost, "/accounts/password-reset/confirm/", passwordResetConfirmView(m)),
-		tango.Path(http.MethodGet, "/accounts/verify/", verifyView(m)),
-		tango.Path(http.MethodPost, "/accounts/verify/", verifyView(m)),
-		tango.Path(http.MethodPost, "/accounts/verify/resend/", resendVerificationView(m)),
-	}
 }

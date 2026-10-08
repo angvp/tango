@@ -2,23 +2,20 @@ package accounts
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"net/url"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
-	tangomail "github.com/angvp/tango/mail"
+	"github.com/angvp/tango/internal/security"
 )
 
 // queueVerification queues a verification email for account, unless its
 // address is in its cooldown.
 func (m *mailer) queueVerification(ctx context.Context, account Account) {
-	if !m.mayEmail(normalizeEmail(account.Email), PurposeEmailVerification) {
-		return
-	}
 	id := account.ID
-	m.outbox.enqueue(ctx, outboxJob{
+	m.queue(ctx, normalizeEmail(account.Email), outboxJob{
 		purpose: PurposeEmailVerification,
 		prepare: func(jobCtx context.Context) (delivery, bool, error) { return m.prepareVerification(jobCtx, id) },
 	})
@@ -28,10 +25,9 @@ func (m *mailer) queueVerification(ctx context.Context, account Account) {
 // returns its email, or ok=false when the account is gone, inactive or
 // already verified.
 func (m *mailer) prepareVerification(ctx context.Context, accountID int64) (delivery, bool, error) {
-	accountMeta, _, _ := accountModelMetas()
 	var account Account
-	if err := m.store.Get(ctx, accountMeta, accountID, &account); err != nil {
-		if isNotFound(err) {
+	if err := m.store.Get(ctx, accountMeta(), accountID, &account); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
 			return delivery{}, false, nil
 		}
 		return delivery{}, false, err
@@ -43,78 +39,40 @@ func (m *mailer) prepareVerification(ctx context.Context, accountID int64) (deli
 	if err != nil {
 		return delivery{}, false, err
 	}
-	link := m.baseURL + "/accounts/verify/?token=" + token
-	return delivery{
-		message: tangomail.Message{
-			From:    m.from,
-			To:      account.Email,
-			Subject: "Confirm your email address",
-			Text: fmt.Sprintf("Please confirm that this is your email address by opening this link within 24 hours:\n\n%s\n\n"+
-				"If you didn't create an account, ignore this email.\n", link),
-		},
-		secret: token,
-	}, true, nil
+	return m.emailWithLink(account, token, "/accounts/verify/", "Confirm your email address",
+		"Please confirm that this is your email address by opening this link within 24 hours:\n\n%s\n\n"+
+			"If you didn't create an account, ignore this email.\n"), true, nil
 }
 
-// verifyView handles GET (a "Confirm my email" button) and POST (verify)
-// for /accounts/verify/?token=…. Only POST uses the token, so a mail
-// scanner following the link verifies nothing.
-func verifyView(m *mailer) tango.View {
-	return func(ctx *tango.Context) error {
-		tokenPage(ctx.ResponseWriter())
-		token := ctx.Query("token")
-		switch ctx.Request().Method {
-		case http.MethodGet:
-			csrf, err := ensurePreSessionCSRFCookie(ctx.ResponseWriter(), ctx.Request())
-			if err != nil {
-				return err
-			}
-			if _, _, ok, err := m.usableToken(ctx.Context(), token, PurposeEmailVerification); err != nil {
-				return err
-			} else if !ok {
-				return invalidLink(ctx)
-			}
-			return render(ctx, http.StatusOK, verifyTemplate, verifyPageData{CSRFToken: csrf})
-
-		case http.MethodPost:
-			if err := ctx.Request().ParseForm(); err != nil {
-				return err
-			}
-			if !verifyPreSessionCSRF(ctx.Request()) {
-				return forbiddenCSRF(ctx)
-			}
-			row, account, ok, err := m.usableToken(ctx.Context(), token, PurposeEmailVerification)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return invalidLink(ctx)
-			}
-			if won, err := m.consumeToken(ctx.Context(), row); err != nil {
-				return err
-			} else if !won {
+// verifyLink is /accounts/verify/: its form is a "Confirm my email"
+// button, and confirming sets EmailVerifiedAt.
+func (m *mailer) verifyLink() tokenLink {
+	return tokenLink{
+		purpose: PurposeEmailVerification,
+		form:    verifyTemplate,
+		act: func(ctx *tango.Context, row AccountToken, account Account) error {
+			if won, err := m.useToken(ctx.Context(), row); err != nil || !won {
+				if err != nil {
+					return err
+				}
 				return invalidLink(ctx)
 			}
 			if account.EmailVerifiedAt.IsZero() {
 				account.EmailVerifiedAt = m.cfg.now().UTC()
-				accountMeta, _, _ := accountModelMetas()
-				if err := m.store.Update(ctx.Context(), accountMeta, &account); err != nil {
+				if err := m.store.Update(ctx.Context(), accountMeta(), &account); err != nil {
 					return err
 				}
 			}
 			return render(ctx, http.StatusOK, verifiedTemplate, nil)
-
-		default:
-			return methodNotAllowed(ctx)
-		}
+		},
 	}
 }
 
 // resendVerificationView handles POST /accounts/verify/resend/ for a
 // logged-in account: it queues a new verification email, subject to the
-// per-address cooldown, and answers the same way whether or not one was
-// queued.
-func resendVerificationView(m *mailer) tango.View {
+// per-IP limit and the per-address cooldown, and answers the same way
+// whether or not one was queued.
+func resendVerificationView(m *mailer, limiter *security.RateLimiter) tango.View {
 	return func(ctx *tango.Context) error {
 		if err := ctx.Request().ParseForm(); err != nil {
 			return err
@@ -129,6 +87,11 @@ func resendVerificationView(m *mailer) tango.View {
 		if !verifyPreSessionCSRF(ctx.Request()) {
 			return forbiddenCSRF(ctx)
 		}
+		key := rateLimitKey(ctx.Request())
+		if !limiter.Allow(key) {
+			return tooManyRequests(ctx)
+		}
+		limiter.RecordFailure(key)
 		if account.EmailVerifiedAt.IsZero() {
 			m.queueVerification(ctx.Context(), account)
 		}
@@ -158,7 +121,7 @@ func RequireVerified(store *db.Store, cookieName string, loginPath string, next 
 			if err != nil {
 				return err
 			}
-			return render(ctx, http.StatusForbidden, unverifiedTemplate, verifyPageData{CSRFToken: csrf})
+			return render(ctx, http.StatusForbidden, unverifiedTemplate, tokenFormData{CSRFToken: csrf})
 		}
 		return next(ctx)
 	}

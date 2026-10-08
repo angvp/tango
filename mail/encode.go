@@ -41,12 +41,15 @@ func encode(message Message, o options) (encoded, error) {
 	if err != nil {
 		return encoded{}, err
 	}
-	return encoded{raw: serialize(message.Subject, message.Text, from, to, attachments), from: from.Address, to: to.Address}, nil
+	raw, err := serialize(message.Subject, message.Text, from, to, attachments)
+	if err != nil {
+		return encoded{}, err
+	}
+	return encoded{raw: raw, from: from.Address, to: to.Address}, nil
 }
 
 // serialize writes a validated message in wire format.
-func serialize(subject, text string, from, to *mail.Address, attachments []Attachment) []byte {
-
+func serialize(subject, text string, from, to *mail.Address, attachments []Attachment) ([]byte, error) {
 	var b bytes.Buffer
 	header := func(name, value string) { fmt.Fprintf(&b, "%s: %s\r\n", name, value) }
 	header("From", from.String())
@@ -60,28 +63,36 @@ func serialize(subject, text string, from, to *mail.Address, attachments []Attac
 		header("Content-Transfer-Encoding", "quoted-printable")
 		b.WriteString("\r\n")
 		writeText(&b, text)
-		return b.Bytes()
+		return b.Bytes(), nil
 	}
 
 	body := multipart.NewWriter(&b)
 	// Folded, so the long boundary doesn't push the line past 78 characters.
 	header("Content-Type", "multipart/mixed;\r\n boundary="+body.Boundary())
 	b.WriteString("\r\n")
-	textPart, _ := body.CreatePart(textproto.MIMEHeader{
+	textPart, err := body.CreatePart(textproto.MIMEHeader{
 		"Content-Type":              {textContentType},
 		"Content-Transfer-Encoding": {"quoted-printable"},
 	})
+	if err != nil {
+		return nil, err
+	}
 	writeText(textPart, text)
 	for _, a := range attachments {
-		part, _ := body.CreatePart(textproto.MIMEHeader{
+		part, err := body.CreatePart(textproto.MIMEHeader{
 			"Content-Type":              {a.ContentType},
 			"Content-Disposition":       {mime.FormatMediaType("attachment", map[string]string{"filename": a.Filename})},
 			"Content-Transfer-Encoding": {"base64"},
 		})
+		if err != nil {
+			return nil, err
+		}
 		writeBase64(part, a.Data)
 	}
-	_ = body.Close()
-	return b.Bytes()
+	if err := body.Close(); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
 }
 
 const textContentType = "text/plain; charset=utf-8"
@@ -139,7 +150,8 @@ func isControl(r rune) bool { return r < 0x20 || r == 0x7f }
 
 func hasLineBreak(s string) bool { return strings.ContainsAny(s, "\r\n") }
 
-// writeText writes text quoted-printable, with CRLF line endings.
+// writeText writes text quoted-printable, with CRLF line endings. It
+// writes only to in-memory buffers, which can't fail.
 func writeText(w io.Writer, text string) {
 	qp := quotedprintable.NewWriter(w)
 	_, _ = qp.Write([]byte(strings.ReplaceAll(text, "\r\n", "\n")))
@@ -150,7 +162,8 @@ func writeText(w io.Writer, text string) {
 // RFC 2045's limit of 76.
 const base64LineLength = 76
 
-// writeBase64 writes data base64-encoded, in CRLF-terminated lines.
+// writeBase64 writes data base64-encoded, in CRLF-terminated lines, to an
+// in-memory buffer, which can't fail.
 func writeBase64(w io.Writer, data []byte) {
 	encoded := base64.StdEncoding.EncodeToString(data)
 	for len(encoded) > base64LineLength {
@@ -165,7 +178,7 @@ func writeBase64(w io.Writer, data []byte) {
 // messageID returns a unique Message-ID at the sender's domain.
 func messageID(fromAddress string) string {
 	random := make([]byte, 16)
-	_, _ = rand.Read(random)
+	_, _ = rand.Read(random) // crypto/rand.Read never fails (Go 1.24+)
 	domain := fromAddress[strings.LastIndexByte(fromAddress, '@')+1:]
 	return "<" + hex.EncodeToString(random) + "@" + domain + ">"
 }

@@ -20,7 +20,7 @@ err = sender.Send(ctx, mail.Message{
 
 ## Senders
 
-A `mail.Sender` has one method, `Send(ctx, Message) error`. It's synchronous and truthful: it returns `nil` only once the message has been handed on. Three come with tanGO:
+A `mail.Sender` has one method, `Send(ctx, Message) error`. It's synchronous and truthful: it returns `nil` only once the message has been handed on. It must also return promptly once `ctx` is done, because `accounts` relies on that to finish within its shutdown deadline. Three come with tanGO:
 
 - `mail.NewSMTPSender(url)`, or `mail.SMTPSenderFromEnv()` reading `TANGO_SMTP_URL`: an SMTP server.
 - `mail.WriterSender(w)`: writes each message to `w` in the exact wire format SMTP would send. For development.
@@ -36,9 +36,9 @@ The URL's scheme decides how the connection is secured:
 |---|---|---|
 | `smtp://user:pass@smtp.example.com` | STARTTLS, required: a server that doesn't offer it is refused before any credentials are sent | 587 |
 | `smtps://user:pass@smtp.example.com` | TLS from the first byte | 465 |
-| `smtp+insecure://localhost:1025` | Plaintext. Only for `localhost` or a loopback IP, and never with credentials | 25 |
+| `smtp+insecure://localhost:1025` | Plaintext. Only for `localhost` or a loopback IP, never with credentials, and only with an explicit port | none: required |
 
-`smtp+insecure` is for local tools such as [Mailpit](https://mailpit.axllent.org/). There's no plaintext mode for a real server. Each message opens one connection, bounded by the context's deadline, or 30 seconds when it has none. Errors never contain the URL, so a password can't end up in your logs.
+`smtp+insecure` is for local tools such as [Mailpit](https://mailpit.axllent.org/); give their port, since they differ (1025, 2525, …). There's no plaintext mode for a real server. Each message opens one connection, bounded by the context's deadline, or 30 seconds when it has none. Errors never contain the URL, the credentials, the recipient or the message: when the server refuses a command, the error names the stage and reply code but not the reply's text, which can echo what tanGO sent. `errors.Is` still matches a timeout or cancellation.
 
 Put `From` in your code or config, not in `TANGO_SMTP_URL`.
 

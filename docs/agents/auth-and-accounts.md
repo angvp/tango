@@ -2,7 +2,7 @@
 
 Use this when adding login/session behavior to a tanGO app.
 
-Canonical files: `accounts/accounts.go`, `accounts/current_account.go`, and `accounts/require_login.go`.
+Canonical files: `accounts/accounts.go`, `accounts/current_account.go`, `accounts/require_login.go`, and, for password reset and verification, `accounts/mail.go`, `accounts/password_reset.go` and `accounts/verification.go`.
 
 ## Choose the Layer
 
@@ -43,4 +43,5 @@ protected := accounts.RequireLogin(store, accounts.DefaultSessionCookieName, "/a
 
 - Compare install shape with `accounts/accounts.go`.
 - Compare current-account helper behavior with `accounts/current_account.go`.
+- Compare mail-flow wiring with `accounts/mail.go`, and test it with `mail/mailtest.Sender`.
 - Run the shared checklist: `docs/agents/checklist.md`.

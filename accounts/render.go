@@ -104,11 +104,6 @@ var passwordResetRequestTemplate = template.Must(template.New("password_reset_re
 </body>
 </html>`))
 
-type passwordResetRequestPageData struct {
-	CSRFToken string
-	Error     string
-}
-
 // passwordResetSentTemplate is the one answer to every reset request, so
 // it never says whether the address has an account.
 var passwordResetSentTemplate = template.Must(template.New("password_reset_sent").Parse(`<!doctype html>
@@ -140,11 +135,6 @@ var passwordResetConfirmTemplate = template.Must(template.New("password_reset_co
 </body>
 </html>`))
 
-type passwordResetConfirmPageData struct {
-	CSRFToken string
-	Error     string
-}
-
 // invalidLinkTemplate answers every unusable emailed link the same way.
 var invalidLinkTemplate = template.Must(template.New("invalid_link").Parse(`<!doctype html>
 <html>
@@ -170,10 +160,7 @@ var verifyTemplate = template.Must(template.New("verify").Parse(`<!doctype html>
 </body>
 </html>`))
 
-type verifyPageData struct {
-	CSRFToken string
-}
-
+// verifiedTemplate answers a confirmed verification link.
 var verifiedTemplate = template.Must(template.New("verified").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Email confirmed</title></head>
@@ -182,6 +169,7 @@ var verifiedTemplate = template.Must(template.New("verified").Parse(`<!doctype h
 </body>
 </html>`))
 
+// verificationSentTemplate answers every resend the same way.
 var verificationSentTemplate = template.Must(template.New("verification_sent").Parse(`<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Check your email</title></head>

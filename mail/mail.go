@@ -18,7 +18,8 @@ import (
 // Sender delivers a Message. Send is synchronous and truthful: it returns
 // nil only once the message has been handed on, and otherwise the error
 // that stopped it. An invalid message fails with ErrInvalidMessage before
-// anything is sent.
+// anything is sent. Send must return promptly once ctx is done: callers
+// such as accounts' outbox rely on it to finish within a shutdown deadline.
 type Sender interface {
 	Send(ctx context.Context, message Message) error
 }

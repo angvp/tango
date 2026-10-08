@@ -10,8 +10,9 @@ Canonical files: `mail/mail.go`, `mail/smtp.go`, `mail/writer.go`, and `mail/mai
 - Production: `mail.SMTPSenderFromEnv()` reads `TANGO_SMTP_URL`, and returns `mail.ErrNotConfigured` when it's unset. Schemes:
   - `smtp://` requires STARTTLS;
   - `smtps://` is implicit TLS;
-  - `smtp+insecure://` is plaintext, only to a loopback host and never with credentials.
+  - `smtp+insecure://` is plaintext, only to a loopback host, never with credentials, and only with an explicit port (`smtp+insecure://localhost:1025`).
 - Development: choose `mail.WriterSender(os.Stdout)` explicitly. Never fall back to it automatically.
+- A custom `Sender` must return promptly once `ctx` is done.
 - Tests: use `&mailtest.Sender{}` and read `Messages()`; set `Err` to simulate a failing relay.
 - `From` is application configuration, not an environment variable.
 

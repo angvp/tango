@@ -51,10 +51,9 @@ func normalizeEmail(raw string) string {
 // constraint, not this lookup, is what actually prevents two concurrent
 // registrations for the same email from both succeeding.
 func findAccountByEmail(ctx context.Context, store *db.Store, email string) (Account, bool, error) {
-	meta, _, _ := accountModelMetas()
 	var rows []Account
 	query := db.Query{Where: []db.Condition{{Field: "Email", Op: db.OpEq, Value: email}}, Limit: 1}
-	if err := store.List(ctx, meta, query, &rows); err != nil {
+	if err := store.List(ctx, accountMeta(), query, &rows); err != nil {
 		return Account{}, false, err
 	}
 	if len(rows) == 0 {
@@ -65,16 +64,15 @@ func findAccountByEmail(ctx context.Context, store *db.Store, email string) (Acc
 
 // registerView handles GET (render the registration form) and POST
 // (validate, create the Account, and with mail queue a verification email)
-// for /accounts/register/. When signup is
-// disabled, both methods render a clear closed-registration response
-// instead — never a bare 404 — since a live project may have old links,
-// bookmarks, or indexed pages pointing at this route.
+// for /accounts/register/. When signup is disabled, both methods render a
+// clear closed-registration response instead — never a bare 404 — since a
+// live project may have old links, bookmarks, or indexed pages pointing at
+// this route.
 func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLimiter, m *mailer) tango.View {
 	return func(ctx *tango.Context) error {
 		if cfg.signupDisabled {
 			return render(ctx, http.StatusForbidden, registrationClosedTemplate, nil)
 		}
-
 		switch ctx.Request().Method {
 		case http.MethodGet:
 			token, err := ensurePreSessionCSRFCookie(ctx.ResponseWriter(), ctx.Request())
@@ -85,82 +83,83 @@ func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLim
 				Next:      safeAccountsNext(ctx.Query("next"), ""),
 				CSRFToken: token,
 			})
-
 		case http.MethodPost:
-			if err := ctx.Request().ParseForm(); err != nil {
-				return err
-			}
-			if !verifyPreSessionCSRF(ctx.Request()) {
-				return forbiddenCSRF(ctx)
-			}
-
-			key := rateLimitKey(ctx.Request())
-			if !limiter.Allow(key) {
-				return tooManyRequests(ctx)
-			}
-
-			email := normalizeEmail(ctx.Request().PostForm.Get("email"))
-			password := ctx.Request().PostForm.Get("password")
-			next := ctx.Request().PostForm.Get("next")
-			csrfCookie, _ := ctx.Request().Cookie(preSessionCSRFCookieName)
-
-			rerender := func(status int, message string) error {
-				limiter.RecordFailure(key)
-				return render(ctx, status, registerTemplate, registerPageData{
-					Next:      next,
-					Email:     email,
-					Error:     message,
-					CSRFToken: csrfCookie.Value,
-				})
-			}
-
-			if email == "" || password == "" {
-				return rerender(http.StatusBadRequest, "Email and password are required.")
-			}
-			if problem := passwordProblem(password); problem != "" {
-				return rerender(http.StatusBadRequest, problem)
-			}
-
-			if _, exists, err := findAccountByEmail(ctx.Context(), store, email); err != nil {
-				return err
-			} else if exists {
-				return rerender(http.StatusConflict, "This email is already registered.")
-			}
-
-			hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-			if err != nil {
-				return err
-			}
-
-			meta, _, _ := accountModelMetas()
-			account := Account{
-				Email:        email,
-				PasswordHash: string(hash),
-				Active:       true,
-				CreatedAt:    time.Now().UTC(),
-			}
-			if err := store.Create(ctx.Context(), meta, &account); err != nil {
-				if db.IsUniqueConstraintViolation(err) {
-					// The pre-check above missed a concurrent registration
-					// for the same email — the database's own constraint is
-					// the actual correctness boundary, not the pre-check.
-					return rerender(http.StatusConflict, "This email is already registered.")
-				}
-				return err
-			}
-
-			if err := createAccountSession(ctx.Context(), store, cfg, ctx.ResponseWriter(), ctx.Request(), account.ID); err != nil {
-				return err
-			}
-			if m != nil {
-				m.queueVerification(ctx.Context(), account)
-			}
-			return ctx.Redirect(safeAccountsNext(next, defaultPostLoginRedirect))
-
+			return register(ctx, store, cfg, limiter, m)
 		default:
 			return methodNotAllowed(ctx)
 		}
 	}
+}
+
+// register handles a submitted registration form.
+func register(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *security.RateLimiter, m *mailer) error {
+	if err := ctx.Request().ParseForm(); err != nil {
+		return err
+	}
+	if !verifyPreSessionCSRF(ctx.Request()) {
+		return forbiddenCSRF(ctx)
+	}
+	key := rateLimitKey(ctx.Request())
+	if !limiter.Allow(key) {
+		return tooManyRequests(ctx)
+	}
+
+	email := normalizeEmail(ctx.Request().PostForm.Get("email"))
+	password := ctx.Request().PostForm.Get("password")
+	next := ctx.Request().PostForm.Get("next")
+	rerender := func(status int, message string) error {
+		limiter.RecordFailure(key)
+		return render(ctx, status, registerTemplate, registerPageData{
+			Next:      next,
+			Email:     email,
+			Error:     message,
+			CSRFToken: submittedCSRFToken(ctx.Request()),
+		})
+	}
+	if email == "" || password == "" {
+		return rerender(http.StatusBadRequest, "Email and password are required.")
+	}
+	if problem := passwordProblem(password); problem != "" {
+		return rerender(http.StatusBadRequest, problem)
+	}
+
+	account, created, err := createAccount(ctx.Context(), store, email, password)
+	if err != nil {
+		return err
+	}
+	if !created {
+		return rerender(http.StatusConflict, "This email is already registered.")
+	}
+	if err := createAccountSession(ctx.Context(), store, cfg, ctx.ResponseWriter(), ctx.Request(), account.ID); err != nil {
+		return err
+	}
+	if m != nil {
+		m.queueVerification(ctx.Context(), account)
+	}
+	return ctx.Redirect(safeAccountsNext(next, defaultPostLoginRedirect))
+}
+
+// createAccount creates an active Account for email, or reports
+// created=false when email is already registered.
+func createAccount(ctx context.Context, store *db.Store, email, password string) (account Account, created bool, err error) {
+	if _, exists, err := findAccountByEmail(ctx, store, email); err != nil || exists {
+		return Account{}, false, err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return Account{}, false, err
+	}
+	account = Account{Email: email, PasswordHash: string(hash), Active: true, CreatedAt: time.Now().UTC()}
+	if err := store.Create(ctx, accountMeta(), &account); err != nil {
+		if db.IsUniqueConstraintViolation(err) {
+			// The pre-check above missed a concurrent registration for the
+			// same email — the database's own constraint is the actual
+			// correctness boundary, not the pre-check.
+			return Account{}, false, nil
+		}
+		return Account{}, false, err
+	}
+	return account, true, nil
 }
 
 // rateLimitKey derives the rate-limit key (source IP, port stripped) for

@@ -2,11 +2,11 @@ package accounts
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/internal/observabilitysafe"
@@ -35,16 +35,19 @@ type outboxJob struct {
 
 // outbox is accounts' bounded in-memory email queue, drained one email at
 // a time by one worker that runs as a Lifecycle component. A full queue
-// drops the email; a stopped worker first sends what its deadline allows.
-// Nothing survives a crash and nothing is retried (ADR 0033).
+// drops the email. Stop sends what's queued until its deadline, then
+// cancels the send in progress and waits for the worker to return, so no
+// email is sent after Stop returns. Nothing survives a crash and nothing
+// is retried (ADR 0033).
 type outbox struct {
 	queue  chan outboxJob
 	sender tangomail.Sender
 	logger *slog.Logger
 
-	mu   sync.Mutex
-	stop chan context.Context
-	done chan struct{}
+	mu     sync.Mutex
+	stop   chan struct{}      // closed by Stop
+	done   chan struct{}      // closed when the worker returns
+	cancel context.CancelFunc // ends the worker's sends
 }
 
 func newOutbox(capacity int, sender tangomail.Sender, logger *slog.Logger) *outbox {
@@ -58,37 +61,40 @@ func (o *outbox) lifecycle() tango.Lifecycle {
 	return tango.Lifecycle{Name: "accounts.outbox", Start: o.start, Stop: o.shutdown}
 }
 
-// enqueue queues job, or drops it and logs EventMailDropped when the queue
-// is full. It never blocks.
-func (o *outbox) enqueue(ctx context.Context, job outboxJob) {
+// enqueue queues job and reports true, or drops it, logs EventMailDropped
+// and reports false when the queue is full. It never blocks.
+func (o *outbox) enqueue(ctx context.Context, job outboxJob) bool {
 	select {
 	case o.queue <- job:
+		return true
 	default:
 		o.log(ctx, EventMailDropped, slog.String("purpose", string(job.purpose)))
+		return false
 	}
 }
 
 func (o *outbox) start(ctx context.Context) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.stop, o.done = make(chan context.Context, 1), make(chan struct{})
-	// The application context is cancelled when shutdown begins; the
-	// worker keeps going until Stop, which bounds the rest.
-	go o.run(context.WithoutCancel(ctx), o.stop, o.done)
+	// The application context ends when shutdown begins; the worker's own
+	// context lasts until Stop's deadline instead.
+	worker, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	o.stop, o.done, o.cancel = make(chan struct{}), make(chan struct{}), cancel
+	go o.run(worker, o.stop, o.done)
 	return nil
 }
 
-func (o *outbox) run(ctx context.Context, stop <-chan context.Context, done chan<- struct{}) {
+func (o *outbox) run(ctx context.Context, stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 	for {
 		select {
 		case job := <-o.queue:
 			o.deliver(ctx, job)
-		case stopCtx := <-stop:
-			for stopCtx.Err() == nil {
+		case <-stop:
+			for ctx.Err() == nil {
 				select {
 				case job := <-o.queue:
-					o.deliver(stopCtx, job)
+					o.deliver(ctx, job)
 				default:
 					return
 				}
@@ -98,32 +104,45 @@ func (o *outbox) run(ctx context.Context, stop <-chan context.Context, done chan
 	}
 }
 
-// shutdown sends what's queued before ctx's deadline, then stops the
-// worker. Emails still queued at the deadline are lost.
+// shutdown lets the worker send what's queued until ctx's deadline, then
+// cancels the send in progress and waits for the worker to return. It
+// returns ctx's error when the deadline came first: what was still queued
+// is lost.
 func (o *outbox) shutdown(ctx context.Context) error {
 	o.mu.Lock()
-	stop, done := o.stop, o.done
-	o.stop, o.done = nil, nil
+	stop, done, cancel := o.stop, o.done, o.cancel
+	o.stop, o.done, o.cancel = nil, nil, nil
 	o.mu.Unlock()
 	if stop == nil {
 		return nil
 	}
-	stop <- ctx
+	defer cancel()
+	close(stop)
 	select {
 	case <-done:
 		return nil
 	case <-ctx.Done():
+		cancel()
+		<-done // Senders return promptly once their context ends
 		return ctx.Err()
 	}
 }
 
+// deliver prepares and sends job's email, logging a failure. A failed
+// preparation is logged by its class only: its text could carry anything
+// the lookup touched.
 func (o *outbox) deliver(ctx context.Context, job outboxJob) {
+	purpose := slog.String("purpose", string(job.purpose))
 	d, ok, err := job.prepare(ctx)
-	if err == nil && ok {
-		err = o.sender.Send(ctx, d.message)
-	}
 	if err != nil {
-		o.log(ctx, EventMailFailed, slog.String("purpose", string(job.purpose)), slog.String("error", redact(err.Error(), d)))
+		o.log(ctx, EventMailFailed, purpose, slog.String("error", fmt.Sprintf("preparing the email failed (%T)", err)))
+		return
+	}
+	if !ok {
+		return
+	}
+	if err := o.sender.Send(ctx, d.message); err != nil {
+		o.log(ctx, EventMailFailed, purpose, slog.String("error", redact(err.Error(), d)))
 	}
 }
 
@@ -133,7 +152,8 @@ func (o *outbox) log(ctx context.Context, event string, attrs ...slog.Attr) {
 
 // redact removes from text the email's recipient, its text (whole and line
 // by line) and its secret, so a Sender's error that echoes them can be
-// logged.
+// logged. tanGO's own SMTP sender already keeps credentials out of its
+// errors.
 func redact(text string, d delivery) string {
 	secrets := []string{d.message.To, d.message.Text, d.secret}
 	secrets = append(secrets, strings.Split(d.message.Text, "\n")...)
@@ -163,32 +183,4 @@ func replaceFold(s, old, replacement string) string {
 		b.WriteString(replacement)
 		s, lowerS = s[i+len(old):], lowerS[i+len(old):]
 	}
-}
-
-// cooldown allows one email per key per window, in memory. Expired entries
-// are pruned on every call, so it holds at most what the window allows.
-type cooldown struct {
-	mu     sync.Mutex
-	window time.Duration
-	last   map[string]time.Time
-}
-
-func newCooldown(window time.Duration) *cooldown {
-	return &cooldown{window: window, last: map[string]time.Time{}}
-}
-
-// allow reports whether key may send at now, recording it if so.
-func (c *cooldown) allow(key string, now time.Time) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for k, at := range c.last {
-		if now.Sub(at) >= c.window {
-			delete(c.last, k)
-		}
-	}
-	if _, cooling := c.last[key]; cooling {
-		return false
-	}
-	c.last[key] = now
-	return true
 }

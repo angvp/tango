@@ -9,7 +9,7 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 - Treat plain Go structs as the source of truth for models and metadata.
 - Register apps explicitly through `tango.Config{InstalledApps: []tango.App{...}}`.
 - Register models, admin config, routes, checks, and app-owned assets from an app's `Register(*tango.Registry)` path.
-- Use public packages and documented APIs first: `tango`, `model`, `db`, `auth`, `auth/jwt`, `accounts`, `admin`, `i18n`, `ratelimit`, `realtime`, `realtime/websocket`, `observability`, and `migration` through the documented workflow.
+- Use public packages and documented APIs first: `tango`, `model`, `db`, `auth`, `auth/jwt`, `accounts`, `admin`, `i18n`, `mail`, `mail/mailtest`, `ratelimit`, `realtime`, `realtime/websocket`, `observability`, and `migration` through the documented workflow.
 - Use `db.Store` for persistence unless a real query need forces raw SQL through `Store.Query`/`QueryRow`.
 - Keep Chi as tanGO's internal routing implementation detail. Do not expose Chi types from app APIs.
 - Run the shared validation checklist in `docs/agents/checklist.md` before calling a change done.
@@ -33,6 +33,7 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 - Reusable apps: `docs/agents/reusable-apps.md`
 - Relationships and foreign keys: `docs/agents/relationships.md`
 - Auth and accounts: `docs/agents/auth-and-accounts.md`
+- Outgoing email: `docs/agents/mail.md`
 - JWT authentication: `docs/agents/jwt-auth.md`
 - Realtime rooms and WebSockets: `docs/agents/realtime.md`
 - Background jobs: `docs/agents/jobs.md`

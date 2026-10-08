@@ -222,3 +222,15 @@ func TestWithoutMailNoVerificationRouteExists(t *testing.T) {
 		}
 	}
 }
+
+func TestResendIsRateLimitedPerClient(t *testing.T) {
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	session := site.register("alice@example.com")
+	var last *httptest.ResponseRecorder
+	for i := 0; i < 6; i++ {
+		last = site.resend(session)
+	}
+	if last.Code != http.StatusTooManyRequests || last.Header().Get("Retry-After") == "" {
+		t.Fatalf("sixth resend = %d, want 429 with Retry-After", last.Code)
+	}
+}

@@ -29,8 +29,7 @@ const defaultPostLoginRedirect = "/"
 // createAccountSession creates an AccountSession for accountID using
 // auth.CreateSession, and sets the session cookie on the response.
 func createAccountSession(ctx context.Context, store *db.Store, cfg accountsConfig, w http.ResponseWriter, r *http.Request, accountID int64) error {
-	_, sessionMeta, _ := accountModelMetas()
-	token, expiresAt, err := auth.CreateSession(ctx, store, sessionMeta, accountID, cfg.sessionDuration)
+	token, expiresAt, err := auth.CreateSession(ctx, store, sessionMeta(), accountID, cfg.sessionDuration)
 	if err != nil {
 		return err
 	}

@@ -90,7 +90,7 @@ accounts.New(store, accounts.WithMail(accounts.MailConfig{
 
 ### Routes
 
-- `GET`/`POST /accounts/password-reset/` asks for a reset link. Every address gets the same answer: an existing, unknown, inactive or recently emailed one. The request only queues a job; the background outbox looks the account up and emails a link only to an active account, so neither the response nor its timing reveals whether an account exists.
+- `GET`/`POST /accounts/password-reset/` asks for a reset link. Every syntactically valid address gets the same answer: an existing, unknown, inactive or recently emailed one. Only an empty or malformed address gets a form error, which says nothing about accounts. The request only queues a job; the background outbox looks the account up and emails a link only to an active account, so neither the response nor its timing reveals whether an account exists.
 - `GET`/`POST /accounts/password-reset/confirm/?token=…` sets a new password under registration's rules. The link lasts one hour. A completed reset ends every session and every other link the account has, marks the email verified, and sends the user to log in.
 - `GET`/`POST /accounts/verify/?token=…` confirms the email address from the link sent at registration. It lasts 24 hours.
 - `POST /accounts/verify/resend/` sends a logged-in, unverified account a new verification link.
@@ -101,11 +101,11 @@ An expired, used, replaced or unknown link gets the same "This link is not valid
 
 ### Limits
 
-- **Cooldown:** each address gets at most one email of each kind every five minutes, and each client IP five reset requests a minute.
+- **Cooldown:** each address gets at most one email of each kind every five minutes, and each client IP five reset or resend requests a minute. An email the full outbox drops gives its cooldown back.
 - **Outbox:** emails wait in an in-memory outbox of 100, sent one at a time by a worker that `accounts` registers as a [Lifecycle](application-lifecycle.md) component.
 - **Full outbox:** the email is dropped and `tango.accounts.mail_dropped` is logged.
-- **Failed send:** `tango.accounts.mail_failed` is logged, with the address and link redacted.
-- **Shutdown:** the worker sends what it can before its stop deadline.
+- **Failed send:** `tango.accounts.mail_failed` is logged, with the address and link redacted; a failure preparing the email is logged by its error class only.
+- **Shutdown:** the worker sends what it can before its stop deadline, then the send in progress is cancelled; nothing is sent after shutdown finishes.
 - **What's lost:** a crash loses whatever is queued, and nothing is retried.
 - **Per process:** the cooldown and the outbox are per process, like the login rate limiter.
 

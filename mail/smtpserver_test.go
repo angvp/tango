@@ -25,7 +25,10 @@ type smtpServer struct {
 	// startTLS offers STARTTLS; implicitTLS speaks TLS from the first byte;
 	// stall accepts connections and never answers.
 	startTLS, implicitTLS, stall bool
-	tlsConfig                    *tls.Config
+	// failOn names a command the server refuses with a reply echoing
+	// everything the client told it.
+	failOn    string
+	tlsConfig *tls.Config
 
 	mu       sync.Mutex
 	auth     []string // decoded AUTH PLAIN credentials
@@ -113,6 +116,21 @@ func (s *smtpServer) serve(conn net.Conn) {
 		s.mu.Lock()
 		s.commands = append(s.commands, verb)
 		s.mu.Unlock()
+		if verb == s.failOn {
+			if verb == "DATA" {
+				reply("354 go")
+				data, _ := text.ReadDotBytes()
+				reply("554 rejected: " + strings.ReplaceAll(string(data), "\r\n", " "))
+				continue
+			}
+			decoded := ""
+			if fields := strings.Fields(line); len(fields) > 2 {
+				raw, _ := base64.StdEncoding.DecodeString(fields[2])
+				decoded = strings.ReplaceAll(string(raw), "\x00", " ")
+			}
+			reply("535 refused " + line + " " + decoded)
+			continue
+		}
 		switch verb {
 		case "EHLO", "HELO":
 			lines := []string{"250-test"}

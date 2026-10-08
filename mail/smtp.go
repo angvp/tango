@@ -3,13 +3,18 @@ package mail
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
+	"net/textproto"
 	"net/url"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/angvp/tango/internal/security"
 )
 
 // SMTPURLEnv is the environment variable SMTPSenderFromEnv reads.
@@ -50,9 +55,10 @@ type SMTPSender struct {
 //	smtp+insecure://localhost:1025     plaintext, for a local tool such as Mailpit
 //
 // smtp+insecure is accepted only for a loopback host (localhost or a
-// loopback IP) and never with credentials. The port defaults to 587, 465
-// and 25 respectively. Credentials, if any, are sent with AUTH PLAIN.
-// Errors never contain the URL, so a password can't leak into logs.
+// loopback IP), never with credentials, and only with an explicit port, so
+// plaintext is always a deliberate choice. smtp and smtps default to ports
+// 587 and 465. Credentials, if any, are sent with AUTH PLAIN. Errors never
+// contain the URL, so a password can't leak into logs.
 func NewSMTPSender(rawURL string, opts ...Option) (*SMTPSender, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -66,7 +72,7 @@ func NewSMTPSender(rawURL string, opts ...Option) (*SMTPSender, error) {
 	case "smtps":
 		s.mode, defaultPort = modeTLS, "465"
 	case "smtp+insecure":
-		s.mode, defaultPort = modePlain, "25"
+		s.mode = modePlain
 	default:
 		return nil, errors.New("mail: the SMTP URL's scheme must be smtp, smtps or smtp+insecure")
 	}
@@ -76,15 +82,18 @@ func NewSMTPSender(rawURL string, opts ...Option) (*SMTPSender, error) {
 	}
 	port := u.Port()
 	if port == "" {
+		if s.mode == modePlain {
+			return nil, errors.New("mail: smtp+insecure needs an explicit port, such as smtp+insecure://localhost:1025")
+		}
 		port = defaultPort
 	}
 	s.addr = net.JoinHostPort(s.host, port)
 	if u.User != nil {
 		s.username = u.User.Username()
-		s.password, _ = u.User.Password()
+		s.password, _ = u.User.Password() // an absent password is an empty one
 	}
 	if s.mode == modePlain {
-		if !isLoopback(s.host) {
+		if !security.IsLoopbackHost(s.host) {
 			return nil, errors.New("mail: smtp+insecure is only allowed to a loopback host")
 		}
 		if u.User != nil {
@@ -104,18 +113,10 @@ func SMTPSenderFromEnv(opts ...Option) (*SMTPSender, error) {
 	return NewSMTPSender(rawURL, opts...)
 }
 
-// isLoopback reports whether host is localhost or a loopback IP, without
-// resolving it.
-func isLoopback(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
 // Send validates message, then delivers it in one SMTP exchange bounded by
-// ctx's deadline, or DefaultSMTPTimeout when ctx has none.
+// ctx's deadline, or DefaultSMTPTimeout when ctx has none. A server's
+// refusal is reported by stage and reply code only: its text can echo
+// whatever the client sent.
 func (s *SMTPSender) Send(ctx context.Context, message Message) error {
 	encoded, err := encode(message, s.options)
 	if err != nil {
@@ -126,65 +127,134 @@ func (s *SMTPSender) Send(ctx context.Context, message Message) error {
 		ctx, cancel = context.WithTimeout(ctx, s.options.defaultTimeout)
 		defer cancel()
 	}
-	if err := s.deliver(ctx, encoded); err != nil {
-		return fmt.Errorf("mail: sending through %s: %w", s.addr, err)
+	if stage, err := s.deliver(ctx, encoded); err != nil {
+		return s.sendError(stage, err, encoded)
 	}
 	return nil
 }
 
-func (s *SMTPSender) deliver(ctx context.Context, message encoded) error {
+// deliver runs one SMTP exchange, returning the stage that failed.
+func (s *SMTPSender) deliver(ctx context.Context, message encoded) (string, error) {
+	client, closeConn, err := s.connect(ctx)
+	if err != nil {
+		return "connecting", err
+	}
+	defer closeConn()
+	defer client.Close()
+	if s.username != "" {
+		if err := client.Auth(smtp.PlainAuth("", s.username, s.password, s.host)); err != nil {
+			return "authentication", err
+		}
+	}
+	if err := client.Mail(message.from); err != nil {
+		return "the sender", err
+	}
+	if err := client.Rcpt(message.to); err != nil {
+		return "the recipient", err
+	}
+	w, err := client.Data()
+	if err != nil {
+		return "the message", err
+	}
+	if _, err := w.Write(message.raw); err != nil {
+		return "the message", err
+	}
+	if err := w.Close(); err != nil {
+		return "the message", err
+	}
+	return "closing", client.Quit()
+}
+
+// connect dials the server and secures the connection as the URL's
+// scheme says, bounding everything by ctx. closeConn releases what it set
+// up.
+func (s *SMTPSender) connect(ctx context.Context) (client *smtp.Client, closeConn func(), err error) {
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", s.addr)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer conn.Close()
 	deadline, _ := ctx.Deadline()
-	_ = conn.SetDeadline(deadline)
+	_ = conn.SetDeadline(deadline) // a net.Conn from Dial accepts a deadline
 	// Cancelling ctx ends a blocked read or write at once.
 	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Unix(1, 0)) })
-	defer stop()
+	closeConn = func() { stop(); _ = conn.Close() }
 
 	tlsConfig := &tls.Config{ServerName: s.host, RootCAs: s.options.rootCAs, MinVersion: tls.VersionTLS12}
 	if s.mode == modeTLS {
 		tlsConn := tls.Client(conn, tlsConfig)
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
-			return err
+			closeConn()
+			return nil, nil, err
 		}
 		conn = tlsConn
 	}
-	client, err := smtp.NewClient(conn, s.host)
+	client, err = smtp.NewClient(conn, s.host)
 	if err != nil {
-		return err
+		closeConn()
+		return nil, nil, err
 	}
-	defer client.Close()
 	if s.mode == modeSTARTTLS {
 		if ok, _ := client.Extension("STARTTLS"); !ok {
-			return errors.New("the server doesn't offer STARTTLS")
+			closeConn()
+			return nil, nil, errors.New("the server doesn't offer STARTTLS")
 		}
 		if err := client.StartTLS(tlsConfig); err != nil {
-			return err
+			closeConn()
+			return nil, nil, err
 		}
 	}
-	if s.username != "" {
-		if err := client.Auth(smtp.PlainAuth("", s.username, s.password, s.host)); err != nil {
-			return err
-		}
-	}
-	if err := client.Mail(message.from); err != nil {
-		return err
-	}
-	if err := client.Rcpt(message.to); err != nil {
-		return err
-	}
-	w, err := client.Data()
-	if err != nil {
-		return err
-	}
-	if _, err := w.Write(message.raw); err != nil {
-		return err
-	}
-	if err := w.Close(); err != nil {
-		return err
-	}
-	return client.Quit()
+	return client, closeConn, nil
 }
+
+// sendError reports a failed exchange without anything secret in it: a
+// server's refusal keeps only its reply code, and any other error has the
+// credentials, the recipient and the message's lines removed.
+func (s *SMTPSender) sendError(stage string, err error, message encoded) error {
+	var reply *textproto.Error
+	if errors.As(err, &reply) {
+		return &smtpError{text: fmt.Sprintf("mail: the SMTP server at %s refused %s (code %d)", s.addr, stage, reply.Code), cause: err}
+	}
+	return &smtpError{text: fmt.Sprintf("mail: sending through %s failed at %s: %s", s.addr, stage, s.scrub(err.Error(), message)), cause: err}
+}
+
+// scrub removes from text everything this sender or message must never
+// reveal.
+func (s *SMTPSender) scrub(text string, message encoded) string {
+	secrets := []string{s.username, s.password, url.QueryEscape(s.username), url.QueryEscape(s.password), message.to}
+	if s.username != "" {
+		secrets = append(secrets, base64.StdEncoding.EncodeToString([]byte("\x00"+s.username+"\x00"+s.password)))
+	}
+	secrets = append(secrets, strings.Split(string(message.raw), "\r\n")...)
+	return redactAll(text, secrets)
+}
+
+// redactAll replaces every non-blank secret in text, longest first.
+func redactAll(text string, secrets []string) string {
+	kept := secrets[:0:0]
+	for _, secret := range secrets {
+		if len(strings.TrimSpace(secret)) > 3 {
+			kept = append(kept, secret)
+		}
+	}
+	for changed := true; changed; {
+		changed = false
+		for _, secret := range kept {
+			if strings.Contains(text, secret) {
+				text, changed = strings.ReplaceAll(text, secret, "[redacted]"), true
+			}
+		}
+	}
+	return text
+}
+
+// smtpError is a delivery failure whose text is safe to log. It doesn't
+// unwrap, so the original text can't be recovered from it, but errors.Is
+// still matches its cause, such as context.DeadlineExceeded.
+type smtpError struct {
+	text  string
+	cause error
+}
+
+func (e *smtpError) Error() string { return e.text }
+
+func (e *smtpError) Is(target error) bool { return errors.Is(e.cause, target) }
