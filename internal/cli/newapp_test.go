@@ -186,7 +186,7 @@ func TestNewAppSaysHowToInstallTheApp(t *testing.T) {
 	tests := []struct {
 		name, goMod, want string
 	}{
-		{"in a module", "module shop\n\ngo 1.27\n",
+		{"in a module", "module shop // the shop\n\ngo 1.27\n",
 			`Install it in main.go: import "shop/apps/greetings" and add greetings.App{} to config.InstalledApps.`},
 		{"without a go.mod", "",
 			`Install it in main.go: import the apps/greetings package and add greetings.App{} to config.InstalledApps.`},

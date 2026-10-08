@@ -2,13 +2,18 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
 	"github.com/angvp/tango/testdb"
@@ -42,7 +47,8 @@ func newTestServer(t *testing.T) (http.Handler, *db.Store, *tango.Registry) {
 
 // TestAPostCreatedThroughTheAPIBelongsToItsAuthor is the example's point:
 // a JSON API and the admin share one set of models, linked by a foreign
-// key.
+// key: a post the API creates for an author is listed by author, and
+// shows in the admin.
 func TestAPostCreatedThroughTheAPIBelongsToItsAuthor(t *testing.T) {
 	handler, store, registry := newTestServer(t)
 	author := authors.Author{Name: "Ada", Email: "ada@example.com"}
@@ -68,9 +74,48 @@ func TestAPostCreatedThroughTheAPIBelongsToItsAuthor(t *testing.T) {
 		t.Fatalf("GET /posts/?author_id= = %d %s", listed.Code, listed.Body.String())
 	}
 
-	admin := httptest.NewRecorder()
-	handler.ServeHTTP(admin, httptest.NewRequest(http.MethodGet, "/admin/", nil))
-	if admin.Code != http.StatusFound || !strings.HasPrefix(admin.Header().Get("Location"), "/admin/login/") {
-		t.Fatalf("GET /admin/ = %d to %q, want the admin's login redirect", admin.Code, admin.Header().Get("Location"))
+	// The admin, logged in, lists the post the API created.
+	if err := admin.CreateAccount(t.Context(), store, "editor", "correct-password"); err != nil {
+		t.Fatal(err)
 	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browser := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	loginPage := fetch(t, browser, server.URL+"/admin/login/")
+	csrf := regexp.MustCompile(`name="csrf_token" value="([^"]+)"`).FindStringSubmatch(loginPage)
+	if csrf == nil {
+		t.Fatalf("the admin login page has no CSRF token:\n%s", loginPage)
+	}
+	loggedIn, err := browser.PostForm(server.URL+"/admin/login/", url.Values{
+		"username": {"editor"}, "password": {"correct-password"}, "csrf_token": {csrf[1]},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loggedIn.Body.Close()
+	if loggedIn.StatusCode != http.StatusFound {
+		t.Fatalf("admin login = %d", loggedIn.StatusCode)
+	}
+	if list := fetch(t, browser, server.URL+"/admin/post/"); !strings.Contains(list, "Hello") {
+		t.Fatalf("the admin's post list doesn't show the API's post:\n%s", list)
+	}
+}
+
+// fetch GETs target with browser and returns its body.
+func fetch(t *testing.T, browser *http.Client, target string) string {
+	t.Helper()
+	response, err := browser.Get(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
 }

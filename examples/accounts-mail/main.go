@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -43,7 +44,8 @@ func run() error {
 
 	// Development only: every email, with its live link, is printed here.
 	// A real deployment passes mail.SMTPSenderFromEnv() instead.
-	config := appConfig(db.NewStore(sqlDB, dsn.Dialect), mail.WriterSender(os.Stdout), baseURL())
+	addr := tango.LoadConfigFromEnv(tango.WithPortFromEnv()).Addr
+	config := appConfig(db.NewStore(sqlDB, dsn.Dialect), mail.WriterSender(os.Stdout), baseURL(addr))
 	if handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations); handled || err != nil {
 		return err
 	}
@@ -57,12 +59,17 @@ func run() error {
 }
 
 // baseURL is the Public base URL emailed links are built on: BASE_URL, or
-// http://localhost:8000 for local development.
-func baseURL() string {
+// for local development http://localhost on the port the app listens on
+// (addr, such as ":8000").
+func baseURL(addr string) string {
 	if url := os.Getenv("BASE_URL"); url != "" {
 		return url
 	}
-	return "http://localhost:8000"
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" {
+		port = "8000"
+	}
+	return "http://localhost:" + port
 }
 
 // appConfig is the whole application, sending its emails through sender.

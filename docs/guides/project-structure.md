@@ -40,13 +40,11 @@ apps/<name>/
   app.go
 ```
 
-`app.go` starts as a stub implementing `Name() string` and `Register(*Registry) error`. tanGO never edits `main.go` for you: wiring a new app into `Config.InstalledApps` is always a line you write by hand. `newapp` prints that line when it finishes, with the import path read from your `go.mod`:
+`app.go` starts as a stub implementing `Name() string` and `Register(*Registry) error`. tanGO never edits `main.go` for you: wiring a new app into `Config.InstalledApps` is always a line you write by hand. This is deliberate — a project's composition should be fully visible by reading `main.go`, never inferred from what files happen to exist on disk. `newapp` prints that line when it finishes, with the import path read from your `go.mod`:
 
 ```
 created apps/posts/app.go
 Install it in main.go: import "shop/apps/posts" and add posts.App{} to config.InstalledApps.
 ```
-
- This is deliberate — a project's composition should be fully visible by reading `main.go`, never inferred from what files happen to exist on disk.
 
 As an app grows past a stub, it's a plain Go package: nothing stops you from splitting `app.go` into `models.go`, `app.go`, and `views.go` (as the [`api-with-admin`](../../examples/api-with-admin) example does) once it's more than a screenful. See the [application architecture guide](application-architecture.md) for what comes after that — when to introduce a `services/` layer, and when the app has earned a full domain/ports/adapters split.

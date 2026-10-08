@@ -21,6 +21,15 @@ type commandWorld struct {
 
 var shellFence = regexp.MustCompile("^```(sh|bash|shell|console)\\s*$")
 
+// shellSession follows one shell block's commands: where they run, whether
+// this repository was cloned, and which directories they created.
+type shellSession struct {
+	world   commandWorld
+	cwd     string
+	cloned  bool
+	created map[string]bool
+}
+
 // readmeCommandProblems checks the shell blocks of a README in dir: every
 // cd leads to a directory, every `go run .` runs a main package, and every
 // flag passed to it is one that binary declares. A `git clone` of this
@@ -29,58 +38,70 @@ var shellFence = regexp.MustCompile("^```(sh|bash|shell|console)\\s*$")
 // main package trusted to the scaffolder. Commands aren't run.
 func readmeCommandProblems(dir, text string, world commandWorld) []string {
 	var problems []string
-	inBlock, cwd, cloned := false, dir, false
-	created := map[string]bool{}
+	var session *shellSession
 	for _, line := range strings.Split(text, "\n") {
 		trimmed := strings.TrimSpace(line)
 		switch {
-		case !inBlock && shellFence.MatchString(trimmed):
-			inBlock, cwd, cloned = true, dir, false
-			created = map[string]bool{}
-			continue
-		case inBlock && trimmed == "```":
-			inBlock = false
-			continue
-		case !inBlock:
+		case session == nil && shellFence.MatchString(trimmed):
+			session = &shellSession{world: world, cwd: dir, created: map[string]bool{}}
+		case session != nil && trimmed == "```":
+			session = nil
+		case session != nil:
+			for _, command := range strings.Split(strings.TrimPrefix(trimmed, "$ "), "&&") {
+				problems = append(problems, session.run(strings.Fields(command))...)
+			}
+		}
+	}
+	return problems
+}
+
+// run follows one command, returning what's wrong with it.
+func (s *shellSession) run(fields []string) []string {
+	switch {
+	case len(fields) == 0 || strings.HasPrefix(fields[0], "#"):
+	case len(fields) >= 3 && fields[0] == "git" && fields[1] == "clone" && strings.TrimSuffix(fields[2], ".git") == "https://github.com/angvp/tango":
+		s.cloned = true
+	case len(fields) >= 3 && fields[0] == "tango" && fields[1] == "newproject":
+		s.created[path.Join(s.cwd, fields[len(fields)-1])] = true
+	case len(fields) == 2 && fields[0] == "mkdir":
+		s.created[path.Join(s.cwd, fields[1])] = true
+	case len(fields) == 2 && fields[0] == "cd":
+		return s.cd(fields[1])
+	case len(fields) >= 3 && fields[0] == "go" && fields[1] == "run" && fields[2] == ".":
+		return s.goRun(fields[3:])
+	}
+	return nil
+}
+
+// cd moves to dir, which must exist or have been created.
+func (s *shellSession) cd(dir string) []string {
+	target := path.Join(s.cwd, dir)
+	if s.cloned && (dir == "tango" || strings.HasPrefix(dir, "tango/")) {
+		target = path.Clean(strings.TrimPrefix(strings.TrimPrefix(dir, "tango"), "/"))
+	}
+	if !s.world.isDir(target) && !s.created[target] {
+		return []string{"cd " + dir + ": no such directory"}
+	}
+	s.cwd = target
+	return nil
+}
+
+// goRun checks `go run .` with args in the current directory.
+func (s *shellSession) goRun(args []string) []string {
+	if s.created[s.cwd] {
+		return nil
+	}
+	flags, isMain := s.world.mainFlags(s.cwd)
+	if !isMain {
+		return []string{"go run . in " + s.cwd + ": not a main package"}
+	}
+	var problems []string
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-") {
 			continue
 		}
-		for _, command := range strings.Split(strings.TrimPrefix(trimmed, "$ "), "&&") {
-			fields := strings.Fields(command)
-			switch {
-			case len(fields) == 0 || strings.HasPrefix(fields[0], "#"):
-			case len(fields) >= 3 && fields[0] == "git" && fields[1] == "clone" && strings.TrimSuffix(fields[2], ".git") == "https://github.com/angvp/tango":
-				cloned = true
-			case len(fields) >= 3 && fields[0] == "tango" && fields[1] == "newproject":
-				created[path.Join(cwd, fields[len(fields)-1])] = true
-			case len(fields) == 2 && fields[0] == "mkdir":
-				created[path.Join(cwd, fields[1])] = true
-			case fields[0] == "cd" && len(fields) == 2:
-				target := path.Join(cwd, fields[1])
-				if cloned && (fields[1] == "tango" || strings.HasPrefix(fields[1], "tango/")) {
-					target = path.Clean(strings.TrimPrefix(strings.TrimPrefix(fields[1], "tango"), "/"))
-				}
-				if !world.isDir(target) && !created[target] {
-					problems = append(problems, "cd "+fields[1]+": no such directory")
-					continue
-				}
-				cwd = target
-			case len(fields) >= 3 && fields[0] == "go" && fields[1] == "run" && fields[2] == "." && created[cwd]:
-			case len(fields) >= 3 && fields[0] == "go" && fields[1] == "run" && fields[2] == ".":
-				flags, isMain := world.mainFlags(cwd)
-				if !isMain {
-					problems = append(problems, "go run . in "+cwd+": not a main package")
-					continue
-				}
-				for _, arg := range fields[3:] {
-					if !strings.HasPrefix(arg, "-") {
-						continue
-					}
-					name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
-					if !slices.Contains(flags, name) {
-						problems = append(problems, "go run . "+arg+" in "+cwd+": "+cwd+" declares no such flag")
-					}
-				}
-			}
+		if name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "="); !slices.Contains(flags, name) {
+			problems = append(problems, "go run . "+arg+" in "+s.cwd+": "+s.cwd+" declares no such flag")
 		}
 	}
 	return problems
@@ -120,27 +141,32 @@ func TestReadmeCommandProblems(t *testing.T) {
 }
 
 var (
-	declaredFlag  = regexp.MustCompile(`flag\.\w+\("([^"]+)"`)
-	dispatchFlag  = regexp.MustCompile(`flags\.\w+\("([^"]+)"`)
-	adminFlag     = regexp.MustCompile(`"-(tango-admin-[a-z-]+)"`)
-	mainPackage   = regexp.MustCompile(`(?m)^package main$`)
-	readSourceDir = func(t *testing.T, dir string) string {
-		t.Helper()
-		files, _ := filepath.Glob(filepath.Join(dir, "*.go"))
-		var b strings.Builder
-		for _, f := range files {
-			if strings.HasSuffix(f, "_test.go") {
-				continue
-			}
-			content, err := os.ReadFile(f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			b.Write(content)
-		}
-		return b.String()
-	}
+	declaredFlag = regexp.MustCompile(`flag\.\w+\("([^"]+)"`)
+	dispatchFlag = regexp.MustCompile(`flags\.\w+\("([^"]+)"`)
+	adminFlag    = regexp.MustCompile(`"-(tango-admin-[a-z-]+)"`)
+	mainPackage  = regexp.MustCompile(`(?m)^package main$`)
 )
+
+// readSource returns the non-test Go source in dir, concatenated.
+func readSource(t *testing.T, dir string) string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		content, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.Write(content)
+	}
+	return b.String()
+}
 
 func matches(re *regexp.Regexp, text string) []string {
 	var out []string
@@ -150,19 +176,18 @@ func matches(re *regexp.Regexp, text string) []string {
 	return out
 }
 
-// TestReadmeCommandsMatchTheRepository checks the root README's and every
-// example README's commands against the repository, and that the root
-// README lists every example.
-func TestReadmeCommandsMatchTheRepository(t *testing.T) {
-	dispatchFlags := matches(dispatchFlag, readSourceDir(t, "."))
-	adminFlags := matches(adminFlag, readSourceDir(t, "admin"))
-	world := commandWorld{
+// repositoryWorld is the repository as README commands see it, with the
+// flags DispatchFlags and the admin CLI add read from their source.
+func repositoryWorld(t *testing.T) commandWorld {
+	dispatchFlags := matches(dispatchFlag, readSource(t, "."))
+	adminFlags := matches(adminFlag, readSource(t, "admin"))
+	return commandWorld{
 		isDir: func(dir string) bool {
 			info, err := os.Stat(dir)
 			return err == nil && info.IsDir()
 		},
 		mainFlags: func(dir string) ([]string, bool) {
-			source := readSourceDir(t, dir)
+			source := readSource(t, dir)
 			flags := matches(declaredFlag, source)
 			if strings.Contains(source, "tango.DispatchFlags(") {
 				flags = append(flags, dispatchFlags...)
@@ -173,10 +198,17 @@ func TestReadmeCommandsMatchTheRepository(t *testing.T) {
 			return flags, mainPackage.MatchString(source)
 		},
 	}
+}
 
-	readmes, _ := filepath.Glob("examples/*/README.md")
-	readmes = append([]string{"README.md"}, readmes...)
-	for _, readme := range readmes {
+// TestReadmeCommandsMatchTheRepository checks the root README's and every
+// example README's commands against the repository.
+func TestReadmeCommandsMatchTheRepository(t *testing.T) {
+	world := repositoryWorld(t)
+	readmes, err := filepath.Glob("examples/*/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, readme := range append([]string{"README.md"}, readmes...) {
 		text, err := os.ReadFile(readme)
 		if err != nil {
 			t.Fatal(err)
@@ -185,20 +217,31 @@ func TestReadmeCommandsMatchTheRepository(t *testing.T) {
 			t.Errorf("%s: %s", readme, problem)
 		}
 	}
+}
 
+// TestTheReadmeListsEveryExample keeps the root README's examples list,
+// and the examples' own READMEs, complete.
+func TestTheReadmeListsEveryExample(t *testing.T) {
 	root, err := os.ReadFile("README.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	examples, _ := os.ReadDir("examples")
+	examples, err := os.ReadDir("examples")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(examples) == 0 {
+		t.Fatal("no examples found")
+	}
 	for _, example := range examples {
-		if example.IsDir() && !strings.Contains(string(root), "examples/"+example.Name()) {
-			t.Errorf("README.md doesn't list examples/%s", example.Name())
+		if !example.IsDir() {
+			continue
 		}
-		if example.IsDir() {
-			if _, err := os.Stat(filepath.Join("examples", example.Name(), "README.md")); err != nil {
-				t.Errorf("examples/%s has no README", example.Name())
-			}
+		if !strings.Contains(string(root), "](examples/"+example.Name()+")") {
+			t.Errorf("README.md doesn't link examples/%s", example.Name())
+		}
+		if _, err := os.Stat(filepath.Join("examples", example.Name(), "README.md")); err != nil {
+			t.Errorf("examples/%s has no README", example.Name())
 		}
 	}
 }

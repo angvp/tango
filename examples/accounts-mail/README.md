@@ -26,7 +26,7 @@ Then, in a browser:
 
 - `TANGO_DB_DSN` picks the database and defaults to `sqlite://app.db`.
 - The address is `TANGO_ADDR`, else the `PORT` hosting platforms set, else `:8000`.
-- `BASE_URL` is the origin emailed links are built on, `http://localhost:8000` by default. It must match where the app is reached.
+- `BASE_URL` is the origin emailed links are built on. By default it's `http://localhost` on the port the app listens on; set it when the app is reached at another address.
 - Ctrl-C or `SIGTERM` shuts the server down gracefully, sending any queued email first.
 
 A real deployment passes `mail.SMTPSenderFromEnv()` instead of `mail.WriterSender`, and an `https://` `BASE_URL`. See [password reset and email verification](../../docs/guides/accounts.md#password-reset-and-email-verification) and the [mail guide](../../docs/guides/mail.md).

@@ -67,6 +67,7 @@ func modulePath(dir string) string {
 		return ""
 	}
 	for _, line := range strings.Split(string(content), "\n") {
+		line, _, _ = strings.Cut(line, "//")
 		if fields := strings.Fields(line); len(fields) == 2 && fields[0] == "module" {
 			return strings.Trim(fields[1], `"`)
 		}
