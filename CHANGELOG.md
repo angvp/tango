@@ -9,6 +9,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 - `tango.LoadConfigFromEnv(tango.WithPortFromEnv())` falls back to the `PORT` variable hosting platforms set: the address is `TANGO_ADDR`, else `":"+PORT`, else `:8000`. Without the option, `LoadConfigFromEnv` is unchanged.
 - `tango.MaxBodySize(n)` middleware caps request bodies: an oversized body gets `413` with `{"error":"request body too large"}`. When several limits apply, the most restrictive wins.
 
+### Security
+
+- `ServeContext` (and `Serve`) now drop a client that takes more than 10 seconds to send a request's headers, so a slow-header (Slowloris-style) client can't hold connections open indefinitely. This changes default behaviour under the compatibility promise's security exception. `tango.WithReadHeaderTimeout(d)` sets another bound, and `WithReadHeaderTimeout(0)` restores the old, unbounded behaviour.
+
 ### Fixed
 
 - A panic's `tango.http.panic` log reports the route's registered pattern (`/items/{id}/`), like every other log and metric for that request; it used to drop a trailing slash (`/items/{id}`).

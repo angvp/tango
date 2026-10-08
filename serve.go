@@ -16,6 +16,11 @@ import (
 
 const defaultShutdownTimeout = 15 * time.Second
 
+// defaultReadHeaderTimeout bounds how long a client may take to send its
+// request headers, so a slow-header (Slowloris-style) client can't hold a
+// connection open indefinitely.
+const defaultReadHeaderTimeout = 10 * time.Second
+
 // newListener is the seam ServeContext binds through. Overridden in tests
 // to inject a listener whose Accept can be made to fail on demand, so a
 // genuine (non-http.ErrServerClosed) Server.Serve error can be exercised
@@ -25,14 +30,34 @@ var newListener = net.Listen
 // serveConfig holds ServeContext's tunables, built from the ServeOption
 // values passed to it.
 type serveConfig struct {
-	shutdownTimeout time.Duration
-	logger          *slog.Logger
-	recorder        observability.Recorder
-	recorderEnabled bool
+	shutdownTimeout   time.Duration
+	logger            *slog.Logger
+	recorder          observability.Recorder
+	recorderEnabled   bool
+	readHeaderTimeout time.Duration
 }
 
 // ServeOption configures ServeContext.
 type ServeOption func(*serveConfig)
+
+// newServeConfig is ServeContext's configuration: the defaults, then opts.
+func newServeConfig(opts ...ServeOption) serveConfig {
+	sc := serveConfig{
+		shutdownTimeout:   defaultShutdownTimeout,
+		logger:            slog.Default(),
+		recorder:          observability.NopRecorder{},
+		readHeaderTimeout: defaultReadHeaderTimeout,
+	}
+	for _, opt := range opts {
+		opt(&sc)
+	}
+	return sc
+}
+
+// newHTTPServer is the http.Server ServeContext runs handler on.
+func newHTTPServer(addr string, handler http.Handler, sc serveConfig) *http.Server {
+	return &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: sc.readHeaderTimeout}
+}
 
 // WithShutdownTimeout bounds each phase of ServeContext's graceful
 // shutdown — draining in-flight HTTP requests, and running every
@@ -42,6 +67,13 @@ func WithShutdownTimeout(d time.Duration) ServeOption {
 	return func(c *serveConfig) {
 		c.shutdownTimeout = d
 	}
+}
+
+// WithReadHeaderTimeout bounds how long a client may take to send a
+// request's headers before the server closes the connection. It defaults
+// to 10 seconds; 0 disables it. d must not be negative.
+func WithReadHeaderTimeout(d time.Duration) ServeOption {
+	return func(c *serveConfig) { c.readHeaderTimeout = d }
 }
 
 // WithLogger configures framework-owned structured logging.
@@ -86,12 +118,12 @@ func WithRecorder(recorder observability.Recorder) ServeOption {
 // independently-timed context — a second budget from the drain phase, but
 // one budget for the whole stop phase, not one per component.
 func ServeContext(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.Dialect, opts ...ServeOption) error {
-	sc := serveConfig{shutdownTimeout: defaultShutdownTimeout, logger: slog.Default(), recorder: observability.NopRecorder{}}
-	for _, opt := range opts {
-		opt(&sc)
-	}
+	sc := newServeConfig(opts...)
 	if sc.shutdownTimeout <= 0 {
 		return fmt.Errorf("tango: shutdown timeout must be positive, got %s", sc.shutdownTimeout)
+	}
+	if sc.readHeaderTimeout < 0 {
+		return fmt.Errorf("tango: read header timeout must not be negative, got %s", sc.readHeaderTimeout)
 	}
 	if sc.logger == nil {
 		return fmt.Errorf("tango: logger must not be nil")
@@ -176,7 +208,7 @@ func ServeContext(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.
 		return rollbackStarted(started, fmt.Errorf("listen: %w", err), sc.shutdownTimeout)
 	}
 
-	server := &http.Server{Addr: config.Addr, Handler: handler}
+	server := newHTTPServer(config.Addr, handler, sc)
 	serveErrCh := make(chan error, 1)
 	go func() { serveErrCh <- server.Serve(listener) }()
 

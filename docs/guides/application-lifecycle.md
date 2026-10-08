@@ -49,6 +49,10 @@ The context passed to every `Lifecycle.Start` — and that a component may retai
 
 Each shutdown phase instead gets its own **fresh, independent** context bounded by `WithShutdownTimeout`: one for the HTTP drain, a separate one later shared by the entire `Lifecycle.Stop` pass. This is not one timeout split across both phases, and within the stop phase it is one shared budget across every component, not one fresh budget per `Stop` call — draining a slow connection down to the wire doesn't leave your components with an already-expired context to clean up in, but a component that's slow to stop does eat into the time left for the ones stopped after it. The tradeoff: a graceful shutdown can take up to roughly **2x** the configured timeout in the worst case, regardless of how many `Lifecycle` components are registered. See [ADR 0031](../adr/0031-shutdown-uses-two-independent-phase-timeouts-and-a-decoupled-application-context.md).
 
+## Request header timeout
+
+`ServeContext` closes a connection whose client takes more than 10 seconds to send a request's headers. A slow-header (Slowloris-style) client can't hold connections open indefinitely. Change the bound with `tango.WithReadHeaderTimeout(d)`, or pass `0` to turn it off. A negative duration makes `ServeContext` return an error before it listens. tanGO sets no other server timeouts: a whole-request timeout would cut off slow uploads and long-lived WebSocket connections.
+
 ## Wiring signals yourself
 
 tanGO never installs OS signal handling for you — a host wires it with the standard library, then passes the resulting context to `ServeContext`:
