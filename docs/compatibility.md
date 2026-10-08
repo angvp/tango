@@ -26,7 +26,11 @@ Everything below is covered unless it is named under [what is not covered](#what
 - **The `tango:"…"` struct tag grammar** described in [models and tags](guides/models-and-tags.md).
 - **The `tango_migrations` table**: its name and its columns (`app`, `name`, `applied_at`).
 - **The generic View-error response**: a View that returns an error, or panics behind `Recoverer`, answers `500` with the JSON body `{"error": "internal error"}`.
-- **`accounts`' HTTP endpoints**: `/accounts/register/`, `/accounts/login/` and `/accounts/logout/` with their methods, and the JSON error bodies a client reads from them (`{"error": …}` with `403`, `405` and `429`). Their HTML pages are not covered (below).
+- **`accounts`' HTTP endpoints**: `GET`/`POST /accounts/register/`, `GET`/`POST /accounts/login/` and `POST /accounts/logout/`, plus the only two JSON responses `accounts` sends:
+  - a rejected or missing CSRF token on a `POST` answers `403` with a JSON object carrying an `"error"` string;
+  - rate limiting answers `429` with the same JSON shape and a `Retry-After` header.
+
+  Everything else `accounts` answers is an HTML page and not covered beyond its status: closed registration, for example, is a `403` HTML page, not JSON. A request with a method an endpoint doesn't register gets the router's bare `405`, which isn't part of `accounts`' contract.
 - **Observability names**, as listed in the [observability guide](guides/observability.md#stable-events-and-metrics):
   - the log event names `tango.http.view_error`, `tango.http.panic`, `tango.http.access`, `tango.scheduler.job_failed` and `tango.http.request_id_generation_failed`;
   - the metric names `tango_http_request_duration_seconds`, `tango_scheduler_job_invocations_total` and `tango_realtime_room_events_total`;

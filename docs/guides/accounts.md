@@ -106,7 +106,7 @@ Keep `PasswordHash` read-only (or omit it from `ListDisplay`/leave it out of any
 
 ## Non-goals
 
-- No JSON auth endpoints — HTML only. A JSON variant is a different contract (status codes, response bodies, no redirect-with-`next`) for its own milestone.
+- No JSON auth endpoints — HTML only. A JSON variant is a different contract (status codes, response bodies, no redirect-with-`next`) for its own milestone. The two exceptions are errors a client may need to tell apart from a page: a rejected or missing CSRF token answers `403` and rate limiting answers `429` (with `Retry-After`), each with a JSON `{"error": …}` object. Closed registration is a `403` HTML page. See [versioning and compatibility](../compatibility.md#the-covered-api) for what is promised.
 - No custom user model abstraction or interface beyond `auth`'s own Application user pattern.
 - No roles, groups, or permissions of any kind on `Account`.
 - No dedicated CLI.

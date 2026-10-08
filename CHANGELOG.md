@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+
+- The compatibility page promised a JSON body for every `403`, `405` and `429` from `/accounts/*`. It now promises only the JSON `accounts` sends, for a rejected CSRF token (`403`) and rate limiting (`429`, with `Retry-After`). Closed registration's `403` is an HTML page, and the router's `405` has no body. A test pins that contract.
+
 ## [0.1.0] - 2026-10-08
 
 ### Changed

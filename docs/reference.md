@@ -162,7 +162,7 @@ Independent of `admin`/`accounts`' existing failed-login-attempt limiter, which 
 | `func RequireLogin(store *db.Store, cookieName, loginPath string, next tango.View) tango.View` | View wrapper for a host's own routes, mirroring `auth.RequireLogin`'s shape. `Active` is re-checked on every request through an already-valid session, not just at login. |
 | `func CurrentAccountID(ctx *tango.Context, store *db.Store, cookieName string) (int64, bool, error)`, `func CurrentAccount(...) (Account, bool, error)` | Thin, `Active`-aware sugar over `auth.CurrentUserID`, for a host's own Views. Not a route — there is no `/accounts/me/` page. |
 
-See [the accounts guide](guides/accounts.md). Built entirely by composing `auth`'s primitives — no new primitives added to `auth` itself; HTML-only, no JSON auth endpoints, no CLI, no template-override hook.
+See [the accounts guide](guides/accounts.md). Built entirely by composing `auth`'s primitives — no new primitives added to `auth` itself; HTML-only, no JSON auth endpoints (only a rejected CSRF token's `403` and rate limiting's `429` answer with a JSON `{"error": …}`), no CLI, no template-override hook.
 
 ## `i18n` (`github.com/angvp/tango/i18n`)
 
