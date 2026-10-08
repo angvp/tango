@@ -6,8 +6,10 @@ tanGO's configuration surface is deliberately small:
 type Config struct {
 	InstalledApps   []App
 	Addr            string
-	Middleware      []Middleware
-	MiddlewareScope MiddlewareScope
+	Middleware       []Middleware
+	MiddlewareScope  MiddlewareScope
+	NotFound         View
+	MethodNotAllowed View
 }
 ```
 
@@ -18,6 +20,7 @@ type Config struct {
   - **`tango.MiddlewareScopeRoutes`** wraps each matched route. An Unmatched request, one the router answers itself with `404` or `405`, passes no global middleware and is neither logged nor counted.
   - **`tango.MiddlewareScopeAll`** wraps the whole router, so Unmatched requests are logged, counted, recovered and limited like any other.
   - **The zero value, `tango.MiddlewareScopeDefault`,** means the framework's default, currently `MiddlewareScopeRoutes`. Projects created by `tango newproject` set `MiddlewareScopeAll`. Set a scope explicitly to keep it if the default ever changes, which can only happen after a minor release's notice.
+- **`NotFound`, `MethodNotAllowed`** — optional Views that answer Unmatched requests in place of the router's responses. See [custom 404 and 405 pages](routing-and-reverse-lookup.md#custom-404-and-405-pages).
 
 ## `LoadConfigFromEnv`
 

@@ -71,6 +71,27 @@ Under `MiddlewareScopeAll`:
 
 `tango newproject` sets `MiddlewareScopeAll`. The zero value, `MiddlewareScopeDefault`, means the framework's default, currently `MiddlewareScopeRoutes`. See [ADR 0043](../adr/0043-global-middleware-can-wrap-the-whole-router-as-an-opt-in-scope.md).
 
+### Custom 404 and 405 pages
+
+`Config.NotFound` and `Config.MethodNotAllowed` are optional Views that answer Unmatched requests in place of the router's responses: `NotFound` when no route matches the path, `MethodNotAllowed` when a route matches the path but not the method.
+
+```go
+config := tango.Config{
+	NotFound: func(ctx *tango.Context) error {
+		return ctx.HTML(http.StatusNotFound, pages, "not_found.html", nil)
+	},
+}
+```
+
+- **Like any View:** both run like any other View, so an error they return gets the generic `500`, and the error is logged with route `"(unmatched)"`.
+- **The `Allow` header:** before `MethodNotAllowed` runs, tanGO sets `Allow` to the methods the path does accept.
+- **Unset:** a View left unset keeps the router's own response, a plain-text `404 page not found`, or an empty `405` with `Allow`.
+
+They work under either [middleware scope](#middleware-scope), but the scope decides what wraps them:
+
+- **Under `MiddlewareScopeAll`,** they run inside `Config.Middleware`, and are logged and counted as route `"(unmatched)"`.
+- **Under `MiddlewareScopeRoutes`,** they run outside `Config.Middleware`: no `RequestID`, no access log, no automatic metrics. A `Recoverer` configured only in `Config.Middleware` does not protect them either, so a panic in one is not recovered. Keep them simple, or use `MiddlewareScopeAll`.
+
 Built-in middleware remains opt-in. `tango.Recoverer()` catches downstream panics and returns tanGO's generic JSON `500`; `tango.RequestID()` adds correlation IDs; `tango.AccessLogger()` emits structured access events. When all three are used, order them `RequestID -> Recoverer -> AccessLogger`. See [structured logging and observability](observability.md).
 
 ### Request body limits

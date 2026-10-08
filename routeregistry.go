@@ -37,13 +37,15 @@ type includedRoute struct {
 // RouteRegistry is the sub-registry apps contribute routes to, mirroring
 // the shape of Registry's other sub-APIs.
 type RouteRegistry struct {
-	registry        *Registry
-	included        []includedRoute
-	middleware      []Middleware
-	scope           MiddlewareScope
-	logger          *slog.Logger
-	recorder        observability.Recorder
-	recorderEnabled bool
+	registry         *Registry
+	included         []includedRoute
+	middleware       []Middleware
+	scope            MiddlewareScope
+	notFound         View
+	methodNotAllowed View
+	logger           *slog.Logger
+	recorder         observability.Recorder
+	recorderEnabled  bool
 }
 
 // IncludeOption customizes one Include call.
@@ -152,26 +154,7 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 
 		view := route.view
 		terminal := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			params := make(map[string]string)
-			if chiCtx := chi.RouteContext(r.Context()); chiCtx != nil {
-				for i, key := range chiCtx.URLParams.Keys {
-					params[key] = chiCtx.URLParams.Values[i]
-				}
-			}
-
-			ctx := newContextWithLogger(w, r, params, logger)
-			if err := view(ctx); err != nil {
-				// A body limit's rejection the View didn't handle is the
-				// client's error, not the server's.
-				if isBodyTooLarge(err) {
-					writeBodyTooLarge(w)
-					return
-				}
-				observabilitysafe.Call(func() {
-					ctx.Logger().LogAttrs(r.Context(), slog.LevelError, EventViewError, slog.Any("error", err))
-				})
-				writeInternalError(w)
-			}
+			serveView(w, r, view, logger)
 		})
 
 		if rr.scope == MiddlewareScopeAll {
@@ -185,6 +168,13 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 		}
 		handler = identifyRoute(route.pattern, handler)
 		mux.Method(route.method, route.pattern, handler)
+	}
+
+	if rr.notFound != nil {
+		mux.NotFound(unmatchedView(rr.notFound, logger, nil))
+	}
+	if rr.methodNotAllowed != nil {
+		mux.MethodNotAllowed(unmatchedView(rr.methodNotAllowed, logger, mux))
 	}
 
 	if rr.scope == MiddlewareScopeAll {
@@ -209,10 +199,67 @@ func (rr *RouteRegistry) wrapRouter(mux *chi.Mux, recorder observability.Recorde
 	})
 }
 
-// resolveRoute returns the pattern of the route mux would dispatch r to,
-// or unmatchedRoute, without running any handler or middleware. Like
-// chi's own dispatch, it routes on the escaped path when there is one.
-func resolveRoute(mux *chi.Mux, r *http.Request) string {
+// serveView runs view for r as tanGO's View terminal: an error gets the
+// generic 500 and a View-error log, except a body limit's rejection, which
+// gets 413.
+func serveView(w http.ResponseWriter, r *http.Request, view View, logger *slog.Logger) {
+	params := make(map[string]string)
+	if chiCtx := chi.RouteContext(r.Context()); chiCtx != nil {
+		for i, key := range chiCtx.URLParams.Keys {
+			params[key] = chiCtx.URLParams.Values[i]
+		}
+	}
+
+	ctx := newContextWithLogger(w, r, params, logger)
+	if err := view(ctx); err != nil {
+		// A body limit's rejection the View didn't handle is the client's
+		// error, not the server's.
+		if isBodyTooLarge(err) {
+			writeBodyTooLarge(w)
+			return
+		}
+		observabilitysafe.Call(func() {
+			ctx.Logger().LogAttrs(r.Context(), slog.LevelError, EventViewError, slog.Any("error", err))
+		})
+		writeInternalError(w)
+	}
+}
+
+// unmatchedView answers an Unmatched request with view, reported as route
+// "(unmatched)". Given mux, it first sets the Allow header to the methods
+// mux routes r's path for, derived here rather than left to the router.
+func unmatchedView(view View, logger *slog.Logger, mux *chi.Mux) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if mux != nil {
+			for _, method := range allowedMethods(mux, r) {
+				w.Header().Add("Allow", method)
+			}
+		}
+		serveView(w, withRouteIdentity(r, unmatchedRoute), view, logger)
+	}
+}
+
+// routeMethods are the methods allowedMethods checks a path against.
+var routeMethods = []string{
+	http.MethodConnect, http.MethodDelete, http.MethodGet, http.MethodHead,
+	http.MethodOptions, http.MethodPatch, http.MethodPost, http.MethodPut, http.MethodTrace,
+}
+
+// allowedMethods returns the methods mux has a route for at r's path.
+func allowedMethods(mux *chi.Mux, r *http.Request) []string {
+	path := routingPath(r)
+	var allowed []string
+	for _, method := range routeMethods {
+		if mux.Find(chi.NewRouteContext(), method, path) != "" {
+			allowed = append(allowed, method)
+		}
+	}
+	return allowed
+}
+
+// routingPath is the path chi routes r on: the escaped path when there is
+// one.
+func routingPath(r *http.Request) string {
 	path := r.URL.RawPath
 	if path == "" {
 		path = r.URL.Path
@@ -220,7 +267,14 @@ func resolveRoute(mux *chi.Mux, r *http.Request) string {
 	if path == "" {
 		path = "/"
 	}
-	if pattern := mux.Find(chi.NewRouteContext(), r.Method, path); pattern != "" {
+	return path
+}
+
+// resolveRoute returns the pattern of the route mux would dispatch r to,
+// or unmatchedRoute, without running any handler or middleware. Like
+// chi's own dispatch, it routes on the escaped path when there is one.
+func resolveRoute(mux *chi.Mux, r *http.Request) string {
+	if pattern := mux.Find(chi.NewRouteContext(), r.Method, routingPath(r)); pattern != "" {
 		return pattern
 	}
 	return unmatchedRoute
@@ -230,6 +284,10 @@ func (rr *RouteRegistry) setObservability(logger *slog.Logger, recorder observab
 	rr.logger = logger
 	rr.recorder = recorder
 	rr.recorderEnabled = recorderEnabled
+}
+
+func (rr *RouteRegistry) setUnmatchedViews(notFound, methodNotAllowed View) {
+	rr.notFound, rr.methodNotAllowed = notFound, methodNotAllowed
 }
 
 func (rr *RouteRegistry) setMiddleware(middleware []Middleware, scope MiddlewareScope) {

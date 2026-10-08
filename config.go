@@ -26,6 +26,16 @@ type Config struct {
 	// or the whole router, Unmatched requests included. The zero value is
 	// the framework's default, MiddlewareScopeRoutes.
 	MiddlewareScope MiddlewareScope
+	// NotFound, if set, answers requests whose path no route matches, in
+	// place of the router's plain-text 404. MethodNotAllowed, if set,
+	// answers requests whose path a route matches but not their method, in
+	// place of the router's empty 405; tanGO sets the Allow header before
+	// it runs. Both run like any View (an error gets the generic 500).
+	// Under MiddlewareScopeAll they run inside Middleware and are observed
+	// as route "(unmatched)"; under MiddlewareScopeRoutes they run outside
+	// it and are not observed.
+	NotFound         View
+	MethodNotAllowed View
 }
 
 // MiddlewareScope is what Config.Middleware wraps.
@@ -164,6 +174,7 @@ func BuildRegistry(config Config) (*Registry, error) {
 	}
 	registry := NewRegistry()
 	registry.Routes().setMiddleware(config.Middleware, scope)
+	registry.Routes().setUnmatchedViews(config.NotFound, config.MethodNotAllowed)
 
 	for _, app := range config.InstalledApps {
 		if err := registry.Register(app); err != nil {
