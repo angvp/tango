@@ -9,8 +9,10 @@ package mail
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Sender delivers a Message. Send is synchronous and truthful: it returns
@@ -63,6 +65,8 @@ type Option func(*options)
 
 type options struct {
 	maxAttachmentSize int64
+	defaultTimeout    time.Duration
+	rootCAs           *x509.CertPool // nil: the system's
 }
 
 // WithMaxAttachmentSize sets the most raw attachment bytes, all of a
@@ -78,7 +82,7 @@ func WithMaxAttachmentSize(n int64) Option {
 }
 
 func newOptions(opts []Option) options {
-	o := options{maxAttachmentSize: DefaultMaxAttachmentSize}
+	o := options{maxAttachmentSize: DefaultMaxAttachmentSize, defaultTimeout: DefaultSMTPTimeout}
 	for _, opt := range opts {
 		opt(&o)
 	}

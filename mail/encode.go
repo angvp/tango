@@ -16,30 +16,42 @@ import (
 	"time"
 )
 
-// encode validates message and returns it in wire format, with CRLF line
-// endings. Every sender sends exactly these bytes.
-func encode(message Message, o options) ([]byte, error) {
+// encoded is a validated message: its wire format, with CRLF line endings,
+// and the bare addresses its envelope uses. Every sender sends exactly
+// these bytes.
+type encoded struct {
+	raw      []byte
+	from, to string
+}
+
+// encode validates message and encodes it.
+func encode(message Message, o options) (encoded, error) {
 	from, err := parseAddress("From", message.From)
 	if err != nil {
-		return nil, err
+		return encoded{}, err
 	}
 	to, err := parseAddress("To", message.To)
 	if err != nil {
-		return nil, err
+		return encoded{}, err
 	}
 	if hasLineBreak(message.Subject) {
-		return nil, fmt.Errorf("%w: Subject contains a line break", ErrInvalidMessage)
+		return encoded{}, fmt.Errorf("%w: Subject contains a line break", ErrInvalidMessage)
 	}
 	attachments, err := checkAttachments(message.Attachments, o.maxAttachmentSize)
 	if err != nil {
-		return nil, err
+		return encoded{}, err
 	}
+	return encoded{raw: serialize(message.Subject, message.Text, from, to, attachments), from: from.Address, to: to.Address}, nil
+}
+
+// serialize writes a validated message in wire format.
+func serialize(subject, text string, from, to *mail.Address, attachments []Attachment) []byte {
 
 	var b bytes.Buffer
 	header := func(name, value string) { fmt.Fprintf(&b, "%s: %s\r\n", name, value) }
 	header("From", from.String())
 	header("To", to.String())
-	header("Subject", mime.QEncoding.Encode("utf-8", message.Subject))
+	header("Subject", mime.QEncoding.Encode("utf-8", subject))
 	header("Date", time.Now().Format(time.RFC1123Z))
 	header("Message-ID", messageID(from.Address))
 	header("MIME-Version", "1.0")
@@ -47,19 +59,19 @@ func encode(message Message, o options) ([]byte, error) {
 		header("Content-Type", textContentType)
 		header("Content-Transfer-Encoding", "quoted-printable")
 		b.WriteString("\r\n")
-		writeText(&b, message.Text)
-		return b.Bytes(), nil
+		writeText(&b, text)
+		return b.Bytes()
 	}
 
 	body := multipart.NewWriter(&b)
 	// Folded, so the long boundary doesn't push the line past 78 characters.
 	header("Content-Type", "multipart/mixed;\r\n boundary="+body.Boundary())
 	b.WriteString("\r\n")
-	text, _ := body.CreatePart(textproto.MIMEHeader{
+	textPart, _ := body.CreatePart(textproto.MIMEHeader{
 		"Content-Type":              {textContentType},
 		"Content-Transfer-Encoding": {"quoted-printable"},
 	})
-	writeText(text, message.Text)
+	writeText(textPart, text)
 	for _, a := range attachments {
 		part, _ := body.CreatePart(textproto.MIMEHeader{
 			"Content-Type":              {a.ContentType},
@@ -69,7 +81,7 @@ func encode(message Message, o options) ([]byte, error) {
 		writeBase64(part, a.Data)
 	}
 	_ = body.Close()
-	return b.Bytes(), nil
+	return b.Bytes()
 }
 
 const textContentType = "text/plain; charset=utf-8"

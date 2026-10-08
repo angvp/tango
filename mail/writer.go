@@ -23,10 +23,10 @@ func (s *writerSender) Send(ctx context.Context, message Message) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	raw, err := encode(message, s.options)
+	encoded, err := encode(message, s.options)
 	if err != nil {
 		return err
 	}
-	_, err = s.w.Write(raw)
+	_, err = s.w.Write(encoded.raw)
 	return err
 }
