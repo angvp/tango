@@ -13,6 +13,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 - **Breaking:** `migration.Diff` and `migration.DiffModels` return an error alongside the migrations. These are part of the CLI-internal migration surface, which applications don't normally call.
   - *Upgrade:* handle the second return value.
 - SQLite writers wait up to five seconds for a held lock instead of failing at once with `database is locked`.
+- `realtime/websocket.View` gained a variadic `...ViewOption` parameter. Calls compile unchanged; code that stores `View` in a variable of the old function type must update the type.
 
 ### Added
 
@@ -21,6 +22,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 - Widening type changes (`integer` to `real` or `text`, `real` to `text`, `boolean` to `integer` or `text`) through the new `AlterColumnType` step.
 - The public `testdb` package: an app's own tests get a fresh database for the run's Test dialect, chosen by `TANGO_TEST_DSN`.
 - `examples/board`, the tutorial's app, tested end to end on SQLite and PostgreSQL.
+- `realtime/websocket.View` takes options: `WithOriginPatterns` and `WithInsecureSkipVerify` configure the upgrade's origin check.
 
 ### Fixed
 
@@ -36,7 +38,9 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 - Creating a row with an explicit ID on PostgreSQL advances the ID sequence.
 - `tango newproject` keeps its standard-library imports in one sorted group.
 
-## [0.0.2] - 2026-09-26
+## [0.0.2] - 2026-09-23
+
+The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocket.View` options; the Go module proxy, and so every `go get`, serves the original commit (`4fd6667`), which this section describes. Those options are listed under Unreleased.
 
 ### Added
 
@@ -46,7 +50,6 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 - `ServeContext`, with lifecycle-aware graceful shutdown, and `Lifecycle` registration on `Registry`.
 - The `ratelimit` package: a token-bucket `Limiter`, `KeyFunc`, `RemoteIPKey` and `Middleware`.
 - `realtime` Hub operations report to the shared `Recorder`.
-- `realtime/websocket.View` can configure the upgrade's origin check.
 
 ### Changed
 

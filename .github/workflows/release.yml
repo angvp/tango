@@ -1,0 +1,68 @@
+# Turns a pushed vMAJOR.MINOR.PATCH tag into a GitHub release, then moves the
+# website to it. internal/releasecheck refuses the tag, creating nothing, unless:
+# - the tagged commit is on main;
+# - CI passed on that exact commit;
+# - CHANGELOG.md has a dated section for the version;
+# - the Go module proxy doesn't already serve the tag from another commit;
+# - for a patch release, gorelease reports no incompatible change.
+# It doesn't rerun the tests: the CI run it checks is that guarantee.
+# See RELEASING.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the release
+  actions: read # read the tagged commit's CI runs
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # every tag, and main for the reachability check
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+      - name: Compare the API with the previous release
+        run: |
+          report="$RUNNER_TEMP/gorelease.txt"
+          : > "$report"
+          previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$TAG^" 2>/dev/null || true)"
+          if [ -n "$previous" ]; then
+            # An empty report fails a patch release: never skip the check silently.
+            if ! go run golang.org/x/exp/cmd/gorelease@v0.0.0-20261007192929-f45ad48fbe92 -base="$previous" > "$report"; then
+              echo "::warning::gorelease failed; a patch release will be refused"
+              : > "$report"
+            fi
+          fi
+          {
+            echo "## API changes since ${previous:-the first release}"
+            echo '```'
+            cat "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check the release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          go run ./internal/releasecheck/cmd/releasecheck
+          -tag "$TAG" -commit "$GITHUB_SHA"
+          -gorelease "$RUNNER_TEMP/gorelease.txt" -notes "$RUNNER_TEMP/notes.md"
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+      - name: Move the website to the release
+        env:
+          GH_TOKEN: ${{ secrets.TANGO_WEB_DISPATCH_TOKEN }}
+        run: gh workflow run follow-tango-release.yml --repo angvp/tango-web -f version="$TAG"

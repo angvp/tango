@@ -90,4 +90,4 @@ The `admin` and `accounts` models reach your database through your own `tango ma
 
 ## How a release is made
 
-Every release has a dated section in the [changelog](../CHANGELOG.md), used as its release notes, and is published only after CI passed on the exact commit being tagged.
+Every release has a dated section in the [changelog](../CHANGELOG.md), used as its release notes, and is published only after CI passed on the exact commit being tagged. The maintainer's checklist is [RELEASING.md](../RELEASING.md).
