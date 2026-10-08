@@ -13,11 +13,12 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
   - `MiddlewareScopeAll`.
 
   Existing applications keep their behaviour unless they opt in.
+- The `route` attribute is now the route's registered pattern in every log and metric for a request, trailing slash included (`/items/{id}/`), under both middleware scopes. The `tango.http.access`, `tango.http.panic` and `tango.http.request_id_generation_failed` logs used to drop a trailing slash (`/items/{id}`), while `ctx.Logger()`, `tango.http.view_error` and the HTTP metrics did not, so the same request reported two routes. Dashboards or alerts that match these three events on a trimmed `route` need the registered spelling. The attribute key is unchanged.
 
 ### Added
 
-- `Config.NotFound` and `Config.MethodNotAllowed` Views replace the router's `404` and `405` responses (tanGO sets `Allow` for a `405`). Under `MiddlewareScopeAll` they run inside global middleware and are observed; under `MiddlewareScopeRoutes` they run outside it.
-- `Config.MiddlewareScope`: with `tango.MiddlewareScopeAll`, global middleware wraps the whole router, so Unmatched requests (the router's `404` and `405`) are logged, counted, recovered and body-limited, reported with route `"(unmatched)"`. The default stays `MiddlewareScopeRoutes`, today's behaviour, and may become `MiddlewareScopeAll` only after a minor release of notice; set the scope explicitly to keep yours. See ADR 0043.
+- `Config.NotFound` and `Config.MethodNotAllowed` Views replace the router's `404` and `405` responses (tanGO sets `Allow` for a `405`). The `Allow` header lists every method routed at that path, including a non-standard one the app registered. Under `MiddlewareScopeAll` they run inside global middleware and are observed; under `MiddlewareScopeRoutes` they run outside it.
+- `Config.MiddlewareScope`: with `tango.MiddlewareScopeAll`, global middleware wraps the whole router, so Unmatched requests (the router's `404` and `405`) are logged, counted, recovered and body-limited, reported with route `"(unmatched)"`. Global middleware then runs before routing, so it can't read route parameters or rewrite which route answers. The default stays `MiddlewareScopeRoutes`, today's behaviour, and may become `MiddlewareScopeAll` only after a minor release of notice; set the scope explicitly to keep yours. See ADR 0043.
 - `tango.LoadConfigFromEnv(tango.WithPortFromEnv())` falls back to the `PORT` variable hosting platforms set: the address is `TANGO_ADDR`, else `":"+PORT`, else `:8000`. Without the option, `LoadConfigFromEnv` is unchanged.
 - `tango.MaxBodySize(n)` middleware caps request bodies: an oversized body gets `413` with `{"error":"request body too large"}`. When several limits apply, the most restrictive wins.
 
@@ -27,7 +28,6 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Fixed
 
-- A panic's `tango.http.panic` log reports the route's registered pattern (`/items/{id}/`), like every other log and metric for that request; it used to drop a trailing slash (`/items/{id}`).
 - The compatibility page promised a JSON body for every `403`, `405` and `429` from `/accounts/*`. It now promises only the JSON `accounts` sends, for a rejected CSRF token (`403`) and rate limiting (`429`, with `Retry-After`). Closed registration's `403` is an HTML page, and the router's `405` has no body. A test pins that contract.
 
 ## [0.1.0] - 2026-10-08

@@ -9,39 +9,21 @@ import (
 	"testing"
 
 	"github.com/angvp/tango"
+	"github.com/go-chi/chi/v5"
 )
 
 // viewsSite serves GET /items/{id}/ and GET+POST /items/, with config's
-// unmatched Views and scope, observed by a capturing logger and recorder.
+// unmatched Views and scope.
 func viewsSite(t *testing.T, config tango.Config, global func(*slog.Logger) []tango.Middleware) (http.Handler, *scopeLogs, *scopeMetrics) {
 	t.Helper()
-	logger, logs := newScopeLogger()
-	metrics := &scopeMetrics{}
-	ok := func(ctx *tango.Context) error { return ctx.JSON(http.StatusOK, nil) }
-	config.InstalledApps = []tango.App{tango.NewApp("items", func(r *tango.Registry) error {
-		return r.Routes().Include("/items/", tango.URLs{
-			tango.Path(http.MethodGet, "/{id}/", ok),
-			tango.Path(http.MethodGet, "/", ok),
-			tango.Path(http.MethodPost, "/", ok),
-		})
-	})}
-	if global != nil {
-		config.Middleware = global(logger)
-	}
-	registry, err := tango.BuildRegistry(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := registry.RunRegistration(); err != nil {
-		t.Fatal(err)
-	}
-	tango.ObserveRoutes(registry, logger, metrics)
-	handler, err := registry.Routes().Handler()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return handler, logs, metrics
+	return observedSite(t, config, tango.URLs{
+		tango.Path(http.MethodGet, "/{id}/", ok),
+		tango.Path(http.MethodGet, "/", ok),
+		tango.Path(http.MethodPost, "/", ok),
+	}, global)
 }
+
+func ok(ctx *tango.Context) error { return ctx.JSON(http.StatusOK, nil) }
 
 var scopes = map[string]tango.MiddlewareScope{"Routes": tango.MiddlewareScopeRoutes, "All": tango.MiddlewareScopeAll}
 
@@ -94,6 +76,26 @@ func TestCustomUnmatchedViewsAnswerUnderBothScopes(t *testing.T) {
 				if !slices.Equal(allow, tt.allow) {
 					t.Fatalf("DELETE %s Allow = %v, want %v", tt.target, allow, tt.allow)
 				}
+			}
+		})
+	}
+}
+
+// TestACustomMethodIsInTheCustom405sAllowHeader: a route registered with
+// a method chi was taught (chi.RegisterMethod) is allowed like any other.
+func TestACustomMethodIsInTheCustom405sAllowHeader(t *testing.T) {
+	chi.RegisterMethod("PROPFIND")
+	for name, scope := range scopes {
+		t.Run(name, func(t *testing.T) {
+			handler, _, _ := observedSite(t, tango.Config{MiddlewareScope: scope, MethodNotAllowed: methodPage}, tango.URLs{
+				tango.Path("PROPFIND", "/", ok),
+				tango.Path(http.MethodGet, "/", ok),
+			}, nil)
+			r := serve(handler, http.MethodDelete, "/items/", "")
+			allow := r.Header().Values("Allow")
+			slices.Sort(allow)
+			if r.Code != 405 || !slices.Equal(allow, []string{http.MethodGet, "PROPFIND"}) {
+				t.Fatalf("DELETE /items/ = %d, Allow = %v; want 405 with GET, PROPFIND", r.Code, allow)
 			}
 		})
 	}

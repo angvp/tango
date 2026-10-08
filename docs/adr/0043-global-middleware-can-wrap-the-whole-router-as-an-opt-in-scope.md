@@ -10,6 +10,7 @@ A new `Config.MiddlewareScope` decides what global middleware wraps:
 How `MiddlewareScopeAll` works:
 - **Route identity is resolved first.** tanGO resolves the request's route before any global middleware runs, without invoking a handler, so every layer reports the same route. A matched request reports its route's pattern, and an Unmatched request reports `"(unmatched)"`.
 - **Rewriting a route is unsupported.** Middleware that rewrites the method or path to make the router dispatch elsewhere is not supported.
+- **Global middleware sees no route parameters.** It runs before the router dispatches, so parameters are read in group or route middleware, or in the View.
 - **Metrics stay outermost and run once.** A matched request's metrics and logs are identical under both scopes, including requests global middleware rejects before routing.
 
 Optional `Config.NotFound` and `Config.MethodNotAllowed` Views replace the router's responses under either scope. They run through the ordinary View terminal; under `MiddlewareScopeRoutes` they run outside global middleware and are not observed.
@@ -26,4 +27,5 @@ Rejected:
 Consequences:
 - **Precedent.** Behaviour changes ship opt-in first, and a default changes only after a minor release of notice. `docs/compatibility.md` states this rule.
 - **The route value is stable.** `"(unmatched)"` joins the Covered API's observability names.
+- **One route value everywhere.** Every log and metric for a request reports the same `route`, its registered pattern. Before this, middleware logs trimmed a trailing slash (`/items/{id}`) while `ctx.Logger()`, View-error logs and metrics did not (`/items/{id}/`); the router can only resolve the registered form before dispatch, so the trimmed spelling is gone in both scopes.
 - **Pattern resolution happens twice.** Under `MiddlewareScopeAll`, every request's route pattern is resolved once before middleware and once during dispatch.

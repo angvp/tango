@@ -147,8 +147,9 @@ func WithAccessLogger(logger *slog.Logger) AccessLogOption {
 	return func(config *accessLogConfig) { config.logger = logger }
 }
 
-// AccessLogger logs one structured event for each matched downstream request.
-// Router-generated 404 and 405 responses do not pass through route middleware.
+// AccessLogger logs one structured event for each request it wraps. As
+// global middleware, it sees Unmatched requests (the router's own 404 and
+// 405) only under MiddlewareScopeAll.
 func AccessLogger(opts ...AccessLogOption) Middleware {
 	config := accessLogConfig{logger: slog.Default()}
 	for _, opt := range opts {

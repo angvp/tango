@@ -109,13 +109,33 @@ func TestANewProjectRunsSafelyAsGenerated(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	resp, err := http.Post(base+"/admin/login/", "application/x-www-form-urlencoded", strings.NewReader(strings.Repeat("x", 2<<20)))
-	if err != nil {
-		t.Fatal(err)
+	// The scaffold's limit is 1 MiB, whether or not the client declares
+	// the body's length up front.
+	bodies := []struct {
+		name     string
+		body     io.Reader
+		tooLarge bool
+	}{
+		{"declared, over 1 MiB", strings.NewReader(strings.Repeat("x", 1<<20+1)), true},
+		// An io.MultiReader's length is unknown, so the client sends the
+		// body chunked and only the limited reader can catch it.
+		{"chunked, over 1 MiB", io.MultiReader(strings.NewReader(strings.Repeat("x", 1<<20+1))), true},
+		{"declared, under 1 MiB", strings.NewReader(strings.Repeat("x", 1<<20-1024)), false},
 	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusRequestEntityTooLarge {
-		t.Fatalf("an oversized POST got %d, want 413", resp.StatusCode)
+	for _, tt := range bodies {
+		request, err := http.NewRequest(http.MethodPost, base+"/admin/login/", tt.body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		resp.Body.Close()
+		if got := resp.StatusCode == http.StatusRequestEntityTooLarge; got != tt.tooLarge {
+			t.Fatalf("%s: POST /admin/login/ = %d, want 413: %v", tt.name, resp.StatusCode, tt.tooLarge)
+		}
 	}
 
 	logged := func() bool {

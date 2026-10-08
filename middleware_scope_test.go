@@ -96,28 +96,19 @@ func (c *counting) middleware(next http.Handler) http.Handler {
 	})
 }
 
-// scopeSite is an app with GET /items/{id}/ and POST /items/, served with
-// scope and global, and observed with a capturing logger and recorder.
-func scopeSite(t *testing.T, scope tango.MiddlewareScope, global func(logger *slog.Logger) []tango.Middleware) (http.Handler, *scopeLogs, *scopeMetrics) {
+// observedSite serves routes under /items/ with config, adding global's
+// middleware, observed with a capturing logger and recorder.
+func observedSite(t *testing.T, config tango.Config, routes tango.URLs, global func(*slog.Logger) []tango.Middleware) (http.Handler, *scopeLogs, *scopeMetrics) {
 	t.Helper()
 	logger, logs := newScopeLogger()
 	metrics := &scopeMetrics{}
-	app := tango.NewApp("items", func(r *tango.Registry) error {
-		return r.Routes().Include("/items/", tango.URLs{
-			tango.Path(http.MethodGet, "/{id}/", func(ctx *tango.Context) error {
-				ctx.Logger().Info("in view")
-				return ctx.JSON(http.StatusOK, map[string]string{"id": ctx.Param("id")})
-			}),
-			tango.Path(http.MethodPost, "/", func(ctx *tango.Context) error {
-				var v map[string]any
-				if err := ctx.Bind(&v); err != nil {
-					return err
-				}
-				return ctx.JSON(http.StatusCreated, v)
-			}),
-		})
-	})
-	registry, err := tango.BuildRegistry(tango.Config{InstalledApps: []tango.App{app}, Middleware: global(logger), MiddlewareScope: scope})
+	config.InstalledApps = []tango.App{tango.NewApp("items", func(r *tango.Registry) error {
+		return r.Routes().Include("/items/", routes)
+	})}
+	if global != nil {
+		config.Middleware = global(logger)
+	}
+	registry, err := tango.BuildRegistry(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +123,28 @@ func scopeSite(t *testing.T, scope tango.MiddlewareScope, global func(logger *sl
 	return handler, logs, metrics
 }
 
-func observability(logger *slog.Logger, extra ...tango.Middleware) []tango.Middleware {
+// scopeSite is an app with GET /items/{id}/ and POST /items/, served with
+// scope and global.
+func scopeSite(t *testing.T, scope tango.MiddlewareScope, global func(logger *slog.Logger) []tango.Middleware) (http.Handler, *scopeLogs, *scopeMetrics) {
+	t.Helper()
+	return observedSite(t, tango.Config{MiddlewareScope: scope}, tango.URLs{
+		tango.Path(http.MethodGet, "/{id}/", func(ctx *tango.Context) error {
+			ctx.Logger().Info("in view")
+			return ctx.JSON(http.StatusOK, map[string]string{"id": ctx.Param("id")})
+		}),
+		tango.Path(http.MethodPost, "/", func(ctx *tango.Context) error {
+			var v map[string]any
+			if err := ctx.Bind(&v); err != nil {
+				return err
+			}
+			return ctx.JSON(http.StatusCreated, v)
+		}),
+	}, global)
+}
+
+// observedMiddleware is RequestID, Recoverer and AccessLogger logging to
+// logger, followed by extra.
+func observedMiddleware(logger *slog.Logger, extra ...tango.Middleware) []tango.Middleware {
 	return append([]tango.Middleware{
 		tango.RequestID(tango.WithRequestIDLogger(logger)),
 		tango.Recoverer(tango.WithRecoveryLogger(logger)),
@@ -156,7 +168,7 @@ func TestScopeAllObservesUnmatchedRequests(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, logs, metrics := scopeSite(t, tango.MiddlewareScopeAll, func(l *slog.Logger) []tango.Middleware { return observability(l) })
+			handler, logs, metrics := scopeSite(t, tango.MiddlewareScopeAll, func(l *slog.Logger) []tango.Middleware { return observedMiddleware(l) })
 			response := serve(handler, tt.method, tt.target, "")
 			if response.Code != tt.status {
 				t.Fatalf("status = %d, want %d", response.Code, tt.status)
@@ -175,11 +187,27 @@ func TestScopeAllObservesUnmatchedRequests(t *testing.T) {
 	}
 }
 
+func TestScopeAllRejectsAnOversizedBodyToAnUnmatchedPath(t *testing.T) {
+	handler, logs, metrics := scopeSite(t, tango.MiddlewareScopeAll, func(l *slog.Logger) []tango.Middleware {
+		return observedMiddleware(l, tango.MaxBodySize(8))
+	})
+	if response := serve(handler, http.MethodPost, "/nowhere/", `{"far":"too long for eight bytes"}`); response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", response.Code)
+	}
+	access := logs.byMessage(tango.EventAccessLog)
+	if len(access) != 1 || access[0].attrs["route"] != "(unmatched)" || access[0].attrs["status"] != int64(http.StatusRequestEntityTooLarge) {
+		t.Fatalf("access logs = %+v, want one with route (unmatched), status 413", access)
+	}
+	if len(metrics.observations) != 1 || metrics.observations[0]["route"] != "(unmatched)" {
+		t.Fatalf("metrics = %+v, want one with route (unmatched)", metrics.observations)
+	}
+}
+
 func TestScopeAllRecoversAPanicOnAnUnmatchedRequest(t *testing.T) {
 	panicking := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { panic("boom") })
 	}
-	handler, logs, _ := scopeSite(t, tango.MiddlewareScopeAll, func(l *slog.Logger) []tango.Middleware { return observability(l, panicking) })
+	handler, logs, _ := scopeSite(t, tango.MiddlewareScopeAll, func(l *slog.Logger) []tango.Middleware { return observedMiddleware(l, panicking) })
 	if response := serve(handler, http.MethodGet, "/nowhere/", ""); response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want Recoverer's 500", response.Code)
 	}
@@ -205,7 +233,7 @@ func TestScopeAllReportsTheRealRouteForGlobalShortCircuits(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, logs, metrics := scopeSite(t, tango.MiddlewareScopeAll, func(l *slog.Logger) []tango.Middleware { return observability(l, tt.extra) })
+			handler, logs, metrics := scopeSite(t, tango.MiddlewareScopeAll, func(l *slog.Logger) []tango.Middleware { return observedMiddleware(l, tt.extra) })
 			var last *httptest.ResponseRecorder
 			for i := 0; i < 2; i++ {
 				last = serve(handler, tt.method, tt.target, tt.body)
@@ -229,7 +257,7 @@ func TestScopeAllReportsTheRealRouteForGlobalShortCircuits(t *testing.T) {
 // metric for one matched request, minus the per-request values.
 func TestAMatchedRouteIsObservedTheSameUnderBothScopes(t *testing.T) {
 	observe := func(scope tango.MiddlewareScope) ([]scopeLog, []map[string]any) {
-		handler, logs, metrics := scopeSite(t, scope, func(l *slog.Logger) []tango.Middleware { return observability(l) })
+		handler, logs, metrics := scopeSite(t, scope, func(l *slog.Logger) []tango.Middleware { return observedMiddleware(l) })
 		serve(handler, http.MethodGet, "/items/42/", "")
 		for _, r := range *logs.records {
 			delete(r.attrs, "request_id")

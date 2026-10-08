@@ -13,18 +13,25 @@ import (
 func TestEveryLayerReportsTheSameRoute(t *testing.T) {
 	const want = "/items/{id}/"
 	tests := []struct {
-		name   string
-		view   View
-		events []string
+		name          string
+		view          View
+		failRequestID bool
+		events        []string
 	}{
 		{"View error", func(ctx *Context) error {
 			ctx.Logger().Info("in view")
 			return errors.New("boom")
-		}, []string{"in view", EventViewError, EventAccessLog}},
-		{"panic", func(ctx *Context) error { panic("boom") }, []string{EventPanic, EventAccessLog}},
+		}, false, []string{"in view", EventViewError, EventAccessLog}},
+		{"panic", func(ctx *Context) error { panic("boom") }, false, []string{EventPanic, EventAccessLog}},
+		{"request ID generation failure", func(ctx *Context) error { return nil }, true, []string{EventRequestIDGenerationFailed, EventAccessLog}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.failRequestID {
+				original := generateRequestID
+				generateRequestID = func() (string, error) { return "", errors.New("no entropy") }
+				t.Cleanup(func() { generateRequestID = original })
+			}
 			logger, records := newCapturingLogger()
 			recorder := &capturingRecorder{}
 			handler := buildObservedHandler(t, tt.view, logger, recorder,

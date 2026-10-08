@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/angvp/tango/internal/observabilitysafe"
@@ -37,15 +38,21 @@ type includedRoute struct {
 // RouteRegistry is the sub-registry apps contribute routes to, mirroring
 // the shape of Registry's other sub-APIs.
 type RouteRegistry struct {
-	registry         *Registry
-	included         []includedRoute
+	registry        *Registry
+	included        []includedRoute
+	router          routerConfig
+	logger          *slog.Logger
+	recorder        observability.Recorder
+	recorderEnabled bool
+}
+
+// routerConfig is what Config decides about the compiled router: global
+// middleware, what it wraps, and the Views answering Unmatched requests.
+type routerConfig struct {
 	middleware       []Middleware
 	scope            MiddlewareScope
 	notFound         View
 	methodNotAllowed View
-	logger           *slog.Logger
-	recorder         observability.Recorder
-	recorderEnabled  bool
 }
 
 // IncludeOption customizes one Include call.
@@ -151,36 +158,42 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 			}
 			patterns[route.qualifiedName] = route.pattern
 		}
-
-		view := route.view
-		terminal := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			serveView(w, r, view, logger)
-		})
-
-		if rr.scope == MiddlewareScopeAll {
-			// Global middleware and metrics wrap the whole router instead.
-			mux.Method(route.method, route.pattern, applyMiddleware(terminal, route.middleware))
-			continue
-		}
-		handler := applyMiddleware(terminal, append(append([]Middleware(nil), rr.middleware...), route.middleware...))
-		if rr.recorderEnabled {
-			handler = instrumentHTTP(handler, recorder)
-		}
-		handler = identifyRoute(route.pattern, handler)
-		mux.Method(route.method, route.pattern, handler)
+		mux.Method(route.method, route.pattern, rr.routeHandler(route, logger, recorder))
 	}
+	rr.answerUnmatched(mux, logger)
 
-	if rr.notFound != nil {
-		mux.NotFound(unmatchedView(rr.notFound, logger, nil))
-	}
-	if rr.methodNotAllowed != nil {
-		mux.MethodNotAllowed(unmatchedView(rr.methodNotAllowed, logger, mux))
-	}
-
-	if rr.scope == MiddlewareScopeAll {
+	if rr.router.scope == MiddlewareScopeAll {
 		return &compiled{handler: rr.wrapRouter(mux, recorder), patterns: patterns}, nil
 	}
 	return &compiled{handler: mux, patterns: patterns}, nil
+}
+
+// routeHandler is the handler the router dispatches route to. Under
+// MiddlewareScopeAll, global middleware and metrics wrap the whole router
+// instead, so it carries only route's own middleware.
+func (rr *RouteRegistry) routeHandler(route includedRoute, logger *slog.Logger, recorder observability.Recorder) http.Handler {
+	view := route.view
+	terminal := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serveView(w, r, view, logger)
+	})
+	if rr.router.scope == MiddlewareScopeAll {
+		return applyMiddleware(terminal, route.middleware)
+	}
+	handler := applyMiddleware(terminal, append(append([]Middleware(nil), rr.router.middleware...), route.middleware...))
+	if rr.recorderEnabled {
+		handler = instrumentHTTP(handler, recorder)
+	}
+	return identifyRoute(route.pattern, handler)
+}
+
+// answerUnmatched hands Unmatched requests to Config's Views, when set.
+func (rr *RouteRegistry) answerUnmatched(mux *chi.Mux, logger *slog.Logger) {
+	if rr.router.notFound != nil {
+		mux.NotFound(unmatchedView(rr.router.notFound, logger))
+	}
+	if rr.router.methodNotAllowed != nil {
+		mux.MethodNotAllowed(withAllowHeader(mux, rr.routedMethods(), unmatchedView(rr.router.methodNotAllowed, logger)))
+	}
 }
 
 // unmatchedRoute is the route an Unmatched request reports.
@@ -190,7 +203,7 @@ const unmatchedRoute = "(unmatched)"
 // route from the request as it arrived, records it, and runs metrics
 // (outermost, once) and global middleware around the whole router.
 func (rr *RouteRegistry) wrapRouter(mux *chi.Mux, recorder observability.Recorder) http.Handler {
-	handler := applyMiddleware(mux, rr.middleware)
+	handler := applyMiddleware(mux, rr.router.middleware)
 	if rr.recorderEnabled {
 		handler = instrumentHTTP(handler, recorder)
 	}
@@ -226,35 +239,39 @@ func serveView(w http.ResponseWriter, r *http.Request, view View, logger *slog.L
 }
 
 // unmatchedView answers an Unmatched request with view, reported as route
-// "(unmatched)". Given mux, it first sets the Allow header to the methods
-// mux routes r's path for, derived here rather than left to the router.
-func unmatchedView(view View, logger *slog.Logger, mux *chi.Mux) http.HandlerFunc {
+// "(unmatched)".
+func unmatchedView(view View, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if mux != nil {
-			for _, method := range allowedMethods(mux, r) {
-				w.Header().Add("Allow", method)
-			}
-		}
 		serveView(w, withRouteIdentity(r, unmatchedRoute), view, logger)
 	}
 }
 
-// routeMethods are the methods allowedMethods checks a path against.
-var routeMethods = []string{
-	http.MethodConnect, http.MethodDelete, http.MethodGet, http.MethodHead,
-	http.MethodOptions, http.MethodPatch, http.MethodPost, http.MethodPut, http.MethodTrace,
+// withAllowHeader sets the Allow header to those of methods mux routes r's
+// path for before calling next. The router gives a replaced 405 handler no
+// Allow header, so it's derived here.
+func withAllowHeader(mux *chi.Mux, methods []string, next http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := routingPath(r)
+		for _, method := range methods {
+			if mux.Find(chi.NewRouteContext(), method, path) != "" {
+				w.Header().Add("Allow", method)
+			}
+		}
+		next.ServeHTTP(w, r)
+	}
 }
 
-// allowedMethods returns the methods mux has a route for at r's path.
-func allowedMethods(mux *chi.Mux, r *http.Request) []string {
-	path := routingPath(r)
-	var allowed []string
-	for _, method := range routeMethods {
-		if mux.Find(chi.NewRouteContext(), method, path) != "" {
-			allowed = append(allowed, method)
+// routedMethods are the distinct methods the included routes use, in
+// first-seen order, spelled as the router stores them.
+func (rr *RouteRegistry) routedMethods() []string {
+	var methods []string
+	for _, route := range rr.included {
+		method := strings.ToUpper(route.method)
+		if !slices.Contains(methods, method) {
+			methods = append(methods, method)
 		}
 	}
-	return allowed
+	return methods
 }
 
 // routingPath is the path chi routes r on: the escaped path when there is
@@ -286,13 +303,9 @@ func (rr *RouteRegistry) setObservability(logger *slog.Logger, recorder observab
 	rr.recorderEnabled = recorderEnabled
 }
 
-func (rr *RouteRegistry) setUnmatchedViews(notFound, methodNotAllowed View) {
-	rr.notFound, rr.methodNotAllowed = notFound, methodNotAllowed
-}
-
-func (rr *RouteRegistry) setMiddleware(middleware []Middleware, scope MiddlewareScope) {
-	rr.middleware = append([]Middleware(nil), middleware...)
-	rr.scope = scope
+func (rr *RouteRegistry) setRouterConfig(router routerConfig) {
+	router.middleware = append([]Middleware(nil), router.middleware...)
+	rr.router = router
 }
 
 // Handler compiles the full route tree, contributed by every app's Include

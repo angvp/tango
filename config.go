@@ -55,7 +55,8 @@ const (
 	// global middleware too. A request's route is resolved before global
 	// middleware runs, from the request as it arrived: an Unmatched request
 	// is reported as route "(unmatched)". Middleware that rewrites the method
-	// or path so the router dispatches elsewhere is unsupported.
+	// or path so the router dispatches elsewhere is unsupported, and global
+	// middleware sees no route parameters: the router hasn't dispatched yet.
 	MiddlewareScopeAll
 )
 
@@ -173,8 +174,12 @@ func BuildRegistry(config Config) (*Registry, error) {
 		return nil, err
 	}
 	registry := NewRegistry()
-	registry.Routes().setMiddleware(config.Middleware, scope)
-	registry.Routes().setUnmatchedViews(config.NotFound, config.MethodNotAllowed)
+	registry.Routes().setRouterConfig(routerConfig{
+		middleware:       config.Middleware,
+		scope:            scope,
+		notFound:         config.NotFound,
+		methodNotAllowed: config.MethodNotAllowed,
+	})
 
 	for _, app := range config.InstalledApps {
 		if err := registry.Register(app); err != nil {

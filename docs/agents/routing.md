@@ -30,18 +30,24 @@ The route name above is `books:detail`, because `Include` namespaces names using
 
 ## Middleware scope
 
-- `Config.Middleware`: every matched route.
+- `Config.Middleware`: every matched route, or the whole router under `Config.MiddlewareScope = tango.MiddlewareScopeAll`.
 - `tango.WithMiddleware(...)` on `Include`: one mounted group.
 - `tango.Use(...)` on `Path`: one endpoint.
 
 They compose outer-to-inner: global → group → route → View. Use `docs/agents/middleware.md` for the middleware/View-wrapper distinction.
+
+## Unmatched requests
+
+- A request no route answers by path (404) or by method (405) is an Unmatched request. Route and group middleware never run for it; global middleware does only under `MiddlewareScopeAll`.
+- To answer them with your own pages, set `Config.NotFound` and `Config.MethodNotAllowed` to Views. They work under either scope; tanGO sets the custom 405's `Allow` header. Under `MiddlewareScopeRoutes` they run without global middleware, so a global `Recoverer` doesn't protect them.
 
 ## Don't
 
 - Do not import or expose Chi types.
 - Do not mount routes from `init` or by scanning directories.
 - Do not use raw request paths as route names; name the route and reverse it when another part of the app owns the link.
-- Do not expect router-generated 404/405 responses to run route middleware in this version.
+- Do not expect router-generated 404/405 responses to run route or group middleware, or global middleware outside `MiddlewareScopeAll`.
+- Do not read route parameters in global middleware under `MiddlewareScopeAll`; the route hasn't been dispatched yet.
 
 ## Check
 

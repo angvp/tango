@@ -41,6 +41,8 @@ The header name is validated when middleware is constructed. Invalid inbound val
 
 Inside a View, `ctx.Logger()` returns the configured logger enriched with the route pattern, HTTP method, and request ID when present.
 
+The `route` value is the pattern the route was registered with, trailing slash included (`/items/{id}/`). It's the same in `ctx.Logger()`, View-error, access, panic and request-ID logs and in HTTP metrics, for every request.
+
 ## Stable events and metrics
 
 The stable log event names are `EventViewError`, `EventPanic`, `EventAccessLog`, `EventJobFailed`, and `EventRequestIDGenerationFailed`. The stable metric names are `MetricHTTPRequestDuration`, `MetricSchedulerJobInvocations`, and `MetricRealtimeRoomEvents` in the `observability` package.
