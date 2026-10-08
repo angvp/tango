@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/angvp/tango/db"
@@ -19,7 +21,7 @@ const renameForm = "app.Model.Field=NewField or app.Model=NewModel"
 func parseRename(value string) (migration.Rename, error) {
 	source, to, ok := strings.Cut(value, "=")
 	parts := strings.Split(source, ".")
-	if !ok || to == "" || strings.Contains(to, ".") || len(parts) < 2 || len(parts) > 3 || slicesContainEmpty(parts) {
+	if !ok || to == "" || strings.Contains(to, ".") || len(parts) < 2 || len(parts) > 3 || slices.Contains(parts, "") {
 		return migration.Rename{}, fmt.Errorf("--rename %q: want %s", value, renameForm)
 	}
 	if len(parts) == 2 {
@@ -46,7 +48,7 @@ func parseRenames(values []string) ([]migration.Rename, error) {
 		renames = append(renames, rename)
 	}
 	if len(problems) > 0 {
-		return nil, fmt.Errorf("%s", strings.Join(problems, "\n"))
+		return nil, errors.New(strings.Join(problems, "\n"))
 	}
 	return renames, nil
 }

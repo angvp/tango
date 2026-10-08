@@ -12,8 +12,8 @@ import (
 
 // ApplyStep executes step against sqlDB, translating it into the DDL
 // appropriate for dialect. A SQLite step it cannot express as a direct
-// ALTER TABLE (DropColumn) is applied by rebuilding the table, keeping
-// everything else about it (see rebuildSQLiteTable).
+// ALTER TABLE (DropColumn, AlterColumnType) is applied by rebuilding the
+// table, keeping everything else about it (see rebuildSQLiteTable).
 // It is exported so ApplyPending and the tango CLI can share DDL translation;
 // application code should use tango migrate rather than calling ApplyStep
 // directly.
@@ -29,7 +29,7 @@ func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		if dialect == db.Postgres {
 			return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", quote(dialect, s.Table), quote(dialect, s.Column)))
 		}
-		return rebuildSQLiteTable(ctx, sqlDB, s.Table, dropSQLiteColumn(s.Table, s.Column))
+		return rebuildSQLiteTable(ctx, sqlDB, s.Table, dropSQLiteColumn(s.Table, s.Column), nil)
 	case AlterColumnUnique:
 		return applyUniqueIndex(ctx, sqlDB, dialect, s.Table, s.Column, s.Unique)
 	case CreateIndex:

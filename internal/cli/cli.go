@@ -234,7 +234,7 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
 		return 1
 	}
-	if err := checkDrops(changes, state, allowDrops); err != nil {
+	if err := checkDrops(changes, allowDrops); err != nil {
 		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
 		return 1
 	}

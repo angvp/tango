@@ -3,21 +3,12 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
 )
-
-// stringList is a flag that may be given several times, keeping each value.
-type stringList []string
-
-func (l *stringList) String() string { return strings.Join(*l, ",") }
-
-func (l *stringList) Set(value string) error {
-	*l = append(*l, value)
-	return nil
-}
 
 // schemaItem names a model's table, or one column of it, the way migration
 // history knows it: app, table and column names, column empty for a model.
@@ -37,7 +28,7 @@ func (i schemaItem) String() string {
 // to the same item.
 func parseSchemaItem(flagName, value string) (schemaItem, error) {
 	parts := strings.Split(value, ".")
-	if (len(parts) != 2 && len(parts) != 3) || slicesContainEmpty(parts) {
+	if (len(parts) != 2 && len(parts) != 3) || slices.Contains(parts, "") {
 		return schemaItem{}, fmt.Errorf("%s %q: want app.Model.Field or app.Model", flagName, value)
 	}
 	item := schemaItem{app: parts[0], table: db.ColumnName(parts[1])}
@@ -47,25 +38,29 @@ func parseSchemaItem(flagName, value string) (schemaItem, error) {
 	return item, nil
 }
 
-func slicesContainEmpty(parts []string) bool {
-	for _, part := range parts {
-		if part == "" {
-			return true
-		}
-	}
-	return false
-}
-
-// plannedDrops lists every model and field changes would drop, in order.
-func plannedDrops(changes []migration.Migration, state migration.SchemaState) []schemaItem {
+// plannedDrops lists every model and field changes would drop, in order,
+// each under the app of the migration dropping it. A field of a model the
+// same migration renames is named by the model's old table name, as every
+// mapping is.
+func plannedDrops(changes []migration.Migration) []schemaItem {
 	var drops []schemaItem
 	for _, change := range changes {
+		oldName := make(map[string]string)
+		for _, step := range change.Up {
+			if rename, ok := step.(migration.RenameTable); ok {
+				oldName[rename.To] = rename.From
+			}
+		}
 		for _, step := range change.Up {
 			switch s := step.(type) {
 			case migration.DropColumn:
-				drops = append(drops, schemaItem{app: state.Tables[s.Table].App, table: s.Table, column: s.Column})
+				table := s.Table
+				if old, ok := oldName[table]; ok {
+					table = old
+				}
+				drops = append(drops, schemaItem{app: change.App, table: table, column: s.Column})
 			case migration.DropTable:
-				drops = append(drops, schemaItem{app: state.Tables[s.Table].App, table: s.Table})
+				drops = append(drops, schemaItem{app: change.App, table: s.Table})
 			}
 		}
 	}
@@ -75,7 +70,7 @@ func plannedDrops(changes []migration.Migration, state migration.SchemaState) []
 // checkDrops fails unless every model and field changes would drop is
 // authorised by exactly one --allow-drop, and every --allow-drop authorises
 // one of them. It reports every problem at once.
-func checkDrops(changes []migration.Migration, state migration.SchemaState, allowDrops []string) error {
+func checkDrops(changes []migration.Migration, allowDrops []string) error {
 	var problems []string
 	authorised := make(map[schemaItem]bool)
 	var authorisedOrder []schemaItem
@@ -97,7 +92,7 @@ func checkDrops(changes []migration.Migration, state migration.SchemaState, allo
 
 	planned := make(map[schemaItem]bool)
 	var unauthorised []schemaItem
-	for _, drop := range plannedDrops(changes, state) {
+	for _, drop := range plannedDrops(changes) {
 		planned[drop] = true
 		if !authorised[drop] {
 			unauthorised = append(unauthorised, drop)

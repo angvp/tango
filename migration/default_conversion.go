@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,50 +12,53 @@ var (
 )
 
 // convertDefault converts def, a column's raw SQL default literal, by the
-// same Widening type change as the column's values, so the converted
-// default equals what a row holding the old default converts to. An empty
-// def converts to an empty one. It fails for a default that is not a
-// plain literal of type from, such as an expression.
+// Widening type change from to to, so the converted default equals what a
+// row holding the old default converts to. An empty def converts to an
+// empty one. It fails for a pair that is not a Widening type change, and
+// for a default that is not a plain literal of type from, such as an
+// expression.
 func convertDefault(from, to, def string) (string, bool) {
+	conversion, ok := wideningConversions[wideningKey{from, to}]
+	if !ok {
+		return "", false
+	}
 	def = strings.TrimSpace(def)
 	if def == "" {
 		return "", true
 	}
-	switch (wideningKey{from, to}) {
-	case wideningKey{"integer", "real"}:
-		if integerLiteral.MatchString(def) {
-			return def + ".0", true
-		}
-	case wideningKey{"integer", "text"}:
-		if integerLiteral.MatchString(def) {
-			return "'" + def + "'", true
-		}
-	case wideningKey{"real", "text"}:
-		if realLiteral.MatchString(def) {
-			if f, err := strconv.ParseFloat(def, 64); err == nil {
-				return "'" + canonicalRealText(f) + "'", true
-			}
-		}
-	case wideningKey{"boolean", "integer"}:
-		if b, ok := booleanLiteral(def); ok {
-			return map[bool]string{true: "1", false: "0"}[b], true
-		}
-	case wideningKey{"boolean", "text"}:
-		if b, ok := booleanLiteral(def); ok {
-			return map[bool]string{true: "'true'", false: "'false'"}[b], true
-		}
-	}
-	return "", false
+	return conversion.convertDefault(def)
 }
 
-func booleanLiteral(def string) (bool, bool) {
-	switch strings.ToLower(def) {
-	case "true", "1":
-		return true, true
-	case "false", "0":
-		return false, true
+func integerDefault(convert func(string) string) func(string) (string, bool) {
+	return func(def string) (string, bool) {
+		if !integerLiteral.MatchString(def) {
+			return "", false
+		}
+		return convert(def), true
 	}
-	return false, false
+}
+
+func realToTextDefault(def string) (string, bool) {
+	if !realLiteral.MatchString(def) {
+		return "", false
+	}
+	f, err := strconv.ParseFloat(def, 64)
+	if err != nil {
+		return "", false
+	}
+	return "'" + canonicalRealText(f) + "'", true
+}
+
+func booleanDefault(whenTrue, whenFalse string) func(string) (string, bool) {
+	return func(def string) (string, bool) {
+		switch strings.ToLower(def) {
+		case "true", "1":
+			return whenTrue, true
+		case "false", "0":
+			return whenFalse, true
+		}
+		return "", false
+	}
 }
 
 // canonicalRealText writes f the way PostgreSQL's float8 text output does,
@@ -64,12 +66,12 @@ func booleanLiteral(def string) (bool, bool) {
 // digits that round-trip, without a trailing ".0", in exponent form when
 // the decimal exponent is below -4 or at least 15.
 func canonicalRealText(f float64) string {
-	if f == 0 {
-		return "0"
-	}
-	exponent := int(math.Floor(math.Log10(math.Abs(f))))
-	if exponent < -4 || exponent >= 15 {
-		return strconv.FormatFloat(f, 'e', -1, 64)
+	scientific := strconv.FormatFloat(f, 'e', -1, 64)
+	// The exponent is read from the shortest digits themselves: computing
+	// it with Log10 is off by one at exact powers of ten such as 1e15.
+	exponent, err := strconv.Atoi(scientific[strings.LastIndexByte(scientific, 'e')+1:])
+	if err != nil || exponent < -4 || exponent >= 15 {
+		return scientific
 	}
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }

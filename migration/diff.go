@@ -31,23 +31,18 @@ type Model struct {
 }
 
 // ErrUnsupportedChange is returned by Diff when the models changed in a way
-// no migration step can express: a column's type, which column is the
-// primary key, or a foreign key's target. Generating nothing would leave
-// the database silently out of step with the models, so Diff refuses.
+// no migration step can express: a type change that is not a Widening type
+// change (or one to a primary key, or whose default cannot convert), a
+// change to which column is the primary key, or a foreign key gained, lost
+// or retargeted on an existing column. Generating nothing would leave the
+// database silently out of step with the models, so Diff refuses.
 var ErrUnsupportedChange = errors.New("tango migration: a model change cannot be expressed as a migration")
 
 // fieldName names column of model the way the developer wrote it
 // ("posts.Post.Views"), falling back to the table and column names when
 // the Go names are unknown.
 func (m Model) fieldName(column string) string {
-	structName, field := m.Struct, m.Fields[column]
-	if structName == "" {
-		structName = m.Name
-	}
-	if field == "" {
-		field = column
-	}
-	return m.App + "." + structName + "." + field
+	return m.App + "." + m.structName() + "." + m.goField(column)
 }
 
 // sqlType returns the dialect-agnostic type token Diff stores in Column.Type

@@ -199,7 +199,7 @@ func TestMakeMigrationsRefusesModelRenamesThatOverlap(t *testing.T) {
 			[]string{"shop.Widget", "not dropped"}},
 		{"field rename on a dropped model", shopModels(false, false)[1:],
 			[]string{"--allow-drop", "shop.Widget", "--rename", "shop.Widget.Stock=Quantity"},
-			[]string{"shop.widget.stock", "no table widget"}},
+			[]string{"shop.widget.stock", "no table widget", "has tables gadget"}},
 		{"two models renamed to one", gizmoModels("stock", "Stock"),
 			[]string{"--rename", "shop.Widget=Gizmo", "--rename", "shop.Gadget=Gizmo"},
 			[]string{"shop.gizmo", "more than once"}},
@@ -217,5 +217,34 @@ func TestMakeMigrationsRefusesModelRenamesThatOverlap(t *testing.T) {
 
 			assertRefusedAndUnchanged(t, dir, before, code, stderr, tt.wants...)
 		})
+	}
+}
+
+func TestMakeMigrationsDropsAFieldOfARenamedModelByItsOldName(t *testing.T) {
+	dir := t.TempDir()
+	makeInitialMigration(t, dir, shopModels(false, false))
+	models := gizmoModels("stock", "Stock")
+	models[0].Columns = models[0].Columns[:1]
+	before := migrationsDirContents(t, dir)
+
+	code, stderr := runMakeMigrations(t, dir, models, "--rename", "shop.Widget=Gizmo")
+	assertRefusedAndUnchanged(t, dir, before, code, stderr, "--allow-drop shop.widget.stock")
+
+	code, stderr = runMakeMigrations(t, dir, models, "--rename", "shop.Widget=Gizmo", "--allow-drop", "shop.Widget.Stock")
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr: %s", code, stderr)
+	}
+	files, err := filepath.Glob(filepath.Join(dir, "migrations", "0002_*.go"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("second migration files = %v (%v), want one", files, err)
+	}
+	content, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	for _, want := range []string{`migration.RenameTable{From: "widget", To: "gizmo"}`, `migration.DropColumn{Table: "gizmo", Column: "stock"}`} {
+		if !strings.Contains(string(content), want) {
+			t.Fatalf("migration does not contain %q:\n%s", want, content)
+		}
 	}
 }

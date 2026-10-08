@@ -142,7 +142,7 @@ func TestDiffRejectsRenameMappingsThatDoNotFit(t *testing.T) {
 			name:    "table not in history",
 			models:  articleModels(noChange),
 			renames: []Rename{{App: "posts", Table: "story", Column: "body", To: "content"}},
-			wants:   []string{"posts.story", "no table"},
+			wants:   []string{"posts.story", "no table", "has tables post"},
 		},
 		{
 			name:    "wrong app",
@@ -155,9 +155,9 @@ func TestDiffRejectsRenameMappingsThatDoNotFit(t *testing.T) {
 			models: articleModels(noChange),
 			renames: []Rename{
 				{App: "posts", Table: "post", Column: "body", To: "content"},
-				{App: "posts", Table: "post", Column: "body", To: "content"},
+				{App: "posts", Table: "post", Column: "body", To: "contents"},
 			},
-			wants: []string{"posts.post.body", "more than once"},
+			wants: []string{"posts.post.body", "more than once", "posts.post.content", "posts.post.contents"},
 		},
 		{
 			name: "same destination twice",
@@ -168,7 +168,7 @@ func TestDiffRejectsRenameMappingsThatDoNotFit(t *testing.T) {
 				{App: "posts", Table: "post", Column: "body", To: "content"},
 				{App: "posts", Table: "post", Column: "title", To: "content"},
 			},
-			wants: []string{"posts.post.content", "more than once"},
+			wants: []string{"posts.post.content", "more than once", "posts.post.body", "posts.post.title"},
 		},
 	}
 	for _, tt := range tests {

@@ -64,7 +64,7 @@ type sqliteIndex struct {
 // NOT NULL, DEFAULT, primary key and REFERENCES unless reshape changes
 // them, and other tables' references to table keep pointing at it. If any
 // statement fails, the transaction rolls back and table is left as it was.
-func rebuildSQLiteTable(ctx context.Context, sqlDB *sql.DB, table string, reshape func([]sqliteColumn) ([]sqliteColumn, error)) (err error) {
+func rebuildSQLiteTable(ctx context.Context, sqlDB *sql.DB, table string, reshape func([]sqliteColumn) ([]sqliteColumn, error), afterCopy copyFixup) (err error) {
 	conn, err := sqlDB.Conn(ctx)
 	if err != nil {
 		return err
@@ -87,23 +87,17 @@ func rebuildSQLiteTable(ctx context.Context, sqlDB *sql.DB, table string, reshap
 		}
 	}()
 
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
-
-	if err := rebuildInTx(ctx, tx, table, reshape); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return inTx(ctx, conn, func(tx *sql.Tx) error {
+		return rebuildInTx(ctx, tx, table, reshape, afterCopy)
+	})
 }
 
-func rebuildInTx(ctx context.Context, tx *sql.Tx, table string, reshape func([]sqliteColumn) ([]sqliteColumn, error)) error {
+// copyFixup runs after a rebuild has copied the rows into newTable, before
+// the old table is dropped, to rewrite values SQL alone cannot convert
+// exactly. It may be nil.
+type copyFixup func(ctx context.Context, tx *sql.Tx, oldTable, newTable string, columns []sqliteColumn) error
+
+func rebuildInTx(ctx context.Context, tx *sql.Tx, table string, reshape func([]sqliteColumn) ([]sqliteColumn, error), afterCopy copyFixup) error {
 	columns, err := readSQLiteColumns(ctx, tx, table)
 	if err != nil {
 		return err
@@ -131,9 +125,20 @@ func rebuildInTx(ctx context.Context, tx *sql.Tx, table string, reshape func([]s
 		names[i] = c.name
 		sources[i] = c.source
 	}
-	statements := []string{
+	for _, statement := range []string{
 		fmt.Sprintf("CREATE TABLE %s (%s)", quote(db.SQLite, tempTable), strings.Join(defs, ", ")),
 		fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", quote(db.SQLite, tempTable), sqlident.QuoteAll(identStyle(db.SQLite), names), strings.Join(sources, ", "), quote(db.SQLite, table)),
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	if afterCopy != nil {
+		if err := afterCopy(ctx, tx, table, tempTable, reshaped); err != nil {
+			return err
+		}
+	}
+	statements := []string{
 		fmt.Sprintf("DROP TABLE %s", quote(db.SQLite, table)),
 		fmt.Sprintf("ALTER TABLE %s RENAME TO %s", quote(db.SQLite, tempTable), quote(db.SQLite, table)),
 	}
@@ -228,8 +233,12 @@ func readSQLiteReferences(ctx context.Context, tx *sql.Tx, table string) (map[st
 	return references, rows.Err()
 }
 
+// sqliteCreatedIndexesSQL lists the indexes created on a table by
+// CREATE INDEX, not the ones SQLite makes for a constraint itself.
+const sqliteCreatedIndexesSQL = "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = $1 AND sql IS NOT NULL"
+
 func readSQLiteIndexes(ctx context.Context, tx *sql.Tx, table string) ([]sqliteIndex, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = $1 AND sql IS NOT NULL", table)
+	rows, err := tx.QueryContext(ctx, sqliteCreatedIndexesSQL, table)
 	if err != nil {
 		return nil, err
 	}

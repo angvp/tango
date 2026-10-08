@@ -76,7 +76,7 @@ tango makemigrations: refusing to drop data no --allow-drop authorises:
 to drop them and their data: tango makemigrations --allow-drop shop.widget.stock
 ```
 
-To drop it, name each model (`app.Model`) or field (`app.Model.Field`) with its own `--allow-drop`; Go names (`shop.Widget.Stock`) and table/column names (`shop.widget.stock`) both work. Every drop needs one, and the run also fails, writing nothing, if an `--allow-drop` names something the change doesn't drop or names the same thing twice. One flag never covers a second, accidental drop.
+To drop it, name each model (`app.Model`) or field (`app.Model.Field`) with its own `--allow-drop`; Go names (`shop.Widget.Stock`) and table/column names (`shop.widget.stock`) both work. Every drop needs one, and the run also fails, writing nothing, if an `--allow-drop` names something the change doesn't drop or names the same thing twice. One flag never covers a second, accidental drop. If the same run renames the model, name the dropped field by the model's old name (`--rename shop.Widget=Gizmo --allow-drop shop.Widget.Stock`), as for `--rename`.
 
 ## Naming migrations
 

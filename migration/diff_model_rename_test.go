@@ -119,7 +119,7 @@ func TestDiffRejectsModelRenameMappingsThatDoNotFit(t *testing.T) {
 		renames []Rename
 		wants   []string
 	}{
-		{"source not in history", blogModels("body"), []Rename{{App: "posts", Table: "story", To: "article"}}, []string{"posts.story", "no table"}},
+		{"source not in history", blogModels("body"), []Rename{{App: "posts", Table: "story", To: "article"}}, []string{"posts.story", "posts.article", "no table", "has tables post"}},
 		{"source still in the models", append(blogModels("body"), Model{App: "posts", Name: "post", Struct: "Post"}), []Rename{renamePostToArticle}, []string{"posts.post", "still has"}},
 		{"destination not in the models", blogModels("body"), []Rename{{App: "posts", Table: "post", To: "articel"}}, []string{"posts.articel", "no model"}},
 		{"destination already in history", blogModels("body"), []Rename{{App: "posts", Table: "post", To: "comment"}}, []string{"comment", "already in migration history"}},

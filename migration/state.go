@@ -12,8 +12,9 @@ type ColumnState struct {
 	Indexed    bool
 	References string
 	// Default is the column's database default as a raw SQL literal, set
-	// only by an AddColumn that carried one: CreateTable never writes a
-	// default (see columnDefSQL), so replay must not invent one.
+	// by an AddColumn that carried one and converted by AlterColumnType.
+	// CreateTable never writes a default (see columnDefSQL), so replay
+	// never takes one from it.
 	Default string
 }
 

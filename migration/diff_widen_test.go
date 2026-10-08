@@ -37,6 +37,7 @@ func TestDiffTurnsAWideningTypeChangeIntoAlterColumnType(t *testing.T) {
 		{"real", "text", "2.5", "'2.5'"},
 		{"real", "text", "1e20", "'1e+20'"},
 		{"real", "text", "3.0", "'3'"},
+		{"real", "text", "1e15", "'1e+15'"},
 		{"boolean", "integer", "TRUE", "1"},
 		{"boolean", "integer", "false", "0"},
 		{"boolean", "text", "FALSE", "'false'"},

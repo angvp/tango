@@ -65,22 +65,22 @@ func validateRenames(models []Model, state SchemaState, renames []Rename) error 
 		modelsByTable[m.Name] = m
 	}
 	tableRenames, columnRenames := splitRenames(renames)
-	sources := make(map[string]bool)
-	destinations := make(map[string]bool)
+	sources := make(map[string]string)
+	destinations := make(map[string]string)
 	newTable := make(map[string]string, len(tableRenames))
 	renamedTo := make(map[string]Rename, len(tableRenames))
 	var problems []string
 	for _, r := range renames {
-		if sources[r.source()] {
-			problems = append(problems, fmt.Sprintf("%s is renamed more than once", r.source()))
+		if earlier, ok := sources[r.source()]; ok {
+			problems = append(problems, fmt.Sprintf("%s is renamed more than once (to %s and %s)", r.source(), earlier, r.destination()))
 			continue
 		}
-		sources[r.source()] = true
-		if destinations[r.destination()] {
-			problems = append(problems, fmt.Sprintf("%s is named as a rename destination more than once", r.destination()))
+		sources[r.source()] = r.destination()
+		if earlier, ok := destinations[r.destination()]; ok {
+			problems = append(problems, fmt.Sprintf("%s is named as a rename destination more than once (from %s and %s)", r.destination(), earlier, r.source()))
 			continue
 		}
-		destinations[r.destination()] = true
+		destinations[r.destination()] = r.source()
 	}
 	for _, r := range tableRenames {
 		newTable[r.Table] = r.To
@@ -102,7 +102,7 @@ func validateRenames(models []Model, state SchemaState, renames []Rename) error 
 		if to, ok := newTable[r.Table]; ok {
 			modelTable = to
 		}
-		problems = append(problems, renameProblems(r, modelTable, modelsByTable, state)...)
+		problems = append(problems, columnRenameProblems(r, modelTable, modelsByTable, state)...)
 	}
 	if len(problems) == 0 {
 		return nil
@@ -113,7 +113,7 @@ func validateRenames(models []Model, state SchemaState, renames []Rename) error 
 func tableRenameProblems(r Rename, modelsByTable map[string]Model, state SchemaState) []string {
 	table, inHistory := state.Tables[r.Table]
 	if !inHistory {
-		return []string{fmt.Sprintf("%s: migration history has no table %s", r.source(), r.Table)}
+		return []string{fmt.Sprintf("%s → %s: migration history has no table %s (app %s has tables %s)", r.source(), r.destination(), r.Table, r.App, stateTableList(state, r.App))}
 	}
 	if table.App != r.App {
 		return []string{fmt.Sprintf("%s: table %s belongs to app %s", r.source(), r.Table, table.App)}
@@ -131,6 +131,17 @@ func tableRenameProblems(r Rename, modelsByTable map[string]Model, state SchemaS
 	return problems
 }
 
+func stateTableList(state SchemaState, app string) string {
+	var names []string
+	for name, t := range state.Tables {
+		if t.App == app {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return strings.Join(names, ", ")
+}
+
 func appTableList(modelsByTable map[string]Model, app string) string {
 	var names []string
 	for name, m := range modelsByTable {
@@ -142,17 +153,17 @@ func appTableList(modelsByTable map[string]Model, app string) string {
 	return strings.Join(names, ", ")
 }
 
-func renameProblems(r Rename, modelTable string, modelsByTable map[string]Model, state SchemaState) []string {
+func columnRenameProblems(r Rename, modelTable string, modelsByTable map[string]Model, state SchemaState) []string {
 	table, inHistory := state.Tables[r.Table]
 	if !inHistory {
-		return []string{fmt.Sprintf("%s.%s: migration history has no table %s", r.App, r.Table, r.Table)}
+		return []string{fmt.Sprintf("%s → %s: migration history has no table %s (app %s has tables %s)", r.source(), r.destination(), r.Table, r.App, stateTableList(state, r.App))}
 	}
 	if table.App != r.App {
 		return []string{fmt.Sprintf("%s: table %s belongs to app %s", r.source(), r.Table, table.App)}
 	}
 	model, inModels := modelsByTable[modelTable]
 	if !inModels {
-		return []string{fmt.Sprintf("%s: the models have no table %s", r.source(), modelTable)}
+		return []string{fmt.Sprintf("%s: the models have no table %s (app %s has tables %s)", r.source(), modelTable, r.App, appTableList(modelsByTable, r.App))}
 	}
 
 	var problems []string
