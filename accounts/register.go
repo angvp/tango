@@ -64,11 +64,12 @@ func findAccountByEmail(ctx context.Context, store *db.Store, email string) (Acc
 }
 
 // registerView handles GET (render the registration form) and POST
-// (validate, create the Account) for /accounts/register/. When signup is
+// (validate, create the Account, and with mail queue a verification email)
+// for /accounts/register/. When signup is
 // disabled, both methods render a clear closed-registration response
 // instead — never a bare 404 — since a live project may have old links,
 // bookmarks, or indexed pages pointing at this route.
-func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLimiter) tango.View {
+func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLimiter, m *mailer) tango.View {
 	return func(ctx *tango.Context) error {
 		if cfg.signupDisabled {
 			return render(ctx, http.StatusForbidden, registrationClosedTemplate, nil)
@@ -150,6 +151,9 @@ func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLim
 
 			if err := createAccountSession(ctx.Context(), store, cfg, ctx.ResponseWriter(), ctx.Request(), account.ID); err != nil {
 				return err
+			}
+			if m != nil {
+				m.queueVerification(ctx.Context(), account)
 			}
 			return ctx.Redirect(safeAccountsNext(next, defaultPostLoginRedirect))
 

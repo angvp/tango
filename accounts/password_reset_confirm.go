@@ -41,6 +41,8 @@ func (m *mailer) usableToken(ctx context.Context, token string, purpose TokenPur
 	return row, account, true, nil
 }
 
+func isNotFound(err error) bool { return errors.Is(err, db.ErrNotFound) }
+
 // consumeToken deletes row, reporting false if another request already
 // did: of two concurrent uses, only one wins.
 func (m *mailer) consumeToken(ctx context.Context, row AccountToken) (bool, error) {

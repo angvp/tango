@@ -63,6 +63,7 @@ func newMailSite(t *testing.T, sender mail.Sender, start bool, opts ...accounts.
 	if err := registry.Register(tango.NewApp("host", func(r *tango.Registry) error {
 		return r.Routes().Include("/", tango.URLs{
 			tango.Path(http.MethodGet, "/private/", accounts.RequireLogin(site.store, accounts.DefaultSessionCookieName, "/accounts/login/", private)),
+			tango.Path(http.MethodGet, "/verified/", accounts.RequireVerified(site.store, accounts.DefaultSessionCookieName, "/accounts/login/", private)),
 		})
 	})); err != nil {
 		t.Fatal(err)
@@ -271,7 +272,9 @@ func (s *mailSite) get(path string, cookies ...*http.Cookie) *httptest.ResponseR
 	s.t.Helper()
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	for _, c := range cookies {
-		request.AddCookie(c)
+		if c != nil {
+			request.AddCookie(c)
+		}
 	}
 	response := httptest.NewRecorder()
 	s.handler.ServeHTTP(response, request)
@@ -340,4 +343,10 @@ func tokenPageHeaders(t *testing.T, response *httptest.ResponseRecorder) {
 	if response.Header().Get("Referrer-Policy") != "no-referrer" || response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("Referrer-Policy = %q, Cache-Control = %q; want no-referrer and no-store", response.Header().Get("Referrer-Policy"), response.Header().Get("Cache-Control"))
 	}
+}
+
+func t0() context.Context { return context.Background() }
+
+func dbWhereEmail(email string) db.Query {
+	return db.Query{Where: []db.Condition{{Field: "Email", Op: db.OpEq, Value: email}}}
 }

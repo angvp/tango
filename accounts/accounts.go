@@ -96,30 +96,33 @@ func New(store *db.Store, opts ...Option) tango.App {
 			return err
 		}
 
+		var m *mailer
+		if cfg.mail != nil {
+			var err error
+			if m, err = newMailer(registry, store, cfg); err != nil {
+				return err
+			}
+		}
+
 		registerLimiter := security.NewRateLimiter(registerRateLimitAttempts, registerRateLimitWindow)
 		loginLimiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 		routes := tango.URLs{
-			tango.Path(http.MethodGet, "/accounts/register/", registerView(store, cfg, registerLimiter)),
-			tango.Path(http.MethodPost, "/accounts/register/", registerView(store, cfg, registerLimiter)),
+			tango.Path(http.MethodGet, "/accounts/register/", registerView(store, cfg, registerLimiter, m)),
+			tango.Path(http.MethodPost, "/accounts/register/", registerView(store, cfg, registerLimiter, m)),
 			tango.Path(http.MethodGet, "/accounts/login/", loginView(store, cfg, loginLimiter)),
 			tango.Path(http.MethodPost, "/accounts/login/", loginView(store, cfg, loginLimiter)),
 			tango.Path(http.MethodPost, "/accounts/logout/", logoutView(store, cfg)),
 		}
-		if cfg.mail != nil {
-			mailRoutes, err := enableMail(registry, store, cfg)
-			if err != nil {
-				return err
-			}
-			routes = append(routes, mailRoutes...)
+		if m != nil {
+			routes = append(routes, m.routes()...)
 		}
 
 		return registry.Routes().Include("/", routes)
 	})
 }
 
-// enableMail validates cfg.mail, registers the outbox's worker and returns
-// the mail flows' routes.
-func enableMail(registry *tango.Registry, store *db.Store, cfg accountsConfig) (tango.URLs, error) {
+// newMailer validates cfg.mail and registers the outbox's worker.
+func newMailer(registry *tango.Registry, store *db.Store, cfg accountsConfig) (*mailer, error) {
 	baseURL, err := cfg.mail.validate()
 	if err != nil {
 		return nil, err
@@ -135,11 +138,19 @@ func enableMail(registry *tango.Registry, store *db.Store, cfg accountsConfig) (
 	if err := registry.RegisterLifecycle(m.outbox.lifecycle()); err != nil {
 		return nil, err
 	}
+	return m, nil
+}
+
+// routes are the mail flows' routes, mounted only with WithMail.
+func (m *mailer) routes() tango.URLs {
 	resetLimiter := security.NewRateLimiter(resetRateLimitAttempts, resetRateLimitWindow)
 	return tango.URLs{
 		tango.Path(http.MethodGet, "/accounts/password-reset/", passwordResetView(m, resetLimiter)),
 		tango.Path(http.MethodPost, "/accounts/password-reset/", passwordResetView(m, resetLimiter)),
 		tango.Path(http.MethodGet, "/accounts/password-reset/confirm/", passwordResetConfirmView(m)),
 		tango.Path(http.MethodPost, "/accounts/password-reset/confirm/", passwordResetConfirmView(m)),
-	}, nil
+		tango.Path(http.MethodGet, "/accounts/verify/", verifyView(m)),
+		tango.Path(http.MethodPost, "/accounts/verify/", verifyView(m)),
+		tango.Path(http.MethodPost, "/accounts/verify/resend/", resendVerificationView(m)),
+	}
 }

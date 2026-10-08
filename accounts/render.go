@@ -156,6 +156,55 @@ var invalidLinkTemplate = template.Must(template.New("invalid_link").Parse(`<!do
 </body>
 </html>`))
 
+// verifyTemplate asks the person to confirm, so following the link alone
+// verifies nothing.
+var verifyTemplate = template.Must(template.New("verify").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Confirm your email</title></head>
+<body>
+  <h1>Confirm your email</h1>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <button type="submit">Confirm my email</button>
+  </form>
+</body>
+</html>`))
+
+type verifyPageData struct {
+	CSRFToken string
+}
+
+var verifiedTemplate = template.Must(template.New("verified").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Email confirmed</title></head>
+<body>
+  <h1>Your email address is confirmed.</h1>
+</body>
+</html>`))
+
+var verificationSentTemplate = template.Must(template.New("verification_sent").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Check your email</title></head>
+<body>
+  <h1>Check your email</h1>
+  <p>If your address still needs confirming, we've sent a new link. Only the newest link works, for 24 hours.</p>
+</body>
+</html>`))
+
+// unverifiedTemplate is RequireVerified's 403 page.
+var unverifiedTemplate = template.Must(template.New("unverified").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Confirm your email</title></head>
+<body>
+  <h1>Please confirm your email address</h1>
+  <p>This page needs a confirmed email address. Open the link we emailed you, or ask for a new one.</p>
+  <form method="post" action="/accounts/verify/resend/">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <button type="submit">Send a new link</button>
+  </form>
+</body>
+</html>`))
+
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {
 	return ctx.HTML(status, tmpl, tmpl.Name(), data)
 }
