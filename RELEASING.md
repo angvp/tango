@@ -20,7 +20,7 @@ This is the maintainer's checklist for cutting a release. What a release promise
    internal/migrationcompat/generate.sh vX.Y.Z local
    ```
 
-   Then add the new `vX_Y_Z` directory to both tests' version lists (see [the fixtures' README](internal/migrationcompat/README.md)). Run them on both dialects:
+   Then add the new `vX_Y_Z` directory to `Generators` in `internal/migrationcompat/versions.go` (see [the fixtures' README](internal/migrationcompat/README.md)). Run them on both dialects:
 
    ```sh
    go test ./internal/migrationcompat/ ./internal/cli/
@@ -52,7 +52,7 @@ If the workflow refuses the tag, it only asks the proxy once every other check p
 
 1. Watch the **Release** workflow. On a minor release, its job summary shows `gorelease`'s report: check it against the changelog's upgrade notes.
 2. Check that the [GitHub release](https://github.com/angvp/tango/releases) exists, with the changelog section as its notes.
-3. Check the website. The workflow dispatches **Follow a tanGO release** in `angvp/tango-web`, which pins the release in its `go.mod`, tests the site against it, and pushes to its `main` for Railway to deploy. Within a few minutes [tangoframework.com](https://tangoframework.com) should show "Docs for vX.Y.Z". If the dispatch step failed (for example, an expired token), run that workflow by hand from `tango-web`'s Actions tab with the version.
+3. Check the website. The workflow dispatches **Follow a tanGO release** in `angvp/tango-web`, which pins the release in its `go.mod`, tests the site against it, and pushes to its `main` for Railway to deploy. Within a few minutes [tangoframework.com](https://tangoframework.com) should show "Docs for vX.Y.Z". If the dispatch step failed (for example, an expired token), run that workflow by hand from `tango-web`'s Actions tab with the version. The workflow must be on `tango-web`'s default branch for either to work.
 4. Check that [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) lists the version. Requesting the page fetches it if it doesn't.
 
 ## The website dispatch token

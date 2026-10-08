@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -121,7 +122,8 @@ func checkCI(ctx context.Context, commit string, s Sources) error {
 		if len(failed) == 0 {
 			return nil
 		}
-		if run.Status != "completed" {
+		// A run still going can yet pass, unless a required job already failed.
+		if run.Status != "completed" && !anyRequiredJobFailed(run) {
 			running = true
 		}
 		missing = append(missing, failed...)
@@ -150,6 +152,17 @@ func failedRequiredJobs(run CIRun) []string {
 		}
 	}
 	return failed
+}
+
+// anyRequiredJobFailed reports whether a required job of run finished
+// without succeeding.
+func anyRequiredJobFailed(run CIRun) bool {
+	for _, job := range run.Jobs {
+		if slices.Contains(RequiredJobs, job.Name) && job.Status == "completed" && job.Conclusion != "success" {
+			return true
+		}
+	}
+	return false
 }
 
 // checkPatchCompatible refuses a patch release whose gorelease report lists
@@ -192,7 +205,9 @@ func changelogSection(changelog []byte, version string) (string, error) {
 		}
 		end := len(lines)
 		for j := i + 1; j < len(lines); j++ {
-			if strings.HasPrefix(lines[j], "## ") || strings.HasPrefix(lines[j], "[") && strings.Contains(lines[j], "]: ") {
+			nextSection := strings.HasPrefix(lines[j], "## ")
+			linkDefinition := strings.HasPrefix(lines[j], "[") && strings.Contains(lines[j], "]: ")
+			if nextSection || linkDefinition {
 				end = j
 				break
 			}

@@ -3,8 +3,9 @@
 # - the tagged commit is on main;
 # - CI passed on that exact commit;
 # - CHANGELOG.md has a dated section for the version;
-# - the Go module proxy doesn't already serve the tag from another commit;
-# - for a patch release, gorelease reports no incompatible change.
+# - for a patch release, gorelease reports no incompatible change;
+# - the Go module proxy doesn't already serve the tag from another commit
+#   (asked last, only when everything else passed: asking pins the tag).
 # It doesn't rerun the tests: the CI run it checks is that guarantee.
 # See RELEASING.md.
 name: Release
@@ -36,19 +37,21 @@ jobs:
       - name: Compare the API with the previous release
         run: |
           report="$RUNNER_TEMP/gorelease.txt"
+          errors="$RUNNER_TEMP/gorelease.err"
           : > "$report"
+          : > "$errors"
           previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$TAG^" 2>/dev/null || true)"
-          if [ -n "$previous" ]; then
+          heading="API changes since ${previous:-the first release}"
+          if [ -n "$previous" ] && ! go run golang.org/x/exp/cmd/gorelease@v0.0.0-20261007192929-f45ad48fbe92 -base="$previous" > "$report" 2> "$errors"; then
             # An empty report fails a patch release: never skip the check silently.
-            if ! go run golang.org/x/exp/cmd/gorelease@v0.0.0-20261007192929-f45ad48fbe92 -base="$previous" > "$report"; then
-              echo "::warning::gorelease failed; a patch release will be refused"
-              : > "$report"
-            fi
+            echo "::warning::gorelease failed; a patch release will be refused"
+            : > "$report"
+            heading="gorelease failed against $previous: compare the API by hand before writing upgrade notes"
           fi
           {
-            echo "## API changes since ${previous:-the first release}"
+            echo "## $heading"
             echo '```'
-            cat "$report"
+            cat "$report" "$errors"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Check the release

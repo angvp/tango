@@ -9,20 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/angvp/tango/internal/migrationcompat/unreleased/migrations"
-	v001 "github.com/angvp/tango/internal/migrationcompat/v0_0_1/migrations"
-	v002 "github.com/angvp/tango/internal/migrationcompat/v0_0_2/migrations"
-	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/internal/migrationcompat"
 )
-
-// releasedGenerators maps each fixture directory under
-// internal/migrationcompat, written by that release's own
-// `tango makemigrations`, to the migrations its files compile to.
-var releasedGenerators = map[string][]migration.Migration{
-	"v0_0_1":     v001.Migrations,
-	"unreleased": migrations.Migrations,
-	"v0_0_2":     v002.Migrations,
-}
 
 // rawDumpRunner answers -tango-dump-models with a recorded output.
 type rawDumpRunner struct{ output []byte }
@@ -39,9 +27,10 @@ func (r rawDumpRunner) Run(ctx context.Context, dir string, name string, args []
 // -tango-dump-models output for the models the files were generated from,
 // replays the headers to a schema with nothing left to generate.
 func TestReleasedGeneratorHeadersReadBack(t *testing.T) {
-	for version, compiled := range releasedGenerators {
-		t.Run(version, func(t *testing.T) {
-			fixture := filepath.Join("..", "migrationcompat", version)
+	for _, gen := range migrationcompat.Generators {
+		compiled := gen.Migrations
+		t.Run(gen.Dir, func(t *testing.T) {
+			fixture := filepath.Join("..", "migrationcompat", gen.Dir)
 
 			decoded, err := loadMigrations(fixture)
 			if err != nil {

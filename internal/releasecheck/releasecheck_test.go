@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const commit = "5e66893a20224b91c605aaa990f826c35b0eff37"
+const taggedCommit = "5e66893a20224b91c605aaa990f826c35b0eff37"
 
 const changelog = `# Changelog
 
@@ -96,7 +96,7 @@ func TestCheckPassesAReadyRelease(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			release := Release{Tag: tt.tag, Commit: commit, Changelog: []byte(changelog), Gorelease: tt.report}
+			release := Release{Tag: tt.tag, Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: tt.report}
 			sources := fakeSources{onMain: true, runs: []CIRun{greenRun()}, published: ""}
 			notes, err := Check(context.Background(), release, sources)
 			if err != nil {
@@ -111,7 +111,7 @@ func TestCheckPassesAReadyRelease(t *testing.T) {
 
 func TestCheckRefusesAReleaseThatIsNotReady(t *testing.T) {
 	ready := func() (Release, fakeSources) {
-		return Release{Tag: "v0.1.1", Commit: commit, Changelog: []byte(changelog), Gorelease: compatibleReport},
+		return Release{Tag: "v0.1.1", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: compatibleReport},
 			fakeSources{onMain: true, runs: []CIRun{greenRun()}}
 	}
 	tests := []struct {
@@ -121,13 +121,17 @@ func TestCheckRefusesAReleaseThatIsNotReady(t *testing.T) {
 	}{
 		{"not a release tag", func(r *Release, _ *fakeSources) { r.Tag = "v0.1" }, []string{`"v0.1"`, "vMAJOR.MINOR.PATCH"}},
 		{"a prerelease tag", func(r *Release, _ *fakeSources) { r.Tag = "v0.1.1-rc.1" }, []string{"vMAJOR.MINOR.PATCH"}},
-		{"commit not on main", func(_ *Release, s *fakeSources) { s.onMain = false }, []string{commit, "not reachable from main"}},
+		{"taggedCommit not on main", func(_ *Release, s *fakeSources) { s.onMain = false }, []string{taggedCommit, "not reachable from main"}},
 		{"no changelog section", func(r *Release, _ *fakeSources) { r.Tag = "v0.1.2" }, []string{"CHANGELOG.md", "no section", "0.1.2"}},
 		{"undated changelog section", func(r *Release, _ *fakeSources) { r.Tag = "v0.0.9" }, []string{"0.0.9", "no date"}},
-		{"no CI run for the commit", func(_ *Release, s *fakeSources) { s.runs = nil }, []string{"no successful CI run", commit}},
+		{"no CI run for the commit", func(_ *Release, s *fakeSources) { s.runs = nil }, []string{"no successful CI run", taggedCommit}},
 		{"CI still running", func(_ *Release, s *fakeSources) {
 			s.runs = []CIRun{withJob(CIRun{Status: "in_progress", Jobs: greenRun().Jobs}, "test (postgres)", "in_progress", "")}
 		}, []string{"still running", "re-run"}},
+		{"a required job failed while another still runs", func(_ *Release, s *fakeSources) {
+			run := withJob(CIRun{Status: "in_progress", Jobs: greenRun().Jobs}, "test (sqlite)", "in_progress", "")
+			s.runs = []CIRun{withJob(run, "test (postgres)", "completed", "failure")}
+		}, []string{"no successful CI run", "test (postgres)"}},
 		{"a required job failed", func(_ *Release, s *fakeSources) {
 			s.runs = []CIRun{withJob(greenRun(), "test (postgres)", "completed", "failure")}
 		}, []string{"no successful CI run", "test (postgres)"}},
@@ -158,7 +162,7 @@ func TestCheckRefusesAReleaseThatIsNotReady(t *testing.T) {
 
 // TestCheckReportsEveryProblemAtOnce saves a maintainer a retag per problem.
 func TestCheckReportsEveryProblemAtOnce(t *testing.T) {
-	release := Release{Tag: "v0.1.2", Commit: commit, Changelog: []byte(changelog), Gorelease: incompatibleReport}
+	release := Release{Tag: "v0.1.2", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: incompatibleReport}
 	_, err := Check(context.Background(), release, fakeSources{onMain: false})
 	if err == nil {
 		t.Fatal("Check passed, want it refused")
@@ -170,10 +174,10 @@ func TestCheckReportsEveryProblemAtOnce(t *testing.T) {
 	}
 }
 
-// TestCheckAcceptsAGreenRunAmongOthers covers a commit with a failed run and
+// TestCheckAcceptsAGreenRunAmongOthers covers a taggedCommit with a failed run and
 // a later green re-run, or several workflows' runs.
 func TestCheckAcceptsAGreenRunAmongOthers(t *testing.T) {
-	release := Release{Tag: "v0.1.1", Commit: commit, Changelog: []byte(changelog), Gorelease: compatibleReport}
+	release := Release{Tag: "v0.1.1", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: compatibleReport}
 	runs := []CIRun{withJob(greenRun(), "lint", "completed", "failure"), greenRun()}
 	if _, err := Check(context.Background(), release, fakeSources{onMain: true, runs: runs}); err != nil {
 		t.Fatalf("Check: %v", err)
@@ -181,30 +185,30 @@ func TestCheckAcceptsAGreenRunAmongOthers(t *testing.T) {
 }
 
 func TestCheckAcceptsTheSameCommitAlreadyPublished(t *testing.T) {
-	release := Release{Tag: "v0.1.1", Commit: commit, Changelog: []byte(changelog), Gorelease: compatibleReport}
-	if _, err := Check(context.Background(), release, fakeSources{onMain: true, runs: []CIRun{greenRun()}, published: commit}); err != nil {
+	release := Release{Tag: "v0.1.1", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: compatibleReport}
+	if _, err := Check(context.Background(), release, fakeSources{onMain: true, runs: []CIRun{greenRun()}, published: taggedCommit}); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
 }
 
-// recordingSources fails the test if the module proxy is asked about a tag:
+// proxyForbiddenSources fails the test if the module proxy is asked about a tag:
 // asking makes the proxy fetch and cache the tag for good.
-type recordingSources struct {
+type proxyForbiddenSources struct {
 	fakeSources
 	t *testing.T
 }
 
-func (r recordingSources) PublishedCommit(context.Context, string) (string, error) {
+func (r proxyForbiddenSources) PublishedCommit(context.Context, string) (string, error) {
 	r.t.Fatal("asked the module proxy about a release the other checks refuse")
 	return "", nil
 }
 
 // TestCheckLeavesTheProxyAloneForARefusedRelease keeps a refused tag
 // fixable: until the proxy has fetched it, the maintainer may still fix the
-// commit and push the tag again.
+// taggedCommit and push the tag again.
 func TestCheckLeavesTheProxyAloneForARefusedRelease(t *testing.T) {
-	release := Release{Tag: "v0.1.2", Commit: commit, Changelog: []byte(changelog), Gorelease: compatibleReport}
-	sources := recordingSources{fakeSources: fakeSources{onMain: true, runs: []CIRun{greenRun()}}, t: t}
+	release := Release{Tag: "v0.1.2", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: compatibleReport}
+	sources := proxyForbiddenSources{fakeSources: fakeSources{onMain: true, runs: []CIRun{greenRun()}}, t: t}
 	if _, err := Check(context.Background(), release, sources); err == nil {
 		t.Fatal("Check passed, want it refused for the missing changelog section")
 	}

@@ -10,8 +10,13 @@ import (
 	"strings"
 )
 
-// ciWorkflow is the workflow whose runs prove a commit passed CI.
-const ciWorkflow = ".github/workflows/ci.yml"
+const (
+	// ciWorkflow is the workflow whose runs prove a commit passed CI.
+	ciWorkflow = ".github/workflows/ci.yml"
+	// defaultAPI and defaultProxy are where Live looks unless told otherwise.
+	defaultAPI   = "https://api.github.com"
+	defaultProxy = "https://proxy.golang.org"
+)
 
 // Live looks things up in the git checkout, the GitHub Actions API and the
 // Go module proxy.
@@ -76,15 +81,16 @@ func (l Live) CIRuns(ctx context.Context, commit string) ([]CIRun, error) {
 func (l Live) PublishedCommit(ctx context.Context, tag string) (string, error) {
 	proxy := l.Proxy
 	if proxy == "" {
-		proxy = "https://proxy.golang.org"
+		proxy = defaultProxy
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxy+"/"+strings.ToLower(l.Module)+"/@v/"+tag+".info", nil)
+	url := proxy + "/" + strings.ToLower(l.Module) + "/@v/" + tag + ".info"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("build module proxy request: %w", err)
 	}
 	resp, err := l.client().Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("query module proxy: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
@@ -121,7 +127,7 @@ func (j *CIJob) UnmarshalJSON(data []byte) error {
 func (l Live) getJSON(ctx context.Context, url string, into any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("build GitHub API request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if l.Token != "" {
@@ -129,7 +135,7 @@ func (l Live) getJSON(ctx context.Context, url string, into any) error {
 	}
 	resp, err := l.client().Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("query GitHub API: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -145,7 +151,7 @@ func (l Live) api() string {
 	if l.API != "" {
 		return l.API
 	}
-	return "https://api.github.com"
+	return defaultAPI
 }
 
 func (l Live) client() *http.Client {

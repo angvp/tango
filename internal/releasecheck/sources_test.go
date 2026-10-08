@@ -8,16 +8,23 @@ import (
 	"testing"
 )
 
+// earlierCommit is main's commit before the tagged one: its green CI run
+// proves nothing about the tagged commit, so CIRuns must not return it.
+const earlierCommit = "429ef1e0000000000000000000000000000000000"
+
+// TestLiveReadsGitHubAndTheModuleProxy checks that CIRuns returns only the CI
+// workflow's runs for exactly the tagged commit.
 func TestLiveReadsGitHubAndTheModuleProxy(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /repos/angvp/tango/actions/runs", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("head_sha") != commit || r.Header.Get("Authorization") != "Bearer token" {
+		if r.URL.Query().Get("head_sha") != taggedCommit || r.Header.Get("Authorization") != "Bearer token" {
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 			return
 		}
 		w.Write([]byte(`{"workflow_runs":[
-			{"id":1,"path":".github/workflows/ci.yml","head_sha":"` + commit + `","status":"completed","conclusion":"success"},
-			{"id":2,"path":".github/workflows/release.yml","head_sha":"` + commit + `","status":"completed","conclusion":"success"}]}`))
+			{"id":1,"path":".github/workflows/ci.yml","head_sha":"` + taggedCommit + `","status":"completed","conclusion":"success"},
+			{"id":2,"path":".github/workflows/release.yml","head_sha":"` + taggedCommit + `","status":"completed","conclusion":"success"},
+			{"id":3,"path":".github/workflows/ci.yml","head_sha":"` + earlierCommit + `","status":"completed","conclusion":"success"}]}`))
 	})
 	mux.HandleFunc("GET /repos/angvp/tango/actions/runs/1/jobs", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"jobs":[{"name":"lint","status":"completed","conclusion":"success","id":9}]}`))
@@ -30,13 +37,13 @@ func TestLiveReadsGitHubAndTheModuleProxy(t *testing.T) {
 	live := Live{Repo: "angvp/tango", Module: "github.com/angvp/tango", Token: "token", API: server.URL, Proxy: server.URL}
 	ctx := context.Background()
 
-	runs, err := live.CIRuns(ctx, commit)
+	runs, err := live.CIRuns(ctx, taggedCommit)
 	if err != nil {
 		t.Fatalf("CIRuns: %v", err)
 	}
 	want := []CIRun{{Status: "completed", Conclusion: "success", Jobs: []CIJob{{Name: "lint", Status: "completed", Conclusion: "success"}}}}
 	if !reflect.DeepEqual(runs, want) {
-		t.Fatalf("CIRuns = %#v, want only the CI workflow's run %#v", runs, want)
+		t.Fatalf("CIRuns = %#v, want only the CI workflow's run for the tagged commit %#v", runs, want)
 	}
 
 	for tag, want := range map[string]string{"v0.0.2": "4fd666747631ada5854daa820c43fb03f80851f3", "v0.9.9": ""} {

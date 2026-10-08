@@ -13,7 +13,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 - **Breaking:** `migration.Diff` and `migration.DiffModels` return an error alongside the migrations. These are part of the CLI-internal migration surface, which applications don't normally call.
   - *Upgrade:* handle the second return value.
 - SQLite writers wait up to five seconds for a held lock instead of failing at once with `database is locked`.
-- `realtime/websocket.View` gained a variadic `...ViewOption` parameter. Calls compile unchanged; code that stores `View` in a variable of the old function type must update the type.
+- **Breaking:** `realtime/websocket.View` gained a variadic `...ViewOption` parameter. Calls compile unchanged, but code that stores `View` in a variable of its old function type no longer compiles.
+  - *Upgrade:* add `...websocket.ViewOption` to that variable's function type, or call `View` directly.
 
 ### Added
 
@@ -40,7 +41,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [0.0.2] - 2026-09-23
 
-The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocket.View` options; the Go module proxy, and so every `go get`, serves the original commit (`4fd6667`), which this section describes. Those options are listed under Unreleased.
+The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocket.View` options; the Go module proxy, and so every `go get`, serves the original commit (`4fd6667`), which this section and its comparison link describe. Those options are listed under Unreleased.
 
 ### Added
 
@@ -74,6 +75,6 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.0.2...HEAD
-[0.0.2]: https://github.com/angvp/tango/compare/v0.0.1...v0.0.2
+[Unreleased]: https://github.com/angvp/tango/compare/4fd666747631ada5854daa820c43fb03f80851f3...HEAD
+[0.0.2]: https://github.com/angvp/tango/compare/v0.0.1...4fd666747631ada5854daa820c43fb03f80851f3
 [0.0.1]: https://github.com/angvp/tango/releases/tag/v0.0.1

@@ -46,12 +46,12 @@ func run(tag, commit, changelogPath, goreleasePath, notesPath, repo string) erro
 	}
 	changelog, err := os.ReadFile(changelogPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read the changelog: %w", err)
 	}
 	var report []byte
 	if goreleasePath != "" {
 		if report, err = os.ReadFile(goreleasePath); err != nil {
-			return err
+			return fmt.Errorf("read the gorelease report: %w", err)
 		}
 	}
 	token := os.Getenv("GITHUB_TOKEN")
@@ -66,7 +66,9 @@ func run(tag, commit, changelogPath, goreleasePath, notesPath, repo string) erro
 	}
 	fmt.Printf("%s at %s may be released.\n", tag, commit)
 	if notesPath != "" {
-		return os.WriteFile(notesPath, []byte(body+"\n"), 0o644)
+		if err := os.WriteFile(notesPath, []byte(body+"\n"), 0o644); err != nil {
+			return fmt.Errorf("write the release notes: %w", err)
+		}
 	}
 	return nil
 }
