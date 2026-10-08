@@ -4,6 +4,16 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Changed
+
+- Projects created by `tango newproject` opt in to everything new in this release:
+  - `LoadConfigFromEnv(tango.WithPortFromEnv())`, which replaces the hardcoded `:8000` and honours `TANGO_ADDR` and `PORT`;
+  - `RequestID`, `Recoverer` and `AccessLogger`;
+  - a global `MaxBodySize(1 << 20)`;
+  - `MiddlewareScopeAll`.
+
+  Existing applications keep their behaviour unless they opt in.
+
 ### Added
 
 - `Config.NotFound` and `Config.MethodNotAllowed` Views replace the router's `404` and `405` responses (tanGO sets `Allow` for a `405`). Under `MiddlewareScopeAll` they run inside global middleware and are observed; under `MiddlewareScopeRoutes` they run outside it.

@@ -69,10 +69,24 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		`tango.Serve(config, sqlDB, dsn.Dialect)`,
 		`admin.New(store)`,
 		`admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)`,
+		`config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())`,
+		`tango.MaxBodySize(1 << 20)`,
+		`config.MiddlewareScope = tango.MiddlewareScopeAll`,
+		`tango.RequestID()`,
+		`tango.Recoverer()`,
+		`tango.AccessLogger()`,
 	} {
 		if !strings.Contains(mainSource, want) {
 			t.Fatalf("main.go does not contain %q:\n%s", want, mainSource)
 		}
+	}
+	if strings.Contains(mainSource, `":8000"`) {
+		t.Fatalf("main.go hardcodes :8000 instead of loading the address from the environment:\n%s", mainSource)
+	}
+	// The upload comment, read as one sentence across its wrapped lines.
+	const uploadComment = "If this application later needs large uploads, remove the global body-limit middleware and apply `MaxBodySize` only to the route groups or routes that should remain limited."
+	if !strings.Contains(strings.Join(strings.Fields(strings.ReplaceAll(mainSource, "//", "")), " "), uploadComment) {
+		t.Fatalf("main.go does not carry the upload comment %q:\n%s", uploadComment, mainSource)
 	}
 
 	// The generated file is the first code a reader sees, so its imports

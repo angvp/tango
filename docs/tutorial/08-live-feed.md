@@ -138,16 +138,14 @@ if err != nil {
 	return err
 }
 
-config := tango.Config{
-	InstalledApps: []tango.App{
-		accounts.New(store),
-		posts.New(store, tokens, feed),
-		api.New(store, tokens),
-		web.New(store, feed),
-		feed.App(),
-		admin.New(store),
-	},
-	Addr: ":8000",
+config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+config.InstalledApps = []tango.App{
+	accounts.New(store),
+	posts.New(store, tokens, feed),
+	api.New(store, tokens),
+	web.New(store, feed),
+	feed.App(),
+	admin.New(store),
 }
 ```
 

@@ -90,20 +90,24 @@ logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 slog.SetDefault(logger)
 ```
 
-Then add three built-in middleware to `Config`, which run on every request:
+The generated `main.go` already installs three built-in middleware, which run on every request:
 
 ```go
 // main.go (as of part 9)
-Middleware: []tango.Middleware{
+config.Middleware = []tango.Middleware{
 	tango.RequestID(),
 	tango.Recoverer(),
 	tango.AccessLogger(),
-},
+	tango.MaxBodySize(1 << 20),
+}
+config.MiddlewareScope = tango.MiddlewareScopeAll
 ```
 
 - **`RequestID`** gives each request a random ID, returns it in an `X-Request-ID` response header, and adds it to every log line the request produces — including the ones you write with `ctx.Logger()` in a view. When a user reports an error, the ID from their response finds every related log line.
 - **`Recoverer`** turns a panic in a view into a normal `500` response and a log entry, instead of a crashed connection.
 - **`AccessLogger`** writes one line per request: route, method, status, duration.
+- **`MaxBodySize`** caps request bodies at 1 MiB and answers a larger one with `413`. See [request body limits](../guides/routing-and-reverse-lookup.md#request-body-limits).
+- **`MiddlewareScopeAll`** makes all of these wrap every request, including the ones no route matches: a `404` is logged and counted too, as route `"(unmatched)"`. See [middleware scope](../guides/routing-and-reverse-lookup.md#middleware-scope).
 
 Keep them in this order — request ID first, so everything after it can log the ID. Each request now produces a line like:
 

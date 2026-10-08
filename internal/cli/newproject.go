@@ -129,16 +129,16 @@ func renderImports(groups [][]string, blankImport string) string {
 func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bool) string {
 	stdImports := []string{"database/sql", "fmt", "os"}
 	tangoImports := []string{"github.com/angvp/tango"}
-	adminConfig := "InstalledApps: []tango.App{},"
+	installedApps := "config.InstalledApps = []tango.App{}"
 	storeLine := ""
 	adminCLIBlock := ""
 	if includeAdmin {
 		stdImports = append(stdImports, "context")
 		tangoImports = append(tangoImports, "github.com/angvp/tango/admin", "github.com/angvp/tango/db")
 		storeLine = "store := db.NewStore(sqlDB, dsn.Dialect)"
-		adminConfig = `InstalledApps: []tango.App{
-			admin.New(store),
-		},`
+		installedApps = `config.InstalledApps = []tango.App{
+		admin.New(store),
+	}`
 		adminCLIBlock = `
 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 		return err
@@ -188,10 +188,22 @@ func run() error {
 	defer sqlDB.Close()
 
 	%s
-	config := tango.Config{
-		%s
-		Addr: ":8000",
+	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	%s
+	config.Middleware = []tango.Middleware{
+		tango.RequestID(),
+		tango.Recoverer(),
+		tango.AccessLogger(),
+		// Request bodies are capped at 1 MiB. If this application later needs
+		// large uploads, remove the global body-limit middleware and apply
+		// `+"`MaxBodySize`"+` only to the route groups or routes that should remain
+		// limited.
+		tango.MaxBodySize(1 << 20),
 	}
+	// Global middleware also wraps requests no route matches, so 404s and
+	// 405s are logged and counted too.
+	config.MiddlewareScope = tango.MiddlewareScopeAll
 %s
 	handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)
 	if handled || err != nil {
@@ -201,5 +213,5 @@ func run() error {
 	fmt.Println("listening on", config.Addr)
 	return tango.Serve(config, sqlDB, dsn.Dialect)
 }
-`, imports, defaultDSNBlock, storeLine, adminConfig, adminCLIBlock)
+`, imports, defaultDSNBlock, storeLine, installedApps, adminCLIBlock)
 }

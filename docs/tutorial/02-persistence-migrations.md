@@ -56,12 +56,10 @@ In `main.go`, the generated code already opens the database named by `TANGO_DB_D
 ```go
 // main.go (as of part 2)
 store := db.NewStore(sqlDB, dsn.Dialect)
-config := tango.Config{
-	InstalledApps: []tango.App{
-		posts.New(store),
-		admin.New(store),
-	},
-	Addr: ":8000",
+config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+config.InstalledApps = []tango.App{
+	posts.New(store),
+	admin.New(store),
 }
 ```
 

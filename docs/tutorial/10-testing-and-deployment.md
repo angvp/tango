@@ -4,7 +4,7 @@ Continuing from [part 9](09-jobs-logging-and-shutdown.md), this last part makes 
 
 ## One config for the app and its tests
 
-Tests should exercise the same app `main` runs — same apps, same order, same middleware — not a hand-assembled lookalike. Pull the config out of `run()` into a function both can call. While you're at it, read the address from the environment with `tango.LoadConfigFromEnv()`, which uses `TANGO_ADDR` and defaults to `:8000`:
+Tests should exercise the same app `main` runs — same apps, same order, same middleware — not a hand-assembled lookalike. Pull the config out of `run()` into a function both can call:
 
 ```go
 // main.go
@@ -12,7 +12,7 @@ Tests should exercise the same app `main` runs — same apps, same order, same m
 // order, and the middleware around every request. The tests build the
 // exact same config.
 func appConfig(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.Config {
-	config := tango.LoadConfigFromEnv() // Addr from TANGO_ADDR, default :8000
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv()) // TANGO_ADDR, else PORT, else :8000
 	config.InstalledApps = []tango.App{
 		accounts.New(store),
 		posts.New(store, tokens, feed),
@@ -26,12 +26,14 @@ func appConfig(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.Conf
 		tango.RequestID(),
 		tango.Recoverer(),
 		tango.AccessLogger(),
+		tango.MaxBodySize(1 << 20),
 	}
+	config.MiddlewareScope = tango.MiddlewareScopeAll
 	return config
 }
 ```
 
-In `run()`, the config literal becomes one line: `config := appConfig(store, tokens, feed)`.
+In `run()`, the config lines become one: `config := appConfig(store, tokens, feed)`.
 
 ## Tests that drive the real app
 

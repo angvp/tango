@@ -37,14 +37,14 @@ This writes `apps/posts/app.go` with a stub `Name()`/`Register()`. It does **not
 
 ```go
 // main.go (as of part 1)
-config := tango.Config{
-	InstalledApps: []tango.App{
-		posts.App{},
-		// keep the generated admin.New(...) entry after your apps
-	},
-	Addr: ":8000",
+config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+config.InstalledApps = []tango.App{
+	posts.App{},
+	// keep the generated admin.New(...) entry after your apps
 }
 ```
+
+The generated `main.go` reads the listen address from the environment: `TANGO_ADDR`, else the `PORT` a hosting platform sets, else `:8000`. It also sets up some middleware, which part 9 explains.
 
 (add the import for `"board/apps/posts"` alongside it.)
 
