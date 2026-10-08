@@ -2,7 +2,7 @@
 
 Use this when packaging functionality as an importable app another tanGO project can install.
 
-Canonical examples: `examples/reusable-greetings/` and `examples/reusable-greetings-host/`.
+Canonical examples: `examples/reusable-greetings/` and `examples/reusable-greetings-host/`. Human guide: `docs/guides/reusable-apps.md`.
 
 ## Do
 

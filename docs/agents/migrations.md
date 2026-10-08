@@ -2,7 +2,7 @@
 
 Use this after adding or changing models.
 
-Canonical examples: `examples/api-with-admin/migrations/0001_auto.go`, `examples/api-with-admin/migrations/0005_add_admin_staff_and_superuser.go`, and `examples/api-with-admin/migrations/migrations.go`.
+Canonical examples: `examples/api-with-admin/migrations/0001_auto.go`, `examples/api-with-admin/migrations/0005_add_admin_staff_and_superuser.go`, and `examples/api-with-admin/migrations/migrations.go`. Human guide: `docs/guides/migrations.md`.
 
 ## Do
 

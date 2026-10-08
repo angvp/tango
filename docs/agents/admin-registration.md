@@ -2,7 +2,7 @@
 
 Use this when an existing model should appear in the tanGO admin.
 
-Canonical example: `examples/api-with-admin/apps/posts/app.go`.
+Canonical example: `examples/api-with-admin/apps/posts/app.go`. Human guide: `docs/guides/admin-registration.md`.
 
 ## Do
 

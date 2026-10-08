@@ -2,7 +2,7 @@
 
 Use this when adding cross-cutting request behavior or protecting routes.
 
-Canonical files: `middleware.go`, `routeregistry.go`, `accounts/require_login.go`, and `auth/session.go`.
+Canonical files: `middleware.go`, `routeregistry.go`, `accounts/require_login.go`, and `auth/session.go`. Runnable proof: `examples/board/main.go` (global middleware with `MaxBodySize` and `MiddlewareScopeAll`). Human guide: `docs/guides/routing-and-reverse-lookup.md`.
 
 ## Rule
 

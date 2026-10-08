@@ -2,7 +2,7 @@
 
 Use this when an app sends email, or tests code that does.
 
-Canonical files: `mail/mail.go`, `mail/smtp.go`, `mail/writer.go`, and `mail/mailtest/mailtest.go`.
+Canonical files: `mail/mail.go`, `mail/smtp.go`, `mail/writer.go`, and `mail/mailtest/mailtest.go`. Runnable proof: `examples/accounts-mail` (`WriterSender` in development, `mailtest.Sender` in its test).
 
 ## Rule
 

@@ -2,7 +2,7 @@
 
 Use this when one model should reference another model.
 
-Canonical example: `examples/api-with-admin/apps/posts/models.go` references `examples/api-with-admin/apps/authors/models.go`.
+Canonical example: `examples/api-with-admin/apps/posts/models.go` references `examples/api-with-admin/apps/authors/models.go`. Human guide: `docs/guides/relationships-and-admin-foreign-keys.md`.
 
 ## Do
 

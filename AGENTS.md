@@ -37,6 +37,9 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 - JWT authentication: `docs/agents/jwt-auth.md`
 - Realtime rooms and WebSockets: `docs/agents/realtime.md`
 - Background jobs: `docs/agents/jobs.md`
+- Application lifecycle and graceful shutdown: `docs/agents/application-lifecycle.md`
+- Configuration and deployment: `docs/agents/configuration-and-deployment.md`
+- Testing with `testdb`: `docs/agents/testing.md`
 - Rate limiting: `docs/agents/ratelimit.md`
 - Localization: `docs/agents/i18n.md`
 - Middleware and View wrappers: `docs/agents/middleware.md`
@@ -45,4 +48,4 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 
 ## Sync Rule
 
-When a public API or canonical example changes, review affected files in `docs/agents/`. Each public feature must either have an agent recipe, extend an existing recipe, or explicitly be documented as too narrow to need one. These docs intentionally prefer references over duplicated code, so stale references are caught by ordinary doc review rather than tooling.
+When a public API or canonical example changes, review affected files in `docs/agents/`. Each public feature must either have an agent recipe, extend an existing recipe, or explicitly be documented as too narrow to need one. These docs intentionally prefer references over duplicated code. A test (`agent_recipes_test.go`) fails when a recipe names a file, example or docs page that doesn't exist, or links no human guide; whether the prose still describes the code is caught by review.

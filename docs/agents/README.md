@@ -22,6 +22,15 @@ Read in this order:
 - Locale-aware text: `i18n.md`.
 - Live rooms/WebSockets: `realtime.md`; pair with `application-lifecycle.md` for graceful shutdown.
 - Recurring work: `jobs.md`; pair with `application-lifecycle.md` because Jobs run only through `ServeContext`.
+- Startup, addresses, production defaults and containers: `configuration-and-deployment.md`.
+- Tests on both databases: `testing.md`.
+
+Guides without a recipe, read directly when needed:
+
+- App checks for `-check`: `docs/guides/app-checks.md`.
+- Views, binding and HTML responses: `docs/guides/context-and-binding.md`.
+- Persistence beyond models (`db.Store` CRUD, raw SQL): `docs/guides/persistence-crud-and-raw-sql.md`.
+- SQLite and PostgreSQL setup: `docs/guides/sqlite-and-postgresql-setup.md`.
 
 ## Escalate deliberately
 

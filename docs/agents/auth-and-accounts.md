@@ -2,7 +2,7 @@
 
 Use this when adding login/session behavior to a tanGO app.
 
-Canonical files: `accounts/accounts.go`, `accounts/current_account.go`, `accounts/require_login.go`, and, for password reset and verification, `accounts/mail.go`, `accounts/password_reset.go` and `accounts/verification.go`.
+Canonical files: `accounts/accounts.go`, `accounts/current_account.go`, `accounts/require_login.go`, and, for password reset and verification, `accounts/mail.go`, `accounts/password_reset.go` and `accounts/verification.go`. Runnable proof: `examples/accounts-mail` (password reset, verification, `RequireVerified`) and `examples/board` (register, login, sessions). Human guide: `docs/guides/accounts.md`.
 
 ## Choose the Layer
 

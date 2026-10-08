@@ -2,7 +2,7 @@
 
 Use this for small, in-process recurring maintenance: pruning expired rows, periodic reconciliation, or an app-owned refresh task.
 
-Canonical example: `docs/tutorial/09-jobs-logging-and-shutdown.md`. Human lifecycle guide: `docs/guides/application-lifecycle.md`.
+Canonical example: `docs/tutorial/09-jobs-logging-and-shutdown.md`, built in `examples/board/apps/housekeeping`. Human lifecycle guide: `docs/guides/application-lifecycle.md`.
 
 ## Build
 
