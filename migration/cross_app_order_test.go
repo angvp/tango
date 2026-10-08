@@ -144,3 +144,46 @@ func TestApplyPendingRejectsForeignKeysBetweenAppsThatFormACycle(t *testing.T) {
 		}
 	}
 }
+
+// TestApplyPendingOrdersOneMigrationsTablesByForeignKey covers a migration
+// file written by a release before v0.1.0, whose generator ordered a
+// migration's CreateTable steps (and their DropTable Down steps) by table
+// name: here comment, which references post, is created first and dropped
+// last. PostgreSQL refuses both, so the runner orders each run of
+// CreateTable steps referenced-first and each run of DropTable steps
+// referencing-first; the Generated-file contract needs those files to keep
+// applying and rolling back.
+func TestApplyPendingOrdersOneMigrationsTablesByForeignKey(t *testing.T) {
+	ctx := context.Background()
+	sqlDB, dialect := testdb.Open(t)
+	migrations := []Migration{{
+		App: "blog", Name: "0001_initial", Reversible: true,
+		Up: []Step{
+			CreateTable{Table: "author", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+			CreateTable{Table: "comment", Columns: []Column{
+				{Name: "id", Type: "integer", PrimaryKey: true},
+				{Name: "post_id", Type: "integer", References: "post"},
+			}},
+			CreateTable{Table: "post", Columns: []Column{
+				{Name: "id", Type: "integer", PrimaryKey: true},
+				{Name: "author_id", Type: "integer", References: "author"},
+			}},
+		},
+		Down: []Step{DropTable{Table: "author"}, DropTable{Table: "comment"}, DropTable{Table: "post"}},
+	}}
+
+	if err := ApplyPending(ctx, sqlDB, dialect, migrations); err != nil {
+		t.Fatalf("ApplyPending: %v", err)
+	}
+	if _, err := sqlDB.ExecContext(ctx, `INSERT INTO comment (id, post_id) VALUES (1, 99)`); err == nil {
+		t.Fatal("comment.post_id accepted a post that does not exist; want its foreign key enforced")
+	}
+	if err := RollbackLast(ctx, sqlDB, dialect, migrations); err != nil {
+		t.Fatalf("RollbackLast: %v", err)
+	}
+	for _, table := range []string{"author", "comment", "post"} {
+		if _, err := sqlDB.ExecContext(ctx, `SELECT 1 FROM `+table); err == nil {
+			t.Fatalf("table %s still exists after rolling back", table)
+		}
+	}
+}

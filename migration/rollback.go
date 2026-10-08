@@ -49,7 +49,7 @@ func RollbackLast(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrat
 		return fmt.Errorf("%w: %q", ErrIrreversibleMigration, target.Name)
 	}
 
-	for _, step := range target.Down {
+	for _, step := range stepOrder(*target, target.Down) {
 		if err := ApplyStep(ctx, sqlDB, dialect, step); err != nil {
 			return fmt.Errorf("migration %q: rolling back: %w", target.Name, err)
 		}

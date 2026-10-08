@@ -139,3 +139,97 @@ func orderCycleError(base []Migration, stuck []int) error {
 	return fmt.Errorf("tango migration: cannot order migrations: foreign keys between apps form a cycle among %s; "+
 		"move one of the foreign keys into a later migration of its app", strings.Join(names, ", "))
 }
+
+// stepOrder returns steps, one of m's step lists, in the order ApplyPending
+// and RollbackLast run them: as written, except that within each run of
+// consecutive CreateTable steps a table comes after the tables it
+// references, and within each run of consecutive DropTable steps a table
+// comes before the tables it references. PostgreSQL refuses a REFERENCES
+// clause naming a table that doesn't exist yet, and refuses to drop a table
+// another table still references. Today's generator already writes steps in
+// this order; releases before v0.1.0 wrote them in table-name order, and
+// their files must keep applying and rolling back. Which table references
+// which comes from m's own CreateTable and AddColumn steps, Up and Down.
+func stepOrder(m Migration, steps []Step) []Step {
+	references := make(map[string][]string)
+	for _, step := range append(append([]Step(nil), m.Up...), m.Down...) {
+		switch s := step.(type) {
+		case CreateTable:
+			references[s.Table] = append(references[s.Table], columnReferences(s.Columns)...)
+		case AddColumn:
+			if s.Column.References != "" {
+				references[s.Table] = append(references[s.Table], s.Column.References)
+			}
+		}
+	}
+
+	ordered := make([]Step, 0, len(steps))
+	for start := 0; start < len(steps); {
+		end := start + 1
+		for end < len(steps) && sameTableStepKind(steps[start], steps[end]) {
+			end++
+		}
+		ordered = append(ordered, tableRunOrder(steps[start:end], references)...)
+		start = end
+	}
+	return ordered
+}
+
+// sameTableStepKind reports whether a and b are both CreateTable or both
+// DropTable steps, so they belong to one run stepOrder may reorder.
+func sameTableStepKind(a, b Step) bool {
+	switch a.(type) {
+	case CreateTable:
+		_, ok := b.(CreateTable)
+		return ok
+	case DropTable:
+		_, ok := b.(DropTable)
+		return ok
+	}
+	return false
+}
+
+// tableRunOrder orders one run of CreateTable steps referenced-first, or one
+// run of DropTable steps referencing-first. Any other single step, and any
+// tables whose foreign keys form a cycle, keep their written order.
+func tableRunOrder(run []Step, references map[string][]string) []Step {
+	if len(run) < 2 {
+		return run
+	}
+	_, creating := run[0].(CreateTable)
+	index := make(map[string]int, len(run))
+	for i, step := range run {
+		index[stepTable(step)] = i
+	}
+	deps := make([][]int, len(run))
+	for i, step := range run {
+		for _, referenced := range references[stepTable(step)] {
+			j, ok := index[referenced]
+			if !ok || j == i {
+				continue
+			}
+			if creating {
+				deps[i] = append(deps[i], j) // create the referenced table first
+			} else {
+				deps[j] = append(deps[j], i) // drop the referencing table first
+			}
+		}
+	}
+	order, stuck := dependencyOrder(deps)
+	ordered := make([]Step, 0, len(run))
+	for _, i := range append(order, stuck...) {
+		ordered = append(ordered, run[i])
+	}
+	return ordered
+}
+
+// stepTable is the table a CreateTable or DropTable step names.
+func stepTable(step Step) string {
+	switch s := step.(type) {
+	case CreateTable:
+		return s.Table
+	case DropTable:
+		return s.Table
+	}
+	return ""
+}
