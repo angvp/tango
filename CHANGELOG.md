@@ -6,6 +6,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Added
 
+- `Config.MiddlewareScope`: with `tango.MiddlewareScopeAll`, global middleware wraps the whole router, so Unmatched requests (the router's `404` and `405`) are logged, counted, recovered and body-limited, reported with route `"(unmatched)"`. The default stays `MiddlewareScopeRoutes`, today's behaviour, and may become `MiddlewareScopeAll` only after a minor release of notice; set the scope explicitly to keep yours. See ADR 0043.
 - `tango.LoadConfigFromEnv(tango.WithPortFromEnv())` falls back to the `PORT` variable hosting platforms set: the address is `TANGO_ADDR`, else `":"+PORT`, else `:8000`. Without the option, `LoadConfigFromEnv` is unchanged.
 - `tango.MaxBodySize(n)` middleware caps request bodies: an oversized body gets `413` with `{"error":"request body too large"}`. When several limits apply, the most restrictive wins.
 

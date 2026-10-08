@@ -4,15 +4,20 @@ tanGO's configuration surface is deliberately small:
 
 ```go
 type Config struct {
-	InstalledApps []App
-	Addr          string
-	Middleware    []Middleware
+	InstalledApps   []App
+	Addr            string
+	Middleware      []Middleware
+	MiddlewareScope MiddlewareScope
 }
 ```
 
 - **`InstalledApps`** — the apps that make up your project, in the order they should register. Order is significant: an app's `Register` may depend on state an earlier app already contributed (for example, the admin app in [`examples/api-with-admin`](../../examples/api-with-admin) reads `registry.Admin()` registrations that the `posts` app must have already added). `InstalledApps` is always set by hand in Go code — there is no config file or dynamic discovery.
 - **`Addr`** — the address `http.ListenAndServe` binds to when your `main.go` starts the server.
 - **`Middleware`** — raw `net/http` middleware applied globally to every compiled route, including routes contributed by reusable apps such as admin. The first entry is outermost. See [routing and reverse lookup](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
+- **`MiddlewareScope`** — what `Middleware` wraps. See [middleware scope](routing-and-reverse-lookup.md#middleware-scope).
+  - **`tango.MiddlewareScopeRoutes`** wraps each matched route. An Unmatched request, one the router answers itself with `404` or `405`, passes no global middleware and is neither logged nor counted.
+  - **`tango.MiddlewareScopeAll`** wraps the whole router, so Unmatched requests are logged, counted, recovered and limited like any other.
+  - **The zero value, `tango.MiddlewareScopeDefault`,** means the framework's default, currently `MiddlewareScopeRoutes`. Projects created by `tango newproject` set `MiddlewareScopeAll`. Set a scope explicitly to keep it if the default ever changes, which can only happen after a minor release's notice.
 
 ## `LoadConfigFromEnv`
 

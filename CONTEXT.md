@@ -108,6 +108,12 @@ The promise that a migration file written by a released `tango makemigrations` k
 
 Do not confuse this with a promise about hand-written steps: only what a released generator wrote is protected.
 
+## Unmatched request
+
+A request that no route answers: no route matches its path (not found), or a route matches its path but not its method (method not allowed). The router answers it without running any View. Whether a request is unmatched is decided from the request as it arrived, before any middleware runs. In logs and metrics, every unmatched request is reported under one fixed route name, never the URL that was requested.
+
+Do not confuse this with a View that answers "not found" for a route it does match, such as a lookup of a missing row: that request matched a route and is reported under that route's pattern.
+
 ## Body limit
 
 The most bytes a request's body may carry before tanGO rejects the request as too large. When more than one body limit applies to a request, the most restrictive wins: a limit set closer to a View can keep or lower a limit set further out, never raise it. A route that must accept larger bodies is left outside the stricter limit rather than given a higher one.

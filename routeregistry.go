@@ -40,6 +40,7 @@ type RouteRegistry struct {
 	registry        *Registry
 	included        []includedRoute
 	middleware      []Middleware
+	scope           MiddlewareScope
 	logger          *slog.Logger
 	recorder        observability.Recorder
 	recorderEnabled bool
@@ -173,15 +174,56 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 			}
 		})
 
+		if rr.scope == MiddlewareScopeAll {
+			// Global middleware and metrics wrap the whole router instead.
+			mux.Method(route.method, route.pattern, applyMiddleware(terminal, route.middleware))
+			continue
+		}
 		handler := applyMiddleware(terminal, append(append([]Middleware(nil), rr.middleware...), route.middleware...))
 		if rr.recorderEnabled {
-			handler = instrumentHTTP(handler, recorder, route.method)
+			handler = instrumentHTTP(handler, recorder)
 		}
 		handler = identifyRoute(route.pattern, handler)
 		mux.Method(route.method, route.pattern, handler)
 	}
 
+	if rr.scope == MiddlewareScopeAll {
+		return &compiled{handler: rr.wrapRouter(mux, recorder), patterns: patterns}, nil
+	}
 	return &compiled{handler: mux, patterns: patterns}, nil
+}
+
+// unmatchedRoute is the route an Unmatched request reports.
+const unmatchedRoute = "(unmatched)"
+
+// wrapRouter is MiddlewareScopeAll's handler: it resolves each request's
+// route from the request as it arrived, records it, and runs metrics
+// (outermost, once) and global middleware around the whole router.
+func (rr *RouteRegistry) wrapRouter(mux *chi.Mux, recorder observability.Recorder) http.Handler {
+	handler := applyMiddleware(mux, rr.middleware)
+	if rr.recorderEnabled {
+		handler = instrumentHTTP(handler, recorder)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(w, withRouteIdentity(r, resolveRoute(mux, r)))
+	})
+}
+
+// resolveRoute returns the pattern of the route mux would dispatch r to,
+// or unmatchedRoute, without running any handler or middleware. Like
+// chi's own dispatch, it routes on the escaped path when there is one.
+func resolveRoute(mux *chi.Mux, r *http.Request) string {
+	path := r.URL.RawPath
+	if path == "" {
+		path = r.URL.Path
+	}
+	if path == "" {
+		path = "/"
+	}
+	if pattern := mux.Find(chi.NewRouteContext(), r.Method, path); pattern != "" {
+		return pattern
+	}
+	return unmatchedRoute
 }
 
 func (rr *RouteRegistry) setObservability(logger *slog.Logger, recorder observability.Recorder, recorderEnabled bool) {
@@ -190,8 +232,9 @@ func (rr *RouteRegistry) setObservability(logger *slog.Logger, recorder observab
 	rr.recorderEnabled = recorderEnabled
 }
 
-func (rr *RouteRegistry) setMiddleware(middleware []Middleware) {
+func (rr *RouteRegistry) setMiddleware(middleware []Middleware, scope MiddlewareScope) {
 	rr.middleware = append([]Middleware(nil), middleware...)
+	rr.scope = scope
 }
 
 // Handler compiles the full route tree, contributed by every app's Include

@@ -224,7 +224,7 @@ func TestRouteRegistryHandlerReturnsPlainHTTPHandler(t *testing.T) {
 
 func TestRouteRegistryHandlerRunsMiddlewareInGlobalGroupRouteOrder(t *testing.T) {
 	registry := NewRegistry()
-	registry.Routes().setMiddleware([]Middleware{recordMiddleware("global")})
+	registry.Routes().setMiddleware([]Middleware{recordMiddleware("global")}, MiddlewareScopeRoutes)
 	routes := registry.Routes()
 
 	view := func(ctx *Context) error {

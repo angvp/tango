@@ -35,7 +35,8 @@ Everything below is covered unless it is named under [what is not covered](#what
   - the log event names `tango.http.view_error`, `tango.http.panic`, `tango.http.access`, `tango.scheduler.job_failed` and `tango.http.request_id_generation_failed`;
   - the metric names `tango_http_request_duration_seconds`, `tango_scheduler_job_invocations_total` and `tango_realtime_room_events_total`;
   - their attribute keys: `route`, `method`, `request_id`, `status`, `duration_seconds`, `error`, `recovered`, `stack`, `job`, `panicked`, `event` and `outcome`;
-  - their enumerated values: a scheduler job's `outcome` is `success`, `error`, `canceled` or `panic`; a realtime room event's `event` is `join`, `leave` or `dispatch`, and its `outcome` is `success` or `error`.
+  - their enumerated values: a scheduler job's `outcome` is `success`, `error`, `canceled` or `panic`; a realtime room event's `event` is `join`, `leave` or `dispatch`, and its `outcome` is `success` or `error`;
+  - the `route` value `"(unmatched)"`, which every Unmatched request reports under `MiddlewareScopeAll`.
 
 A new release may add to any of these: a new function, a new optional flag, a new JSON key, a new attribute. Code and tools that ignore what they don't recognise keep working.
 
@@ -63,6 +64,10 @@ A minor release may add a field to any covered struct, which breaks an unkeyed l
 - **Best-effort admin extensibility**: `admin.Widget` and the types it uses, the `admin.Options` presentation fields (`Widgets`, `Labels`, `HelpText`, `ReadOnly`, `FieldOrder`), the built-in widgets, and `admin.Branding`/`admin.WithBranding`. Admin's rendering and theme are still settling, so these may change in any minor release without a Deprecation window, though the changelog always lists the change.
 - **Admin and `accounts` presentation**: their HTML, templates, CSS, presentation redirects, and admin URLs. A renamed model, for example, changes its admin URL.
 - **The wording of error and log messages.** Match errors with `errors.Is` against the exported sentinel errors, which are covered, never against their text.
+
+## How defaults change
+
+A change to how an existing app behaves, such as a new default, ships as an opt-in first, and new projects from `tango newproject` opt in. An app that doesn't opt in keeps its behaviour. A default changes later only after a minor release of notice in the changelog. Where a setting's zero value means "the framework's default" (like `Config.MiddlewareScope`), setting it explicitly keeps your choice whatever the default becomes. The one exception is a security fix, which may change a default at once and is called out in the release notes. See [ADR 0043](adr/0043-global-middleware-can-wrap-the-whole-router-as-an-opt-in-scope.md).
 
 ## Deprecation
 

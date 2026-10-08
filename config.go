@@ -22,6 +22,43 @@ type Config struct {
 	InstalledApps []App
 	Addr          string
 	Middleware    []Middleware
+	// MiddlewareScope decides what Middleware wraps: each matched route,
+	// or the whole router, Unmatched requests included. The zero value is
+	// the framework's default, MiddlewareScopeRoutes.
+	MiddlewareScope MiddlewareScope
+}
+
+// MiddlewareScope is what Config.Middleware wraps.
+type MiddlewareScope int
+
+const (
+	// MiddlewareScopeDefault is the framework's default scope, currently
+	// MiddlewareScopeRoutes. A later release may change the default, with a
+	// minor release's notice in the changelog; set a scope explicitly to
+	// keep it.
+	MiddlewareScopeDefault MiddlewareScope = iota
+	// MiddlewareScopeRoutes wraps each matched route. Unmatched requests,
+	// which the router answers itself with 404 or 405, pass no global
+	// middleware and are neither logged nor counted.
+	MiddlewareScopeRoutes
+	// MiddlewareScopeAll wraps the whole router, so Unmatched requests pass
+	// global middleware too. A request's route is resolved before global
+	// middleware runs, from the request as it arrived: an Unmatched request
+	// is reported as route "(unmatched)". Middleware that rewrites the method
+	// or path so the router dispatches elsewhere is unsupported.
+	MiddlewareScopeAll
+)
+
+// resolve returns the scope s stands for: MiddlewareScopeDefault becomes
+// the framework's default.
+func (s MiddlewareScope) resolve() (MiddlewareScope, error) {
+	switch s {
+	case MiddlewareScopeDefault:
+		return MiddlewareScopeRoutes, nil
+	case MiddlewareScopeRoutes, MiddlewareScopeAll:
+		return s, nil
+	}
+	return 0, fmt.Errorf("tango: unknown MiddlewareScope %d", int(s))
 }
 
 // ConfigOption changes how LoadConfigFromEnv reads the environment.
@@ -121,8 +158,12 @@ func LoadEnvFile(path string) error {
 
 // BuildRegistry registers Config.InstalledApps into a new Registry.
 func BuildRegistry(config Config) (*Registry, error) {
+	scope, err := config.MiddlewareScope.resolve()
+	if err != nil {
+		return nil, err
+	}
 	registry := NewRegistry()
-	registry.Routes().setMiddleware(config.Middleware)
+	registry.Routes().setMiddleware(config.Middleware, scope)
 
 	for _, app := range config.InstalledApps {
 		if err := registry.Register(app); err != nil {

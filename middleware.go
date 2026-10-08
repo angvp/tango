@@ -174,14 +174,14 @@ func AccessLogger(opts ...AccessLogOption) Middleware {
 	}
 }
 
-func instrumentHTTP(next http.Handler, recorder observability.Recorder, method string) http.Handler {
+func instrumentHTTP(next http.Handler, recorder observability.Recorder) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		state := &responseStateWriter{ResponseWriter: w}
 		started := time.Now()
 		next.ServeHTTP(state, r)
 		observabilitysafe.Call(func() {
 			recorder.ObserveHistogram(observability.MetricHTTPRequestDuration, time.Since(started).Seconds(),
-				slog.String("route", routeIdentity(r)), slog.String("method", method), slog.Int("status", state.Status()))
+				slog.String("route", routeIdentity(r)), slog.String("method", r.Method), slog.Int("status", state.Status()))
 		})
 	})
 }

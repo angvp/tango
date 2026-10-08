@@ -52,6 +52,25 @@ Composition order is always outer to inner:
 Config.Middleware -> Include WithMiddleware -> Path Use -> View
 ```
 
+### Middleware scope
+
+By default, `Config.Middleware` wraps each matched route. A request no route matches, an **Unmatched request**, gets the router's `404`, or `405` when the path exists but not with that method. It passes none of your global middleware, so it isn't logged, counted, recovered or body-limited. Set `Config.MiddlewareScope` to `tango.MiddlewareScopeAll` to wrap the whole router instead:
+
+```go
+config := tango.Config{
+	Middleware:      []tango.Middleware{tango.RequestID(), tango.Recoverer(), tango.AccessLogger()},
+	MiddlewareScope: tango.MiddlewareScopeAll,
+}
+```
+
+Under `MiddlewareScopeAll`:
+
+- **Route resolved first:** tanGO resolves each request's route before global middleware runs, from the request as it arrived. Logs, metrics and `ctx.Logger()` report that route's pattern, or `"(unmatched)"` for a `404` or `405`. A request a global middleware answers before routing, such as a rate limit's `429` or a body limit's `413`, still reports the route it matches.
+- **Once per request:** global middleware runs once per request, around the router. Group and route middleware still run inside it, only for their routes.
+- **No route rewriting:** middleware that rewrites the request's method or path so the router dispatches it to a different route is not supported. The route was already resolved from the original request.
+
+`tango newproject` sets `MiddlewareScopeAll`. The zero value, `MiddlewareScopeDefault`, means the framework's default, currently `MiddlewareScopeRoutes`. See [ADR 0043](../adr/0043-global-middleware-can-wrap-the-whole-router-as-an-opt-in-scope.md).
+
 Built-in middleware remains opt-in. `tango.Recoverer()` catches downstream panics and returns tanGO's generic JSON `500`; `tango.RequestID()` adds correlation IDs; `tango.AccessLogger()` emits structured access events. When all three are used, order them `RequestID -> Recoverer -> AccessLogger`. See [structured logging and observability](observability.md).
 
 ### Request body limits
