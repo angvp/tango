@@ -3,7 +3,6 @@ package mail
 import (
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -11,7 +10,6 @@ import (
 	"net/textproto"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/angvp/tango/internal/security"
@@ -128,7 +126,7 @@ func (s *SMTPSender) Send(ctx context.Context, message Message) error {
 		defer cancel()
 	}
 	if stage, err := s.deliver(ctx, encoded); err != nil {
-		return s.sendError(stage, err, encoded)
+		return s.sendError(stage, err)
 	}
 	return nil
 }
@@ -207,44 +205,15 @@ func (s *SMTPSender) connect(ctx context.Context) (client *smtp.Client, closeCon
 }
 
 // sendError reports a failed exchange without anything secret in it: a
-// server's refusal keeps only its reply code, and any other error has the
-// credentials, the recipient and the message's lines removed.
-func (s *SMTPSender) sendError(stage string, err error, message encoded) error {
+// server's refusal keeps only its stage and reply code, and any other
+// failure only its stage. Neither carries the original text, which can
+// quote what tanGO sent, credentials included.
+func (s *SMTPSender) sendError(stage string, err error) error {
 	var reply *textproto.Error
 	if errors.As(err, &reply) {
 		return &smtpError{text: fmt.Sprintf("mail: the SMTP server at %s refused %s (code %d)", s.addr, stage, reply.Code), cause: err}
 	}
-	return &smtpError{text: fmt.Sprintf("mail: sending through %s failed at %s: %s", s.addr, stage, s.scrub(err.Error(), message)), cause: err}
-}
-
-// scrub removes from text everything this sender or message must never
-// reveal.
-func (s *SMTPSender) scrub(text string, message encoded) string {
-	secrets := []string{s.username, s.password, url.QueryEscape(s.username), url.QueryEscape(s.password), message.to}
-	if s.username != "" {
-		secrets = append(secrets, base64.StdEncoding.EncodeToString([]byte("\x00"+s.username+"\x00"+s.password)))
-	}
-	secrets = append(secrets, strings.Split(string(message.raw), "\r\n")...)
-	return redactAll(text, secrets)
-}
-
-// redactAll replaces every non-blank secret in text, longest first.
-func redactAll(text string, secrets []string) string {
-	kept := secrets[:0:0]
-	for _, secret := range secrets {
-		if len(strings.TrimSpace(secret)) > 3 {
-			kept = append(kept, secret)
-		}
-	}
-	for changed := true; changed; {
-		changed = false
-		for _, secret := range kept {
-			if strings.Contains(text, secret) {
-				text, changed = strings.ReplaceAll(text, secret, "[redacted]"), true
-			}
-		}
-	}
-	return text
+	return &smtpError{text: fmt.Sprintf("mail: sending through %s failed at %s", s.addr, stage), cause: err}
 }
 
 // smtpError is a delivery failure whose text is safe to log. It doesn't

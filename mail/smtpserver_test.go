@@ -27,8 +27,12 @@ type smtpServer struct {
 	startTLS, implicitTLS, stall bool
 	// failOn names a command the server refuses with a reply echoing
 	// everything the client told it.
-	failOn    string
-	tlsConfig *tls.Config
+	failOn string
+	// misbehaveOn names a command the server answers by misbehaving:
+	// "garble" (a line with no reply code, echoing the credentials),
+	// "close" (dropping the connection) or "stall".
+	misbehaveOn, misbehaviour string
+	tlsConfig                 *tls.Config
 
 	mu       sync.Mutex
 	auth     []string // decoded AUTH PLAIN credentials
@@ -116,6 +120,19 @@ func (s *smtpServer) serve(conn net.Conn) {
 		s.mu.Lock()
 		s.commands = append(s.commands, verb)
 		s.mu.Unlock()
+		if verb == s.misbehaveOn {
+			switch s.misbehaviour {
+			case "garble":
+				fields := strings.Fields(line)
+				raw, _ := base64.StdEncoding.DecodeString(fields[len(fields)-1])
+				_ = text.PrintfLine("oops %s", strings.ReplaceAll(string(raw), "\x00", " "))
+			case "close":
+				return
+			case "stall":
+				time.Sleep(time.Minute)
+			}
+			continue
+		}
 		if verb == s.failOn {
 			if verb == "DATA" {
 				reply("354 go")

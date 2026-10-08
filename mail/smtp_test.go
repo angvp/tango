@@ -221,3 +221,46 @@ func TestARedactedSMTPErrorStillMatchesItsCause(t *testing.T) {
 		t.Fatalf("error = %v, want it to match a timeout", err)
 	}
 }
+
+// TestShortCredentialsNeverAppearInErrors uses credentials of one, two and
+// three characters, made of letters tanGO's own error text never uses, so
+// any occurrence in an error is a leak.
+func TestShortCredentialsNeverAppearInErrors(t *testing.T) {
+	credentials := []struct{ username, password string }{
+		{"Q", "W"},
+		{"QJ", "WV"},
+		{"QJK", "WVY"},
+	}
+	servers := []struct {
+		name   string
+		server func() *smtpServer
+	}{
+		{"refused", func() *smtpServer { return &smtpServer{startTLS: true, failOn: "AUTH"} }},
+		{"garbled reply", func() *smtpServer { return &smtpServer{startTLS: true, misbehaveOn: "AUTH", misbehaviour: "garble"} }},
+		{"dropped connection", func() *smtpServer { return &smtpServer{startTLS: true, misbehaveOn: "AUTH", misbehaviour: "close"} }},
+		{"stalled", func() *smtpServer { return &smtpServer{startTLS: true, misbehaveOn: "AUTH", misbehaviour: "stall"} }},
+	}
+	for _, c := range credentials {
+		for _, s := range servers {
+			t.Run(s.name+"/"+c.username, func(t *testing.T) {
+				server := s.server()
+				pool := startSMTPServer(t, server)
+				sender, err := tangomail.NewSMTPSender("smtp://"+c.username+":"+c.password+"@"+server.addr,
+					tangomail.WithRootCAs(pool), tangomail.WithDefaultTimeout(300*time.Millisecond))
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = sender.Send(context.Background(), invoice)
+				if err == nil {
+					t.Fatal("Send succeeded against a failing server")
+				}
+				if strings.Contains(err.Error(), c.username) || strings.Contains(err.Error(), c.password) {
+					t.Fatalf("error %q contains the credentials %q:%q", err, c.username, c.password)
+				}
+				if s.name == "stalled" && !errors.Is(err, os.ErrDeadlineExceeded) && !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("error = %v, want it to still match the timeout", err)
+				}
+			})
+		}
+	}
+}
