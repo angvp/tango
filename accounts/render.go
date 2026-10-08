@@ -121,6 +121,41 @@ var passwordResetSentTemplate = template.Must(template.New("password_reset_sent"
 </body>
 </html>`))
 
+// passwordResetConfirmTemplate asks for the new password. The form posts
+// back to the same URL, token included.
+var passwordResetConfirmTemplate = template.Must(template.New("password_reset_confirm").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Choose a new password</title></head>
+<body>
+  <h1>Choose a new password</h1>
+  {{if .Error}}<p style="color:red">{{.Error}}</p>{{end}}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <div>
+      <label for="field-password">New password</label>
+      <input id="field-password" type="password" name="password" autocomplete="new-password" autofocus>
+    </div>
+    <button type="submit">Set password</button>
+  </form>
+</body>
+</html>`))
+
+type passwordResetConfirmPageData struct {
+	CSRFToken string
+	Error     string
+}
+
+// invalidLinkTemplate answers every unusable emailed link the same way.
+var invalidLinkTemplate = template.Must(template.New("invalid_link").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Link not valid</title></head>
+<body>
+  <h1>This link is not valid</h1>
+  <p>It may have expired, been used already, or been replaced by a newer one.</p>
+  <p><a href="/accounts/login/">Back to log in</a></p>
+</body>
+</html>`))
+
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {
 	return ctx.HTML(status, tmpl, tmpl.Name(), data)
 }

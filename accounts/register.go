@@ -25,6 +25,18 @@ const minPasswordLength = 8
 // bcrypt and surface as an unhandled 500.
 const maxPasswordLength = 72
 
+// passwordProblem returns why password can't be used, or "" if it can:
+// the rules registration and password reset share.
+func passwordProblem(password string) string {
+	switch {
+	case len(password) < minPasswordLength:
+		return "Password must be at least 8 characters."
+	case len(password) > maxPasswordLength:
+		return "Password must be at most 72 characters."
+	}
+	return ""
+}
+
 // normalizeEmail lowercases and trims raw, so Alice@Example.com and
 // alice@example.com are always treated as the same Account. Applied on
 // every write and lookup — the database's unique constraint is not
@@ -104,11 +116,8 @@ func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLim
 			if email == "" || password == "" {
 				return rerender(http.StatusBadRequest, "Email and password are required.")
 			}
-			if len(password) < minPasswordLength {
-				return rerender(http.StatusBadRequest, "Password must be at least 8 characters.")
-			}
-			if len(password) > maxPasswordLength {
-				return rerender(http.StatusBadRequest, "Password must be at most 72 characters.")
+			if problem := passwordProblem(password); problem != "" {
+				return rerender(http.StatusBadRequest, problem)
 			}
 
 			if _, exists, err := findAccountByEmail(ctx.Context(), store, email); err != nil {

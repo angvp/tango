@@ -139,5 +139,7 @@ func enableMail(registry *tango.Registry, store *db.Store, cfg accountsConfig) (
 	return tango.URLs{
 		tango.Path(http.MethodGet, "/accounts/password-reset/", passwordResetView(m, resetLimiter)),
 		tango.Path(http.MethodPost, "/accounts/password-reset/", passwordResetView(m, resetLimiter)),
+		tango.Path(http.MethodGet, "/accounts/password-reset/confirm/", passwordResetConfirmView(m)),
+		tango.Path(http.MethodPost, "/accounts/password-reset/confirm/", passwordResetConfirmView(m)),
 	}, nil
 }

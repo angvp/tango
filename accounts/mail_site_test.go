@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
 	"github.com/angvp/tango/db"
@@ -54,6 +56,15 @@ func newMailSite(t *testing.T, sender mail.Sender, start bool, opts ...accounts.
 	_, site.store = migratedAccountsDB(t)
 	registry := tango.NewRegistry()
 	if err := registry.Register(accounts.New(site.store, opts...)); err != nil {
+		t.Fatal(err)
+	}
+	// A host app with a page only a logged-in account may see.
+	private := func(ctx *tango.Context) error { return ctx.JSON(http.StatusOK, map[string]string{"page": "private"}) }
+	if err := registry.Register(tango.NewApp("host", func(r *tango.Registry) error {
+		return r.Routes().Include("/", tango.URLs{
+			tango.Path(http.MethodGet, "/private/", accounts.RequireLogin(site.store, accounts.DefaultSessionCookieName, "/accounts/login/", private)),
+		})
+	})); err != nil {
 		t.Fatal(err)
 	}
 	if err := registry.RunRegistration(); err != nil {
@@ -123,11 +134,16 @@ func (s *mailSite) sent(n int) []mail.Message {
 	}
 }
 
-// createAccount inserts an account directly, as an operator might.
+// createAccount inserts an account directly, as an operator might, with
+// the password "old-password".
 func (s *mailSite) createAccount(email string, active bool) accounts.Account {
 	s.t.Helper()
 	meta, _ := accountMetas(s.t)
-	account := accounts.Account{Email: email, PasswordHash: "x", Active: active, CreatedAt: s.clock()}
+	hash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.MinCost)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	account := accounts.Account{Email: email, PasswordHash: string(hash), Active: active, CreatedAt: s.clock()}
 	if err := s.store.Create(context.Background(), meta, &account); err != nil {
 		s.t.Fatal(err)
 	}
@@ -248,4 +264,80 @@ func accountMetas(t *testing.T) (account, token model.ModelMeta) {
 		}
 	}
 	return account, token
+}
+
+// get GETs path with any cookies given.
+func (s *mailSite) get(path string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+	s.t.Helper()
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	for _, c := range cookies {
+		request.AddCookie(c)
+	}
+	response := httptest.NewRecorder()
+	s.handler.ServeHTTP(response, request)
+	return response
+}
+
+// logIn logs email in with password and returns the session cookie, or nil
+// when the login fails.
+func (s *mailSite) logIn(email, password string) *http.Cookie {
+	s.t.Helper()
+	response := s.postForm("/accounts/login/", url.Values{"email": {email}, "password": {password}}, func(r *http.Request) { r.RemoteAddr = "198.51.100.1:1" })
+	for _, c := range response.Result().Cookies() {
+		if c.Name == accounts.DefaultSessionCookieName && c.Value != "" {
+			return c
+		}
+	}
+	return nil
+}
+
+// resetToken asks for a reset for email and returns the emailed token.
+func (s *mailSite) resetToken(email string) string {
+	s.t.Helper()
+	before := len(s.sender.Messages())
+	s.askForReset(email, func(r *http.Request) { r.RemoteAddr = "203.0.113.1:1" })
+	return tokenIn(s.t, s.sent(before + 1)[before], testBaseURL+"/accounts/password-reset/confirm/")
+}
+
+// insertToken stores a token row directly, for cases no flow produces.
+func (s *mailSite) insertToken(account accounts.Account, token string, purpose accounts.TokenPurpose, expires time.Time) {
+	s.t.Helper()
+	_, meta := accountMetas(s.t)
+	row := accounts.AccountToken{TokenHash: sha256Hex(token), AccountID: account.ID, Purpose: purpose, AddressHash: sha256Hex(account.Email), ExpiresAt: expires}
+	if err := s.store.Create(context.Background(), meta, &row); err != nil {
+		s.t.Fatal(err)
+	}
+}
+
+// updateAccount applies change to email's account, as an operator might.
+func (s *mailSite) updateAccount(id int64, change func(*accounts.Account)) {
+	s.t.Helper()
+	meta, _ := accountMetas(s.t)
+	var account accounts.Account
+	if err := s.store.Get(context.Background(), meta, id, &account); err != nil {
+		s.t.Fatal(err)
+	}
+	change(&account)
+	if err := s.store.Update(context.Background(), meta, &account); err != nil {
+		s.t.Fatal(err)
+	}
+}
+
+func (s *mailSite) account(id int64) accounts.Account {
+	s.t.Helper()
+	meta, _ := accountMetas(s.t)
+	var account accounts.Account
+	if err := s.store.Get(context.Background(), meta, id, &account); err != nil {
+		s.t.Fatal(err)
+	}
+	return account
+}
+
+// tokenPageHeaders checks a page carrying a token keeps it out of
+// referrers and caches.
+func tokenPageHeaders(t *testing.T, response *httptest.ResponseRecorder) {
+	t.Helper()
+	if response.Header().Get("Referrer-Policy") != "no-referrer" || response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("Referrer-Policy = %q, Cache-Control = %q; want no-referrer and no-store", response.Header().Get("Referrer-Policy"), response.Header().Get("Cache-Control"))
+	}
 }
