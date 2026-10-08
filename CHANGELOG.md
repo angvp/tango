@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-08
+
 ### Changed
 
 - **Breaking:** the database is chosen by `TANGO_DB_DSN`'s scheme alone, and `TANGO_DB_DIALECT` is retired: setting it is now an error. `tango.LoadDBDSNFromEnv` and `tango.LoadDBDialectFromEnv` are replaced by `tango.LoadDBConfigFromEnv`, which returns a `db.DSN` carrying the dialect, driver name and connection string together.
@@ -41,7 +43,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [0.0.2] - 2026-09-23
 
-The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocket.View` options; the Go module proxy, and so every `go get`, serves the original commit (`4fd6667`), which this section and its comparison link describe. Those options are listed under Unreleased.
+The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocket.View` options; the Go module proxy, and so every `go get`, serves the original commit (`4fd6667`), which this section and its comparison link describe. Those options are listed under 0.1.0.
 
 ### Added
 
@@ -75,6 +77,7 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/4fd666747631ada5854daa820c43fb03f80851f3...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/angvp/tango/compare/4fd666747631ada5854daa820c43fb03f80851f3...v0.1.0
 [0.0.2]: https://github.com/angvp/tango/compare/v0.0.1...4fd666747631ada5854daa820c43fb03f80851f3
 [0.0.1]: https://github.com/angvp/tango/releases/tag/v0.0.1

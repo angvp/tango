@@ -7,6 +7,7 @@ import (
 	"github.com/angvp/tango/internal/migrationcompat/unreleased/migrations"
 	v001 "github.com/angvp/tango/internal/migrationcompat/v0_0_1/migrations"
 	v002 "github.com/angvp/tango/internal/migrationcompat/v0_0_2/migrations"
+	v010 "github.com/angvp/tango/internal/migrationcompat/v0_1_0/migrations"
 	"github.com/angvp/tango/migration"
 )
 
@@ -21,5 +22,6 @@ type Generator struct {
 var Generators = []Generator{
 	{Dir: "v0_0_1", Migrations: v001.Migrations},
 	{Dir: "v0_0_2", Migrations: v002.Migrations},
+	{Dir: "v0_1_0", Migrations: v010.Migrations},
 	{Dir: "unreleased", Migrations: migrations.Migrations},
 }
