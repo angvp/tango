@@ -24,14 +24,36 @@ type Config struct {
 	Middleware    []Middleware
 }
 
-// LoadConfigFromEnv returns a Config populated from environment variables.
-func LoadConfigFromEnv() Config {
+// ConfigOption changes how LoadConfigFromEnv reads the environment.
+type ConfigOption func(*envConfig)
+
+type envConfig struct {
+	portFromEnv bool
+}
+
+// WithPortFromEnv makes LoadConfigFromEnv fall back to the PORT variable
+// that hosting platforms (Railway, Heroku, Cloud Run, ...) set: the
+// address is TANGO_ADDR if set, else ":"+PORT if PORT is set, else :8000.
+func WithPortFromEnv() ConfigOption {
+	return func(c *envConfig) { c.portFromEnv = true }
+}
+
+// LoadConfigFromEnv returns a Config populated from environment variables:
+// Addr is TANGO_ADDR, defaulting to :8000. WithPortFromEnv adds PORT as a
+// fallback before the default.
+func LoadConfigFromEnv(opts ...ConfigOption) Config {
+	var env envConfig
+	for _, opt := range opts {
+		opt(&env)
+	}
 	config := Config{
 		Addr: defaultAddr,
 	}
 
 	if addr := os.Getenv("TANGO_ADDR"); addr != "" {
 		config.Addr = addr
+	} else if port := os.Getenv("PORT"); env.portFromEnv && port != "" {
+		config.Addr = ":" + port
 	}
 
 	return config

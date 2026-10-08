@@ -869,3 +869,33 @@ func TestServeRollsBackLifecycleStartFailure(t *testing.T) {
 		t.Fatalf("log = %v, want %v", log, want)
 	}
 }
+
+func TestLoadConfigFromEnvAddressPrecedence(t *testing.T) {
+	tests := []struct {
+		name       string
+		addr, port string
+		withPort   bool
+		want       string
+	}{
+		{name: "neither set", want: ":8000"},
+		{name: "neither set, with the option", withPort: true, want: ":8000"},
+		{name: "only PORT, without the option", port: "8080", want: ":8000"},
+		{name: "only PORT, with the option", port: "8080", withPort: true, want: ":8080"},
+		{name: "only TANGO_ADDR", addr: "127.0.0.1:9000", want: "127.0.0.1:9000"},
+		{name: "only TANGO_ADDR, with the option", addr: "127.0.0.1:9000", withPort: true, want: "127.0.0.1:9000"},
+		{name: "both, with the option", addr: "127.0.0.1:9000", port: "8080", withPort: true, want: "127.0.0.1:9000"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TANGO_ADDR", tt.addr)
+			t.Setenv("PORT", tt.port)
+			var opts []tango.ConfigOption
+			if tt.withPort {
+				opts = append(opts, tango.WithPortFromEnv())
+			}
+			if got := tango.LoadConfigFromEnv(opts...).Addr; got != tt.want {
+				t.Fatalf("Addr = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

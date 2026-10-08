@@ -17,7 +17,7 @@ type Config struct {
 ## `LoadConfigFromEnv`
 
 ```go
-func LoadConfigFromEnv() Config
+func LoadConfigFromEnv(opts ...ConfigOption) Config
 ```
 
 Returns a `Config` with `Addr` read from the `TANGO_ADDR` environment variable, defaulting to `:8000` if unset. `InstalledApps` is never populated from the environment; your project composition stays visible in Go.
@@ -26,6 +26,14 @@ Returns a `Config` with `Addr` read from the `TANGO_ADDR` environment variable, 
 config := tango.LoadConfigFromEnv()
 config.InstalledApps = []tango.App{posts.New(store)}
 ```
+
+On a hosting platform that tells the app where to listen through `PORT` (Railway, Heroku, Cloud Run and others), pass `tango.WithPortFromEnv()`:
+
+```go
+config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+```
+
+The address is then `TANGO_ADDR` if it's set, else `":"+PORT` if `PORT` is set, else `:8000`. Without the option, `PORT` is ignored.
 
 ## Database env helpers
 
