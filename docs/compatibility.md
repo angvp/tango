@@ -26,11 +26,12 @@ Everything below is covered unless it is named under [what is not covered](#what
 - **The `tango:"…"` struct tag grammar** described in [models and tags](guides/models-and-tags.md).
 - **The `tango_migrations` table**: its name and its columns (`app`, `name`, `applied_at`).
 - **The generic View-error response**: a View that returns an error, or panics behind `Recoverer`, answers `500` with the JSON body `{"error": "internal error"}`.
-- **`accounts`' HTTP endpoints**: `GET`/`POST /accounts/register/`, `GET`/`POST /accounts/login/` and `POST /accounts/logout/`, plus the only two JSON responses `accounts` sends:
+- **`accounts`' HTTP endpoints**: `GET`/`POST /accounts/register/`, `GET`/`POST /accounts/login/` and `POST /accounts/logout/`; with `accounts.WithMail`, also `GET`/`POST /accounts/password-reset/`, `GET`/`POST /accounts/password-reset/confirm/`, `GET`/`POST /accounts/verify/` and `POST /accounts/verify/resend/`, with their links' `token` query parameter. On top of the endpoints, the only two JSON responses `accounts` sends:
   - a rejected or missing CSRF token on a `POST` answers `403` with a JSON object carrying an `"error"` string;
   - rate limiting answers `429` with the same JSON shape and a `Retry-After` header.
 
   Everything else `accounts` answers is an HTML page and not covered beyond its status: closed registration, for example, is a `403` HTML page, not JSON. A request with a method an endpoint doesn't register gets the router's bare `405`, which isn't part of `accounts`' contract.
+- **`mail`'s wire format**: a message with attachments is `multipart/mixed`, with the text part first and each attachment base64-encoded; the text is quoted-printable UTF-8. Exact MIME boundaries and header order are not covered.
 - **Observability names**, as listed in the [observability guide](guides/observability.md#stable-events-and-metrics):
   - the log event names `tango.http.view_error`, `tango.http.panic`, `tango.http.access`, `tango.scheduler.job_failed`, `tango.http.request_id_generation_failed`, and `accounts`' `tango.accounts.mail_failed` and `tango.accounts.mail_dropped`;
   - the metric names `tango_http_request_duration_seconds`, `tango_scheduler_job_invocations_total` and `tango_realtime_room_events_total`;

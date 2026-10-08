@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/accounts"
+	"github.com/angvp/tango/mail/mailtest"
 )
 
 // This file pins the accounts HTTP contract docs/compatibility.md promises,
@@ -61,6 +62,28 @@ func TestDocumentedEndpointsAnswerTheirMethods(t *testing.T) {
 			request.AddCookie(csrfCookie)
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, request)
+			if response.Code == http.StatusNotFound || response.Code == http.StatusMethodNotAllowed {
+				t.Fatalf("%s %s status = %d, want the endpoint to answer", tt.method, tt.path, response.Code)
+			}
+		})
+	}
+}
+
+func TestDocumentedMailEndpointsAnswerTheirMethods(t *testing.T) {
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	tests := []struct{ method, path string }{
+		{http.MethodGet, "/accounts/password-reset/"},
+		{http.MethodPost, "/accounts/password-reset/"},
+		{http.MethodGet, "/accounts/password-reset/confirm/?token=x"},
+		{http.MethodPost, "/accounts/password-reset/confirm/?token=x"},
+		{http.MethodGet, "/accounts/verify/?token=x"},
+		{http.MethodPost, "/accounts/verify/?token=x"},
+		{http.MethodPost, "/accounts/verify/resend/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			site.handler.ServeHTTP(response, httptest.NewRequest(tt.method, tt.path, nil))
 			if response.Code == http.StatusNotFound || response.Code == http.StatusMethodNotAllowed {
 				t.Fatalf("%s %s status = %d, want the endpoint to answer", tt.method, tt.path, response.Code)
 			}

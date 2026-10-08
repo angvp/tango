@@ -16,6 +16,9 @@ Canonical files: `accounts/accounts.go`, `accounts/current_account.go`, and `acc
 - Protect host views with `accounts.RequireLogin(store, cookieName, loginPath, next)`.
 - Read the current account from host views with `accounts.CurrentAccountID` or `accounts.CurrentAccount`.
 - Pass the same cookie name used when configuring `accounts.New`; use `accounts.DefaultSessionCookieName` for the default.
+- For password reset and email verification, pass `accounts.WithMail(accounts.MailConfig{Sender, From, BaseURL})`. `BaseURL` is the configured public origin (`https://…`, or `http://localhost…` in development); never build links from `Request.Host`. Without `WithMail` the reset/verify routes don't exist.
+- Require a verified email for a host view with `accounts.RequireVerified(store, cookieName, loginPath, next)`. Verification never blocks login.
+- Every app installing `accounts` runs `tango makemigrations` after upgrading, for `Account.EmailVerifiedAt` and `AccountToken`.
 
 Tiny shape:
 
@@ -33,6 +36,8 @@ protected := accounts.RequireLogin(store, accounts.DefaultSessionCookieName, "/a
 - Do not mix admin users with application accounts; they are separate identity spaces.
 - Do not assume `accounts.Account` has roles, groups, or permissions. It deliberately has no permission-shaped field.
 - If an app needs roles or permissions, write a View wrapper against app-owned data.
+- Do not change `Account.Email` without clearing `EmailVerifiedAt`; `accounts` has no email-change flow.
+- Do not reveal whether an email has an account in any reset-like flow you write; follow `accounts`' single response.
 
 ## Check
 

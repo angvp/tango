@@ -16,7 +16,7 @@ InstalledApps: []tango.App{
 },
 ```
 
-(import `"github.com/angvp/tango/accounts"`.) It mounts `/accounts/register/`, `/accounts/login/`, and `/accounts/logout/`, and registers two models, `Account` and `AccountSession`. It deliberately stays separate from the admin's own users: an admin account can't log in to the board, and a board account can't open the admin.
+(import `"github.com/angvp/tango/accounts"`.) It mounts `/accounts/register/`, `/accounts/login/`, and `/accounts/logout/`, and registers three models: `Account`, `AccountSession`, and `AccountToken`, which holds password-reset and verification links if you turn those on. It deliberately stays separate from the admin's own users: an admin account can't log in to the board, and a board account can't open the admin.
 
 ## Give posts an owner
 
@@ -414,6 +414,20 @@ func (p *pages) post(ctx *tango.Context) error {
 ```
 
 `displayName` shows only the part of the email before the `@`, so the board never publishes anyone's address. Add an `accountMeta model.ModelMeta` field to `pages`, and look it up in `New` next to the other two: `p.accountMeta, _ = registry.Models().Get("Account")`. The new views need `strings`, `time`, and `github.com/angvp/tango/accounts` added to the imports in `views.go`.
+
+## Forgotten passwords (optional)
+
+`accounts` can also email password-reset and verification links, but only once you give it a way to send mail. The board doesn't need that yet. To try it locally without an SMTP server, print the emails to the terminal:
+
+```go
+accounts.New(store, accounts.WithMail(accounts.MailConfig{
+	Sender:  mail.WriterSender(os.Stdout), // development only: prints live links
+	From:    "Board <noreply@localhost>",
+	BaseURL: "http://localhost:8000",
+}))
+```
+
+(import `"github.com/angvp/tango/mail"`.) Then `/accounts/password-reset/` asks for an address, and the link appears in the terminal. In production you'd use `mail.SMTPSenderFromEnv()` and your site's `https://` address instead. See [password reset and email verification](../guides/accounts.md#password-reset-and-email-verification).
 
 ## Manage accounts in the admin
 

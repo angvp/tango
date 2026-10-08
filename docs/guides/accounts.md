@@ -12,11 +12,12 @@
 
 ```go
 type Account struct {
-	ID           int64  `tango:"pk"`
-	Email        string `tango:"unique"`
-	PasswordHash string
-	Active       bool
-	CreatedAt    time.Time
+	ID              int64  `tango:"pk"`
+	Email           string `tango:"unique"`
+	PasswordHash    string
+	Active          bool
+	CreatedAt       time.Time
+	EmailVerifiedAt time.Time // the zero time means unverified
 }
 
 type AccountSession struct {
@@ -27,7 +28,9 @@ type AccountSession struct {
 }
 ```
 
-`Account` is deliberately bare: identity, credential, activity state, a timestamp. tanGO deliberately ships no `IsStaff`, `Role`, `Group`, or `Permission`-shaped field. An app that needs roles or permissions today queries `Account` itself (if installed) or its own domain data, from its own [View wrapper](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
+`accounts` also registers `AccountToken`, which stores the hashes of emailed password-reset and verification links (see below).
+
+`Account` is deliberately bare: identity, credential, activity state, timestamps. tanGO deliberately ships no `IsStaff`, `Role`, `Group`, or `Permission`-shaped field. An app that needs roles or permissions today queries `Account` itself (if installed) or its own domain data, from its own [View wrapper](routing-and-reverse-lookup.md#middleware-vs-view-wrappers).
 
 `Email` is always stored lowercased and trimmed, and every lookup normalizes the same way — `Alice@Example.com` and `alice@example.com` are always the same `Account`.
 
@@ -56,13 +59,71 @@ config := tango.Config{
 
 `accounts` mounts a fixed prefix, like every other reusable app in tanGO (`admin` owns `/admin/`, the `greetings` example owns `/greetings/`) — there is no host-configurable mount prefix:
 
-- `GET`/`POST /accounts/register/` — registration. On success, creates the `Account` (`Active=true` immediately — there's no email verification step yet), creates a session, and redirects straight to the post-login destination. No separate login step is needed after signing up.
+- `GET`/`POST /accounts/register/` — registration. On success, creates the `Account` (`Active=true` immediately), creates a session, and redirects straight to the post-login destination. No separate login step is needed after signing up. With mail enabled, it also emails a verification link; the account is usable before it's verified.
 - `GET`/`POST /accounts/login/` — login. Any failure (unknown email, wrong password, or an inactive account) produces the exact same generic error — none of those cases are distinguishable from the response, so a failed attempt never reveals whether a given email is even registered. This is deliberately asymmetric with registration's specific "this email is already registered" error: login is a credential check, where a generic error closes off an oracle for identifying registered emails; registration is a self-service form where a genuine user needs to know why their signup didn't go through, and an email address isn't a secret the way a password is.
 - `POST /accounts/logout/` — deletes only the current session; any other session belonging to the same account is untouched. No `GET` route.
 
 Both `register` and `login` accept a `next` query parameter/form value, validated against any same-origin path (not restricted to `/accounts/`, since accounts's login can be reached from protecting any page across your site) — an off-site or malformed `next` falls back to `/`.
 
 Both endpoints are CSRF-protected and rate-limited (a small per-IP, in-memory limiter — not distributed, no CAPTCHA, no configurable policy).
+
+## Password reset and email verification
+
+Both need outbound mail, so they're off until you pass `accounts.WithMail`:
+
+```go
+sender, err := mail.SMTPSenderFromEnv()
+if err != nil {
+	return err
+}
+accounts.New(store, accounts.WithMail(accounts.MailConfig{
+	Sender:  sender,
+	From:    "Shop <noreply@example.com>",
+	BaseURL: "https://example.com",
+}))
+```
+
+- **`BaseURL`:** the origin links are built on. It must be an absolute `https://` origin, or `http://` on localhost during development. Links never come from the request's `Host` header, which an attacker controls.
+- **Checked at registration:** a missing `Sender`, a malformed `From` or a bad `BaseURL` makes `-check` fail.
+- **`Logger`:** an optional `*slog.Logger` for the two events below; nil uses `slog.Default()`.
+- **Without `WithMail`:** none of the routes below is mounted, and `accounts` sends nothing.
+
+### Routes
+
+- `GET`/`POST /accounts/password-reset/` asks for a reset link. Every address gets the same answer: an existing, unknown, inactive or recently emailed one. The request only queues a job; the background outbox looks the account up and emails a link only to an active account, so neither the response nor its timing reveals whether an account exists.
+- `GET`/`POST /accounts/password-reset/confirm/?token=…` sets a new password under registration's rules. The link lasts one hour. A completed reset ends every session and every other link the account has, marks the email verified, and sends the user to log in.
+- `GET`/`POST /accounts/verify/?token=…` confirms the email address from the link sent at registration. It lasts 24 hours.
+- `POST /accounts/verify/resend/` sends a logged-in, unverified account a new verification link.
+
+GET never uses a link: it shows a form or a button, and only POST acts. Email scanners and link previews follow links, and they shouldn't reset a password or verify an address. These pages send `Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
+
+An expired, used, replaced or unknown link gets the same "This link is not valid" page. So does a link sent before the account's email changed.
+
+### Limits
+
+- **Cooldown:** each address gets at most one email of each kind every five minutes, and each client IP five reset requests a minute.
+- **Outbox:** emails wait in an in-memory outbox of 100, sent one at a time by a worker that `accounts` registers as a [Lifecycle](application-lifecycle.md) component.
+- **Full outbox:** the email is dropped and `tango.accounts.mail_dropped` is logged.
+- **Failed send:** `tango.accounts.mail_failed` is logged, with the address and link redacted.
+- **Shutdown:** the worker sends what it can before its stop deadline.
+- **What's lost:** a crash loses whatever is queued, and nothing is retried.
+- **Per process:** the cooldown and the outbox are per process, like the login rate limiter.
+
+### Requiring a verified email
+
+Verification never stops anyone logging in. To require it for a page, use `accounts.RequireVerified`, shaped like `RequireLogin`:
+
+```go
+billing := accounts.RequireVerified(store, accounts.DefaultSessionCookieName, "/accounts/login/", Billing)
+```
+
+A logged-out visitor is redirected to log in. A logged-in but unverified account gets a `403` page with a button to send a new link; that button needs `WithMail`.
+
+### Changing an account's email
+
+`accounts` has no email-change flow. Whoever changes `Account.Email`, your own code or an operator in admin, must also clear `EmailVerifiedAt`, because the new address hasn't been proven. They should also delete the account's `AccountToken` rows. A link sent to the old address already stops working, because each link is tied to the address it was sent to.
+
+See [ADR 0045](../adr/0045-accounts-reset-and-verification-never-reveal-an-account.md) and the [mail guide](mail.md).
 
 ## Protecting your own routes
 
@@ -113,4 +174,4 @@ Keep `PasswordHash` read-only (or omit it from `ListDisplay`/leave it out of any
 - No template-override hook — write your own login/register views composing `auth` primitives directly if you need different HTML.
 - No `/accounts/me/` page.
 - No host-configurable mount prefix.
-- No password-reset email flow or email-verification/confirmation step at signup, no OAuth/OIDC/social login.
+- No OAuth/OIDC/social login, no email-change flow, and no customizable email wording: reset and verification emails are fixed English plain text.

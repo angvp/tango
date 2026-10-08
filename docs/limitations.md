@@ -16,8 +16,21 @@ tanGO is still early. This page is the honest summary of where it stops, so you 
 ## Security boundaries
 
 - **Admin has a real session-cookie login, bcrypt-hashed accounts, CSRF protection on every form, and rate-limited login attempts** — but it is still an internal-tool admin, not a full production auth system. There's no account lockout (only rate limiting), no idle timeout or "remember me" (sessions have a fixed lifetime from login), no password reset via email, and no admin-UI account management (`tango admin create/resetpassword/deactivate` is CLI-only, by design — see [admin registration](guides/admin-registration.md)). It's suitable for a trusted, low-traffic internal tool behind TLS — not a public-facing admin panel; tanGO provides no network-layer protection of its own.
-- **The login rate limiter is in-memory and per-process.** It resets on restart and isn't shared across multiple server instances behind a load balancer — a real but bounded gap for a single-process admin tool. The same limiter, and the same bound, protects the optional `accounts` app's login and registration endpoints.
-- **`accounts` (the optional first-party register/login/logout app) has no password-reset email flow and no email-verification/confirmation step at signup** — a freshly registered account is usable immediately, with no mail milestone yet to gate on. There's no dedicated CLI for managing accounts either; the generic admin CRUD is the whole operational story, once you've manually registered `Account` with `admin` — see [the accounts guide](guides/accounts.md).
+- **The login rate limiter is in-memory and per-process.** It resets on restart and isn't shared across multiple server instances behind a load balancer — a real but bounded gap for a single-process admin tool. The same limiter, and the same bound, protects the optional `accounts` app's login, registration and password-reset endpoints.
+- **`accounts`' password reset and email verification are single-process and best-effort.** With `accounts.WithMail`:
+  - **Queued in memory:** emails wait in an in-memory outbox. A crash loses what's queued, a full outbox drops new emails (logging `tango.accounts.mail_dropped`), and a failed send is logged, never retried.
+  - **Per process:** the per-address cooldown is in-memory and per-process, like the login rate limiter.
+  - **No email change:** there's no email-change flow. Whoever changes `Account.Email` must clear `EmailVerifiedAt`.
+  - **Fixed wording:** emails are fixed English plain text.
+  - **No CLI:** there's no dedicated CLI for managing accounts either; the generic admin CRUD is the whole operational story, once you've manually registered `Account` with `admin`.
+
+  See [the accounts guide](guides/accounts.md#password-reset-and-email-verification).
+- **`mail` sends plain text to one recipient over SMTP.**
+  - **Out of scope:** HTML mail, inline images, streamed attachments, DKIM, queueing, retries and bounce handling.
+  - **Attachments:** they live in memory, 10 MiB of raw bytes per message by default.
+  - **Trusted certificates:** an SMTP server's certificate must chain to the system's trusted roots; there's no option for a private CA.
+
+  See [the mail guide](guides/mail.md).
 - **JWT access tokens are stateless and cannot be revoked before expiry.** `auth/jwt` performs no database lookup, blacklist check, or account-status check during verification. There are no refresh tokens. Choose database-backed cookie sessions when immediate logout or deactivation must invalidate credentials; otherwise keep JWT lifetimes short and treat expiry as the only containment mechanism. See [JWT authentication](guides/jwt-auth.md).
 - **JWT support is HS256-only with manual, fixed-set key rotation.** There is no RS256/ES256, JWKS, external identity-provider verification, automatic rotation, or remote key loading. A deployment explicitly supplies one active signing key and any retired verification-only keys.
 - **Query-string JWTs can leak through infrastructure logs.** `jwt.QueryToken` exists for transports that genuinely cannot send an `Authorization` header, but URLs may appear in browser history and server or proxy access logs. Prefer `jwt.BearerToken` whenever possible.

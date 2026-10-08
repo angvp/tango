@@ -45,7 +45,7 @@ The `route` value is the pattern the route was registered with, trailing slash i
 
 ## Stable events and metrics
 
-The stable log event names are `EventViewError`, `EventPanic`, `EventAccessLog`, `EventJobFailed`, and `EventRequestIDGenerationFailed`. The stable metric names are `MetricHTTPRequestDuration`, `MetricSchedulerJobInvocations`, and `MetricRealtimeRoomEvents` in the `observability` package.
+The stable log event names are `EventViewError`, `EventPanic`, `EventAccessLog`, `EventJobFailed`, and `EventRequestIDGenerationFailed`, plus `accounts`' `accounts.EventMailFailed` (`tango.accounts.mail_failed`, with `purpose` and a redacted `error`) and `accounts.EventMailDropped` (`tango.accounts.mail_dropped`, with `purpose`); `purpose` is `password_reset` or `email_verification`. The stable metric names are `MetricHTTPRequestDuration`, `MetricSchedulerJobInvocations`, and `MetricRealtimeRoomEvents` in the `observability` package.
 
 Framework metric labels are intentionally bounded. HTTP metrics use route patterns rather than raw URLs. Realtime metrics never include room IDs, user IDs, or error text. Durations are recorded in seconds.
 
