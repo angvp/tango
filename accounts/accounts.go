@@ -27,6 +27,13 @@ const (
 	registerRateLimitWindow   = time.Minute
 )
 
+// resetRateLimitAttempts and resetRateLimitWindow bound how many reset
+// links one source IP may ask for, on top of the per-address cooldown.
+const (
+	resetRateLimitAttempts = 5
+	resetRateLimitWindow   = time.Minute
+)
+
 // Option configures accounts.New.
 type Option func(*accountsConfig)
 
@@ -35,6 +42,9 @@ type accountsConfig struct {
 	signupDisabled    bool
 	sessionDuration   time.Duration
 	sessionCookieName string
+	mail              *MailConfig
+	now               func() time.Time
+	outboxCapacity    int
 }
 
 // WithSignupDisabled opts an installation out of self-service registration.
@@ -66,6 +76,8 @@ func New(store *db.Store, opts ...Option) tango.App {
 	cfg := accountsConfig{
 		sessionDuration:   defaultSessionDuration,
 		sessionCookieName: DefaultSessionCookieName,
+		now:               time.Now,
+		outboxCapacity:    defaultOutboxCapacity,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -93,7 +105,39 @@ func New(store *db.Store, opts ...Option) tango.App {
 			tango.Path(http.MethodPost, "/accounts/login/", loginView(store, cfg, loginLimiter)),
 			tango.Path(http.MethodPost, "/accounts/logout/", logoutView(store, cfg)),
 		}
+		if cfg.mail != nil {
+			mailRoutes, err := enableMail(registry, store, cfg)
+			if err != nil {
+				return err
+			}
+			routes = append(routes, mailRoutes...)
+		}
 
 		return registry.Routes().Include("/", routes)
 	})
+}
+
+// enableMail validates cfg.mail, registers the outbox's worker and returns
+// the mail flows' routes.
+func enableMail(registry *tango.Registry, store *db.Store, cfg accountsConfig) (tango.URLs, error) {
+	baseURL, err := cfg.mail.validate()
+	if err != nil {
+		return nil, err
+	}
+	m := &mailer{
+		store:    store,
+		cfg:      cfg,
+		from:     cfg.mail.From,
+		baseURL:  baseURL,
+		outbox:   newOutbox(cfg.outboxCapacity, cfg.mail.Sender, cfg.mail.Logger),
+		cooldown: newCooldown(mailCooldown),
+	}
+	if err := registry.RegisterLifecycle(m.outbox.lifecycle()); err != nil {
+		return nil, err
+	}
+	resetLimiter := security.NewRateLimiter(resetRateLimitAttempts, resetRateLimitWindow)
+	return tango.URLs{
+		tango.Path(http.MethodGet, "/accounts/password-reset/", passwordResetView(m, resetLimiter)),
+		tango.Path(http.MethodPost, "/accounts/password-reset/", passwordResetView(m, resetLimiter)),
+	}, nil
 }

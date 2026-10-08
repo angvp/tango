@@ -39,7 +39,7 @@ func normalizeEmail(raw string) string {
 // constraint, not this lookup, is what actually prevents two concurrent
 // registrations for the same email from both succeeding.
 func findAccountByEmail(ctx context.Context, store *db.Store, email string) (Account, bool, error) {
-	meta, _ := accountModelMetas()
+	meta, _, _ := accountModelMetas()
 	var rows []Account
 	query := db.Query{Where: []db.Condition{{Field: "Email", Op: db.OpEq, Value: email}}, Limit: 1}
 	if err := store.List(ctx, meta, query, &rows); err != nil {
@@ -122,7 +122,7 @@ func registerView(store *db.Store, cfg accountsConfig, limiter *security.RateLim
 				return err
 			}
 
-			meta, _ := accountModelMetas()
+			meta, _, _ := accountModelMetas()
 			account := Account{
 				Email:        email,
 				PasswordHash: string(hash),

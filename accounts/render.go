@@ -84,6 +84,43 @@ type loginPageData struct {
 	SignupEnabled bool
 }
 
+// passwordResetRequestTemplate asks for the address to send a reset link
+// to.
+var passwordResetRequestTemplate = template.Must(template.New("password_reset_request").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Reset your password</title></head>
+<body>
+  <h1>Reset your password</h1>
+  {{if .Error}}<p style="color:red">{{.Error}}</p>{{end}}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <div>
+      <label for="field-email">Email</label>
+      <input id="field-email" type="email" name="email" autofocus>
+    </div>
+    <button type="submit">Email me a link</button>
+  </form>
+  <p><a href="/accounts/login/">Back to log in</a></p>
+</body>
+</html>`))
+
+type passwordResetRequestPageData struct {
+	CSRFToken string
+	Error     string
+}
+
+// passwordResetSentTemplate is the one answer to every reset request, so
+// it never says whether the address has an account.
+var passwordResetSentTemplate = template.Must(template.New("password_reset_sent").Parse(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Check your email</title></head>
+<body>
+  <h1>Check your email</h1>
+  <p>If an account exists for that address, we've sent it a link to reset its password. The link works for 1 hour.</p>
+  <p><a href="/accounts/login/">Back to log in</a></p>
+</body>
+</html>`))
+
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {
 	return ctx.HTML(status, tmpl, tmpl.Name(), data)
 }

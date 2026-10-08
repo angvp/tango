@@ -18,7 +18,7 @@ func logoutView(store *db.Store, cfg accountsConfig) tango.View {
 		}
 
 		if cookie, err := ctx.Request().Cookie(cfg.sessionCookieName); err == nil {
-			_, sessionMeta := accountModelMetas()
+			_, sessionMeta, _ := accountModelMetas()
 			if err := auth.DeleteSession(ctx.Context(), store, sessionMeta, cookie.Value); err != nil {
 				return err
 			}

@@ -32,10 +32,10 @@ Everything below is covered unless it is named under [what is not covered](#what
 
   Everything else `accounts` answers is an HTML page and not covered beyond its status: closed registration, for example, is a `403` HTML page, not JSON. A request with a method an endpoint doesn't register gets the router's bare `405`, which isn't part of `accounts`' contract.
 - **Observability names**, as listed in the [observability guide](guides/observability.md#stable-events-and-metrics):
-  - the log event names `tango.http.view_error`, `tango.http.panic`, `tango.http.access`, `tango.scheduler.job_failed` and `tango.http.request_id_generation_failed`;
+  - the log event names `tango.http.view_error`, `tango.http.panic`, `tango.http.access`, `tango.scheduler.job_failed`, `tango.http.request_id_generation_failed`, and `accounts`' `tango.accounts.mail_failed` and `tango.accounts.mail_dropped`;
   - the metric names `tango_http_request_duration_seconds`, `tango_scheduler_job_invocations_total` and `tango_realtime_room_events_total`;
-  - their attribute keys: `route`, `method`, `request_id`, `status`, `duration_seconds`, `error`, `recovered`, `stack`, `job`, `panicked`, `event` and `outcome`;
-  - their enumerated values: a scheduler job's `outcome` is `success`, `error`, `canceled` or `panic`; a realtime room event's `event` is `join`, `leave` or `dispatch`, and its `outcome` is `success` or `error`;
+  - their attribute keys: `route`, `method`, `request_id`, `status`, `duration_seconds`, `error`, `recovered`, `stack`, `job`, `panicked`, `event`, `outcome` and `purpose`;
+  - their enumerated values: a scheduler job's `outcome` is `success`, `error`, `canceled` or `panic`; a realtime room event's `event` is `join`, `leave` or `dispatch`, and its `outcome` is `success` or `error`; an `accounts` mail event's `purpose` is `password_reset` or `email_verification`;
   - the `route` value `"(unmatched)"`, which every Unmatched request reports under `MiddlewareScopeAll`.
 
 A new release may add to any of these: a new function, a new optional flag, a new JSON key, a new attribute. Code and tools that ignore what they don't recognise keep working.

@@ -73,7 +73,7 @@ type AccountSession struct {
 // operate directly against store, without depending on the host project's
 // full registration having already run, mirroring admin's own
 // adminModelMetas.
-func accountModelMetas() (accountMeta model.ModelMeta, sessionMeta model.ModelMeta) {
+func accountModelMetas() (accountMeta, sessionMeta, tokenMeta model.ModelMeta) {
 	registry := model.NewRegistry()
 	// Account and AccountSession are known-good models (accounts.New
 	// registers them the same way at app registration time), so these
@@ -83,5 +83,6 @@ func accountModelMetas() (accountMeta model.ModelMeta, sessionMeta model.ModelMe
 	_ = registry.Register(AccountToken{})
 	accountMeta, _ = registry.Get("Account")
 	sessionMeta, _ = registry.Get("AccountSession")
-	return accountMeta, sessionMeta
+	tokenMeta, _ = registry.Get("AccountToken")
+	return accountMeta, sessionMeta, tokenMeta
 }
