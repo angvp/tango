@@ -2,7 +2,7 @@
 
 [![codecov](https://codecov.io/gh/angvp/tango/branch/main/graph/badge.svg)](https://codecov.io/gh/angvp/tango)
 
-tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics but built from plain Go structs and interfaces — no code generation, no reflection-heavy magic beyond what's needed to read your model tags, and no hidden configuration.
+tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics but built from plain Go structs and interfaces. Scaffolding writes plain Go you own. Nothing is generated at runtime, and boot never scans your filesystem; there's no reflection-heavy magic beyond what's needed to read your model tags, and no hidden configuration.
 
 **Status: early development.** The public API is still settling. Behavior described in this README and the linked docs reflects what's implemented today; anything explicitly marked "planned" or "future" is not yet built. See [Versioning and compatibility](docs/compatibility.md) for what each release promises not to break, and [Limitations](docs/limitations.md) before depending on tanGO for anything beyond experimentation.
 
@@ -16,6 +16,19 @@ tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics
 - Generated, typed Go migrations (`tango makemigrations`/`migrate`/`migrate down`) — no separate schema DSL.
 - A server-rendered HTML admin (list/create/edit/delete, pagination, sorting, search) behind a session-cookie login, with CSRF protection and rate-limited login attempts — accounts are managed via `tango admin create/resetpassword/deactivate`.
 - A CLI (`tango run`/`check`/`makemigrations`/`migrate`/`newproject`/`newapp`/`tui`/`admin`) that wraps ordinary `go build`/`go run` rather than replacing them.
+
+## Principles
+
+> If writing normal Go is simpler than invoking tanGO, write normal Go.
+
+- Prefer Go primitives before replacing them.
+- Prefer explicit structure over convention magic.
+- Treat JSON and API-only apps as first-class. HTML is optional.
+- The admin is a normal app, not a privileged subsystem.
+- No custom template language.
+- Third-party internals stay behind tanGO's abstractions.
+
+See [ADR 0001](docs/adr/0001-design-principles.md).
 
 ## Install
 
@@ -72,7 +85,15 @@ curl http://localhost:8000/greetings/World/
 - **[Tutorial](docs/tutorial/01-bootstrap-routing-json.md)** — build one application, a bulletin board, from an empty directory to a deployed container in ten parts: routing and JSON views, persistence and migrations, the HTML admin, foreign keys, server-rendered pages, accounts and forms, API tokens and rate limits, a live WebSocket feed, background jobs and graceful shutdown, and testing and deployment.
 - **[Guides](docs/guides/)** — standalone, task-oriented references: project structure, application architecture, configuration, models and tags, routing, `Context`, persistence, migrations, admin, app checks, dialect setup, reusable apps, and relationships/admin foreign keys.
 - **[API reference](docs/reference.md)** — the supported public surface, linked to runnable examples. Generated package docs are also available via `go doc` or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published.
-- **[Examples](examples/)** — `jsonapi` (JSON-only); `api-with-admin` (JSON API and HTML admin sharing the same models, including an `AuthorID`-style foreign key with FK-backed admin editing); `notes-starter` (a keepable starter-style app using the reduced `main.go` shape); and `reusable-greetings`/`reusable-greetings-host` (a reusable tanGO app and a host project installing it, demonstrating contributed migrations and app-owned static assets).
+- **[Examples](examples/)**, each with a README giving its purpose and commands:
+  - [`jsonapi`](examples/jsonapi): the smallest JSON application, one hand-written app;
+  - [`api-with-admin`](examples/api-with-admin): a JSON API and the HTML admin over one set of models, linked by a foreign key;
+  - [`notes-starter`](examples/notes-starter): a keepable starter with generated migrations, the admin and rate limiting;
+  - [`jwt-api`](examples/jwt-api): a JSON route behind stateless bearer JWTs;
+  - [`realtime-chat`](examples/realtime-chat): WebSocket rooms with JWT auth and graceful shutdown;
+  - [`accounts-mail`](examples/accounts-mail): the `accounts` app's password reset and email verification, with emails printed to the terminal;
+  - [`reusable-greetings`](examples/reusable-greetings) and [`reusable-greetings-host`](examples/reusable-greetings-host): a reusable app with contributed migrations and static assets, and a host installing it;
+  - [`board`](examples/board): the tutorial's finished application, deployable as a container.
 - **[Versioning and compatibility](docs/compatibility.md)** — what each release promises not to break, deprecations, and the [changelog](CHANGELOG.md).
 - **[Limitations](docs/limitations.md)** — non-goals, security boundaries, and dialect differences.
 
