@@ -33,7 +33,7 @@ This is the maintainer's checklist for cutting a release. What a release promise
    GH_TOKEN=$(gh auth token) go run ./internal/releasecheck/cmd/releasecheck -tag vX.Y.Z -commit "$(git rev-parse origin/main)"
    ```
 
-   For a patch release, also pass `-gorelease` a report from `go run golang.org/x/exp/cmd/gorelease@latest -base=<previous tag>`.
+   For a patch release, also pass `-gorelease` a report from `go run golang.org/x/exp/cmd/gorelease@latest -base=<previous tag>`. Before the tag exists, the check never asks the Go module proxy about it: the proxy would cache "unknown revision" for up to about half an hour and delay the release's website update.
 
 ## Tag
 

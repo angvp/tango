@@ -37,12 +37,13 @@ func run(tag, commit, changelogPath, goreleasePath, notesPath, repo string) erro
 	if tag == "" {
 		return fmt.Errorf("-tag is required")
 	}
+	tagged, err := exec.CommandContext(ctx, "git", "rev-parse", "--verify", "--quiet", tag+"^{commit}").Output()
+	tagExists := err == nil
 	if commit == "" {
-		out, err := exec.CommandContext(ctx, "git", "rev-parse", tag+"^{commit}").Output()
-		if err != nil {
-			return fmt.Errorf("resolve %s: %w", tag, err)
+		if !tagExists {
+			return fmt.Errorf("tag %s doesn't exist: pass -commit to check a release before tagging it", tag)
 		}
-		commit = strings.TrimSpace(string(out))
+		commit = strings.TrimSpace(string(tagged))
 	}
 	changelog, err := os.ReadFile(changelogPath)
 	if err != nil {
@@ -58,7 +59,10 @@ func run(tag, commit, changelogPath, goreleasePath, notesPath, repo string) erro
 	if token == "" {
 		token = os.Getenv("GH_TOKEN")
 	}
-	sources := releasecheck.Live{Dir: ".", Repo: repo, Module: "github.com/angvp/tango", Token: token}
+	var sources releasecheck.Sources = releasecheck.Live{Dir: ".", Repo: repo, Module: "github.com/angvp/tango", Token: token}
+	if !tagExists {
+		sources = notYetTagged{sources}
+	}
 	release := releasecheck.Release{Tag: tag, Commit: commit, Changelog: changelog, Gorelease: string(report)}
 	body, err := releasecheck.Check(ctx, release, sources)
 	if err != nil {
@@ -79,3 +83,10 @@ func envOr(key, fallback string) string {
 	}
 	return fallback
 }
+
+// notYetTagged checks a release before its tag exists, so nothing can be
+// published under it yet. It never asks the module proxy: the proxy caches
+// "unknown revision" for a while, which would delay the real release.
+type notYetTagged struct{ releasecheck.Sources }
+
+func (notYetTagged) PublishedCommit(context.Context, string) (string, error) { return "", nil }

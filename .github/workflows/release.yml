@@ -68,4 +68,6 @@ jobs:
       - name: Move the website to the release
         env:
           GH_TOKEN: ${{ secrets.TANGO_WEB_DISPATCH_TOKEN }}
-        run: gh workflow run follow-tango-release.yml --repo angvp/tango-web -f version="$TAG"
+        # --ref spares gh a default-branch lookup the token's Actions-only
+        # permission can't make.
+        run: gh workflow run follow-tango-release.yml --repo angvp/tango-web --ref main -f version="$TAG"
