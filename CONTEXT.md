@@ -107,3 +107,9 @@ Do not confuse this with a removal: during the window the old form must still wo
 The promise that a migration file written by a released `tango makemigrations` keeps compiling on every later v0.x release. Later runs can still read its header, and it still applies and rolls back. The promise holds even though the migration step types it uses are otherwise excluded from the Covered API.
 
 Do not confuse this with a promise about hand-written steps: only what a released generator wrote is protected.
+
+## Body limit
+
+The most bytes a request's body may carry before tanGO rejects the request as too large. When more than one body limit applies to a request, the most restrictive wins: a limit set closer to a View can keep or lower a limit set further out, never raise it. A route that must accept larger bodies is left outside the stricter limit rather than given a higher one.
+
+Do not confuse this with rate limiting, which bounds how often a caller may make requests, not how large one request may be.

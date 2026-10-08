@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- `tango.MaxBodySize(n)` middleware caps request bodies: an oversized body gets `413` with `{"error":"request body too large"}`. When several limits apply, the most restrictive wins.
+
 ### Fixed
 
 - A panic's `tango.http.panic` log reports the route's registered pattern (`/items/{id}/`), like every other log and metric for that request; it used to drop a trailing slash (`/items/{id}`).

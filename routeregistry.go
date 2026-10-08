@@ -160,6 +160,12 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 
 			ctx := newContextWithLogger(w, r, params, logger)
 			if err := view(ctx); err != nil {
+				// A body limit's rejection the View didn't handle is the
+				// client's error, not the server's.
+				if isBodyTooLarge(err) {
+					writeBodyTooLarge(w)
+					return
+				}
 				observabilitysafe.Call(func() {
 					ctx.Logger().LogAttrs(r.Context(), slog.LevelError, EventViewError, slog.Any("error", err))
 				})
