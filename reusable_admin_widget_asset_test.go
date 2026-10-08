@@ -12,52 +12,22 @@ package tango_test
 // app's other static asset.
 
 import (
-	"context"
 	"io"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
-	"time"
 )
 
 func TestReusableAppWidgetAssetIsServedFromHost(t *testing.T) {
-	const hostDir = "examples/reusable-greetings-host"
-	dbPath := filepath.Join(hostDir, "app.db")
-	_ = os.Remove(dbPath)
-	t.Cleanup(func() { _ = os.Remove(dbPath) })
+	baseURL := buildHostExample(t).serve(t)
+	url := baseURL + "/greetings/static/widget.js"
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "go", "run", ".")
-	cmd.Dir = hostDir
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start host server: %v", err)
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
 	}
-	t.Cleanup(func() { _ = cmd.Process.Kill() })
-
-	const url = "http://localhost:8000/greetings/static/widget.js"
-
-	var ok bool
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		resp, err := http.Get(url)
-		if err != nil {
-			time.Sleep(200 * time.Millisecond)
-			continue
-		}
-		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
-			ok = true
-			break
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	if !ok {
-		t.Fatalf("never got a 200 from %s — the reusable app's contributed admin.Widget asset is not reachable through the host", url)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s = %d, want 200: the reusable app's contributed admin.Widget asset is not reachable through the host", url, resp.StatusCode)
 	}
 }

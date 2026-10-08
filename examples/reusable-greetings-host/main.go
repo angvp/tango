@@ -33,14 +33,21 @@ func main() {
 }
 
 func run() int {
-	sqlDB, err := sql.Open("sqlite", "app.db")
+	// TANGO_DB_DSN picks the database (default sqlite://app.db), opened
+	// with the busy timeout and foreign keys db.ParseDSN adds.
+	dsn, err := tango.LoadDBConfigFromEnv()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	defer sqlDB.Close()
 
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dsn.Dialect)
 
 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
 		if err != nil {
@@ -57,13 +64,11 @@ func run() int {
 	down := flag.Bool("down", false, "roll back the last applied migration (with -migrate)")
 	flag.Parse()
 
-	config := tango.Config{
-		InstalledApps: []tango.App{
-			echo.App{},
-			greetings.New(store),
-			admin.New(store),
-		},
-		Addr: ":8000",
+	config := tango.LoadConfigFromEnv() // Addr from TANGO_ADDR, default :8000
+	config.InstalledApps = []tango.App{
+		echo.App{},
+		greetings.New(store),
+		admin.New(store),
 	}
 
 	if *dumpModels {
@@ -100,7 +105,7 @@ func run() int {
 	allMigrations = append(allMigrations, migrations.Migrations...)
 
 	if *status {
-		result := tango.Status(ctx, config, sqlDB, db.SQLite, allMigrations)
+		result := tango.Status(ctx, config, sqlDB, dsn.Dialect, allMigrations)
 		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
@@ -110,14 +115,14 @@ func run() int {
 
 	if *migrateFlag {
 		if *down {
-			if err := migration.RollbackLast(ctx, sqlDB, db.SQLite, allMigrations); err != nil {
+			if err := migration.RollbackLast(ctx, sqlDB, dsn.Dialect, allMigrations); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				return 1
 			}
 			fmt.Println("rolled back last migration")
 			return 0
 		}
-		if err := migration.ApplyPending(ctx, sqlDB, db.SQLite, allMigrations); err != nil {
+		if err := migration.ApplyPending(ctx, sqlDB, dsn.Dialect, allMigrations); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}

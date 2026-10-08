@@ -24,6 +24,8 @@ store := db.NewStore(sqlDB, db.SQLite)
 
 SQLite is `tango newproject`'s default — zero external services required. `modernc.org/sqlite` is a pure-Go driver (no cgo).
 
+A connection string written by hand like this gets neither the foreign key enforcement nor the 5-second busy timeout that `db.ParseDSN` adds, so a write that finds another connection's lock held fails at once with `database is locked (SQLITE_BUSY)`. Prefer `tango.LoadDBConfigFromEnv` or `db.ParseDSN("sqlite://app.db")`; if you do write it by hand, add both yourself: `app.db?_pragma=busy_timeout(5000)&_foreign_keys=on`.
+
 ## PostgreSQL
 
 ```go
