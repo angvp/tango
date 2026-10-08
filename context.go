@@ -26,14 +26,14 @@ type Context struct {
 // lands in a later milestone ticket; params may be nil or supplied directly
 // for now.
 func newContext(w http.ResponseWriter, r *http.Request, params map[string]string) *Context {
-	return newContextWithLogger(w, r, params, slog.Default(), "")
+	return newContextWithLogger(w, r, params, slog.Default())
 }
 
-func newContextWithLogger(w http.ResponseWriter, r *http.Request, params map[string]string, logger *slog.Logger, route string) *Context {
+func newContextWithLogger(w http.ResponseWriter, r *http.Request, params map[string]string, logger *slog.Logger) *Context {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	attrs := []any{slog.String("route", route), slog.String("method", r.Method)}
+	attrs := []any{slog.String("route", routeIdentity(r)), slog.String("method", r.Method)}
 	if requestID, ok := RequestIDFromContext(r.Context()); ok {
 		attrs = append(attrs, slog.String("request_id", requestID))
 	}

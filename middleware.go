@@ -15,7 +15,6 @@ import (
 
 	"github.com/angvp/tango/internal/observabilitysafe"
 	"github.com/angvp/tango/observability"
-	"github.com/go-chi/chi/v5"
 )
 
 // Middleware wraps a raw net/http handler before a *tango.Context exists.
@@ -175,14 +174,14 @@ func AccessLogger(opts ...AccessLogOption) Middleware {
 	}
 }
 
-func instrumentHTTP(next http.Handler, recorder observability.Recorder, method, route string) http.Handler {
+func instrumentHTTP(next http.Handler, recorder observability.Recorder, method string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		state := &responseStateWriter{ResponseWriter: w}
 		started := time.Now()
 		next.ServeHTTP(state, r)
 		observabilitysafe.Call(func() {
 			recorder.ObserveHistogram(observability.MetricHTTPRequestDuration, time.Since(started).Seconds(),
-				slog.String("route", route), slog.String("method", method), slog.Int("status", state.Status()))
+				slog.String("route", routeIdentity(r)), slog.String("method", method), slog.Int("status", state.Status()))
 		})
 	})
 }
@@ -217,18 +216,11 @@ func (w *responseStateWriter) Status() int {
 }
 
 func requestAttrs(r *http.Request) []slog.Attr {
-	attrs := []slog.Attr{slog.String("route", requestRoutePattern(r)), slog.String("method", r.Method)}
+	attrs := []slog.Attr{slog.String("route", routeIdentity(r)), slog.String("method", r.Method)}
 	if requestID, ok := RequestIDFromContext(r.Context()); ok {
 		attrs = append(attrs, slog.String("request_id", requestID))
 	}
 	return attrs
-}
-
-func requestRoutePattern(r *http.Request) string {
-	if routeContext := chi.RouteContext(r.Context()); routeContext != nil {
-		return routeContext.RoutePattern()
-	}
-	return ""
 }
 
 func validRequestID(value string) bool {

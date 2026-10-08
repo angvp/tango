@@ -158,7 +158,7 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 				}
 			}
 
-			ctx := newContextWithLogger(w, r, params, logger, route.pattern)
+			ctx := newContextWithLogger(w, r, params, logger)
 			if err := view(ctx); err != nil {
 				observabilitysafe.Call(func() {
 					ctx.Logger().LogAttrs(r.Context(), slog.LevelError, EventViewError, slog.Any("error", err))
@@ -169,8 +169,9 @@ func (rr *RouteRegistry) compile() (*compiled, error) {
 
 		handler := applyMiddleware(terminal, append(append([]Middleware(nil), rr.middleware...), route.middleware...))
 		if rr.recorderEnabled {
-			handler = instrumentHTTP(handler, recorder, route.method, route.pattern)
+			handler = instrumentHTTP(handler, recorder, route.method)
 		}
+		handler = identifyRoute(route.pattern, handler)
 		mux.Method(route.method, route.pattern, handler)
 	}
 
