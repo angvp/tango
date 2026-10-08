@@ -1,18 +1,19 @@
+// Command api-with-admin is a JSON API and the admin over one set of
+// models: authors (admin only) and posts (admin and a JSON API), linked by
+// a foreign key.
 package main
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"flag"
 	"fmt"
-	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
-	"github.com/angvp/tango/migration"
 
 	"api-with-admin/apps/authors"
 	"api-with-admin/apps/posts"
@@ -22,120 +23,48 @@ import (
 )
 
 func main() {
-	os.Exit(run())
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
-func run() int {
-	// sql.Open only validates the DSN; it doesn't dial the database, so it's
-	// safe to construct the store here and share it across every flag path
-	// (including -check/-tango-dump-models, which never touch it).
-	sqlDB, err := sql.Open("sqlite", "app.db")
+func run() error {
+	dsn, err := tango.LoadDBConfigFromEnv()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return err
+	}
+	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
+	if err != nil {
+		return err
 	}
 	defer sqlDB.Close()
 
-	store := db.NewStore(sqlDB, db.SQLite)
+	store := db.NewStore(sqlDB, dsn.Dialect)
+	config := appConfig(store)
 
-	// admin.HandleCLI scans os.Args itself and reports handled=false when
-	// none of its own flags (-tango-admin-create/-resetpassword/-deactivate)
-	// are present, so it's safe to check before flag.Parse() below — which
-	// would otherwise exit on any flag it doesn't recognize.
-	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
+	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
+		return err
+	}
+	if handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations); handled || err != nil {
+		return err
 	}
 
-	check := flag.Bool("check", false, "validate app registration and exit")
-	dumpModels := flag.Bool("tango-dump-models", false, "print registered models as JSON and exit")
-	status := flag.Bool("tango-status", false, "print project status as JSON and exit")
-	migrateFlag := flag.Bool("migrate", false, "apply pending migrations and exit")
-	down := flag.Bool("down", false, "roll back the last applied migration (with -migrate)")
-	flag.Parse()
-
-	config := tango.Config{
-		InstalledApps: []tango.App{
-			posts.New(store),
-			authors.New(),
-			admin.New(store),
-		},
-		Addr: ":8000",
-	}
-
-	if *dumpModels {
-		models, err := tango.DumpModels(config)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		if err := json.NewEncoder(os.Stdout).Encode(models); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
-	}
-
-	if *check {
-		if err := tango.Check(config); err != nil {
-			fmt.Fprintln(os.Stderr, "check failed:", err)
-			return 1
-		}
-		fmt.Println("check passed")
-		return 0
-	}
-
-	ctx := context.Background()
-
-	if *status {
-		result := tango.Status(ctx, config, sqlDB, db.SQLite, migrations.Migrations)
-		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
-	}
-
-	if *migrateFlag {
-		if *down {
-			if err := migration.RollbackLast(ctx, sqlDB, db.SQLite, migrations.Migrations); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return 1
-			}
-			fmt.Println("rolled back last migration")
-			return 0
-		}
-		if err := migration.ApplyPending(ctx, sqlDB, db.SQLite, migrations.Migrations); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		fmt.Println("migrations applied")
-		return 0
-	}
-
-	registry, err := tango.BuildRegistry(config)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if err := registry.RunRegistration(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	handler, err := registry.Routes().Handler()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
+	// Ctrl-C or SIGTERM cancels ctx, and ServeContext shuts down gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	fmt.Println("listening on", config.Addr)
-	if err := http.ListenAndServe(config.Addr, handler); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
+}
+
+// appConfig is the whole application; the tests build the same one.
+func appConfig(store *db.Store) tango.Config {
+	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	config.InstalledApps = []tango.App{
+		posts.New(store),
+		authors.New(),
+		admin.New(store),
 	}
-	return 0
+	return config
 }
