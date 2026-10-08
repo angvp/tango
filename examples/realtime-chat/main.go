@@ -72,8 +72,9 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Println("listening on :8000")
-	if err := tango.ServeContext(ctx, exampleConfig(hub, jwtService), nil, db.SQLite); err != nil {
+	config := exampleConfig(hub, jwtService)
+	fmt.Println("listening on", config.Addr)
+	if err := tango.ServeContext(ctx, config, nil, db.SQLite); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -140,7 +141,10 @@ func exampleConfig(hub *realtime.Hub, jwtService *tangojwt.Service) tango.Config
 			Stop: hub.Close,
 		})
 	})
-	return tango.Config{InstalledApps: []tango.App{app}, Addr: ":8000"}
+	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	config.InstalledApps = []tango.App{app}
+	return config
 }
 
 // chatLogic is the one room type this example's Hub serves: a plain

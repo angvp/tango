@@ -28,11 +28,15 @@ tools, not a production credential or authentication endpoint — same
 convention as `examples/jwt-api`.
 
 ```sh
+git clone https://github.com/angvp/tango
+cd tango/examples/realtime-chat
 go run . -issue-token alice
 go run .
 # in another terminal, using any WebSocket client:
 #   connect to ws://localhost:8000/rooms/demo/ws?token=<token>
 ```
+
+The address is `TANGO_ADDR`, else the `PORT` hosting platforms set, else `:8000`.
 
 Deliberately out of scope for this example (and for `realtime` itself):
 no persistence across a restart, no distributed/multi-process

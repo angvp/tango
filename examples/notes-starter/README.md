@@ -5,6 +5,8 @@ This example is a small tanGO app you could keep as a starting point: one model,
 ## Run locally
 
 ```sh
+git clone https://github.com/angvp/tango
+cd tango/examples/notes-starter
 go run . -check
 go run . -migrate
 go run . -tango-admin-create=admin
@@ -27,6 +29,7 @@ curl http://localhost:8000/api/notes/
 
 ## Configuration
 
+- The address is `TANGO_ADDR`, else the `PORT` hosting platforms set, else `:8000`. Ctrl-C or `SIGTERM` shuts the server down gracefully.
 - `TANGO_DB_DSN` picks the database by its scheme and defaults to `sqlite://app.db` (a file in the working directory). `sqlite:///var/data/app.db` is an absolute path and `sqlite://:memory:` an in-memory database.
 
 To adapt this example to Postgres, swap the `modernc.org/sqlite` driver import for `github.com/jackc/pgx/v5/stdlib` and set `TANGO_DB_DSN=postgres://user:password@host:5432/dbname`; the dialect and driver name come from the DSN. New projects can generate that shape directly with `tango newproject --dialect=postgres`.

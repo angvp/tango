@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/angvp/tango"
@@ -124,18 +126,21 @@ func run() error {
 		return err
 	}
 
+	// Ctrl-C or SIGTERM cancels ctx, and ServeContext shuts down gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	fmt.Println("listening on", config.Addr)
-	return tango.Serve(config, sqlDB, dsn.Dialect)
+	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
 }
 
 func appConfig(store *db.Store) tango.Config {
-	return tango.Config{
-		InstalledApps: []tango.App{
-			&NotesApp{store: store},
-			admin.New(store),
-		},
-		Addr: ":8000",
+	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	config.InstalledApps = []tango.App{
+		&NotesApp{store: store},
+		admin.New(store),
 	}
+	return config
 }
 
 // buildHandler compiles config into a servable http.Handler exactly the

@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/angvp/tango"
 	tangojwt "github.com/angvp/tango/auth/jwt"
+	"github.com/angvp/tango/db"
 )
 
 var exampleSecret = []byte("example-only-secret-not-for-production-use")
@@ -45,13 +49,13 @@ func run() int {
 		return 0
 	}
 
-	handler, err := buildHandler(service)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	fmt.Println("listening on :8000")
-	if err := http.ListenAndServe(":8000", handler); err != nil {
+	// Ctrl-C or SIGTERM cancels ctx, and ServeContext shuts down gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	config := exampleConfig(service)
+	fmt.Println("listening on", config.Addr)
+	// The example has no database, so ServeContext gets none.
+	if err := tango.ServeContext(ctx, config, nil, db.SQLite); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -88,5 +92,8 @@ func exampleConfig(service *tangojwt.Service) tango.Config {
 			tango.Path(http.MethodGet, "/me", me, tango.Name("me")),
 		}, tango.WithMiddleware(service.Middleware(tangojwt.BearerToken)))
 	})
-	return tango.Config{InstalledApps: []tango.App{app}, Addr: ":8000"}
+	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	config.InstalledApps = []tango.App{app}
+	return config
 }
