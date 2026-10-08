@@ -31,15 +31,19 @@ go install github.com/angvp/tango/cmd/tango@latest
 
 ## The smallest runnable application
 
-The fastest way to see a real one is [`examples/jsonapi`](examples/jsonapi) — a complete, separate Go module you can copy as a starting point. It was produced with:
+The fastest way to see a real one is [`examples/jsonapi`](examples/jsonapi): a complete, separate Go module whose one app answers a JSON route. Its `main.go` is written by hand, so it shows every line of a small application.
+
+To start your own project instead:
 
 ```sh
-tango newproject jsonapi
-cd jsonapi
-tango newapp greetings
+tango newproject shop
+cd shop
+go run .
 ```
 
-`tango newproject` scaffolds a `go.mod` and a small `main.go` pre-wired for SQLite and the admin app; create your first admin account afterward with `tango admin create <username>`. `tango newapp` scaffolds an app stub; wiring it into `main.go`'s `InstalledApps` is one line you write yourself — tanGO never edits your `main.go` for you. The example's app registers one named route:
+`tango newproject` scaffolds a `go.mod` and a `main.go` pre-wired for SQLite and the admin app, which runs unchanged; create your first admin account with `tango admin create <username>` and open `/admin/`. `tango newapp greetings` then scaffolds an app stub and prints the line that installs it: adding it to `main.go`'s `InstalledApps` is one line you write yourself — tanGO never edits your `main.go` for you.
+
+`examples/jsonapi`'s app registers one named route:
 
 ```go
 func (App) Register(registry *tango.Registry) error {

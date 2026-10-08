@@ -1,17 +1,16 @@
+// Command jsonapi is the smallest JSON application: one hand-written app,
+// installed in main.go, answering one named route.
 package main
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"flag"
 	"fmt"
-	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/angvp/tango"
-	"github.com/angvp/tango/db"
-	"github.com/angvp/tango/migration"
 
 	"jsonapi/apps/greetings"
 	"jsonapi/migrations"
@@ -20,100 +19,40 @@ import (
 )
 
 func main() {
-	os.Exit(run())
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
-func run() int {
-	check := flag.Bool("check", false, "validate app registration and exit")
-	dumpModels := flag.Bool("tango-dump-models", false, "print registered models as JSON and exit")
-	status := flag.Bool("tango-status", false, "print project status as JSON and exit")
-	migrateFlag := flag.Bool("migrate", false, "apply pending migrations and exit")
-	down := flag.Bool("down", false, "roll back the last applied migration (with -migrate)")
-	flag.Parse()
-
-	config := tango.Config{
-		InstalledApps: []tango.App{greetings.App{}},
-		Addr:          ":8000",
-	}
-
-	if *dumpModels {
-		models, err := tango.DumpModels(config)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		if err := json.NewEncoder(os.Stdout).Encode(models); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
-	}
-
-	if *check {
-		if err := tango.Check(config); err != nil {
-			fmt.Fprintln(os.Stderr, "check failed:", err)
-			return 1
-		}
-		fmt.Println("check passed")
-		return 0
-	}
-
-	sqlDB, err := sql.Open("sqlite", "app.db")
+func run() error {
+	dsn, err := tango.LoadDBConfigFromEnv()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return err
+	}
+	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
+	if err != nil {
+		return err
 	}
 	defer sqlDB.Close()
 
-	ctx := context.Background()
-
-	if *status {
-		result := tango.Status(ctx, config, sqlDB, db.SQLite, migrations.Migrations)
-		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
+	config := appConfig()
+	if handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations); handled || err != nil {
+		return err
 	}
 
-	if *migrateFlag {
-		if *down {
-			if err := migration.RollbackLast(ctx, sqlDB, db.SQLite, migrations.Migrations); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return 1
-			}
-			fmt.Println("rolled back last migration")
-			return 0
-		}
-		if err := migration.ApplyPending(ctx, sqlDB, db.SQLite, migrations.Migrations); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		fmt.Println("migrations applied")
-		return 0
-	}
-
-	registry, err := tango.BuildRegistry(config)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if err := registry.RunRegistration(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	registry.SetStore(db.NewStore(sqlDB, db.SQLite))
-
-	handler, err := registry.Routes().Handler()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
+	// Ctrl-C or SIGTERM cancels ctx, and ServeContext shuts down gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	fmt.Println("listening on", config.Addr)
-	if err := http.ListenAndServe(config.Addr, handler); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	return 0
+	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
+}
+
+// appConfig is the whole application; the test builds the same one. An app
+// is installed by listing it here: tango newapp never edits this file.
+func appConfig() tango.Config {
+	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	config.InstalledApps = []tango.App{greetings.App{}}
+	return config
 }
