@@ -119,3 +119,25 @@ Do not confuse this with a View that answers "not found" for a route it does mat
 The most bytes a request's body may carry before tanGO rejects the request as too large. When more than one body limit applies to a request, the most restrictive wins: a limit set closer to a View can keep or lower a limit set further out, never raise it. A route that must accept larger bodies is left outside the stricter limit rather than given a higher one.
 
 Do not confuse this with rate limiting, which bounds how often a caller may make requests, not how large one request may be.
+
+## Sender
+
+Whatever delivers an outgoing email message on the application's behalf: an SMTP relay, a provider, or a development stand-in that only writes the message out. Sending is outbound only; a Sender never receives mail.
+
+Do not confuse a Sender with the message's `From` address: the Sender is how a message travels, `From` is who it says it's from.
+
+## Reset token
+
+A secret, single-use proof that whoever holds it can choose a new password for one account. It is sent only to that account's email address, expires after a short time, and stops working once used or once a newer one is issued for the same account. Completing a reset ends every login the account had.
+
+Do not confuse it with a session token, which proves a login already happened, or with a JWT, which can't be revoked.
+
+## Verified email
+
+An account whose owner has proven they receive mail at its email address, and when they did. It is information about identity, not a permission and not activity state: an unverified account can still log in, and only an application that asks for verification blocks it.
+
+Do not confuse this with an account being active, which is an operator's decision.
+
+## Public base URL
+
+The absolute origin, such as `https://example.com`, that links sent outside a request are built on, for example in an email. It is configured by the application, never taken from the request that caused the email.

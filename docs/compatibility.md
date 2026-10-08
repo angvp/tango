@@ -14,7 +14,7 @@ tanGO makes no v1.0 stability promise yet.
 
 Everything below is covered unless it is named under [what is not covered](#what-is-not-covered).
 
-- **Every exported identifier of every public package**: the root `tango` package, `accounts`, `admin`, `auth`, `auth/jwt`, `db`, `i18n`, `migration`, `model`, `observability`, `ratelimit`, `realtime`, `realtime/websocket` and `testdb`. Exported means types, functions, methods, constants, variables, and the exported fields of exported structs.
+- **Every exported identifier of every public package**: the root `tango` package, `accounts`, `admin`, `auth`, `auth/jwt`, `db`, `i18n`, `mail`, `mail/mailtest`, `migration`, `model`, `observability`, `ratelimit`, `realtime`, `realtime/websocket` and `testdb`. Exported means types, functions, methods, constants, variables, and the exported fields of exported structs.
 - **Every `tango` CLI command** (`newproject`, `newapp`, `run`, `check`, `makemigrations`, `migrate`, `migrate down`, `admin …` and `tui`; `tango help` lists them), with its flags.
 - **The app-side flags** a generated `main.go` dispatches, with their JSON output and exit-code expectations:
   - `-check` validates registration, route compilation, and app-contributed checks, then exits non-zero on failure.

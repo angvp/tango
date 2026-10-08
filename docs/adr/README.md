@@ -49,3 +49,4 @@ New records take the next free number here. This directory is the single, public
 | [0041](0041-renames-and-drops-are-explicit-makemigrations-flags.md) | Renames and drops are explicit `makemigrations` flags (`--rename`, per-item `--allow-drop`), and drops are refused by default | Accepted |
 | [0042](0042-v0-1-covers-every-exported-api-except-named-exclusions.md) | v0.1 covers every exported API except named exclusions; minor releases may break only after a one-minor Deprecation window | Accepted |
 | [0043](0043-global-middleware-can-wrap-the-whole-router-as-an-opt-in-scope.md) | Global middleware can wrap the whole router as an opt-in scope (`Config.MiddlewareScope`); behaviour changes ship opt-in first | Accepted |
+| [0044](0044-mail-is-a-sender-interface-with-tls-required-smtp.md) | Mail is a `Sender` interface with TLS-required SMTP and no automatic development fallback | Proposed |
