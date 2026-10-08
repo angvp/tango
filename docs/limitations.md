@@ -1,17 +1,16 @@
-# Limitations and compatibility
+# Limitations
 
-tanGO is still early. This page is the honest summary of where it stops, so you can decide whether that's fine for your project before investing in it.
+tanGO is still early. This page is the honest summary of where it stops, so you can decide whether that's fine for your project before investing in it. What each release promises not to break, and how breaking changes are announced, is in [Versioning and compatibility](compatibility.md).
 
 ## Non-goals
 
 - **Only one relationship shape: many-to-one foreign keys.** A field like `AuthorID int64 \`tango:"fk=Author"\`` is the whole contract — see [relationships and admin foreign keys](guides/relationships-and-admin-foreign-keys.md), which together with schema validation, referential-integrity validation, and cascade delete makes up what tanGO calls its **minimal ORM foundations**: deliberately not a full ORM. No many-to-many, no reverse accessors (`author.Posts`), no eager/lazy loading, no automatic joins. If you need any of those, write the SQL yourself via `Store.Query`/`QueryRow` — see [where `Store` stops](guides/relationships-and-admin-foreign-keys.md#where-store-stops-and-raw-sql-begins).
 - **Composite unique/index constraints aren't supported.** A field's `tango:"unique"`/`tango:"index"` tag always describes that one column alone; there is no equivalent of Django's `unique_together` (a composite constraint spanning multiple fields) yet. This is a deliberate gap, not an oversight — if it's designed later, it will be a separate, non-tag, registration-time mechanism, Django-inspired in spirit but not an extension of the `fk=`/`unique`/`index` tag grammar.
 - **Admin's foreign key select has no raw-SQL escape hatch.** Rendering an FK `<select>` or a related-object label runs one query per row (N+1) — acceptable for the admin (already a non-optimized internal tool), but there's no way yet to hand-optimize a specific list page with a custom join.
-- **Admin extensibility stops well short of Django admin.** `admin.Widget`, the `Options` presentation fields, and `admin.WithBranding` (see [admin registration](guides/admin-registration.md)) cover per-field customization and two branding slots — deliberately not inlines, admin actions, permission matrices, custom querysets, custom changelist views, or full `ModelAdmin`-style subclassing. None of those are planned; each would be its own future milestone if ever built.
+- **Admin extensibility stops well short of Django admin.** `admin.Widget`, the `Options` presentation fields, and `admin.WithBranding` (see [admin registration](guides/admin-registration.md)) cover per-field customization and two branding slots, and are best-effort (see [what is not covered](compatibility.md#what-is-not-covered)) — deliberately not inlines, admin actions, permission matrices, custom querysets, custom changelist views, or full `ModelAdmin`-style subclassing. None of those are planned; each would be its own future milestone if ever built.
 - **Contributed migrations require explicit concatenation, not automatic discovery.** A reusable app can ship its own `Migrations` var, generated with a throwaway harness inside its own repo; the host project's `main.go` must explicitly concatenate it with the host's own `migrations.Migrations` before calling `DispatchFlags`/`ApplyPending`/`RollbackLast` — tanGO never scans installed apps for migrations on its own. See [reusable apps](guides/reusable-apps.md).
 - **Renames must be declared, and only widening type changes are generated.** Field and model renames are supported, but only when you declare them (`tango makemigrations --rename app.Model.Field=NewField` or `--rename app.Model=NewModel`); tanGO never infers one, and an undeclared rename is refused as an unauthorised drop. A field's type can change only by a Widening type change (`integer` to `real` or `text`, `real` to `text`, `boolean` to `integer` or `text`); any other type change, a change to which field is the primary key, or to a foreign key's target, makes `tango makemigrations` refuse with an error naming each such field, and write nothing.
 - **`tango shell` is not implemented.** Its direction (a Yaegi-based Go interpreter, not a subprocess-per-command or a debugger) is decided, but the command itself isn't built yet.
-- **No generated documentation site.** Docs are repository Markdown plus generated Go package docs (`go doc`, pkg.go.dev). No Docusaurus/Hugo/mkdocs site.
 - **No `tango newproject`/`newapp` interactive wizard.** Both are non-interactive, single-shot scaffolding commands; there's no guided multi-step prompt flow.
 
 ## Security boundaries
@@ -40,33 +39,11 @@ See the [SQLite/PostgreSQL setup guide](guides/sqlite-and-postgresql-setup.md) f
 
 A migration containing `DropColumn`, `DropTable` or `AlterColumnType` is marked irreversible. `tango migrate down` on one fails explicitly with a clear error rather than attempting to restore data it has no way to recover. If you need to test a rollback path, do it in a disposable database before applying the same migration to data you care about.
 
-## Stable CLI app-side flags
-
-The generated `main.go` flag-dispatch convention is a stable contract:
-
-- `-check` validates registration, route compilation, and app-contributed checks, then exits non-zero on failure.
-- `-tango-dump-models` prints registered model metadata as JSON for `tango makemigrations`.
-- `-tango-status` prints registration/database/migration status as JSON for `tango tui`; it is read-only and does not create `tango_migrations`.
-- `-migrate` applies pending migrations.
-- `-migrate -down` rolls back the most recently applied migration.
-- `-tango-admin-create`/`-resetpassword`/`-deactivate` (behind `tango admin create/resetpassword/deactivate`) manage Admin accounts, when the admin app is installed.
-
-Future breaking changes to these flag names, JSON shapes, or exit-code expectations must be called out ahead of time in "APIs still expected to change" before they land.
-
 ## Observability boundaries
 
 - Automatic HTTP metrics and `AccessLogger` observe matched routes, including middleware short-circuits and View errors. Router-generated 404 and 405 responses do not pass through the per-route pipeline and are not observed in this version.
 - Metrics are backend-neutral only. tanGO does not ship Prometheus/OpenTelemetry exporters, dashboards, distributed tracing, DB timing, or log shipping.
 - Realtime and root HTTP/scheduler recorders are configured independently to preserve the package boundary.
-
-## APIs still expected to change before a stable release
-
-- **CLI-internal migration shapes.** `migration.Step`/`Model`/`SchemaState` and the diff/replay helpers are exported for generated files and the `tango` CLI, not as hand-authored application APIs; see the [`migration` reference](reference.md#migration-githubcomangvptangomigration).
-- **`Config`'s fields.** `InstalledApps`/`Addr` are the whole of it today; expect this to grow only when a concrete consumer forces the shape, per this project's own design principle.
-
-## Best-effort admin extensibility
-
-`admin.Widget`, the `admin.Options` fields it and `Labels`/`HelpText`/`ReadOnly`/`FieldOrder` live in, the built-in widgets, and `admin.Branding`/`admin.WithBranding` are **best-effort**, not one of the [stable CLI app-side flags](#stable-cli-app-side-flags) above. This is a different, narrower promise than "APIs still expected to change before a stable release" just above: that section names things expected to *settle* before a stable release. This admin-extensibility surface is expected to keep evolving even after that, because admin's internals — its rendering, its default field behaviors, its theme — aren't finished settling and are likely to keep changing as real usage surfaces gaps. Breaking changes here may land without the advance-notice process the stable CLI flags get.
 
 ## Test coverage
 

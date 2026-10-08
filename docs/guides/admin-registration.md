@@ -198,4 +198,4 @@ Omit it — `admin.New(store)` with no options — and the sidebar shows tanGO's
 
 ## Stability
 
-`Widget`, the `Options` fields this section and the one above describe, the built-in widgets, and `Branding` are **best-effort**, not one of tanGO's [stable contracts](../limitations.md#stable-cli-app-side-flags): admin's internals are still expected to evolve, and this surface may change without the advance-notice process those contracts get. This is different from `docs/limitations.md`'s "APIs still expected to change before a stable release" — that section names things expected to *settle* before a stable release; this surface is expected to keep evolving even after that.
+`Widget`, the `Options` fields this section and the one above describe, the built-in widgets, and `Branding` are **best-effort**: they are [not covered](../compatibility.md#what-is-not-covered) by tanGO's compatibility promise. Admin's internals are still expected to evolve, so this surface may change in any minor release without a Deprecation window; the changelog still lists every change.

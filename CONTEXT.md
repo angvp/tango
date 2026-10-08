@@ -83,3 +83,27 @@ Do not confuse this with a drop plus an add: a drop destroys the data, a rename 
 A change to a field's Go type whose new column type can hold every value the old one could, so existing rows convert without loss or failure: `integer` to `real` or `text`, `real` to `text`, and `boolean` to `integer` or `text`. These are the only column type changes a generated migration expresses; any other type change is refused when migrations are generated.
 
 Do not confuse this with a narrowing change (for example `text` to `integer`), where some existing values cannot convert. Changes within one column type, such as `int` to `int64`, are not type changes at all.
+
+## Covered API
+
+The public surface tanGO's compatibility promise applies to. It covers:
+
+- every exported identifier of every public package;
+- every `tango` CLI command and CLI app-side flag;
+- the other contracts the compatibility page lists, such as environment variables and machine-read JSON.
+
+Some exports are excluded by name, and anything not excluded is covered. A patch release never intentionally breaks the Covered API. A minor release may break it, but only after a Deprecation window.
+
+Do not confuse this with "exported": an exported identifier can be excluded, such as the migration step types. Something that isn't Go at all can be covered, such as `TANGO_DB_DSN`.
+
+## Deprecation window
+
+The period, at least one minor release long, during which a deprecated part of the Covered API keeps working before a later minor release may remove it. For example, something deprecated in 0.2 can be removed no earlier than 0.3. A deprecation is announced in the Go doc comment, the changelog and the release notes. A behaviour change with no symbol to mark is announced in the changelog one minor release ahead.
+
+Do not confuse this with a removal: during the window the old form must still work.
+
+## Generated-file contract
+
+The promise that a migration file written by a released `tango makemigrations` keeps compiling on every later v0.x release. Later runs can still read its header, and it still applies and rolls back. The promise holds even though the migration step types it uses are otherwise excluded from the Covered API.
+
+Do not confuse this with a promise about hand-written steps: only what a released generator wrote is protected.

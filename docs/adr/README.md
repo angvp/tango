@@ -47,3 +47,4 @@ New records take the next free number here. This directory is the single, public
 | [0039](0039-secure-cookies-trust-forwarded-proto.md) | Cookies' Secure flag trusts the proxy's forwarded protocol | Accepted |
 | [0040](0040-tests-run-once-per-test-dialect-chosen-by-one-scheme-driven-dsn.md) | Tests run once per Test dialect, chosen by one scheme-driven `TANGO_TEST_DSN` through a public `testdb` package | Accepted |
 | [0041](0041-renames-and-drops-are-explicit-makemigrations-flags.md) | Renames and drops are explicit `makemigrations` flags (`--rename`, per-item `--allow-drop`), and drops are refused by default | Accepted |
+| [0042](0042-v0-1-covers-every-exported-api-except-named-exclusions.md) | v0.1 covers every exported API except named exclusions; minor releases may break only after a one-minor Deprecation window | Accepted |
