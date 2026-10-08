@@ -8,11 +8,10 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"flag"
 	"fmt"
-	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
@@ -29,128 +28,59 @@ import (
 )
 
 func main() {
-	os.Exit(run())
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
-func run() int {
+func run() error {
 	// TANGO_DB_DSN picks the database (default sqlite://app.db), opened
 	// with the busy timeout and foreign keys db.ParseDSN adds.
 	dsn, err := tango.LoadDBConfigFromEnv()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return err
 	}
 	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return err
 	}
 	defer sqlDB.Close()
 
 	store := db.NewStore(sqlDB, dsn.Dialect)
+	config := appConfig(store)
 
-	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
+	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
+		return err
+	}
+	if handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, allMigrations()); handled || err != nil {
+		return err
 	}
 
-	check := flag.Bool("check", false, "validate app registration and exit")
-	dumpModels := flag.Bool("tango-dump-models", false, "print registered models as JSON and exit")
-	status := flag.Bool("tango-status", false, "print project status as JSON and exit")
-	migrateFlag := flag.Bool("migrate", false, "apply pending migrations and exit")
-	down := flag.Bool("down", false, "roll back the last applied migration (with -migrate)")
-	flag.Parse()
+	// Ctrl-C or SIGTERM cancels ctx, and ServeContext shuts down gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	fmt.Println("listening on", config.Addr)
+	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
+}
 
-	config := tango.LoadConfigFromEnv() // Addr from TANGO_ADDR, default :8000
+// appConfig is the whole host; the test builds the same one.
+func appConfig(store *db.Store) tango.Config {
+	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
 	config.InstalledApps = []tango.App{
 		echo.App{},
 		greetings.New(store),
 		admin.New(store),
 	}
+	return config
+}
 
-	if *dumpModels {
-		models, err := tango.DumpModels(config)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		if err := json.NewEncoder(os.Stdout).Encode(models); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
-	}
-
-	if *check {
-		if err := tango.Check(config); err != nil {
-			fmt.Fprintln(os.Stderr, "check failed:", err)
-			return 1
-		}
-		fmt.Println("check passed")
-		return 0
-	}
-
-	ctx := context.Background()
-
-	// Contributed migrations (greetingsmigrations.Migrations, shipped inside
-	// the reusable app's own repo) are concatenated with this host's own
-	// migrations, in InstalledApps order (greetings.New before this host's
-	// own local migrations), before anything is applied or reported — see
-	// docs/guides/reusable-apps.md.
-	var allMigrations []migration.Migration
-	allMigrations = append(allMigrations, greetingsmigrations.Migrations...)
-	allMigrations = append(allMigrations, migrations.Migrations...)
-
-	if *status {
-		result := tango.Status(ctx, config, sqlDB, dsn.Dialect, allMigrations)
-		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
-	}
-
-	if *migrateFlag {
-		if *down {
-			if err := migration.RollbackLast(ctx, sqlDB, dsn.Dialect, allMigrations); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return 1
-			}
-			fmt.Println("rolled back last migration")
-			return 0
-		}
-		if err := migration.ApplyPending(ctx, sqlDB, dsn.Dialect, allMigrations); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		fmt.Println("migrations applied")
-		return 0
-	}
-
-	registry, err := tango.BuildRegistry(config)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if err := registry.RunRegistration(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	registry.SetStore(store)
-
-	handler, err := registry.Routes().Handler()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	fmt.Println("listening on", config.Addr)
-	if err := http.ListenAndServe(config.Addr, handler); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	return 0
+// allMigrations is the reusable app's contributed migrations (shipped inside
+// its own repo) followed by this host's own, in InstalledApps order, before
+// anything is applied or reported — see docs/guides/reusable-apps.md.
+func allMigrations() []migration.Migration {
+	var all []migration.Migration
+	all = append(all, greetingsmigrations.Migrations...)
+	return append(all, migrations.Migrations...)
 }
