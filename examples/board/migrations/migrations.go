@@ -49,4 +49,14 @@ var Migrations = []migration.Migration{
 			migration.DropColumn{Table: "post", Column: "account_id"},
 		},
 	},
+	{App: "accounts", Name: "0006_auto_20261008201421", Reversible: true,
+		Up: []migration.Step{
+			migration.AddColumn{Table: "account", Column: migration.Column{Name: "email_verified_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}},
+			migration.CreateTable{Table: "account_token", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "token_hash", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, {Name: "account_id", Type: "integer", PrimaryKey: false, Unique: false, Indexed: true, References: "account"}, {Name: "purpose", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "address_hash", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "expires_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+		},
+		Down: []migration.Step{
+			migration.DropTable{Table: "account_token"},
+			migration.DropColumn{Table: "account", Column: "email_verified_at"},
+		},
+	},
 }

@@ -1,0 +1,110 @@
+[
+  {
+    "App": "accounts",
+    "Name": "account",
+    "Columns": [
+      {
+        "Name": "id",
+        "Type": "integer",
+        "PrimaryKey": true,
+        "Unique": false,
+        "Indexed": false,
+        "References": "",
+        "Default": ""
+      },
+      {
+        "Name": "email",
+        "Type": "text",
+        "PrimaryKey": false,
+        "Unique": true,
+        "Indexed": false,
+        "References": "",
+        "Default": ""
+      },
+      {
+        "Name": "password_hash",
+        "Type": "text",
+        "PrimaryKey": false,
+        "Unique": false,
+        "Indexed": false,
+        "References": "",
+        "Default": ""
+      },
+      {
+        "Name": "active",
+        "Type": "boolean",
+        "PrimaryKey": false,
+        "Unique": false,
+        "Indexed": false,
+        "References": "",
+        "Default": ""
+      },
+      {
+        "Name": "created_at",
+        "Type": "timestamp",
+        "PrimaryKey": false,
+        "Unique": false,
+        "Indexed": false,
+        "References": "",
+        "Default": ""
+      }
+    ],
+    "Struct": "Account",
+    "Fields": {
+      "active": "Active",
+      "created_at": "CreatedAt",
+      "email": "Email",
+      "id": "ID",
+      "password_hash": "PasswordHash"
+    }
+  },
+  {
+    "App": "accounts",
+    "Name": "account_session",
+    "Columns": [
+      {
+        "Name": "id",
+        "Type": "integer",
+        "PrimaryKey": true,
+        "Unique": false,
+        "Indexed": false,
+        "References": "",
+        "Default": ""
+      },
+      {
+        "Name": "token",
+        "Type": "text",
+        "PrimaryKey": false,
+        "Unique": true,
+        "Indexed": false,
+        "References": "",
+        "Default": ""
+      },
+      {
+        "Name": "user_id",
+        "Type": "integer",
+        "PrimaryKey": false,
+        "Unique": false,
+        "Indexed": true,
+        "References": "account",
+        "Default": ""
+      },
+      {
+        "Name": "expires_at",
+        "Type": "timestamp",
+        "PrimaryKey": false,
+        "Unique": false,
+        "Indexed": false,
+        "References": "",
+        "Default": ""
+      }
+    ],
+    "Struct": "AccountSession",
+    "Fields": {
+      "expires_at": "ExpiresAt",
+      "id": "ID",
+      "token": "Token",
+      "user_id": "UserID"
+    }
+  }
+]

@@ -26,7 +26,7 @@ func TestAccountHasNoPermissionShapedField(t *testing.T) {
 		fieldNames = append(fieldNames, typ.Field(i).Name)
 	}
 
-	want := []string{"ID", "Email", "PasswordHash", "Active", "CreatedAt"}
+	want := []string{"ID", "Email", "PasswordHash", "Active", "CreatedAt", "EmailVerifiedAt"}
 	if !reflect.DeepEqual(fieldNames, want) {
 		t.Fatalf("Account fields = %v, want exactly %v (no permission-shaped field)", fieldNames, want)
 	}
@@ -42,7 +42,7 @@ func newTestStore(t *testing.T) *db.Store {
 func accountsModels(t *testing.T) []model.ModelMeta {
 	t.Helper()
 	registry := model.NewRegistry()
-	for _, m := range []any{accounts.Account{}, accounts.AccountSession{}} {
+	for _, m := range []any{accounts.Account{}, accounts.AccountSession{}, accounts.AccountToken{}} {
 		if err := registry.Register(m); err != nil {
 			t.Fatalf("register %T: %v", m, err)
 		}

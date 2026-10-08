@@ -13,6 +13,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
   - `MiddlewareScopeAll`.
 
   Existing applications keep their behaviour unless they opt in.
+- `accounts` models gain `Account.EmailVerifiedAt` and a new `AccountToken` model, for password reset and email verification. Every app that installs `accounts` must run `tango makemigrations` and apply the result with `-migrate`, whether or not it enables mail: the change only adds a column and a table, so it needs no `--rename` or `--allow-drop`. Existing accounts read as unverified; nothing is gated on it unless an app uses `accounts.RequireVerified`.
 - The `route` attribute is now the route's registered pattern in every log and metric for a request, trailing slash included (`/items/{id}/`), under both middleware scopes. The `tango.http.access`, `tango.http.panic` and `tango.http.request_id_generation_failed` logs used to drop a trailing slash (`/items/{id}`), while `ctx.Logger()`, `tango.http.view_error` and the HTTP metrics did not, so the same request reported two routes. Dashboards or alerts that match these three events on a trimmed `route` need the registered spelling. The attribute key is unchanged.
 
 ### Added

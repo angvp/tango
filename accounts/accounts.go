@@ -80,6 +80,9 @@ func New(store *db.Store, opts ...Option) tango.App {
 		if err := registry.Models().Register(AccountSession{}); err != nil {
 			return err
 		}
+		if err := registry.Models().Register(AccountToken{}); err != nil {
+			return err
+		}
 
 		registerLimiter := security.NewRateLimiter(registerRateLimitAttempts, registerRateLimitWindow)
 		loginLimiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)

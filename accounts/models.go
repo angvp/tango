@@ -16,12 +16,42 @@ import (
 // Active gates both a fresh login and every subsequent request through an
 // already-valid session — not just login, unlike auth.SessionUser, which
 // has no notion of Active at all.
+//
+// EmailVerifiedAt is when the owner proved they receive mail at Email; the
+// zero time means unverified. It gates nothing by itself: an app that needs
+// a verified email guards its Views with RequireVerified. Whoever changes
+// Email must clear it.
 type Account struct {
-	ID           int64  `tango:"pk"`
-	Email        string `tango:"unique"`
-	PasswordHash string
-	Active       bool
-	CreatedAt    time.Time
+	ID              int64  `tango:"pk"`
+	Email           string `tango:"unique"`
+	PasswordHash    string
+	Active          bool
+	CreatedAt       time.Time
+	EmailVerifiedAt time.Time
+}
+
+// TokenPurpose is what an AccountToken proves.
+type TokenPurpose string
+
+// The two purposes an AccountToken can have.
+const (
+	PurposePasswordReset     TokenPurpose = "password_reset"
+	PurposeEmailVerification TokenPurpose = "email_verification"
+)
+
+// AccountToken is one outstanding emailed token: a password reset or an
+// email verification for one Account. Only hashes are stored: TokenHash is
+// the SHA-256 of the token the email carried, and AddressHash the SHA-256
+// of the normalized address it was sent to, so a token stops working if
+// the account's Email changes. A token is single-use and expires at
+// ExpiresAt.
+type AccountToken struct {
+	ID          int64  `tango:"pk"`
+	TokenHash   string `tango:"unique"`
+	AccountID   int64  `tango:"fk=Account,index"`
+	Purpose     TokenPurpose
+	AddressHash string
+	ExpiresAt   time.Time
 }
 
 // AccountSession is one active login for an Account: a session token, which
@@ -50,6 +80,7 @@ func accountModelMetas() (accountMeta model.ModelMeta, sessionMeta model.ModelMe
 	// errors cannot occur here in practice.
 	_ = registry.Register(Account{})
 	_ = registry.Register(AccountSession{})
+	_ = registry.Register(AccountToken{})
 	accountMeta, _ = registry.Get("Account")
 	sessionMeta, _ = registry.Get("AccountSession")
 	return accountMeta, sessionMeta

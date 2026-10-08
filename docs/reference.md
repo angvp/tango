@@ -179,7 +179,8 @@ Independent of `admin`/`accounts`' existing failed-login-attempt limiter, which 
 | Symbol | What it's for |
 |---|---|
 | `func New(store *db.Store, opts ...Option) tango.App` | Constructs the accounts application, installable via `InstalledApps` like any reusable app. Mounts a fixed `/accounts/register/`, `/accounts/login/`, `/accounts/logout/`. `New(store)` with no options defaults to signup enabled, a 30-day session in a `tango_account_session` cookie. |
-| `type Account struct{ ID, Email, PasswordHash, Active, CreatedAt }`, `type AccountSession struct{ ID, Token, UserID, ExpiresAt }` | The Application user/session model pair `New` registers. Deliberately no permission-shaped field on `Account` — see [the accounts guide](guides/accounts.md). |
+| `type Account struct{ ID, Email, PasswordHash, Active, CreatedAt, EmailVerifiedAt }`, `type AccountSession struct{ ID, Token, UserID, ExpiresAt }` | The Application user/session model pair `New` registers. Deliberately no permission-shaped field on `Account` — see [the accounts guide](guides/accounts.md). `EmailVerifiedAt` is when the owner proved they receive mail at `Email`; the zero time means unverified, and it gates nothing by itself. |
+| `type AccountToken struct{ ID, TokenHash, AccountID, Purpose, AddressHash, ExpiresAt }`, `type TokenPurpose`, `PurposePasswordReset`, `PurposeEmailVerification` | One outstanding emailed token, registered by `New` with the other models. Only hashes are stored: of the token, and of the address it was sent to. |
 | `func WithSignupDisabled() Option` | Closes self-service registration; `/accounts/register/` still returns a clear closed-registration response, never 404. Signup is enabled by default. |
 | `func WithSessionDuration(d time.Duration) Option` | Overrides the default 30-day session duration. |
 | `func WithSessionCookieName(name string) Option`, `DefaultSessionCookieName` | Overrides (or names) the session cookie, default `"tango_account_session"`. |
