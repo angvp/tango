@@ -210,7 +210,7 @@ type Migration struct {
 }
 ```
 
-`Step` is implemented by `CreateTable`, `DropTable`, `AddColumn`, `DropColumn`, `AlterColumnUnique`, `CreateIndex`, and `DropIndex` — each a plain struct describing one dialect-agnostic schema operation. Treat these as "what generated code looks like," not a hand-authored API.
+`Step` is implemented by `CreateTable`, `DropTable`, `AddColumn`, `DropColumn`, `AlterColumnUnique`, `CreateIndex`, `DropIndex`, `RenameColumn`, `RenameTable` and `AlterColumnType` — each a plain struct describing one dialect-agnostic schema operation. Treat these as "what generated code looks like," not a hand-authored API.
 
 Stable runtime contract:
 
@@ -227,10 +227,10 @@ CLI-internal exported surface:
 
 | Symbol | What it's for |
 |---|---|
-| `type Step`, `type Column`, `CreateTable`, `DropTable`, `AddColumn`, `DropColumn`, `AlterColumnUnique`, `CreateIndex`, `DropIndex` | Generated migration-file representation; don't hand-author these in application code. `Column.Default` is a raw SQL literal (e.g. `"TRUE"`), not a typed Go value — when set, `AddColumn` (and only `AddColumn`) emits `NOT NULL DEFAULT <Default>` so pre-existing rows backfill instead of going `NULL`; `CreateTable` ignores it, since a freshly created table has no existing rows to backfill. `tango makemigrations` never produces one from a model's struct tags; it only ever survives on a migration where it was hand-set (e.g. admin's `IsStaff`/`IsSuperuser` columns). Not a general default-value system for model fields. |
-| `type Model`, `func ModelsFromMeta(...)` | The `-tango-dump-models` JSON bridge used by `tango makemigrations`. |
+| `type Step`, `type Column`, `CreateTable`, `DropTable`, `AddColumn`, `DropColumn`, `AlterColumnUnique`, `CreateIndex`, `DropIndex`, `RenameColumn`, `RenameTable`, `AlterColumnType` | Generated migration-file representation; don't hand-author these in application code. `Column.Default` is a raw SQL literal (e.g. `"TRUE"`), not a typed Go value — when set, `AddColumn` (and only `AddColumn`) emits `NOT NULL DEFAULT <Default>` so pre-existing rows backfill instead of going `NULL`; `CreateTable` ignores it, since a freshly created table has no existing rows to backfill. `tango makemigrations` never produces one from a model's struct tags; it only ever survives on a migration where it was hand-set (e.g. admin's `IsStaff`/`IsSuperuser` columns). Not a general default-value system for model fields. |
+| `type Model`, `func ModelsFromMeta(...)` | The `-tango-dump-models` JSON bridge used by `tango makemigrations`; `Model.Struct` and `Model.Fields` carry the Go names its errors use. |
 | `func Replay(...)`, `type SchemaState`, `type TableState`, `type ColumnState` | Schema reconstruction for `tango makemigrations`. |
-| `func Diff(...)`, `func DiffModels(...)` | Diff engine behind `tango makemigrations`. |
+| `func Diff(...)`, `func DiffModels(..., renames ...Rename)`, `type Rename`, `ErrUnsupportedChange`, `ErrInvalidRename` | Diff engine behind `tango makemigrations`. A `Rename` is one `--rename` mapping (`Column` empty for a model); `ErrUnsupportedChange` names every change no step can express (a non-widening type change, a primary-key or foreign-key-target change, a default that can't convert), `ErrInvalidRename` every mapping that doesn't fit history and the models. Either way no migrations are returned. |
 | `func ApplyStep(...)` | Shared DDL translator used by migration runners and tests; use `tango migrate` / `ApplyPending` instead. |
 
 ## `testdb` (`github.com/angvp/tango/testdb`)
