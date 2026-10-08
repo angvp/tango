@@ -10,10 +10,12 @@ import (
 
 // renameForm is the shape --rename takes, quoted in every malformed-value
 // error.
-const renameForm = "app.Model.Field=NewField"
+const renameForm = "app.Model.Field=NewField or app.Model=NewModel"
 
-// parseRename reads "app.Model.Field=NewField" into a Rename mapping. The
-// model and fields may be written as Go names or as table and column names.
+// parseRename reads "app.Model.Field=NewField" or "app.Model=NewModel" into
+// a Rename mapping. Models and fields may be written as Go names or as
+// table and column names; a field of a renamed model is named by the
+// model's old name.
 func parseRename(value string) (migration.Rename, error) {
 	source, to, ok := strings.Cut(value, "=")
 	parts := strings.Split(source, ".")
@@ -21,7 +23,7 @@ func parseRename(value string) (migration.Rename, error) {
 		return migration.Rename{}, fmt.Errorf("--rename %q: want %s", value, renameForm)
 	}
 	if len(parts) == 2 {
-		return migration.Rename{}, fmt.Errorf("--rename %q: renaming a model is not supported yet; want %s", value, renameForm)
+		return migration.Rename{App: parts[0], Table: db.ColumnName(parts[1]), To: db.ColumnName(to)}, nil
 	}
 	return migration.Rename{
 		App:    parts[0],

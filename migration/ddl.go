@@ -40,6 +40,8 @@ func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		return renameColumn(ctx, sqlDB, dialect, s)
 	case AlterColumnType:
 		return alterColumnType(ctx, sqlDB, dialect, s)
+	case RenameTable:
+		return renameTable(ctx, sqlDB, dialect, s)
 	default:
 		return fmt.Errorf("tango migration: unsupported step type %T", step)
 	}

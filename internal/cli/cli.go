@@ -102,10 +102,10 @@ func printUsage(w io.Writer) {
   tango run [args...]      Run the current Go app with go run .
   tango check [args...]    Run the current Go app with -check
   tango makemigrations [--name <name>] [--rename <app.Model.Field=NewField>]...
-                     [--allow-drop <app.Model[.Field]>]...
+                     [--rename <app.Model=NewModel>]... [--allow-drop <app.Model[.Field]>]...
                            Generate a migration from current model metadata;
-                           --rename keeps a renamed field's data, and each
-                           model or field it drops needs its own --allow-drop
+                           --rename keeps a renamed field's or model's data,
+                           and each model or field it drops needs its own --allow-drop
   tango migrate            Apply pending migrations (go run . -migrate)
   tango migrate down       Roll back the last applied migration
   tango newproject [--dialect=sqlite|postgres] [--no-admin] <name>
@@ -180,7 +180,7 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 	flags.SetOutput(stderr)
 	explicitName := flags.String("name", "", "use a descriptive migration name")
 	var renames, allowDrops stringList
-	flags.Var(&renames, "rename", "keep a renamed field's data: app.Model.Field=NewField; repeat for each")
+	flags.Var(&renames, "rename", "keep a renamed field's or model's data: app.Model.Field=NewField or app.Model=NewModel; repeat for each")
 	flags.Var(&allowDrops, "allow-drop", "allow dropping one model (app.Model) or field (app.Model.Field) and its data; repeat for each")
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -551,6 +551,8 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 		fmt.Fprintf(builder, "migration.DropIndex{Table: %q, Column: %q},\n", s.Table, s.Column)
 	case migration.RenameColumn:
 		fmt.Fprintf(builder, "migration.RenameColumn{Table: %q, From: %q, To: %q},\n", s.Table, s.From, s.To)
+	case migration.RenameTable:
+		fmt.Fprintf(builder, "migration.RenameTable{From: %q, To: %q},\n", s.From, s.To)
 	case migration.AlterColumnType:
 		fmt.Fprintf(builder, "migration.AlterColumnType{Table: %q, Column: %q, From: %q, To: %q", s.Table, s.Column, s.From, s.To)
 		if s.Default != "" {

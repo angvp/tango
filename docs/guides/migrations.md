@@ -17,21 +17,35 @@ Each generated file expresses a small, dialect-agnostic step vocabulary:
 - `AlterColumnUnique`
 - `CreateIndex`, `DropIndex`
 
-A field rename is a step (`RenameColumn`), but only when you say so: see [renaming a field](#renaming-a-field). A Widening type change is a step too (`AlterColumnType`): see [changing a field's type](#changing-a-fields-type). A change no step can express — any other type change (`int` to `int64` is the same column type, so it isn't a change), which field is the primary key, or a foreign key's target, including adding or removing `fk=` on an existing field — makes `tango makemigrations` fail with an error naming every such field (`shop.Widget.Stock changes type from integer to boolean, which is not a widening type change`) and write nothing, rather than leave the database silently out of step with your models.
+A field or model rename is a step (`RenameColumn`, `RenameTable`), but only when you say so: see [renaming a field or model](#renaming-a-field-or-model). A Widening type change is a step too (`AlterColumnType`): see [changing a field's type](#changing-a-fields-type). A change no step can express — any other type change (`int` to `int64` is the same column type, so it isn't a change), which field is the primary key, or a foreign key's target, including adding or removing `fk=` on an existing field — makes `tango makemigrations` fail with an error naming every such field (`shop.Widget.Stock changes type from integer to boolean, which is not a widening type change`) and write nothing, rather than leave the database silently out of step with your models.
 
 A generated file's `var M####Xxx = []migration.Migration{...}` is for human readability of the diff — the file an app's `main.go` actually imports is `migrations/migrations.go`, whose `Migrations` slice is regenerated (aggregating every file) on each `tango makemigrations` run. Never hand-edit `migrations.go`.
 
-## Renaming a field
+## Renaming a field or model
 
-Model metadata can't tell a renamed field from a removed one and a new one, and tanGO never guesses. Tell `makemigrations` with `--rename app.Model.Field=NewField`, one per renamed field (Go names or table/column names both work):
+Model metadata can't tell a renamed field or model from a removed one and a new one, and tanGO never guesses. Tell `makemigrations` with `--rename`, once per rename (Go names or table/column names both work):
 
 ```sh
-tango makemigrations --rename shop.Widget.Stock=Quantity
+tango makemigrations --rename shop.Widget.Stock=Quantity   # a field
+tango makemigrations --rename shop.Widget=Gizmo            # a model
 ```
 
-The migration renames the column in place (`ALTER TABLE … RENAME COLUMN` on both SQLite and PostgreSQL), so every row keeps its value, and the column's indexes, uniqueness and foreign key come with it. It's reversible: `tango migrate down` renames it back. A renamed field needs no `--allow-drop`.
+A field rename renames the column in place (`ALTER TABLE … RENAME COLUMN`), and a model rename renames its table (`ALTER TABLE … RENAME TO`), on both SQLite and PostgreSQL, so every row is kept. A column's indexes, uniqueness and foreign key come with it; a table's indexes are renamed with it, and every other table's foreign keys point at it under the new name, including other apps' (their migrations that reference the new name run after the rename). Both are reversible: `tango migrate down` renames them back. A renamed field or model needs no `--allow-drop`. Renaming a model also changes its admin URL, which comes from the model's name.
 
-Every `--rename` is checked against migration history and your models before anything is written: the old name must be in history and gone from the models, the new name must be in the models and not in history, and no old or new name may appear in two mappings. A mapping that fails any of these makes the run fail, naming what you asked for and what history and the models actually have, and nothing is written.
+To rename a model and one of its fields in the same run, name the field by the model's **old** name:
+
+```sh
+tango makemigrations --rename shop.Widget=Gizmo --rename shop.Widget.Stock=Quantity
+```
+
+Every `--rename` is checked against migration history and your models before anything is written:
+
+- the old name must be in history and gone from the models, and the new name must be in the models and not in history;
+- no old or new name may appear in two mappings, and a model can't be renamed and also be the new name of another rename;
+- a field mapping must name its model by the old name when that model is renamed too;
+- a renamed model can't also be given to `--allow-drop`.
+
+A mapping that breaks any of these makes the run fail, naming what you asked for and what history and the models actually have, and nothing is written.
 
 ## Changing a field's type
 

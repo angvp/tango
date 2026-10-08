@@ -125,3 +125,97 @@ func TestMakeMigrationsWidensAFieldAndRoundTripsTheStep(t *testing.T) {
 		t.Fatalf("follow-up run stdout = %q, want no changes detected", stdout.String())
 	}
 }
+
+// gizmoModels is shopModels after the Widget model became Gizmo, with its
+// Stock field named stockName.
+func gizmoModels(stockName, stockField string) []migration.Model {
+	models := shopModels(false, false)
+	models[0].Name = "gizmo"
+	models[0].Struct = "Gizmo"
+	models[0].Columns[1].Name = stockName
+	models[0].Fields = map[string]string{"id": "ID", stockName: stockField}
+	return models
+}
+
+func TestMakeMigrationsRenamesAModel(t *testing.T) {
+	tests := []struct {
+		name   string
+		models []migration.Model
+		args   []string
+		wants  []string
+	}{
+		{"model", gizmoModels("stock", "Stock"), []string{"--rename", "shop.Widget=Gizmo"},
+			[]string{`migration.RenameTable{From: "widget", To: "gizmo"}`}},
+		{"model and field by the model's old name", gizmoModels("quantity", "Quantity"),
+			[]string{"--rename", "shop.Widget=Gizmo", "--rename", "shop.Widget.Stock=Quantity"},
+			[]string{`migration.RenameTable{From: "widget", To: "gizmo"}`, `migration.RenameColumn{Table: "gizmo", From: "stock", To: "quantity"}`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			makeInitialMigration(t, dir, shopModels(false, false))
+
+			code, stderr := runMakeMigrations(t, dir, tt.models, tt.args...)
+			if code != 0 {
+				t.Fatalf("exit code = %d, want 0; stderr: %s", code, stderr)
+			}
+			files, err := filepath.Glob(filepath.Join(dir, "migrations", "0002_*.go"))
+			if err != nil || len(files) != 1 {
+				t.Fatalf("second migration files = %v (%v), want one", files, err)
+			}
+			content, err := os.ReadFile(files[0])
+			if err != nil {
+				t.Fatalf("read migration: %v", err)
+			}
+			for _, want := range append(tt.wants, "Reversible: true") {
+				if !strings.Contains(string(content), want) {
+					t.Fatalf("migration does not contain %q:\n%s", want, content)
+				}
+			}
+
+			var stdout strings.Builder
+			if code := Run(context.Background(), []string{"makemigrations"}, dir, &stdout, &strings.Builder{}, dumpModelsRunner{models: tt.models}); code != 0 {
+				t.Fatalf("follow-up run exit code = %d, want 0", code)
+			}
+			if !strings.Contains(stdout.String(), "no changes detected") {
+				t.Fatalf("follow-up run stdout = %q, want no changes detected", stdout.String())
+			}
+		})
+	}
+}
+
+func TestMakeMigrationsRefusesModelRenamesThatOverlap(t *testing.T) {
+	tests := []struct {
+		name   string
+		models []migration.Model
+		args   []string
+		wants  []string
+	}{
+		{"field named by the model's new name", gizmoModels("quantity", "Quantity"),
+			[]string{"--rename", "shop.Widget=Gizmo", "--rename", "shop.Gizmo.Stock=Quantity"},
+			[]string{"shop.gizmo.stock", "old name", "shop.widget"}},
+		{"renamed model also authorised for drop", gizmoModels("stock", "Stock"),
+			[]string{"--rename", "shop.Widget=Gizmo", "--allow-drop", "shop.Widget"},
+			[]string{"shop.Widget", "not dropped"}},
+		{"field rename on a dropped model", shopModels(false, false)[1:],
+			[]string{"--allow-drop", "shop.Widget", "--rename", "shop.Widget.Stock=Quantity"},
+			[]string{"shop.widget.stock", "no table widget"}},
+		{"two models renamed to one", gizmoModels("stock", "Stock"),
+			[]string{"--rename", "shop.Widget=Gizmo", "--rename", "shop.Gadget=Gizmo"},
+			[]string{"shop.gizmo", "more than once"}},
+		{"chained model renames", gizmoModels("stock", "Stock"),
+			[]string{"--rename", "shop.Widget=Gadget", "--rename", "shop.Gadget=Gizmo"},
+			[]string{"shop.gadget", "both"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			makeInitialMigration(t, dir, shopModels(false, false))
+			before := migrationsDirContents(t, dir)
+
+			code, stderr := runMakeMigrations(t, dir, tt.models, tt.args...)
+
+			assertRefusedAndUnchanged(t, dir, before, code, stderr, tt.wants...)
+		})
+	}
+}

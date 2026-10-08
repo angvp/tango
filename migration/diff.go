@@ -142,6 +142,8 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 		return m
 	}
 
+	state, columnRenames := renameTables(state, renames, appMigration)
+
 	desiredTables := make(map[string]Model)
 	for _, meta := range models {
 		desiredTables[meta.Name] = meta
@@ -166,7 +168,7 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 		}
 
 		m := appMigration(meta.App)
-		columns := applyRenames(m, table, existing.Columns, renames)
+		columns := applyRenames(m, table, existing.Columns, columnRenames)
 		unsupported = append(unsupported, unsupportedChanges(meta, columns)...)
 		diffColumns(m, table, meta.Columns, columns)
 	}

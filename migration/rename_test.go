@@ -110,3 +110,47 @@ func mustReplay(t *testing.T, migrations ...Migration) SchemaState {
 	}
 	return state
 }
+
+func TestRenameTableKeepsRowsIndexesAndIncomingForeignKeys(t *testing.T) {
+	sqlDB, dialect := rebuildFixture(t)
+
+	applySteps(t, sqlDB, dialect, RenameTable{From: "author", To: "writer"})
+
+	var email string
+	if err := sqlDB.QueryRow(`SELECT email FROM writer WHERE id = 2`).Scan(&email); err != nil {
+		t.Fatalf("read renamed table: %v", err)
+	}
+	if email != "alan@example.com" {
+		t.Fatalf("email = %q, want the row's original value", email)
+	}
+	if got, want := indexNames(t, sqlDB, dialect, "writer"), []string{"idx_writer_nick", "uniq_writer_email"}; !slices.Equal(got, want) {
+		t.Fatalf("writer indexes = %v, want %v (named after the new table)", got, want)
+	}
+	mustFail(t, sqlDB, "email is still unique", `INSERT INTO writer (email, nick) VALUES ('ada@example.com', 'other')`)
+	mustFail(t, sqlDB, "post still references the renamed table", `INSERT INTO post (author_id, title) VALUES (999, 'orphan')`)
+	mustFail(t, sqlDB, "posts still reference writer 1", `DELETE FROM writer WHERE id = 1`)
+	mustExec(t, sqlDB, `INSERT INTO post (author_id, title) VALUES (2, 'Engines')`)
+	mustExec(t, sqlDB, `INSERT INTO writer (email, nick) VALUES ('grace@example.com', 'grace')`)
+
+	// Indexes are found by the new table's name, as a later migration would.
+	applySteps(t, sqlDB, dialect,
+		DropIndex{Table: "writer", Column: "nick"},
+		AlterColumnUnique{Table: "writer", Column: "email", Unique: false},
+	)
+}
+
+func TestRenameTableUndoesItselfInReverse(t *testing.T) {
+	sqlDB, dialect := rebuildFixture(t)
+	indexesBefore := indexNames(t, sqlDB, dialect, "author")
+
+	applySteps(t, sqlDB, dialect,
+		RenameTable{From: "author", To: "writer"},
+		RenameTable{From: "writer", To: "author"},
+	)
+
+	if got := indexNames(t, sqlDB, dialect, "author"); !slices.Equal(got, indexesBefore) {
+		t.Fatalf("author indexes = %v, want %v", got, indexesBefore)
+	}
+	mustFail(t, sqlDB, "post references author again", `INSERT INTO post (author_id, title) VALUES (999, 'orphan')`)
+	mustExec(t, sqlDB, `INSERT INTO post (author_id, title) VALUES (1, 'Back')`)
+}

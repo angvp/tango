@@ -64,8 +64,13 @@ func migrationDependencies(base []Migration) [][]int {
 	creators := make(map[string][]int)
 	for i, m := range base {
 		for _, step := range m.Up {
-			if create, ok := step.(CreateTable); ok {
-				creators[create.Table] = append(creators[create.Table], i)
+			switch s := step.(type) {
+			case CreateTable:
+				creators[s.Table] = append(creators[s.Table], i)
+			case RenameTable:
+				// After a rename, the table exists under its new name only
+				// once this migration has run.
+				creators[s.To] = append(creators[s.To], i)
 			}
 		}
 	}

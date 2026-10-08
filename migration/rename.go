@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/angvp/tango/db"
 )
@@ -62,4 +63,65 @@ func renameIndex(ctx context.Context, tx *sql.Tx, dialect db.Dialect, table, col
 	}
 	_, err = tx.ExecContext(ctx, createIndexSQL(dialect, unique, to, table, column))
 	return err
+}
+
+// renameTable renames the table natively on both dialects (both carry
+// other tables' foreign keys over to the new name) and renames the indexes
+// named after it, in one transaction, so a later step that names an index
+// by its table and column finds it.
+func renameTable(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s RenameTable) (err error) {
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s RENAME TO %s", quote(dialect, s.From), quote(dialect, s.To))); err != nil {
+		return err
+	}
+	names, err := tableIndexNames(ctx, tx, dialect, s.To)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		for _, kind := range []struct {
+			prefix string
+			unique bool
+		}{{"idx_", false}, {"uniq_", true}} {
+			column, ok := strings.CutPrefix(name, kind.prefix+s.From+"_")
+			if !ok {
+				continue
+			}
+			if err := renameIndex(ctx, tx, dialect, s.To, column, name, kind.prefix+s.To+"_"+column, kind.unique); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// tableIndexNames lists the indexes created on table.
+func tableIndexNames(ctx context.Context, tx *sql.Tx, dialect db.Dialect, table string) ([]string, error) {
+	query := "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = $1 AND sql IS NOT NULL"
+	if dialect == db.Postgres {
+		query = "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = $1"
+	}
+	rows, err := tx.QueryContext(ctx, query, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
 }

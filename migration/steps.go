@@ -90,6 +90,16 @@ type RenameColumn struct {
 	To    string
 }
 
+// RenameTable renames a model's table, keeping its rows, constraints and
+// indexes (an index named after the table takes the new name); other
+// tables' foreign keys follow it. It comes from a Rename mapping given to
+// tango makemigrations. It is exported for generated migration files;
+// application code should use the tango CLI.
+type RenameTable struct {
+	From string
+	To   string
+}
+
 // AlterColumnType changes a column's type by a Widening type change,
 // converting every row's value with explicit SQL for the dialect. Default,
 // when set, is the column's existing default converted to the new type (a
@@ -124,3 +134,4 @@ func (CreateIndex) isMigrationStep()       {}
 func (DropIndex) isMigrationStep()         {}
 func (RenameColumn) isMigrationStep()      {}
 func (AlterColumnType) isMigrationStep()   {}
+func (RenameTable) isMigrationStep()       {}

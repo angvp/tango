@@ -98,6 +98,8 @@ func encodeSteps(steps []migration.Step) ([]encodedStep, error) {
 			encoded[i] = encodedStep{Kind: "DropIndex", Table: s.Table, Column: s.Column}
 		case migration.RenameColumn:
 			encoded[i] = encodedStep{Kind: "RenameColumn", Table: s.Table, Column: s.From, To: s.To}
+		case migration.RenameTable:
+			encoded[i] = encodedStep{Kind: "RenameTable", Table: s.From, To: s.To}
 		case migration.AlterColumnType:
 			encoded[i] = encodedStep{Kind: "AlterColumnType", Table: s.Table, Column: s.Column, From: s.From, To: s.To, Default: s.Default}
 		default:
@@ -127,6 +129,8 @@ func decodeSteps(steps []encodedStep) ([]migration.Step, error) {
 			decoded[i] = migration.DropIndex{Table: step.Table, Column: step.Column}
 		case "RenameColumn":
 			decoded[i] = migration.RenameColumn{Table: step.Table, From: step.Column, To: step.To}
+		case "RenameTable":
+			decoded[i] = migration.RenameTable{From: step.Table, To: step.To}
 		case "AlterColumnType":
 			decoded[i] = migration.AlterColumnType{Table: step.Table, Column: step.Column, From: step.From, To: step.To, Default: step.Default}
 		default:
