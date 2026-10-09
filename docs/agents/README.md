@@ -25,6 +25,7 @@ Read in this order:
 - Startup, addresses, production defaults and containers: `configuration-and-deployment.md`.
 - Tests on both databases: `testing.md`.
 - The `tango tui` dashboard (changing or documenting it): `tui.md`.
+- Running on more than one server process (replicas, a balancer): `running-more-than-one-instance.md`.
 
 Guides without a recipe, read directly when needed:
 
