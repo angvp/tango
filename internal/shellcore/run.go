@@ -55,6 +55,13 @@ func Run(ctx context.Context, s IO, boot Boot, args []string) int {
 		fmt.Fprintf(s.Err, "tango shell: %v\n", err)
 		return ExitError
 	}
+	if boot.Registry != nil {
+		verbs := NewVerbs(ctx, boot.Registry.Models(), boot.Store, boot.ReadOnly)
+		if err := session.Export("", verbs.Functions()); err != nil {
+			fmt.Fprintf(s.Err, "tango shell: %v\n", err)
+			return ExitError
+		}
+	}
 	if boot.DatabaseLabel != "" {
 		fmt.Fprintf(s.Err, "database: %s\n", boot.DatabaseLabel)
 	}
