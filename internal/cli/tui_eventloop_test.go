@@ -150,3 +150,18 @@ func TestTUIStartsTheDashboardOnlyInAnInteractiveTerminal(t *testing.T) {
 		})
 	}
 }
+
+func TestEventLoopSelectingAGreyedItemDoesNothing(t *testing.T) {
+	var screen strings.Builder
+	status := pendingStatus()
+	status.MigrationsPending = 0 // nothing to apply
+	runner := statusRunner(t, status)
+	// Down to the greyed "Apply", Enter, then "y": no prompt, so nothing runs.
+	code := runDashboard(context.Background(), runner, t.TempDir(), &strings.Builder{}, &strings.Builder{}, status, scriptedSessions(&screen, session(keyDown, keyEnter, "y", "q")))
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("a greyed item ran %v", commandLines(runner))
+	}
+}

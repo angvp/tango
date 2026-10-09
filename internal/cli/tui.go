@@ -21,12 +21,11 @@ const (
 	menuRunServer tuiMenuItem = iota
 	menuApplyMigrations
 	menuRollbackLast
-	menuShell
 )
 
 // menuItems returns the dashboard's menu in display order.
 func menuItems() []tuiMenuItem {
-	return []tuiMenuItem{menuRunServer, menuApplyMigrations, menuRollbackLast, menuShell}
+	return []tuiMenuItem{menuRunServer, menuApplyMigrations, menuRollbackLast}
 }
 
 func (m tuiMenuItem) label() string {
@@ -37,17 +36,42 @@ func (m tuiMenuItem) label() string {
 		return "Apply pending migrations"
 	case menuRollbackLast:
 		return "Roll back the latest migration"
-	case menuShell:
-		return "Shell (not implemented yet)"
 	default:
 		return "unknown"
 	}
 }
 
-// available reports whether selecting m performs a real action. menuShell is
-// listed for discoverability only, since tango shell isn't implemented yet.
-func (m tuiMenuItem) available() bool {
-	return m != menuShell
+// confirmation is the yes/no question asked before m runs, in plain words.
+// ProjectStatus names no migrations, so none is named here.
+func (m tuiMenuItem) confirmation() string {
+	switch m {
+	case menuApplyMigrations:
+		return "Apply pending migrations? (y/n)"
+	case menuRollbackLast:
+		return "Roll back the most recently applied migration? (y/n)"
+	default:
+		return m.label() + "? (y/n)"
+	}
+}
+
+// availability reports whether selecting m can do anything given status,
+// and when it cannot, why. It uses only what ProjectStatus already carries:
+// migration actions need registration and the database to be in order, and
+// something to apply or roll back.
+func (m tuiMenuItem) availability(status tango.ProjectStatus) (ok bool, reason string) {
+	switch m {
+	case menuApplyMigrations, menuRollbackLast:
+		if !status.RegistrationOK || !status.DatabaseReachable {
+			return false, "unavailable: project status is incomplete"
+		}
+		if m == menuApplyMigrations && status.MigrationsPending == 0 {
+			return false, "nothing to apply"
+		}
+		if m == menuRollbackLast && status.MigrationsApplied == 0 {
+			return false, "nothing to roll back"
+		}
+	}
+	return true, ""
 }
 
 // requiresConfirmation reports whether m is destructive enough to need an

@@ -74,7 +74,7 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		selected := m.items[m.cursor]
-		if !selected.available() {
+		if ok, _ := selected.availability(m.status); !ok {
 			return m, nil
 		}
 		m.action = selected
@@ -119,15 +119,15 @@ func (m dashboardModel) View() string {
 			cursor = tuiCursorStyle.Render("> ")
 		}
 		label := item.label()
-		if !item.available() {
-			label = tuiUnavailStyle.Render(label)
+		if ok, reason := item.availability(m.status); !ok {
+			label = tuiUnavailStyle.Render(label + " (" + reason + ")")
 		}
 		fmt.Fprintf(&b, "%s%s\n", cursor, label)
 	}
 
 	if m.confirm {
 		b.WriteString("\n")
-		b.WriteString(tuiConfirmStyle.Render(fmt.Sprintf("%s? (y/n)", m.items[m.cursor].label())))
+		b.WriteString(tuiConfirmStyle.Render(m.items[m.cursor].confirmation()))
 		b.WriteString("\n")
 	}
 

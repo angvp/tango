@@ -13,6 +13,12 @@ func runeKey(r rune) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
 }
 
+// readyStatus is a healthy project with one migration applied and one
+// pending, so every menu item is available.
+func readyStatus() tango.ProjectStatus {
+	return tango.ProjectStatus{RegistrationOK: true, DatabaseReachable: true, MigrationsTotal: 2, MigrationsApplied: 1, MigrationsPending: 1}
+}
+
 func typeKey(t tea.KeyType) tea.KeyMsg {
 	return tea.KeyMsg{Type: t}
 }
@@ -119,9 +125,10 @@ func TestDashboardUpdateEnterOnAvailableItemWithoutConfirmationPerformsAndQuits(
 }
 
 func TestDashboardUpdateEnterOnUnavailableItemDoesNothing(t *testing.T) {
-	m := newDashboardModel(tango.ProjectStatus{})
-	// Move the cursor to menuShell, the only unavailable item.
-	for m.items[m.cursor] != menuShell {
+	status := readyStatus()
+	status.MigrationsPending = 0 // nothing to apply
+	m := newDashboardModel(status)
+	for m.items[m.cursor] != menuApplyMigrations {
 		next, _ := m.Update(typeKey(tea.KeyDown))
 		m = next.(dashboardModel)
 	}
@@ -129,11 +136,8 @@ func TestDashboardUpdateEnterOnUnavailableItemDoesNothing(t *testing.T) {
 	next, cmd := m.Update(typeKey(tea.KeyEnter))
 	got := next.(dashboardModel)
 
-	if got.performed {
-		t.Fatal("performed = true, want false — menuShell is not available")
-	}
-	if got.quitting {
-		t.Fatal("quitting = true, want false")
+	if got.performed || got.confirm || got.quitting {
+		t.Fatalf("Enter on an unavailable item changed the model: %+v", got)
 	}
 	if cmd != nil {
 		t.Fatal("cmd != nil, want nil")
@@ -141,7 +145,7 @@ func TestDashboardUpdateEnterOnUnavailableItemDoesNothing(t *testing.T) {
 }
 
 func TestDashboardUpdateEnterOnConfirmationRequiredItemEntersConfirmMode(t *testing.T) {
-	m := newDashboardModel(tango.ProjectStatus{})
+	m := newDashboardModel(readyStatus())
 	for m.items[m.cursor] != menuApplyMigrations {
 		next, _ := m.Update(typeKey(tea.KeyDown))
 		m = next.(dashboardModel)
@@ -268,7 +272,6 @@ func TestDashboardViewRendersStatusAndMenu(t *testing.T) {
 		"Run server",
 		"Apply pending migrations",
 		"Roll back the latest migration",
-		"Shell (not implemented yet)",
 		"move",
 		"select",
 		"quit",
@@ -276,6 +279,22 @@ func TestDashboardViewRendersStatusAndMenu(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("View() does not contain %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestDashboardViewStatesWhyAnItemIsUnavailable(t *testing.T) {
+	status := readyStatus()
+	status.MigrationsPending = 0
+	out := newDashboardModel(status).View()
+	if !strings.Contains(out, "Apply pending migrations (nothing to apply)") {
+		t.Fatalf("View() does not say why apply is unavailable:\n%s", out)
+	}
+	if strings.Contains(out, "Shell") {
+		t.Fatalf("View() still lists a shell item:\n%s", out)
+	}
+	incomplete := newDashboardModel(tango.ProjectStatus{}).View()
+	if !strings.Contains(incomplete, "Roll back the latest migration (unavailable: project status is incomplete)") {
+		t.Fatalf("View() does not say the status is incomplete:\n%s", incomplete)
 	}
 }
 
@@ -309,15 +328,16 @@ func TestDashboardInitReturnsNilCommand(t *testing.T) {
 
 func TestDashboardViewRendersConfirmationPrompt(t *testing.T) {
 	m := dashboardModel{
-		status:  tango.ProjectStatus{},
+		status:  readyStatus(),
 		items:   menuItems(),
 		cursor:  1,
 		confirm: true,
 	}
-
-	out := m.View()
-
-	if !strings.Contains(out, "Apply pending migrations? (y/n)") {
-		t.Fatalf("View() does not contain the confirmation prompt:\n%s", out)
+	if out := m.View(); !strings.Contains(out, "Apply pending migrations? (y/n)") {
+		t.Fatalf("View() does not contain the apply prompt:\n%s", out)
+	}
+	m.cursor = 2
+	if out := m.View(); !strings.Contains(out, "Roll back the most recently applied migration? (y/n)") {
+		t.Fatalf("View() does not contain the rollback prompt:\n%s", out)
 	}
 }

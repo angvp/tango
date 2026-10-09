@@ -34,9 +34,9 @@ func (r *jsonStdoutRunner) Run(ctx context.Context, dir string, name string, arg
 	return err
 }
 
-func TestMenuItemsOrderAndAvailability(t *testing.T) {
+func TestMenuItemsOrder(t *testing.T) {
+	want := []tuiMenuItem{menuRunServer, menuApplyMigrations, menuRollbackLast}
 	items := menuItems()
-	want := []tuiMenuItem{menuRunServer, menuApplyMigrations, menuRollbackLast, menuShell}
 	if len(items) != len(want) {
 		t.Fatalf("got %d items, want %d", len(items), len(want))
 	}
@@ -45,18 +45,53 @@ func TestMenuItemsOrderAndAvailability(t *testing.T) {
 			t.Fatalf("item[%d] = %v, want %v", i, item, want[i])
 		}
 	}
+}
 
-	if !menuRunServer.available() {
-		t.Fatal("menuRunServer.available() = false, want true")
+func TestMenuItemAvailabilityFollowsProjectStatus(t *testing.T) {
+	ready := tango.ProjectStatus{RegistrationOK: true, DatabaseReachable: true, MigrationsTotal: 2, MigrationsApplied: 1, MigrationsPending: 1}
+	with := func(change func(*tango.ProjectStatus)) tango.ProjectStatus {
+		s := ready
+		change(&s)
+		return s
 	}
-	if !menuApplyMigrations.available() {
-		t.Fatal("menuApplyMigrations.available() = false, want true")
+	const incomplete = "unavailable: project status is incomplete"
+	tests := []struct {
+		name       string
+		item       tuiMenuItem
+		status     tango.ProjectStatus
+		wantOK     bool
+		wantReason string
+	}{
+		{"run server is always available", menuRunServer, tango.ProjectStatus{}, true, ""},
+		{"apply with something pending", menuApplyMigrations, ready, true, ""},
+		{"apply with nothing pending", menuApplyMigrations, with(func(s *tango.ProjectStatus) { s.MigrationsPending = 0 }), false, "nothing to apply"},
+		{"apply when registration failed", menuApplyMigrations, with(func(s *tango.ProjectStatus) { s.RegistrationOK = false }), false, incomplete},
+		{"apply when the database is unreachable", menuApplyMigrations, with(func(s *tango.ProjectStatus) { s.DatabaseReachable = false }), false, incomplete},
+		{"rollback with something applied", menuRollbackLast, ready, true, ""},
+		{"rollback with nothing applied", menuRollbackLast, with(func(s *tango.ProjectStatus) { s.MigrationsApplied = 0 }), false, "nothing to roll back"},
+		{"rollback when registration failed", menuRollbackLast, with(func(s *tango.ProjectStatus) { s.RegistrationOK = false }), false, incomplete},
+		{"rollback when the database is unreachable", menuRollbackLast, with(func(s *tango.ProjectStatus) { s.DatabaseReachable = false }), false, incomplete},
+		{"incomplete status wins over nothing to apply", menuApplyMigrations, with(func(s *tango.ProjectStatus) { s.DatabaseReachable = false; s.MigrationsPending = 0 }), false, incomplete},
 	}
-	if !menuRollbackLast.available() {
-		t.Fatal("menuRollbackLast.available() = false, want true")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ok, reason := tt.item.availability(tt.status)
+			if ok != tt.wantOK || reason != tt.wantReason {
+				t.Fatalf("availability = (%v, %q), want (%v, %q)", ok, reason, tt.wantOK, tt.wantReason)
+			}
+		})
 	}
-	if menuShell.available() {
-		t.Fatal("menuShell.available() = true, want false (tango shell isn't implemented yet)")
+}
+
+func TestConfirmationsSayWhatTheyWillDo(t *testing.T) {
+	cases := map[tuiMenuItem]string{
+		menuApplyMigrations: "Apply pending migrations? (y/n)",
+		menuRollbackLast:    "Roll back the most recently applied migration? (y/n)",
+	}
+	for item, want := range cases {
+		if got := item.confirmation(); got != want {
+			t.Fatalf("%v.confirmation() = %q, want %q", item, got, want)
+		}
 	}
 }
 
@@ -99,7 +134,6 @@ func TestMenuItemsRequireConfirmationOnlyForMigrationActions(t *testing.T) {
 		menuRunServer:       false,
 		menuApplyMigrations: true,
 		menuRollbackLast:    true,
-		menuShell:           false,
 	}
 	for item, want := range cases {
 		if got := item.requiresConfirmation(); got != want {
@@ -367,16 +401,5 @@ func TestPrintStatusPlainRendersFailureStates(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output does not contain %q:\n%s", want, got)
 		}
-	}
-}
-
-func TestPerformActionShellIsInformationalOnly(t *testing.T) {
-	dir := t.TempDir()
-	runner := &multiRecordingRunner{}
-
-	performAction(context.Background(), runner, dir, io.Discard, io.Discard, menuShell, true)
-
-	if len(runner.commands) != 0 {
-		t.Fatalf("commands = %+v, want none — menuShell must not run anything", runner.commands)
 	}
 }
