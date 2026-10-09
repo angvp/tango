@@ -10,7 +10,7 @@ New records take the next free number here. This directory is the single, public
 | [0002](0002-chi-as-internal-router.md) | Use Chi as an Internal Router | Accepted |
 | [0003](0003-tailwind-play-cdn-for-admin-theme.md) | Use Tailwind's Play CDN for the Admin Default Theme | Accepted |
 | [0004](0004-explicit-dialect-for-postgresql-support.md) | Explicit `Dialect` argument for PostgreSQL support | Accepted; env-based loading added later (see note) |
-| [0005](0005-yaegi-for-tango-shell.md) | Yaegi as the direction for `tango shell` | Accepted; a 2026-10-09 spike found it workable with limits; not implemented yet |
+| [0005](0005-yaegi-for-tango-shell.md) | Yaegi as the direction for `tango shell` | Accepted; a 2026-10-09 spike found it workable with limits; built as described in ADR 0048 |
 | [0006](0006-typed-go-migration-steps.md) | Migrations as typed Go steps, not raw SQL files | Accepted |
 | [0007](0007-bubbletea-stack-for-tango-tui.md) | bubbletea/bubbles/lipgloss for `tango tui`, no `huh` | Accepted |
 | [0008](0008-two-helpers-not-one-run.md) | Two small helpers (`DispatchFlags` + `Serve`) instead of one `tango.Run` | Accepted |

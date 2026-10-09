@@ -82,10 +82,10 @@ index 0000000..b2dc89a
 +}
 diff --git a/shell/main.go b/shell/main.go
 new file mode 100644
-index 0000000..8e63aa0
+index 0000000..f3a8bbf
 --- /dev/null
 +++ b/shell/main.go
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,82 @@
 +// Command shell is this project's "tango shell": an interactive Go console
 +// with the project's apps, models and database loaded and nothing served.
 +// Run it with "tango shell". It executes local code with this project's
@@ -152,9 +152,13 @@ index 0000000..8e63aa0
 +	if !ok {
 +		return hidden
 +	}
-+	// A "@" after the first "/" means the userinfo was not escaped, so what
-+	// follows cannot be told apart from a password.
-+	authority, _, _ := strings.Cut(rest, "/")
++	// The address ends at the first "/", "?" or "#". A "@" after that means
++	// the userinfo was not escaped, so what follows cannot be told apart
++	// from a password.
++	authority := rest
++	if end := strings.IndexAny(rest, "/?#"); end >= 0 {
++		authority = rest[:end]
++	}
 +	if strings.Count(rest, "@") != strings.Count(authority, "@") || strings.Count(authority, "@") > 1 {
 +		return hidden
 +	}

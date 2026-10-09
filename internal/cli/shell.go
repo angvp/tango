@@ -67,7 +67,10 @@ func shellCommand(ctx context.Context, runner Runner, dir string, args []string,
 	if err := runner.Run(ctx, dir, binary, args, stdout, stderr); err != nil {
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {
-			return exitError.ExitCode()
+			if code := exitError.ExitCode(); code >= 0 {
+				return code
+			}
+			return 1 // the shell was killed by a signal
 		}
 		fmt.Fprintf(stderr, "tango shell: %v\n", err)
 		return 1

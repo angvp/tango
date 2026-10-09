@@ -30,22 +30,32 @@ func isTerminal(v any) bool {
 // Ctrl-C rules. Ctrl-C at the prompt clears the line and a second one in a
 // row leaves; Ctrl-C during an evaluation ends the process with status 130,
 // because the interpreter cannot interrupt a running evaluation.
-func runInteractive(session *Session, s IO, boot Boot, helperNames []string) int {
+func runInteractive(session *Session, s IO, helperNames []string) int {
 	in, out := s.In.(*os.File), s.Out.(*os.File)
 
-	dir, _ := os.Getwd()
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(s.Err, "tango shell: history is not saved: %v\n", err)
+		dir = ""
+	}
 	history := OpenHistory(dir, s.Err)
 	source := &termSource{in: in, out: out, history: history}
 
 	var evaluating atomic.Bool
 	interrupts := make(chan os.Signal, 1)
 	signal.Notify(interrupts, os.Interrupt)
-	defer signal.Stop(interrupts)
+	done := make(chan struct{})
+	defer func() { signal.Stop(interrupts); close(done) }()
 	go func() {
-		for range interrupts {
-			if evaluating.Load() {
-				fmt.Fprintln(s.Err)
-				os.Exit(ExitInterrupted)
+		for {
+			select {
+			case <-interrupts:
+				if evaluating.Load() {
+					fmt.Fprintln(s.Err)
+					os.Exit(ExitInterrupted)
+				}
+			case <-done:
+				return
 			}
 		}
 	}()
@@ -77,7 +87,11 @@ func (t *termSource) ReadLine(prompt string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	defer term.Restore(fd, state)
+	defer func() {
+		if err := term.Restore(fd, state); err != nil {
+			fmt.Fprintf(t.out, "tango shell: could not restore the terminal: %v\r\n", err)
+		}
+	}()
 
 	if t.terminal == nil {
 		t.reader = &ctrlCReader{r: t.in}

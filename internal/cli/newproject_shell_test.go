@@ -333,6 +333,9 @@ func TestShellDatabaseLabelNeverShowsCredentials(t *testing.T) {
 		{"ipv6 host", "postgres://admin:s3cret@[::1]:5432/shop", "database: postgres: [::1]:5432/shop\n", []string{"admin", "s3cret"}},
 		{"unescaped slash in the password", "postgres://admin:s3cret/pa55@db.example.com/shop", "database: postgres: (address hidden)\n", []string{"admin", "s3cret", "pa55"}},
 		{"unescaped at sign in the password", "postgres://admin:s3@cret@db.example.com/shop", "database: postgres: (address hidden)\n", []string{"admin", "s3", "cret"}},
+		{"at sign after a question mark", "postgres://admin:12345?abc@db.example.com/shop", "database: postgres: (address hidden)\n", []string{"admin", "12345", "abc"}},
+		{"empty password then a question mark", "postgres://admin:?x@db.example.com/shop", "database: postgres: (address hidden)\n", []string{"admin", "x@"}},
+		{"at sign after a hash", "postgres://admin:#x@db.example.com/shop", "database: postgres: (address hidden)\n", []string{"admin", "#x"}},
 		{"malformed port", "postgres://admin:s3cret@db.example.com:port/shop", "database: postgres: (address hidden)\n", []string{"admin", "s3cret"}},
 		{"no host", "postgres://admin:s3cret@/shop", "database: postgres: (address hidden)\n", []string{"admin", "s3cret"}},
 	}

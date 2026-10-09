@@ -79,7 +79,7 @@ func Run(ctx context.Context, s IO, boot Boot, args []string) int {
 	}
 
 	if interactive {
-		return runInteractive(session, s, boot, sortedKeys(boot.Helpers))
+		return runInteractive(session, s, sortedKeys(boot.Helpers))
 	}
 
 	var input = s.In

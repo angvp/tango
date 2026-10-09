@@ -378,9 +378,13 @@ func databaseLabel(dsn db.DSN) string {
 	if !ok {
 		return hidden
 	}
-	// A "@" after the first "/" means the userinfo was not escaped, so what
-	// follows cannot be told apart from a password.
-	authority, _, _ := strings.Cut(rest, "/")
+	// The address ends at the first "/", "?" or "#". A "@" after that means
+	// the userinfo was not escaped, so what follows cannot be told apart
+	// from a password.
+	authority := rest
+	if end := strings.IndexAny(rest, "/?#"); end >= 0 {
+		authority = rest[:end]
+	}
 	if strings.Count(rest, "@") != strings.Count(authority, "@") || strings.Count(authority, "@") > 1 {
 		return hidden
 	}
