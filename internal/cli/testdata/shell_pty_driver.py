@@ -30,6 +30,8 @@ class Shell:
             "TERM": "xterm",
             "TANGO_DB_DSN": "sqlite://" + os.path.join(project, "app.db"),
         }
+        if os.environ.get("GOCOVERDIR"):
+            env["GOCOVERDIR"] = os.environ["GOCOVERDIR"]
         env.update(extra_env or {})
         pid, fd = pty.fork()
         if pid == 0:

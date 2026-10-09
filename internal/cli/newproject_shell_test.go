@@ -143,7 +143,7 @@ func TestShellAgainstAScaffoldedProject(t *testing.T) {
 		restoreDatabase(t, database)
 		binary := buildShell(t, project)
 		cmd := exec.Command(binary)
-		cmd.Dir = project
+		cmd.Dir, cmd.Env = project, withChildCover(os.Environ())
 		cmd.Stdin = strings.NewReader(session.input)
 		var out, errOut bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &errOut
@@ -301,7 +301,7 @@ func loadTranscript(t *testing.T, name string) []transcriptPair {
 func buildShell(t *testing.T, project string) string {
 	t.Helper()
 	binary := filepath.Join(t.TempDir(), "shell-bin")
-	build := exec.Command("go", "build", "-o", binary, "./shell")
+	build := goBuild("-o", binary, "./shell")
 	build.Dir = project
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build ./shell: %v\n%s", err, out)
@@ -347,7 +347,7 @@ func TestShellDatabaseLabelNeverShowsCredentials(t *testing.T) {
 			}
 			cmd := exec.Command(binary, "-c", "1")
 			cmd.Dir = project
-			cmd.Env = append(os.Environ(), "TANGO_DB_DSN="+tt.dsn)
+			cmd.Env = withChildCover(append(os.Environ(), "TANGO_DB_DSN="+tt.dsn))
 			var out, errOut bytes.Buffer
 			cmd.Stdout, cmd.Stderr = &out, &errOut
 			if err := cmd.Run(); err != nil {
@@ -367,7 +367,7 @@ func TestShellDatabaseLabelNeverShowsCredentials(t *testing.T) {
 	t.Run("a DSN the driver rejects does not leak it in the error", func(t *testing.T) {
 		cmd := exec.Command(postgresShell, "-c", "Count(\"posts.Post\")")
 		cmd.Dir = postgresProject
-		cmd.Env = append(os.Environ(), "TANGO_DB_DSN=postgres://admin:s3cret@db.invalid:5432/shop?connect_timeout=1")
+		cmd.Env = withChildCover(append(os.Environ(), "TANGO_DB_DSN=postgres://admin:s3cret@db.invalid:5432/shop?connect_timeout=1"))
 		out, _ := cmd.CombinedOutput()
 		if strings.Contains(string(out), "s3cret") {
 			t.Errorf("an error path leaks the password:\n%s", out)

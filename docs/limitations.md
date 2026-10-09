@@ -59,13 +59,11 @@ A migration containing `DropColumn`, `DropTable` or `AlterColumnType` is marked 
 
 ## Test coverage
 
-Root-module statement coverage is **95%+**, tracked via Codecov (see the badge on the [README](../README.md)) and regenerated with:
+Statement coverage is held above **90%**, tracked via Codecov (see the badge on the [README](../README.md)). It counts the test profile plus the programs the tests build and run (the scaffolded server and `tango shell`), which a plain profile cannot see. Regenerate both with:
 
 ```sh
-go run gotest.tools/gotestsum@v1.13.0 \
-  --junitfile junit.xml \
-  --format testname \
-  -- ./... -count=1 -coverprofile=coverage.out -covermode=atomic
+scripts/coverage.sh                        # SQLite
+TANGO_TEST_DSN=postgres://… scripts/coverage.sh   # PostgreSQL
 ```
 
 A small set of lines is deliberately never exercised by a unit test, because doing so would need a live Postgres connection or a real interactive terminal rather than a meaningful behavioral test — a small set of statements (the exact count depends on which database the suite runs against, so none is quoted):

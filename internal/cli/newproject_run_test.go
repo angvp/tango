@@ -67,13 +67,14 @@ func TestANewProjectRunsSafelyAsGenerated(t *testing.T) {
 	}
 	project := filepath.Join(dir, "shop")
 	binary := filepath.Join(dir, "shop-bin")
-	build := exec.Command("go", "build", "-o", binary, ".")
+	build := goBuild("-o", binary, ".")
 	build.Dir = project
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 
 	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "TANGO_DB_DSN=sqlite://" + filepath.Join(dir, "app.db")}
+	env = withChildCover(env)
 	check := exec.Command(binary, "-check")
 	check.Dir, check.Env = project, env
 	if out, err := check.CombinedOutput(); err != nil {

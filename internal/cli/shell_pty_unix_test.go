@@ -4,6 +4,7 @@ package cli
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
@@ -32,7 +33,9 @@ func TestShellOnATerminal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := exec.Command(python, "-I", driver, binary, project, home).CombinedOutput()
+	driverRun := exec.Command(python, "-I", driver, binary, project, home)
+	driverRun.Env = withChildCover(os.Environ())
+	out, err := driverRun.CombinedOutput()
 	if err != nil {
 		t.Fatalf("terminal session failed: %v\n%s", err, out)
 	}
@@ -48,7 +51,7 @@ func TestShellInterruptedDuringAnEvaluationExits130WithoutATerminal(t *testing.T
 	project, _ := migratedSQLiteProject(t, "blog")
 	binary := buildShell(t, project)
 	cmd := exec.Command(binary, "-c", "for { }")
-	cmd.Dir = project
+	cmd.Dir, cmd.Env = project, withChildCover(os.Environ())
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

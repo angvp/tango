@@ -28,7 +28,7 @@ func buildScaffold(t *testing.T, name string, flags ...string) (binary, project 
 	}
 	project = filepath.Join(dir, name)
 	binary = filepath.Join(dir, name+"-bin")
-	build := exec.Command("go", "build", "-o", binary, ".")
+	build := goBuild("-o", binary, ".")
 	build.Dir = project
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
@@ -45,6 +45,7 @@ func startupOutput(t *testing.T, binary, project, addr string) string {
 	server.Dir, server.Stdout, server.Stderr = project, &output, &output
 	server.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "TANGO_ADDR=" + addr,
 		"TANGO_DB_DSN=sqlite://" + filepath.Join(project, "app.db")}
+	server.Env = withChildCover(server.Env)
 	if err := server.Start(); err != nil {
 		t.Fatal(err)
 	}
