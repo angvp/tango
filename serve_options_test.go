@@ -51,13 +51,16 @@ func serveRoutes(t *testing.T, opts ...ServeOption) string {
 	go func() {
 		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{app}}, sqlDB, testdb.Dialect(), opts...)
 	}()
-	t.Cleanup(func() { cancel(); <-done })
 	select {
 	case addr := <-addrCh:
+		// Stop the server and wait for it, once it is known to be running.
+		t.Cleanup(func() { cancel(); <-done })
 		return "http://" + addr
 	case err := <-done:
+		cancel()
 		t.Fatalf("ServeContext returned before listening: %v", err)
 	case <-time.After(10 * time.Second):
+		cancel()
 		t.Fatal("ServeContext never listened")
 	}
 	return ""

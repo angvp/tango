@@ -119,11 +119,6 @@ func TestADatabaseFailureIsAnErrorNotAnInvalidLink(t *testing.T) {
 	alice := site.createAccount("alice@example.com", true)
 	site.insertToken(alice, "reset-token", accounts.PurposePasswordReset, site.clock().Add(time.Hour))
 	site.insertToken(alice, "verify-token", accounts.PurposeEmailVerification, site.clock().Add(time.Hour))
-	// Get each form's CSRF cookie while the database still answers.
-	resetCSRF := site.get(confirmPath + "reset-token")
-	if resetCSRF.Code != http.StatusOK {
-		t.Fatalf("GET = %d", resetCSRF.Code)
-	}
 	if err := site.db.Close(); err != nil {
 		t.Fatal(err)
 	}

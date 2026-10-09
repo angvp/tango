@@ -230,7 +230,7 @@ func TestStoreListAppliesLimitAndOffset(t *testing.T) {
 }
 
 // An Offset with no Limit skips rows and returns all the rest, on every
-// dialect (SQLite and MySQL refuse OFFSET without LIMIT, so the store adds one).
+// dialect (SQLite refuses OFFSET without LIMIT, so the store adds one).
 func TestStoreListAppliesOffsetWithoutALimit(t *testing.T) {
 	store, meta := openCRUDStore(t)
 

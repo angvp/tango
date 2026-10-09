@@ -47,7 +47,7 @@ func TestNumbersAreStoredOnlyWhenTheyFitTheFieldExactly(t *testing.T) {
 		name  string
 		field string
 		value any
-		want  any // the stored value, or "" when the call must fail
+		want  any // the stored value when the call must succeed
 		err   string
 	}{
 		{"int8 minimum", "Level", -128, int64(-128), ""},
@@ -82,9 +82,6 @@ func TestNumbersAreStoredOnlyWhenTheyFitTheFieldExactly(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("Create(%s: %v): %v", tt.field, tt.value, err)
-			}
-			if tt.want == nil { // stored as is; only checked to be accepted
-				return
 			}
 			got, err := v.Get("shop.Counter", row["ID"])
 			if err != nil {
