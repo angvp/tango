@@ -122,3 +122,33 @@ func TestLiveCorpusRegisteredReadsTheCommitNotTheWorkingTree(t *testing.T) {
 		t.Fatalf("after deleting the working tree: exists=%v registered=%v err=%v, want the committed state", exists, registered, err)
 	}
 }
+
+func TestLiveOnMainSaysWhetherACommitIsReachableFromOriginMain(t *testing.T) {
+	dir, onMain := gitRepoWith(t, map[string]string{"a.txt": "a"})
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("update-ref", "refs/remotes/origin/main", onMain)
+	git("commit", "-q", "--allow-empty", "-m", "work not on main")
+	offMain := git("rev-parse", "HEAD")
+	live := Live{Dir: dir}
+
+	if got, err := live.OnMain(context.Background(), onMain); err != nil || !got {
+		t.Errorf("OnMain(a commit on main) = %v, %v; want true", got, err)
+	}
+	if got, err := live.OnMain(context.Background(), offMain); err != nil || got {
+		t.Errorf("OnMain(a commit past main) = %v, %v; want false, no error", got, err)
+	}
+	got, err := live.OnMain(context.Background(), "0123456789012345678901234567890123456789")
+	if err == nil || got || !strings.Contains(err.Error(), "git merge-base") {
+		t.Errorf("OnMain(an unknown commit) = %v, %v; want an error naming git merge-base", got, err)
+	}
+}
