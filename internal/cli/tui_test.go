@@ -199,6 +199,42 @@ func TestTUIFetchStatusFailurePropagatesError(t *testing.T) {
 	}
 }
 
+func TestTUIExplainsAStatusFailureAndKeepsTheRawError(t *testing.T) {
+	tests := []struct {
+		name   string
+		runner Runner
+		raw    string
+	}{
+		{"the project fails to run", &jsonStdoutRunner{err: errors.New("go run failed")}, "tango tui: go run failed"},
+		{"the entrypoint does not answer -tango-status", &jsonStdoutRunner{payload: []byte("listening on :8000\n")}, "tango tui: decode status:"},
+	}
+	for _, tt := range tests {
+		for _, interactive := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s, interactive=%v", tt.name, interactive), func(t *testing.T) {
+				var stdout, stderr strings.Builder
+				code := tui(context.Background(), tt.runner, t.TempDir(), &stdout, &stderr, func() bool { return interactive }, nil)
+				if code != 1 {
+					t.Fatalf("exit code = %d, want 1", code)
+				}
+				out := stderr.String()
+				explanation := strings.Index(out, "tanGO could not load the project status")
+				raw := strings.Index(out, tt.raw)
+				if explanation < 0 || raw < 0 || explanation > raw {
+					t.Fatalf("stderr must explain first, then keep the raw error %q:\n%s", tt.raw, out)
+				}
+				for _, want := range []string{"tango check", "tango.DispatchFlags"} {
+					if !strings.Contains(out, want) {
+						t.Fatalf("stderr does not mention %q:\n%s", want, out)
+					}
+				}
+				if stdout.Len() != 0 {
+					t.Fatalf("stdout = %q, want nothing", stdout.String())
+				}
+			})
+		}
+	}
+}
+
 func TestPerformActionRunServerInvokesSameCommandAsTangoRun(t *testing.T) {
 	dir := t.TempDir()
 	runner := &multiRecordingRunner{}

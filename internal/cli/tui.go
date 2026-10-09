@@ -98,6 +98,7 @@ var isInteractiveTerminal = func() bool {
 func tui(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, interactive func() bool, programOptions func() []tea.ProgramOption) int {
 	status, err := fetchStatus(ctx, runner, dir, stderr)
 	if err != nil {
+		fmt.Fprint(stderr, statusFailureHelp)
 		fmt.Fprintf(stderr, "tango tui: %v\n", err)
 		return 1
 	}
@@ -109,6 +110,14 @@ func tui(ctx context.Context, runner Runner, dir string, stdout io.Writer, stder
 
 	return runDashboard(ctx, runner, dir, stdout, stderr, status, programOptions)
 }
+
+// statusFailureHelp precedes the raw error when the project's status cannot
+// be loaded; it never replaces it.
+const statusFailureHelp = `tango tui: tanGO could not load the project status.
+  - Run "tango check" to diagnose registration and configuration.
+  - A project whose main.go predates -tango-status may need tango.DispatchFlags,
+    which answers it.
+`
 
 // fetchStatus shells `-tango-status`, the same convention `tango check`/
 // `makemigrations` already use for `-check`/`-tango-dump-models`.
