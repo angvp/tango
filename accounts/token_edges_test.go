@@ -176,3 +176,44 @@ func TestTheResetRequestPageAnswersOnlyGetAndPost(t *testing.T) {
 		t.Fatalf("PUT = %d, want 405", response.Code)
 	}
 }
+
+func TestEveryUnusableVerificationLinkGetsTheSamePage(t *testing.T) {
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	alice := site.createAccount("alice@example.com", true)
+	bob := site.createAccount("bob@example.com", true)
+	carol := site.createAccount("carol@example.com", true)
+
+	site.insertToken(alice, "expired-token", accounts.PurposeEmailVerification, site.clock().Add(-time.Second))
+	site.insertToken(alice, "reset-token", accounts.PurposePasswordReset, site.clock().Add(time.Hour))
+	site.insertToken(bob, "moved-token", accounts.PurposeEmailVerification, site.clock().Add(time.Hour))
+	site.updateAccount(bob.ID, func(a *accounts.Account) { a.Email = "bob@new.example.com" })
+	site.insertToken(carol, "used-token", accounts.PurposeEmailVerification, site.clock().Add(time.Hour))
+	if response := site.verify("used-token"); response.Code != http.StatusOK {
+		t.Fatalf("using carol's token = %d", response.Code)
+	}
+
+	var page string
+	for _, token := range []string{"unknown-token", "expired-token", "reset-token", "moved-token", "used-token", ""} {
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			response := site.get(verifyPath + token)
+			if method == http.MethodPost {
+				response = site.verify(token)
+			}
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("%s %q = %d, want 400", method, token, response.Code)
+			}
+			tokenPageHeaders(t, response)
+			if page == "" {
+				page = response.Body.String()
+			}
+			if response.Body.String() != page {
+				t.Fatalf("%s %q answered differently:\n%s\nvs\n%s", method, token, response.Body.String(), page)
+			}
+		}
+	}
+	for _, email := range []string{"alice@example.com", "bob@new.example.com"} {
+		if !site.accountByEmail(email).EmailVerifiedAt.IsZero() {
+			t.Fatalf("an unusable link verified %s", email)
+		}
+	}
+}

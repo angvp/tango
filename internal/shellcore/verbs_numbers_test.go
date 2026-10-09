@@ -71,12 +71,20 @@ func TestNumbersAreStoredOnlyWhenTheyFitTheFieldExactly(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			before, err := v.Count("shop.Counter")
+			if err != nil {
+				t.Fatal(err)
+			}
 			row, err := v.Create("shop.Counter", map[string]any{tt.field: tt.value})
 			if tt.err != "" {
 				// "any": accepted by the conversion, refused by the database
-				// driver, whose message differs by dialect.
+				// driver, whose message differs by dialect. Either way no row
+				// is created.
 				if err == nil || (tt.err != "any" && !strings.Contains(err.Error(), tt.err)) {
 					t.Fatalf("Create(%s: %v) error = %v, want one containing %q", tt.field, tt.value, err, tt.err)
+				}
+				if after, err := v.Count("shop.Counter"); err != nil || after != before {
+					t.Fatalf("rows after a refused Create = %d (%v), want %d", after, err, before)
 				}
 				return
 			}

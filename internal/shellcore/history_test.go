@@ -194,6 +194,25 @@ func keepsWorkingAfterOneWarning(t *testing.T, h *History, warn *bytes.Buffer) {
 	if n := strings.Count(warn.String(), "history is not saved"); n != 1 {
 		t.Fatalf("warnings = %q, want exactly one", warn.String())
 	}
+	if h.path != "" {
+		t.Fatalf("history still saves to %q after the failure, want saving stopped", h.path)
+	}
+}
+
+// neverSaved checks that the lines typed after a failure did not reach path,
+// once its permissions are back so it can be read.
+func neverSaved(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "one") || strings.Contains(string(data), "two") {
+		t.Fatalf("history file holds lines typed after the failure: %q", data)
+	}
 }
 
 func TestAnUnreadableHistoryFileWarnsOnceAndTheShellGoesOn(t *testing.T) {
@@ -206,6 +225,10 @@ func TestAnUnreadableHistoryFileWarnsOnceAndTheShellGoesOn(t *testing.T) {
 	}
 	var warn bytes.Buffer
 	keepsWorkingAfterOneWarning(t, OpenHistory(project, &warn), &warn)
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	neverSaved(t, path)
 }
 
 func TestAnUnwritableHistoryDirectoryWarnsOnceAndTheShellGoesOn(t *testing.T) {
@@ -223,6 +246,10 @@ func TestAnUnwritableHistoryDirectoryWarnsOnceAndTheShellGoesOn(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 	var warn bytes.Buffer
 	keepsWorkingAfterOneWarning(t, OpenHistory(project, &warn), &warn)
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	neverSaved(t, path)
 }
 
 func TestAHistoryFileThatCannotBeTrimmedWarnsOnceAndTheShellGoesOn(t *testing.T) {
@@ -243,6 +270,10 @@ func TestAHistoryFileThatCannotBeTrimmedWarnsOnceAndTheShellGoesOn(t *testing.T)
 		t.Fatalf("loaded %d entries, want the last %d in memory", h.Len(), historyLimit)
 	}
 	keepsWorkingAfterOneWarning(t, h, &warn)
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	neverSaved(t, path)
 }
 
 func TestWithNoCacheDirectoryHistoryStaysInMemoryAndWarnsOnce(t *testing.T) {

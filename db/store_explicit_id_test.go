@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"math"
 	"sync"
 	"testing"
 
@@ -167,5 +168,59 @@ func TestCreateWithAnExplicitIDHonoursACancelledContext(t *testing.T) {
 	var count int
 	if err := sqlDB.QueryRow("SELECT COUNT(*) FROM Ticket").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("rows = %d (%v), want 0", count, err)
+	}
+}
+
+type BigTicket struct {
+	ID    uint64 `tango:"pk"`
+	Title string
+}
+
+func TestCreateWithAZeroOrNegativeIDOnTheInt64Key(t *testing.T) {
+	ctx := context.Background()
+	sqlDB, dialect, registry := openTables(t, Ticket{})
+	meta, _ := registry.Get("Ticket")
+	store := db.NewStore(sqlDB, dialect)
+
+	zero := Ticket{Title: "zero means no ID yet"}
+	if err := store.Create(ctx, meta, &zero); err != nil {
+		t.Fatalf("Create with ID 0: %v", err)
+	}
+	if zero.ID <= 0 {
+		t.Fatalf("ID 0 became %d, want a generated positive ID", zero.ID)
+	}
+	negative := Ticket{ID: -5, Title: "negative"}
+	if err := store.Create(ctx, meta, &negative); err != nil {
+		t.Fatalf("Create with ID -5: %v", err)
+	}
+	var got Ticket
+	if err := store.Get(ctx, meta, int64(-5), &got); err != nil || got.Title != "negative" {
+		t.Fatalf("Get -5 = %+v, %v; want the negative-ID row", got, err)
+	}
+	after := Ticket{Title: "after"}
+	if err := store.Create(ctx, meta, &after); err != nil {
+		t.Fatalf("Create after a negative ID: %v", err)
+	}
+	if after.ID <= zero.ID {
+		t.Fatalf("ID after a negative explicit ID = %d, want it above %d: a negative ID must not move the sequence", after.ID, zero.ID)
+	}
+}
+
+func TestCreateWithAnUnsignedIDThatNoBIGINTHolds(t *testing.T) {
+	ctx := context.Background()
+	sqlDB, dialect, registry := openTables(t, BigTicket{})
+	meta, _ := registry.Get("BigTicket")
+	store := db.NewStore(sqlDB, dialect)
+
+	fits := BigTicket{ID: math.MaxInt64, Title: "largest that fits"}
+	if err := store.Create(ctx, meta, &fits); err != nil {
+		t.Fatalf("Create with ID MaxInt64: %v", err)
+	}
+	tooBig := BigTicket{ID: math.MaxInt64 + 1, Title: "too big"}
+	if err := store.Create(ctx, meta, &tooBig); err == nil {
+		t.Fatal("Create with an ID above MaxInt64 succeeded")
+	}
+	if count, err := store.Count(ctx, meta, db.Query{}); err != nil || count != 1 {
+		t.Fatalf("rows = %d (%v), want only the one that fit", count, err)
 	}
 }

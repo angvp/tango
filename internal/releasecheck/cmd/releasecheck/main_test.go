@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/angvp/tango/internal/releasecheck"
 )
 
 func TestRunRefusesBeforeAskingAnyoneAnything(t *testing.T) {
@@ -46,11 +48,27 @@ func TestEnvOrFallsBackOnlyWhenTheVariableIsEmpty(t *testing.T) {
 	}
 }
 
+// proxyWatcher is the sources a real check would ask, recording whether the
+// module proxy was.
+type proxyWatcher struct {
+	releasecheck.Sources
+	asked bool
+}
+
+func (w *proxyWatcher) PublishedCommit(context.Context, string) (string, error) {
+	w.asked = true
+	return "", nil
+}
+
 func TestACheckBeforeTaggingNeverAsksTheModuleProxy(t *testing.T) {
 	// The proxy caches "unknown revision" for a while, which would delay the
 	// real release; notYetTagged must answer without any lookup.
-	got, err := notYetTagged{}.PublishedCommit(context.Background(), "v9.9.9")
+	watcher := &proxyWatcher{}
+	got, err := notYetTagged{watcher}.PublishedCommit(context.Background(), "v9.9.9")
 	if got != "" || err != nil {
 		t.Fatalf("PublishedCommit = %q, %v; want empty and no error", got, err)
+	}
+	if watcher.asked {
+		t.Fatal("the module proxy was asked about a tag that is not pushed")
 	}
 }
