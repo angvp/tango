@@ -51,6 +51,7 @@ config := tango.Config{
 
 | Option | Effect | Default |
 |---|---|---|
+| `accounts.WithTrustedProxies(networks...)` | For an app behind a reverse proxy: counts failed attempts per forwarded client address, honouring `X-Forwarded-For` or `X-Real-IP` only from a connection inside these networks. Without it the limiters count the connection address and read no header. See [running more than one instance](running-more-than-one-instance.md#behind-a-reverse-proxy). |
 | `accounts.WithSignupDisabled()` | Closes self-service registration. `/accounts/register/` stays mounted and returns a clear "Registration is currently closed" response (never a bare 404); `/accounts/login/` is unaffected. | Signup enabled |
 | `accounts.WithSessionDuration(d time.Duration)` | How long a created session stays valid. | 30 days — deliberately longer than admin's fixed 24 hours, since public-user and operator expectations differ |
 | `accounts.WithSessionCookieName(name string)` | The session cookie's name. | `accounts.DefaultSessionCookieName` (`"tango_account_session"`) |

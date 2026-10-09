@@ -21,7 +21,7 @@ The failed-login limiter allows 5 failures per minute per source address on each
 - **What you get:** up to about N times the intended attempts per minute, and the count resets whenever an instance restarts.
 - **What it still does:** every instance stops a single address that hammers it.
 - **Workaround:** put a rate limit in front of the instances, on the login and registration paths, at your reverse proxy, load balancer or CDN. That limit is shared by construction.
-- **A related limit, even with one instance:** the limiter keys on the connection's remote address and never reads `X-Forwarded-For`. Behind a proxy that is the proxy's address, so all clients share one key unless the proxy preserves the client address at the connection level. Check this before relying on the limiter behind a proxy.
+- **A related limit, even with one instance:** see [behind a reverse proxy](#behind-a-reverse-proxy) below.
 
 ### `ratelimit`
 
@@ -46,6 +46,23 @@ With `accounts.WithMail`, emails wait in an in-memory outbox in the instance tha
 - **What you get:** a person who asks again within the cooldown, and reaches a different instance, can trigger another email, so up to N emails per cooldown window for one address. Anything queued when an instance dies is lost, and a failed send is never retried.
 - **What still holds:** the link in any email that is sent works on every instance, because the token is a database row.
 - **Workaround:** apply the edge rate limit to `/accounts/password-reset/` and `/accounts/verify/resend/`. Give the instance a long enough shutdown timeout for its outbox to drain on a deploy; see [application lifecycle](application-lifecycle.md).
+
+## Behind a reverse proxy
+
+This applies with one instance too. The failed-login limiter needs to know which client a request came from.
+
+- **Direct deployment (no proxy):** no configuration. The limiter counts failures per connection address, and reads no forwarded header.
+- **Behind a reverse proxy or load balancer:** the connection address is the proxy's, so every user shares one bucket, and five failed logins from anyone lock everyone out for a minute. Name your proxy's network:
+
+```go
+_, proxies, _ := net.ParseCIDR("10.0.0.0/8") // the network your proxy connects from
+admin.New(store, admin.WithTrustedProxies(proxies))
+accounts.New(store, accounts.WithTrustedProxies(proxies))
+```
+
+  With that, the limiter uses the client address from `X-Forwarded-For` (its first address) or `X-Real-IP`, but only for a request whose connection comes from inside one of the networks you named. A request from anywhere else keeps its own connection address and its header is ignored, so a client cannot dodge the limit by inventing one.
+- **What to put in the list:** only networks that you control and that always overwrite `X-Forwarded-For`. Naming a network whose members pass a client's own header through lets that client choose its limiter key.
+- **Scope:** this option is for the login limiter only. For admin it covers login; for `accounts`, login, registration, password reset and verification resend, which share one limiter. It does not change the `ratelimit` package (see `ratelimit.RemoteIPKey` there) and adds no other proxy handling.
 
 ## Where tanGO's guarantees end
 

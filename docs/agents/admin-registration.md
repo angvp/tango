@@ -14,6 +14,7 @@ Canonical example: `examples/api-with-admin/apps/posts/app.go`. Human guide: `do
 - Use `Label` on related models when foreign-key selects should display a friendly value.
 - Use `Labels`, `HelpText`, `ReadOnly`, and `FieldOrder` only for clear form ergonomics; all keys are Go field names and are validated at registration.
 - Use `Widgets` only when the built-in form widget is genuinely insufficient. Widgets are best-effort extensibility, not a stable long-term contract.
+- Behind a reverse proxy, pass `admin.WithTrustedProxies(networks...)` (and `accounts.WithTrustedProxies` if `accounts` is installed) or every user shares one login-limiter bucket. Never trust `X-Forwarded-For` without it.
 - Use `admin.WithBranding` or `admin.WithMiddleware` on `admin.New(store, ...)` for admin-wide branding or `/admin/`-scoped HTTP behavior.
 
 Tiny shape:

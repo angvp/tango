@@ -9,7 +9,7 @@ Canonical files: `internal/security/ratelimit.go`, `ratelimit/limiter.go`, `real
 - Database rows are shared across instances: admin and `accounts` sessions, accounts, and reset and verification tokens. A session or emailed link works on every instance.
 - Memory is per instance: the failed-login limiter (5 per minute per address, on admin login, `accounts` login and registration), `ratelimit.Limiter` buckets, `realtime.Hub` rooms and the `accounts` mail outbox and five-minute cooldown. With N instances the limits weaken by up to N, rooms split, and a queued email is lost if its instance dies.
 - Advise the workaround, not new code: rate-limit login, registration and mail paths at the proxy or CDN; route every connection for a realtime room to one instance by a stable room key; run `-migrate` once per deploy.
-- The login limiter keys on the connection's remote address and never reads `X-Forwarded-For`. Behind a proxy it sees the proxy unless the client address is preserved.
+- The login limiter keys on the connection's remote address and reads no forwarded header unless told which proxies to trust: `admin.WithTrustedProxies` and `accounts.WithTrustedProxies` (opt-in; direct deployments need nothing). Behind a proxy without it, every user shares one bucket.
 
 ## Don't
 
