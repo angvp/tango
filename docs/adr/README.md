@@ -52,3 +52,4 @@ New records take the next free number here. This directory is the single, public
 | [0044](0044-mail-is-a-sender-interface-with-tls-required-smtp.md) | Mail is a `Sender` interface with TLS-required SMTP and no automatic development fallback | Accepted |
 | [0045](0045-accounts-reset-and-verification-never-reveal-an-account.md) | `accounts` password reset and email verification never reveal an account | Accepted |
 | [0046](0046-admin-password-prompt-hides-typing-with-x-term.md) | The admin password prompt hides typing, using `golang.org/x/term` | Accepted |
+| [0047](0047-multi-instance-state-is-not-built-yet.md) | Shared state for more than one instance is not built yet; the guide documents workarounds and four triggers reopen it | Accepted |
