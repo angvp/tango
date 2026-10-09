@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
 ### Added
 
 - **`tango shell`**: a Go prompt on your project's models and database, with nothing served. It is a Yaegi interpreter (pinned at v0.16.1) run by the project's own `shell/main.go` through the new `shell` package, so the server never links it. Helpers `Models`, `Describe`, `Get`, `List`, `Count`, `Create`, `Update` and `Delete` work on any registered model addressed as `app.Model`, with plain-map queries and rows; `-c EXPR` and piped input make it scriptable; `--readonly` refuses writes; `Options.Helpers` adds your own functions as `project.Name`. At a terminal it has line editing, per-project history under your cache directory (`TANGO_SHELL_HISTORY=off` disables it), and Ctrl-C that clears the line, or ends a running evaluation with status 130. It says what Go the interpreter cannot run (`min`, `max`, `clear`, some generics, ranging over a function or an integer) and keeps the session through errors and panics. It runs your code with your project's credentials; it is not a sandbox. See the [shell guide](docs/guides/shell.md), [ADR 0048](docs/adr/0048-tango-shell-is-the-projects-own-program-on-a-pinned-yaegi.md) and [ADR 0005](docs/adr/0005-yaegi-for-tango-shell.md). Adds `github.com/traefik/yaegi` to the root module; only a binary that imports `shell` links it.
@@ -142,7 +144,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/angvp/tango/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/angvp/tango/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/angvp/tango/compare/4fd666747631ada5854daa820c43fb03f80851f3...v0.1.0
 [0.0.2]: https://github.com/angvp/tango/compare/v0.0.1...4fd666747631ada5854daa820c43fb03f80851f3
