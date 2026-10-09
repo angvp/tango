@@ -224,3 +224,66 @@ func TestCheckLeavesTheProxyAloneForARefusedRelease(t *testing.T) {
 		t.Fatal("Check passed, want it refused for the missing changelog section")
 	}
 }
+
+// neverAsked fails the test if a dry run asks the proxy about the tag, or
+// whether the commit is on main: the two questions a rehearsal must skip.
+type neverAsked struct {
+	fakeSources
+	t *testing.T
+}
+
+func (n neverAsked) OnMain(context.Context, string) (bool, error) {
+	n.t.Fatal("a dry run asked whether the commit is on main")
+	return false, nil
+}
+
+func (n neverAsked) PublishedCommit(context.Context, string) (string, error) {
+	n.t.Fatal("a dry run asked the module proxy about the tag")
+	return "", nil
+}
+
+func TestDryRunPassesAReadyCommitThatIsNotOnMainAndNeverAsksTheProxy(t *testing.T) {
+	release := Release{Tag: "v0.1.1", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: compatibleReport, DryRun: true}
+	notes, err := Check(context.Background(), release, neverAsked{fakeSources: fakeSources{runs: []CIRun{greenRun()}}, t: t})
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	if notes != "### Fixed\n\n- A fix." {
+		t.Fatalf("notes = %q", notes)
+	}
+}
+
+func TestDryRunStillRefusesEverythingElse(t *testing.T) {
+	ready := Release{Tag: "v0.1.1", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: compatibleReport, DryRun: true}
+	tests := []struct {
+		name    string
+		release Release
+		sources fakeSources
+		want    string
+	}{
+		{"no dated changelog section", Release{Tag: "v0.1.2", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: compatibleReport, DryRun: true}, fakeSources{runs: []CIRun{greenRun()}}, "no section"},
+		{"CI is not green", ready, fakeSources{runs: nil}, "no successful CI run"},
+		{"no corpus", ready, fakeSources{runs: []CIRun{greenRun()}, noCorpus: true}, "migration-compat corpus"},
+		{"patch with incompatible changes", Release{Tag: "v0.1.1", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: incompatibleReport, DryRun: true}, fakeSources{runs: []CIRun{greenRun()}}, "incompatible"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Check(context.Background(), tt.release, neverAsked{fakeSources: tt.sources, t: t})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v, want it to mention %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestSkippedNamesWhatADryRunDoesNotCheck(t *testing.T) {
+	if got := Skipped(Release{}); len(got) != 0 {
+		t.Fatalf("a real release skips %v, want nothing", got)
+	}
+	got := strings.Join(Skipped(Release{DryRun: true}), "|")
+	for _, want := range []string{"on main", "module proxy"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Skipped = %q, want it to name %q", got, want)
+		}
+	}
+}

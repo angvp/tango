@@ -26,6 +26,20 @@ type Release struct {
 	// Gorelease is gorelease's report comparing the tagged commit with the
 	// previous release, or "" if it wasn't run.
 	Gorelease string
+	// DryRun rehearses a release that cannot be real yet: the commit need
+	// not be on main, and the module proxy is never asked about the tag
+	// (asking would make it cache "unknown revision" and delay the real
+	// release). Every other check runs. Skipped says what was not checked.
+	DryRun bool
+}
+
+// Skipped names the checks r does not get, so a dry run's output says what
+// its pass does not prove.
+func Skipped(r Release) []string {
+	if !r.DryRun {
+		return nil
+	}
+	return []string{"the commit is on main", "the module proxy does not serve the tag from another commit"}
 }
 
 // Sources looks up what the tag alone doesn't say.
@@ -69,10 +83,12 @@ func Check(ctx context.Context, r Release, s Sources) (string, error) {
 	patch, _ := strconv.Atoi(match[3])
 
 	var problems []error
-	if onMain, err := s.OnMain(ctx, r.Commit); err != nil {
-		problems = append(problems, fmt.Errorf("check commit %s is on main: %w", r.Commit, err))
-	} else if !onMain {
-		problems = append(problems, fmt.Errorf("commit %s is not reachable from main: release only commits on main", r.Commit))
+	if !r.DryRun {
+		if onMain, err := s.OnMain(ctx, r.Commit); err != nil {
+			problems = append(problems, fmt.Errorf("check commit %s is on main: %w", r.Commit, err))
+		} else if !onMain {
+			problems = append(problems, fmt.Errorf("commit %s is not reachable from main: release only commits on main", r.Commit))
+		}
 	}
 	notes, err := changelogSection(r.Changelog, strings.TrimPrefix(r.Tag, "v"))
 	if err != nil {
@@ -95,6 +111,9 @@ func Check(ctx context.Context, r Release, s Sources) (string, error) {
 	// Last, and only for an otherwise ready release: asking the proxy about
 	// a tag makes it fetch and keep that tag's commit for good, and a
 	// refused tag must stay fixable.
+	if r.DryRun {
+		return notes, nil
+	}
 	if err := checkPublished(ctx, r, s); err != nil {
 		return "", err
 	}

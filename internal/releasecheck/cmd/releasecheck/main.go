@@ -25,14 +25,15 @@ func main() {
 	gorelease := flag.String("gorelease", "", "a file holding gorelease's report against the previous release")
 	notes := flag.String("notes", "", "write the release notes to this file")
 	repo := flag.String("repo", envOr("GITHUB_REPOSITORY", "angvp/tango"), "the GitHub repository")
+	dryRun := flag.Bool("dry-run", false, "rehearse: skip the commit-on-main and module-proxy checks, and say so")
 	flag.Parse()
-	if err := run(*tag, *commit, *changelog, *gorelease, *notes, *repo); err != nil {
+	if err := run(*tag, *commit, *changelog, *gorelease, *notes, *repo, *dryRun); err != nil {
 		fmt.Fprintln(os.Stderr, "releasecheck:", err)
 		os.Exit(1)
 	}
 }
 
-func run(tag, commit, changelogPath, goreleasePath, notesPath, repo string) error {
+func run(tag, commit, changelogPath, goreleasePath, notesPath, repo string, dryRun bool) error {
 	ctx := context.Background()
 	if tag == "" {
 		return fmt.Errorf("-tag is required")
@@ -60,15 +61,22 @@ func run(tag, commit, changelogPath, goreleasePath, notesPath, repo string) erro
 		token = os.Getenv("GH_TOKEN")
 	}
 	var sources releasecheck.Sources = releasecheck.Live{Dir: ".", Repo: repo, Module: "github.com/angvp/tango", Token: token}
-	if !tagExists {
+	if !tagExists || dryRun {
 		sources = notYetTagged{sources}
 	}
-	release := releasecheck.Release{Tag: tag, Commit: commit, Changelog: changelog, Gorelease: string(report)}
+	release := releasecheck.Release{Tag: tag, Commit: commit, Changelog: changelog, Gorelease: string(report), DryRun: dryRun}
 	body, err := releasecheck.Check(ctx, release, sources)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s at %s may be released.\n", tag, commit)
+	if dryRun {
+		fmt.Printf("dry run: %s at %s passes every check it makes.\n", tag, commit)
+		for _, skipped := range releasecheck.Skipped(release) {
+			fmt.Printf("dry run: not checked: %s.\n", skipped)
+		}
+	} else {
+		fmt.Printf("%s at %s may be released.\n", tag, commit)
+	}
 	if notesPath != "" {
 		if err := os.WriteFile(notesPath, []byte(body+"\n"), 0o644); err != nil {
 			return fmt.Errorf("write the release notes: %w", err)
