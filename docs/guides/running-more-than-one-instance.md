@@ -60,9 +60,9 @@ admin.New(store, admin.WithTrustedProxies(proxies))
 accounts.New(store, accounts.WithTrustedProxies(proxies))
 ```
 
-  With that, the limiter uses the client address from `X-Forwarded-For` (its first address) or `X-Real-IP`, but only for a request whose connection comes from inside one of the networks you named. A request from anywhere else keeps its own connection address and its header is ignored, so a client cannot dodge the limit by inventing one.
-- **What to put in the list:** only networks that you control and that always overwrite `X-Forwarded-For`. Naming a network whose members pass a client's own header through lets that client choose its limiter key.
-- **Scope:** this option is for the login limiter only. For admin it covers login; for `accounts`, login, registration, password reset and verification resend, which share one limiter. It does not change the `ratelimit` package (see `ratelimit.RemoteIPKey` there) and adds no other proxy handling.
+  With that, and only for a request whose connection comes from inside one of the networks you named, the limiter reads `X-Forwarded-For` from the right, skips addresses that are themselves in your list, and takes the first other address as the client: the address your nearest proxy actually saw. Anything the client wrote further left is never used, so this works whether your proxy appends to the header (nginx's default) or replaces it. A request from anywhere else keeps its own connection address and its header is ignored. `X-Real-IP` is not read, and an entry that is not a bare IP address makes the limiter fall back to the connection address.
+- **What to put in the list:** the networks your proxies connect from, and nothing wider. Your proxy must add the address it sees to `X-Forwarded-For`; a proxy that passes the header through untouched leaves the client's own claim as the rightmost entry.
+- **Scope:** the failed-attempt limiters only. For admin that is login; for `accounts` it is login, registration, password reset and verification resend, four limiters that use this one rule for naming the client. It does not change the `ratelimit` package and adds no other proxy handling.
 
 ## Where tanGO's guarantees end
 

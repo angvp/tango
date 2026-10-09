@@ -49,10 +49,11 @@ func WithMiddleware(middleware ...tango.Middleware) Option {
 // front of the application. Without it the limiter counts failed logins per
 // connection address and never reads a forwarded header, which is right for
 // a direct deployment. Behind a proxy that address is the proxy's, so every
-// user would share one limit; naming the proxy's network here makes the
-// limiter use the client address the proxy forwards, and only for requests
-// whose connection comes from one of these networks. A header from any other
-// peer is ignored. This affects the login limiter and nothing else.
+// user would share one limit. Naming the proxy's network here makes the
+// limiter use the client address the proxy saw: the rightmost
+// X-Forwarded-For entry outside these networks, and only for a request whose
+// connection comes from one of them. A header from any other peer is
+// ignored. This affects the login limiter and nothing else.
 func WithTrustedProxies(proxies ...*net.IPNet) Option {
 	return func(c *adminConfig) { c.trustedProxies = append(c.trustedProxies, proxies...) }
 }

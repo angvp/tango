@@ -40,7 +40,13 @@ func (l *RateLimiter) Allow(key string) bool {
 			kept = append(kept, at)
 		}
 	}
-	l.attempts[key] = kept
+	if len(kept) == 0 {
+		// Nothing recent: keep no entry, so a caller that only asks (a
+		// key that never fails) leaves nothing behind.
+		delete(l.attempts, key)
+	} else {
+		l.attempts[key] = kept
+	}
 
 	return len(kept) < l.maxAttempts
 }

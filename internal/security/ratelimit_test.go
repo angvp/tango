@@ -1,6 +1,7 @@
 package security
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -81,5 +82,15 @@ func TestRateLimiterInstancesDoNotShareState(t *testing.T) {
 	}
 	if !second.Allow("1.2.3.4") {
 		t.Fatal("second Allow = false for same key, want independent state")
+	}
+}
+
+func TestAllowDoesNotRetainKeysItHasNeverRecorded(t *testing.T) {
+	l := NewRateLimiter(5, time.Minute)
+	for i := 0; i < 100; i++ {
+		l.Allow(fmt.Sprintf("10.0.0.%d", i))
+	}
+	if len(l.attempts) != 0 {
+		t.Fatalf("limiter holds %d keys after only Allow calls, want 0", len(l.attempts))
 	}
 }

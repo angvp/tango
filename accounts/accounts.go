@@ -50,9 +50,10 @@ type accountsConfig struct {
 // sit in front of the application. Without it they count per connection
 // address and never read a forwarded header, which is right for a direct
 // deployment. Behind a proxy that address is the proxy's, so every user would
-// share one limit; naming the proxy's network here makes them use the client
-// address the proxy forwards, and only for requests whose connection comes
-// from one of these networks. A header from any other peer is ignored.
+// share one limit. Naming the proxy's network here makes them use the client
+// address the proxy saw: the rightmost X-Forwarded-For entry outside these
+// networks, and only for a request whose connection comes from one of them.
+// A header from any other peer is ignored.
 func WithTrustedProxies(proxies ...*net.IPNet) Option {
 	return func(c *accountsConfig) { c.trustedProxies = append(c.trustedProxies, proxies...) }
 }
