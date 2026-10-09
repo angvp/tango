@@ -12,6 +12,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Changed
 
+- `tango shell` is still not implemented, but its help text, `docs/limitations.md` and [ADR 0005](docs/adr/0005-yaegi-for-tango-shell.md) now say what a spike found: Yaegi works against a tanGO project, cannot run some current Go, and a shell needs a program in your own module. No command was added.
 - `tango admin create` and `tango admin resetpassword` use `TANGO_ADMIN_PASSWORD` when it is set and non-empty, with no prompt. It was documented but never read. The value is never printed; the command names the variable instead.
 - `tango migrate` says what it did: `applied 2 migrations: admin/0001_auto_…, blog/0002_auto_…`, or `no pending migrations`, instead of always printing `migrations applied`. A project gets the new wording when it is built against this version; the rollback line is unchanged.
 - `tango newproject` ends with the real first-run order (`tango makemigrations`, `tango migrate`, `tango admin create <username>`), and the generated project prints `admin: http://localhost:8000/admin/` after `listening on` (not with `--no-admin`). Existing projects are unchanged.

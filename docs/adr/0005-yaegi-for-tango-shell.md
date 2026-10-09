@@ -20,3 +20,29 @@ This is a direction decision only. `tango shell` is not implemented yet.
 - No subprocess/compile step per shell command — the interpreter lives inside the running shell binary, so state (variables, imports) persists naturally across a session.
 - Exposing registered models/registry to Yaegi's symbol table needs a defined bridge (likely reflection-based, similar to how `Store` already does reflection over `ModelMeta`) — that bridge design is deferred until `tango shell` is implemented.
 - Switching away from Yaegi later (e.g. to a from-scratch interpreter) is possible but would mean redesigning the shell's evaluation loop — this is a real, if distant, cost of committing now rather than re-deciding at implementation time.
+
+## Update (2026-10-09): a spike found the direction workable, with limits
+
+A bounded spike checked whether Yaegi works on the Go and tanGO this project is on now. It built throwaway code outside the repository and shipped none. It used Go 1.27.1, Yaegi v0.16.1 (the latest release, April 2024, which promises support for Go 1.21 and 1.22) and Yaegi master as of February 2026.
+
+**What worked, on both Yaegi versions.**
+
+- Yaegi builds and runs under Go 1.27 and evaluates expressions, and a variable set on one line is there on the next.
+- From the interpreter, `Store` calls against SQLite work, with `yaegi extract` symbol tables for tanGO's `db` and `model` packages (the exported `Store` API is reflection-based, not generic).
+- Against a scaffolded project, both approaches created and listed a row. **Typed:** a symbol table generated from the project's own package lets the interpreter use its model types. **Maps:** a shell binary exposes a few helper functions over the registry and `Store`, and the interpreter sees only maps, with nothing generated.
+
+**What did not work.** Yaegi interprets an older Go than the one the shell would run on. Expressions a user would reasonably type fail:
+
+- the `min`, `max` and `clear` builtins are undefined;
+- a generic function with two type parameters fails type inference (`cannot use type func(int) string as type func(int) int`);
+- a range over a function panics, and on v0.16.1 so does a range over an integer; the panic comes out of `Eval`, so the shell must recover it or one mistyped line ends the session.
+
+**What a project has to carry.** Both approaches need a shell program in the project's own module, since only there are its model types linked; the `tango` CLI cannot reach them. It repeats the project's wiring (DSN, driver import, store, installed apps, `BuildRegistry` and `RunRegistration`). The typed approach also needs a generated symbol package that must be regenerated whenever a model changes, or it silently describes the old struct. The shell binary was 35.6 MB beside the project's 20.8 MB. All of it stays out of the root library's import graph, as with the TUI ([ADR 0007](0007-bubbletea-stack-for-tango-tui.md)).
+
+**Decision.** The direction stands: Yaegi remains the only option that gives a real read-eval-print loop. `tango shell` is still not implemented, and 0.3.0 ships no `tango shell` command, hidden or otherwise. Building it is a separate milestone that has to decide:
+
+1. How the shell reaches the project: a shell program the scaffold generates, or a flag the project's `main.go` handles, as `-tango-status` is.
+2. Typed access with generated, regenerated symbol tables, or map rows with helper functions tanGO ships and keeps stable.
+3. Which Yaegi version to depend on, given a release that predates Go 1.27 and a master that fixes only some of the gaps above, and what to tell users about the Go it cannot interpret.
+4. How panics and unsupported expressions are reported without ending the session.
+
