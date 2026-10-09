@@ -155,3 +155,103 @@ func TestAnUnusableHistoryDirectoryWarnsOnceAndTheShellGoesOn(t *testing.T) {
 	}
 	_ = home
 }
+
+// skipUnlessPermissionsApply skips a test that relies on file modes: Windows
+// does not honour them and root ignores them.
+func skipUnlessPermissionsApply(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("file modes are not enforced here")
+	}
+}
+
+// historyFileFor creates the project's history file, as an earlier session
+// would have, and returns its path.
+func historyFileFor(t *testing.T, project, content string) string {
+	t.Helper()
+	path, err := historyPath(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// keepsWorkingAfterOneWarning checks the contract of every history failure:
+// the person is told once, and the session's own history still works.
+func keepsWorkingAfterOneWarning(t *testing.T, h *History, warn *bytes.Buffer) {
+	t.Helper()
+	h.Add("one")
+	h.Add("two")
+	if h.At(0) != "two" || h.At(1) != "one" {
+		t.Fatalf("history = %v, want the in-memory history to keep working", h.Entries())
+	}
+	if n := strings.Count(warn.String(), "history is not saved"); n != 1 {
+		t.Fatalf("warnings = %q, want exactly one", warn.String())
+	}
+}
+
+func TestAnUnreadableHistoryFileWarnsOnceAndTheShellGoesOn(t *testing.T) {
+	skipUnlessPermissionsApply(t)
+	cacheHome(t)
+	project := t.TempDir()
+	path := historyFileFor(t, project, "old line\n")
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	var warn bytes.Buffer
+	keepsWorkingAfterOneWarning(t, OpenHistory(project, &warn), &warn)
+}
+
+func TestAnUnwritableHistoryDirectoryWarnsOnceAndTheShellGoesOn(t *testing.T) {
+	skipUnlessPermissionsApply(t)
+	cacheHome(t)
+	project := t.TempDir()
+	path := historyFileFor(t, project, "")
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(path)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	var warn bytes.Buffer
+	keepsWorkingAfterOneWarning(t, OpenHistory(project, &warn), &warn)
+}
+
+func TestAHistoryFileThatCannotBeTrimmedWarnsOnceAndTheShellGoesOn(t *testing.T) {
+	skipUnlessPermissionsApply(t)
+	cacheHome(t)
+	project := t.TempDir()
+	var lines strings.Builder
+	for i := 0; i < historyLimit+5; i++ {
+		fmt.Fprintf(&lines, "line %d\n", i)
+	}
+	path := historyFileFor(t, project, lines.String())
+	if err := os.Chmod(path, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	var warn bytes.Buffer
+	h := OpenHistory(project, &warn)
+	if h.Len() != historyLimit {
+		t.Fatalf("loaded %d entries, want the last %d in memory", h.Len(), historyLimit)
+	}
+	keepsWorkingAfterOneWarning(t, h, &warn)
+}
+
+func TestWithNoCacheDirectoryHistoryStaysInMemoryAndWarnsOnce(t *testing.T) {
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" || runtime.GOOS == "plan9" {
+		t.Skip("UserCacheDir does not depend on the environment alone here")
+	}
+	cacheHome(t)
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CACHE_HOME", "")
+	var warn bytes.Buffer
+	keepsWorkingAfterOneWarning(t, OpenHistory(t.TempDir(), &warn), &warn)
+}
