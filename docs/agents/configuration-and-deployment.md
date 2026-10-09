@@ -25,6 +25,8 @@ return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
 
 - Do not hardcode `Addr: ":8000"` or call `http.ListenAndServe` yourself; you lose `PORT`, the header timeout and graceful shutdown.
 - Do not commit secrets to `.env` files used in production; set real environment variables.
+- `tango admin create` and `resetpassword` take the password from `TANGO_ADMIN_PASSWORD` when it is set and non-empty (no prompt, never printed); otherwise they prompt on stdin without echo. The environment is visible to process-inspection tools, so prefer the platform's secret mechanism, and keep `.env` out of version control.
+- `tango migrate` prints `applied N migrations: app/name, …` or `no pending migrations`.
 - Do not run several processes against in-memory state (rate limiters, realtime rooms, the accounts outbox) and expect them to share it.
 
 ## Check
