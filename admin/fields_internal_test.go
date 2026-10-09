@@ -2,7 +2,6 @@ package admin
 
 import (
 	"html/template"
-	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
@@ -314,15 +313,5 @@ func TestAppendQueryReturnsInputUnchangedForUnparsableURL(t *testing.T) {
 	broken := "/admin/post/new/\x7f"
 	if got := appendQuery(broken, "k", "v"); got != broken {
 		t.Fatalf("appendQuery(%q) = %q, want the input returned unchanged", broken, got)
-	}
-}
-
-// TestRateLimitKeyFallsBackToRawRemoteAddr covers rateLimitKey's error
-// branch: a RemoteAddr without a port (net.SplitHostPort fails) falls back
-// to the raw value rather than erroring or panicking.
-func TestRateLimitKeyFallsBackToRawRemoteAddr(t *testing.T) {
-	r := &http.Request{RemoteAddr: "no-port-here"}
-	if got := rateLimitKey(r); got != "no-port-here" {
-		t.Fatalf("rateLimitKey = %q, want the raw RemoteAddr", got)
 	}
 }

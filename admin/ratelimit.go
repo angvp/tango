@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"net"
 	"net/http"
 	"time"
 
@@ -19,16 +18,6 @@ const (
 	loginRateLimitAttempts = 5
 	loginRateLimitWindow   = time.Minute
 )
-
-// rateLimitKey derives the rate-limit key (source IP, port stripped) for
-// a request.
-func rateLimitKey(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
 
 // tooManyLoginAttempts writes a generic 429 response for a throttled
 // login attempt.

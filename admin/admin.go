@@ -59,6 +59,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 		}
 
 		limiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)
+		clientKey := security.ClientKey(cfg.trustedProxies)
 		index := requireSession(store, indexView(nav, cfg.branding))
 		routes := tango.URLs{
 			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index")),
@@ -67,8 +68,8 @@ func New(store *db.Store, opts ...Option) tango.App {
 			// and Include's own slash-normalization only applies to prefixes
 			// passed to Include, not to a literal pattern like this one.
 			tango.Path(http.MethodGet, "/admin", index),
-			tango.Path(http.MethodGet, "/admin/login/", loginView(store, limiter), tango.Name("login")),
-			tango.Path(http.MethodPost, "/admin/login/", loginView(store, limiter)),
+			tango.Path(http.MethodGet, "/admin/login/", loginView(store, limiter, clientKey), tango.Name("login")),
+			tango.Path(http.MethodPost, "/admin/login/", loginView(store, limiter, clientKey)),
 			tango.Path(http.MethodPost, "/admin/logout/", logoutView(store), tango.Name("logout")),
 		}
 		for _, registration := range registrations {

@@ -2,7 +2,6 @@ package accounts
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -99,7 +98,7 @@ func register(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *
 	if !verifyPreSessionCSRF(ctx.Request()) {
 		return forbiddenCSRF(ctx)
 	}
-	key := rateLimitKey(ctx.Request())
+	key := cfg.clientKey(ctx.Request())
 	if !limiter.Allow(key) {
 		return tooManyRequests(ctx)
 	}
@@ -160,16 +159,6 @@ func createAccount(ctx context.Context, store *db.Store, email, password string)
 		return Account{}, false, err
 	}
 	return account, true, nil
-}
-
-// rateLimitKey derives the rate-limit key (source IP, port stripped) for
-// a request, mirroring admin's own helper.
-func rateLimitKey(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 func tooManyRequests(ctx *tango.Context) error {

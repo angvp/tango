@@ -87,7 +87,7 @@ func resendVerificationView(m *mailer, limiter *security.RateLimiter) tango.View
 		if !verifyPreSessionCSRF(ctx.Request()) {
 			return forbiddenCSRF(ctx)
 		}
-		key := rateLimitKey(ctx.Request())
+		key := m.cfg.clientKey(ctx.Request())
 		if !limiter.Allow(key) {
 			return tooManyRequests(ctx)
 		}

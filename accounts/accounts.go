@@ -10,6 +10,7 @@
 package accounts
 
 import (
+	"net"
 	"net/http"
 	"time"
 
@@ -38,6 +39,22 @@ type accountsConfig struct {
 	mail              *MailConfig
 	now               func() time.Time
 	outboxCapacity    int
+	trustedProxies    []*net.IPNet
+	// clientKey names the client behind a request for the failed-attempt
+	// limiters; New sets it from trustedProxies after the options run.
+	clientKey func(*http.Request) string
+}
+
+// WithTrustedProxies tells the failed-attempt limiters of login,
+// registration, password reset and verification resend which reverse proxies
+// sit in front of the application. Without it they count per connection
+// address and never read a forwarded header, which is right for a direct
+// deployment. Behind a proxy that address is the proxy's, so every user would
+// share one limit; naming the proxy's network here makes them use the client
+// address the proxy forwards, and only for requests whose connection comes
+// from one of these networks. A header from any other peer is ignored.
+func WithTrustedProxies(proxies ...*net.IPNet) Option {
+	return func(c *accountsConfig) { c.trustedProxies = append(c.trustedProxies, proxies...) }
 }
 
 // WithSignupDisabled opts an installation out of self-service registration.
@@ -75,6 +92,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	cfg.clientKey = security.ClientKey(cfg.trustedProxies)
 
 	return tango.NewApp("accounts", func(registry *tango.Registry) error {
 		registry.SetStore(store)

@@ -43,7 +43,7 @@ func (m *mailer) askForReset(ctx *tango.Context, limiter *security.RateLimiter) 
 	if !verifyPreSessionCSRF(ctx.Request()) {
 		return forbiddenCSRF(ctx)
 	}
-	key := rateLimitKey(ctx.Request())
+	key := m.cfg.clientKey(ctx.Request())
 	if !limiter.Allow(key) {
 		return tooManyRequests(ctx)
 	}

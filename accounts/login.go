@@ -56,7 +56,7 @@ func logIn(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *sec
 	if !verifyPreSessionCSRF(ctx.Request()) {
 		return forbiddenCSRF(ctx)
 	}
-	key := rateLimitKey(ctx.Request())
+	key := cfg.clientKey(ctx.Request())
 	if !limiter.Allow(key) {
 		return tooManyRequests(ctx)
 	}
