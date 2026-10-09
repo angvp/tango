@@ -101,7 +101,7 @@ registry.Routes().Include("/", tango.URLs{
 
 ## Deliberate limits
 
-- Single-process, in-memory only — no distributed pub/sub, no cross-instance presence.
+- Single-process, in-memory only — no distributed pub/sub, no cross-instance presence; [running more than one instance](running-more-than-one-instance.md) covers routing a room to one process.
 - No persistence or replay of room state across a restart or past a room's eviction.
 - No automatic game rules, bot AI, or matchmaking — `Logic` is entirely host-written.
 - No configurable backpressure policy beyond "close the slow peer."

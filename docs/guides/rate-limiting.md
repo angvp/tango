@@ -74,7 +74,7 @@ The defaults stay stable and documented — a host overrides them for consistenc
 
 ## Deliberate limits
 
-- Single-process, in-memory only — no distributed quota across multiple server processes. See [ADR 0029](../adr/0029-ratelimit-is-a-concrete-token-bucket.md) for why there's no storage interface yet either.
+- Single-process, in-memory only — no distributed quota across multiple server processes; [running more than one instance](running-more-than-one-instance.md) covers the workaround. See [ADR 0029](../adr/0029-ratelimit-is-a-concrete-token-bucket.md) for why there's no storage interface yet either.
 - No tenant-level policy engine or adaptive throttling.
 - `admin`/`accounts`' existing failed-login-attempt limiter is untouched and unaffected by this package.
 

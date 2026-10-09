@@ -102,6 +102,7 @@ An expired, used, replaced or unknown link gets the same "This link is not valid
 ### Limits
 
 - **Cooldown:** each address gets at most one email of each kind every five minutes, and each client IP five reset or resend requests a minute. An email the full outbox drops gives its cooldown back.
+- **More than one instance:** the cooldown and the outbox are per process; see [running more than one instance](running-more-than-one-instance.md).
 - **Outbox:** emails wait in an in-memory outbox of 100, sent one at a time by a worker that `accounts` registers as a [Lifecycle](application-lifecycle.md) component.
 - **Full outbox:** the email is dropped and `tango.accounts.mail_dropped` is logged.
 - **Failed send:** `tango.accounts.mail_failed` is logged, with the address and link redacted; a failure preparing the email is logged by its error class only.

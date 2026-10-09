@@ -6,6 +6,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Added
 
+- [Running more than one instance](docs/guides/running-more-than-one-instance.md): what is shared across instances (sessions, accounts, tokens), what is per process (the login limiter, `ratelimit`, `realtime` rooms, the `accounts` mail outbox and cooldown) and the workarounds, with [ADR 0047](docs/adr/0047-multi-instance-state-is-not-built-yet.md) recording that shared state is not built yet and what would reopen it. No API changes.
 - A [`tango tui` guide](docs/guides/tui.md), with screens checked against the code by a test, and the promise about the dashboard in [versioning and compatibility](docs/compatibility.md): the command, its terminal requirement, confirmation before database changes and delegation to the supported operations are covered; layout, wording and key bindings are not.
 
 ### Changed
