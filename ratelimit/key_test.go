@@ -46,7 +46,7 @@ func TestRemoteIPKeyTrustedProxyHonorsForwardedFor(t *testing.T) {
 		t.Fatalf("key: %v", err)
 	}
 	if got != "198.51.100.9" {
-		t.Fatalf("key = %q, want the leftmost X-Forwarded-For address from a trusted peer", got)
+		t.Fatalf("key = %q, want the client the trusted proxy saw", got)
 	}
 }
 
@@ -64,23 +64,6 @@ func TestRemoteIPKeyUntrustedPeerIgnoresForgedHeader(t *testing.T) {
 	}
 	if got != "203.0.113.5" {
 		t.Fatalf("key = %q, want the real peer address — an untrusted peer must not be able to spoof its key via X-Forwarded-For", got)
-	}
-}
-
-func TestRemoteIPKeyTrustedProxyRealIPFallback(t *testing.T) {
-	trusted := mustCIDR(t, "10.0.0.0/8")
-	key := RemoteIPKey(trusted)
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.RemoteAddr = "10.0.0.1:12345"
-	req.Header.Set("X-Real-IP", "198.51.100.9")
-
-	got, err := key(req)
-	if err != nil {
-		t.Fatalf("key: %v", err)
-	}
-	if got != "198.51.100.9" {
-		t.Fatalf("key = %q, want X-Real-IP honored from a trusted peer with no X-Forwarded-For", got)
 	}
 }
 

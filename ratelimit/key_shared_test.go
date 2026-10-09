@@ -1,4 +1,4 @@
-package security
+package ratelimit
 
 import (
 	"net"
@@ -8,18 +8,13 @@ import (
 	"github.com/angvp/tango/internal/clientip/clientiptest"
 )
 
-// The login limiters' resolver is tested against the same cases as the
-// public ratelimit.RemoteIPKey.
-func TestClientKeyAgreesWithTheSharedCases(t *testing.T) {
+// The same cases the login limiters' resolver is tested against.
+func TestRemoteIPKeyAgreesWithTheSharedCases(t *testing.T) {
 	for _, tc := range clientiptest.Cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			var trusted []*net.IPNet
 			for _, cidr := range tc.Trusted {
-				_, n, err := net.ParseCIDR(cidr)
-				if err != nil {
-					t.Fatal(err)
-				}
-				trusted = append(trusted, n)
+				trusted = append(trusted, mustCIDR(t, cidr))
 			}
 			r := &http.Request{RemoteAddr: tc.Peer, Header: http.Header{}}
 			for _, line := range tc.ForwardedFor {
@@ -28,7 +23,11 @@ func TestClientKeyAgreesWithTheSharedCases(t *testing.T) {
 			if tc.RealIP != "" {
 				r.Header.Set("X-Real-IP", tc.RealIP)
 			}
-			if got := ClientKey(trusted)(r); got != tc.Want {
+			got, err := RemoteIPKey(trusted...)(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.Want {
 				t.Fatalf("key = %q, want %q", got, tc.Want)
 			}
 		})

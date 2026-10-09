@@ -3,7 +3,8 @@ package ratelimit
 import (
 	"net"
 	"net/http"
-	"strings"
+
+	"github.com/angvp/tango/internal/clientip"
 )
 
 // KeyFunc extracts a rate-limit key from a request. Caller-supplied:
@@ -12,62 +13,26 @@ import (
 // identity, tenant identity, or anything else reachable from *http.Request.
 type KeyFunc func(*http.Request) (string, error)
 
-// RemoteIPKey returns a KeyFunc keyed on the request's remote IP.
+// RemoteIPKey returns a KeyFunc keyed on the request's client IP.
 //
 // With no trustedProxies given, it always uses r.RemoteAddr's host (via
 // net.SplitHostPort, falling back to the raw RemoteAddr value if it
-// doesn't parse as host:port) — X-Forwarded-For and X-Real-IP are never
-// consulted. This matches admin/accounts' existing login rate limiter,
-// which has no proxy awareness at all.
+// doesn't parse as host:port); forwarded headers are never consulted. This
+// matches admin/accounts' login rate limiter when it is not configured with
+// trusted proxies.
 //
-// With trustedProxies given, X-Forwarded-For (its first, leftmost address)
-// or X-Real-IP is honored instead, but only when the immediate peer
-// (r.RemoteAddr's host) parses as an IP inside one of the given CIDRs.
-// From an untrusted peer, those headers are ignored even if present —
-// trusting them unconditionally would let any client spoof its own
-// rate-limit key.
+// With trustedProxies given, and only when the immediate peer
+// (r.RemoteAddr's host) is an IP inside one of the given networks,
+// X-Forwarded-For is read from the right: addresses that are themselves in
+// trustedProxies are skipped, and the first other address, the one your
+// nearest trusted proxy saw, is the key. Whatever the client wrote to the
+// left of it is ignored, so a client cannot pick its own key even through a
+// proxy that appends to the header. An entry that is not a bare IP address, or
+// a list with no usable entry, falls back to the peer's address. A valid
+// address is returned in canonical form. X-Real-IP is never read. From an
+// untrusted peer, headers are ignored even if present.
 func RemoteIPKey(trustedProxies ...*net.IPNet) KeyFunc {
 	return func(r *http.Request) (string, error) {
-		peer := remoteAddrHost(r.RemoteAddr)
-
-		if len(trustedProxies) > 0 && peerIsTrusted(peer, trustedProxies) {
-			if forwarded := firstForwardedFor(r.Header.Get("X-Forwarded-For")); forwarded != "" {
-				return forwarded, nil
-			}
-			if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
-				return realIP, nil
-			}
-		}
-
-		return peer, nil
+		return clientip.Resolve(r, trustedProxies), nil
 	}
-}
-
-func remoteAddrHost(remoteAddr string) string {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		return remoteAddr
-	}
-	return host
-}
-
-func peerIsTrusted(peer string, trustedProxies []*net.IPNet) bool {
-	ip := net.ParseIP(peer)
-	if ip == nil {
-		return false
-	}
-	for _, cidr := range trustedProxies {
-		if cidr == nil {
-			continue
-		}
-		if cidr.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-func firstForwardedFor(header string) string {
-	first, _, _ := strings.Cut(header, ",")
-	return strings.TrimSpace(first)
 }
