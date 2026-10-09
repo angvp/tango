@@ -217,7 +217,7 @@ func TestTUIExplainsAStatusFailureAndKeepsTheRawError(t *testing.T) {
 					t.Fatalf("exit code = %d, want 1", code)
 				}
 				out := stderr.String()
-				explanation := strings.Index(out, "tanGO could not load the project status")
+				explanation := strings.Index(out, "tanGO could not load project status")
 				raw := strings.Index(out, tt.raw)
 				if explanation < 0 || raw < 0 || explanation > raw {
 					t.Fatalf("stderr must explain first, then keep the raw error %q:\n%s", tt.raw, out)
@@ -595,4 +595,15 @@ func killedBySignal(t *testing.T) error {
 		t.Fatalf("expected a signal-killed exit error, got %v", err)
 	}
 	return err
+}
+
+func TestUnknownMenuItemsAreHarmless(t *testing.T) {
+	var unknown tuiMenuItem = 99
+	if got := unknown.confirmation(); got != "unknown? (y/n)" {
+		t.Fatalf("confirmation() = %q", got)
+	}
+	runner := &multiRecordingRunner{}
+	if code := performAction(context.Background(), runner, t.TempDir(), io.Discard, io.Discard, unknown, true); code != 0 || len(runner.commands) != 0 {
+		t.Fatalf("code = %d, commands = %v; an unknown item must run nothing", code, runner.commands)
+	}
 }

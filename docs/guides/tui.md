@@ -1,6 +1,6 @@
 # Guide: `tango tui`
 
-`tango tui` is a small terminal dashboard for the project in the current directory. It shows whether the project's registration and database are healthy and how many migrations are applied, and lets you run the server, apply migrations or roll one back without leaving the screen.
+`tango tui` is a small terminal dashboard for the project in the current directory. It shows whether the project's registration and database are healthy and how many migrations are applied, and lets you apply migrations or roll one back without leaving the screen, or start the server from it.
 
 It changes nothing on its own: every action is the same command you could type yourself, and the two that change the database ask first.
 
@@ -129,15 +129,16 @@ The line carries the command's exit code and the last line it wrote to standard 
 
 ## If the status cannot be loaded
 
-When the project cannot report its status (it does not compile, or its `main.go` predates `-tango-status`), `tango tui` exits `1`. It prints an explanation first, then the underlying error unchanged:
+When the project cannot report its status (it does not compile, or its `main.go` predates `-tango-status`), `tango tui` exits `1`. It prints an explanation first, then whatever the project itself wrote to standard error, then the underlying error, unchanged:
 
 ```text
-tango tui: tanGO could not load the project status.
+tango tui: tanGO could not load project status.
   - Run "tango check" to diagnose registration and configuration.
-  - A project whose main.go predates -tango-status may need tango.DispatchFlags,
-    which answers it.
-tango tui: <the underlying error>
+  - Older project entrypoints may need tango.DispatchFlags, which answers
+    -tango-status.
 ```
+
+One case this cannot catch: a `main.go` that ignores command-line flags entirely starts its server when asked for `-tango-status`, and `tango tui` then waits for a status that never comes. Press Ctrl-C and add `tango.DispatchFlags` to `main.go`; every project from `tango newproject` has it.
 
 ## Without a terminal
 

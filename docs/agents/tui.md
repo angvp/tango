@@ -8,7 +8,7 @@ Canonical files: `internal/cli/tui.go`, `internal/cli/tui_dashboard.go`, and the
 
 - `tango tui` is a client of the project's own binary: it runs `go run . -tango-status` for status and `go run .`, `go run . -migrate` or `go run . -migrate -down` for actions. It never opens the database itself.
 - Which actions can run comes from one function, `availability`, over `tango.ProjectStatus`. Add no query or state just for the dashboard; if the dashboard needs a fact the status lacks, add it to `ProjectStatus` first (a Covered JSON shape, so additive only).
-- A failed apply or rollback stays in the dashboard with a `Last action failed: …` line; only "Run server" ends it, and a stop by Ctrl-C or `SIGTERM` is a normal exit (`server stopped`, code 0).
+- A failed apply or rollback stays in the dashboard with a `Last action failed: …` line. The dashboard ends when the user quits (`q`, or Ctrl-C at the menu or during a confirmation), when "Run server" starts the server, and when a status that cannot be reloaded after a successful action leaves nothing to show (exit 1). A server stopped by Ctrl-C or `SIGTERM` is a normal exit (`server stopped`, code 0).
 - Without a terminal it prints status and exits `0`. Tests supply the terminal answer through the `interactive` parameter of `tui`.
 
 ## Test it

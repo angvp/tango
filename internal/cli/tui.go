@@ -60,18 +60,30 @@ func (m tuiMenuItem) confirmation() string {
 // something to apply or roll back.
 func (m tuiMenuItem) availability(status tango.ProjectStatus) (ok bool, reason string) {
 	switch m {
-	case menuApplyMigrations, menuRollbackLast:
-		if !status.RegistrationOK || !status.DatabaseReachable {
-			return false, "unavailable: project status is incomplete"
+	case menuApplyMigrations:
+		if !statusComplete(status) {
+			return false, reasonStatusIncomplete
 		}
-		if m == menuApplyMigrations && status.MigrationsPending == 0 {
+		if status.MigrationsPending == 0 {
 			return false, "nothing to apply"
 		}
-		if m == menuRollbackLast && status.MigrationsApplied == 0 {
+	case menuRollbackLast:
+		if !statusComplete(status) {
+			return false, reasonStatusIncomplete
+		}
+		if status.MigrationsApplied == 0 {
 			return false, "nothing to roll back"
 		}
 	}
 	return true, ""
+}
+
+const reasonStatusIncomplete = "unavailable: project status is incomplete"
+
+// statusComplete reports whether registration and the database are in order,
+// the precondition for any migration action.
+func statusComplete(status tango.ProjectStatus) bool {
+	return status.RegistrationOK && status.DatabaseReachable
 }
 
 // requiresConfirmation reports whether m is destructive enough to need an
@@ -96,12 +108,17 @@ var isInteractiveTerminal = func() bool {
 // whether a terminal is attached, and programOptions (nil in production)
 // supplies each Bubble Tea program's options, so a test can script the keys.
 func tui(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, interactive func() bool, programOptions func() []tea.ProgramOption) int {
-	status, err := fetchStatus(ctx, runner, dir, stderr)
+	// The project's own stderr is held back so that, on failure, the
+	// explanation comes first and the project's words follow it unchanged.
+	var projectStderr bytes.Buffer
+	status, err := fetchStatus(ctx, runner, dir, &projectStderr)
 	if err != nil {
 		fmt.Fprint(stderr, statusFailureHelp)
+		stderr.Write(projectStderr.Bytes())
 		fmt.Fprintf(stderr, "tango tui: %v\n", err)
 		return 1
 	}
+	stderr.Write(projectStderr.Bytes())
 
 	if !interactive() {
 		printStatusPlain(stdout, status)
@@ -113,10 +130,10 @@ func tui(ctx context.Context, runner Runner, dir string, stdout io.Writer, stder
 
 // statusFailureHelp precedes the raw error when the project's status cannot
 // be loaded; it never replaces it.
-const statusFailureHelp = `tango tui: tanGO could not load the project status.
+const statusFailureHelp = `tango tui: tanGO could not load project status.
   - Run "tango check" to diagnose registration and configuration.
-  - A project whose main.go predates -tango-status may need tango.DispatchFlags,
-    which answers it.
+  - Older project entrypoints may need tango.DispatchFlags, which answers
+    -tango-status.
 `
 
 // fetchStatus shells `-tango-status`, the same convention `tango check`/

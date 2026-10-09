@@ -199,7 +199,7 @@ func advanceDashboard(ctx context.Context, runner Runner, dir string, stdout io.
 	}
 
 	if final.action == menuRunServer {
-		return tango.ProjectStatus{}, "", true, runServer(ctx, runner, dir, stdout, stderr, final)
+		return tango.ProjectStatus{}, "", true, runServer(ctx, runner, dir, stdout, stderr)
 	}
 
 	captured := &lastLineWriter{w: stderr}
@@ -273,16 +273,31 @@ var watchStopSignals = func() func() bool {
 	}
 }
 
+const (
+	// exitGoRunFailed is what `go run` exits with for any failing child, and
+	// for a server stopped by Ctrl-C even after a graceful shutdown.
+	exitGoRunFailed = 1
+	// exitKilledBySignal is the ExitCode Go reports for a process the kernel
+	// killed with a signal, e.g. `go run` itself on SIGTERM.
+	exitKilledBySignal = -1
+)
+
+// isNormalStopCode reports whether code, seen after the user's stop signal,
+// is how a server that stopped normally exits.
+func isNormalStopCode(code int) bool {
+	return code == 0 || code == exitGoRunFailed || code == exitKilledBySignal
+}
+
 // runServer runs the project's server and returns the exit code for the TUI.
 // A server the user stopped with Ctrl-C or SIGTERM is a normal stop: `go run`
 // then exits 1 (even after a graceful shutdown) or is killed by the signal
 // (exit code -1), so those codes, after a signal, print "server stopped" and
 // give 0. Any other code, or any code with no signal, is a real failure and
 // is kept.
-func runServer(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, final dashboardModel) int {
+func runServer(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer) int {
 	stopped := watchStopSignals()
-	code := performAction(ctx, runner, dir, stdout, stderr, final.action, final.confirmed)
-	if stopped() && (code == 0 || code == 1 || code == -1) {
+	code := performAction(ctx, runner, dir, stdout, stderr, menuRunServer, false)
+	if stopped() && isNormalStopCode(code) {
 		fmt.Fprintln(stdout, "server stopped")
 		return 0
 	}
