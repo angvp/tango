@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-09
+
 ### Fixed
 
 - `db.Query` with an `Offset` and no `Limit` failed on SQLite with a SQL syntax error (SQLite refuses `OFFSET` without `LIMIT`). `List` now skips the rows and returns the rest on both dialects. It also made `tango shell`'s `List(model, map[string]any{"offset": n})` fail the same way.
@@ -148,7 +150,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/angvp/tango/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/angvp/tango/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/angvp/tango/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/angvp/tango/compare/4fd666747631ada5854daa820c43fb03f80851f3...v0.1.0
