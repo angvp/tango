@@ -1,0 +1,165 @@
+diff --git a/main.go b/main.go
+index f065f71..57a8db9 100644
+--- a/main.go
++++ b/main.go
+@@ -9,8 +9,10 @@ import (
+ 	"syscall"
+ 
+ 	"github.com/angvp/tango"
++	"github.com/angvp/tango/db"
+ 
+ 	"legacyapp/migrations"
++	"legacyapp/project"
+ 
+ 	_ "modernc.org/sqlite"
+ )
+@@ -38,22 +40,10 @@ func run() error {
+ 	}
+ 	defer sqlDB.Close()
+ 
+-	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+-	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+-	config.InstalledApps = []tango.App{}
+-	config.Middleware = []tango.Middleware{
+-		tango.RequestID(),
+-		tango.Recoverer(),
+-		tango.AccessLogger(),
+-		// Request bodies are capped at 1 MiB. If this application later needs
+-		// large uploads, remove the global body-limit middleware and apply
+-		// `MaxBodySize` only to the route groups or routes that should remain
+-		// limited.
+-		tango.MaxBodySize(1 << 20),
+-	}
+-	// Global middleware also wraps requests no route matches, so 404s and
+-	// 405s are logged and counted too.
+-	config.MiddlewareScope = tango.MiddlewareScopeAll
++	store := db.NewStore(sqlDB, dsn.Dialect)
++	// The installed apps, middleware and other configuration live in
++	// project/project.go, shared with the shell.
++	config := project.Config(store)
+ 
+ 	handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)
+ 	if handled || err != nil {
+diff --git a/project/project.go b/project/project.go
+new file mode 100644
+index 0000000..d6b02b9
+--- /dev/null
++++ b/project/project.go
+@@ -0,0 +1,33 @@
++package project
++
++import (
++	"github.com/angvp/tango"
++	"github.com/angvp/tango/db"
++)
++
++// Config composes the application: its installed apps, middleware and
++// ordinary configuration. The server (main.go) and the shell (shell/main.go)
++// both call it, so they always register the same apps and models. Add each
++// new app to InstalledApps here.
++//
++// Config does not load the .env file or open a database: each process does
++// that itself and passes the store in.
++func Config(store *db.Store) tango.Config {
++	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
++	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
++	config.InstalledApps = []tango.App{}
++	config.Middleware = []tango.Middleware{
++		tango.RequestID(),
++		tango.Recoverer(),
++		tango.AccessLogger(),
++		// Request bodies are capped at 1 MiB. If this application later needs
++		// large uploads, remove the global body-limit middleware and apply
++		// `MaxBodySize` only to the route groups or routes that should remain
++		// limited.
++		tango.MaxBodySize(1 << 20),
++	}
++	// Global middleware also wraps requests no route matches, so 404s and
++	// 405s are logged and counted too.
++	config.MiddlewareScope = tango.MiddlewareScopeAll
++	return config
++}
+diff --git a/shell/main.go b/shell/main.go
+new file mode 100644
+index 0000000..8e63aa0
+--- /dev/null
++++ b/shell/main.go
+@@ -0,0 +1,78 @@
++// Command shell is this project's "tango shell": an interactive Go console
++// with the project's apps, models and database loaded and nothing served.
++// Run it with "tango shell". It executes local code with this project's
++// database credentials: it is not a sandbox.
++package main
++
++import (
++	"context"
++	"database/sql"
++	"fmt"
++	"net/url"
++	"os"
++	"strings"
++
++	"github.com/angvp/tango"
++	"github.com/angvp/tango/db"
++	"github.com/angvp/tango/shell"
++
++	"legacyapp/project"
++
++	_ "modernc.org/sqlite"
++)
++
++func main() {
++	os.Exit(run())
++}
++
++func run() int {
++	if err := tango.LoadEnvFile(".env"); err != nil {
++		fmt.Fprintln(os.Stderr, err)
++		return 1
++	}
++
++	dsn, err := tango.LoadDBConfigFromEnv()
++	if err != nil {
++		fmt.Fprintln(os.Stderr, err)
++		return 1
++	}
++
++	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
++	if err != nil {
++		fmt.Fprintln(os.Stderr, err)
++		return 1
++	}
++	defer sqlDB.Close()
++
++	store := db.NewStore(sqlDB, dsn.Dialect)
++	return shell.Run(context.Background(), project.Config(store), store, os.Args[1:], shell.Options{
++		DatabaseLabel: databaseLabel(dsn),
++	})
++}
++
++// databaseLabel says which database the shell works on, without any part
++// of the DSN that could be a credential: for SQLite the file, for PostgreSQL
++// only the host and database name. Anything it cannot read with confidence
++// is hidden rather than shown.
++func databaseLabel(dsn db.DSN) string {
++	if dsn.Dialect != db.Postgres {
++		path, _, _ := strings.Cut(dsn.Source, "?")
++		return "sqlite: " + strings.TrimPrefix(path, "file:")
++	}
++	const hidden = "postgres: (address hidden)"
++	_, rest, ok := strings.Cut(dsn.Source, "://")
++	if !ok {
++		return hidden
++	}
++	// A "@" after the first "/" means the userinfo was not escaped, so what
++	// follows cannot be told apart from a password.
++	authority, _, _ := strings.Cut(rest, "/")
++	if strings.Count(rest, "@") != strings.Count(authority, "@") || strings.Count(authority, "@") > 1 {
++		return hidden
++	}
++	u, err := url.Parse(dsn.Source)
++	if err != nil || u.Host == "" {
++		return hidden
++	}
++	return "postgres: " + u.Host + "/" + strings.TrimPrefix(u.Path, "/")
++}

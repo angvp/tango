@@ -13,7 +13,7 @@ import (
 )
 
 // shellGuide is where a person is sent when their project has no shell yet.
-const shellGuide = "https://github.com/angvp/tango/blob/main/docs/guides/shell.md"
+const shellGuide = "https://github.com/angvp/tango/blob/main/docs/guides/shell.md#adding-the-shell-to-an-existing-project"
 
 // shellCommand implements `tango shell`: it builds the project's own
 // shell/main.go and runs it with args, so the shell links the project's apps
