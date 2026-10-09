@@ -90,7 +90,7 @@ func newProject(ctx context.Context, runner Runner, dir string, args []string, s
 
 	fmt.Fprintf(stdout, "created %s\n", name)
 	if !*noAdmin {
-		fmt.Fprintln(stdout, "run `tango migrate` then `tango admin create <username>` to create your first admin account")
+		fmt.Fprintln(stdout, "next: run `tango makemigrations`, then `tango migrate`, then `tango admin create <username>` to create your first admin account")
 	}
 	return 0
 }
@@ -128,12 +128,33 @@ func renderImports(groups [][]string, blankImport string) string {
 
 func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bool) string {
 	stdImports := []string{"context", "database/sql", "fmt", "os", "os/signal", "syscall"}
+	adminURLBlock, adminURLFunc := "", ""
 	tangoImports := []string{"github.com/angvp/tango"}
 	installedApps := "config.InstalledApps = []tango.App{}"
 	storeLine := ""
 	adminCLIBlock := ""
 	if includeAdmin {
+		stdImports = []string{"context", "database/sql", "fmt", "net", "os", "os/signal", "syscall"}
 		tangoImports = append(tangoImports, "github.com/angvp/tango/admin", "github.com/angvp/tango/db")
+		adminURLBlock = `
+	if url := adminURL(config.Addr); url != "" {
+		fmt.Println("admin:", url)
+	}`
+		adminURLFunc = `
+// adminURL is where the admin can be opened from this machine for the listen
+// address addr, or "" when addr is not a host:port.
+func adminURL(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return ""
+	}
+	switch host {
+	case "", "0.0.0.0", "::":
+		host = "localhost"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/admin/"
+}
+`
 		storeLine = "store := db.NewStore(sqlDB, dsn.Dialect)"
 		installedApps = `config.InstalledApps = []tango.App{
 		admin.New(store),
@@ -214,8 +235,8 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Println("listening on", config.Addr)
+	fmt.Println("listening on", config.Addr)%s
 	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
 }
-`, imports, defaultDSNBlock, storeLine, installedApps, adminCLIBlock)
+%s`, imports, defaultDSNBlock, storeLine, installedApps, adminCLIBlock, adminURLBlock, adminURLFunc)
 }

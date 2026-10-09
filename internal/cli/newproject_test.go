@@ -93,7 +93,7 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 
 	// The generated file is the first code a reader sees, so its imports
 	// form sorted groups, the way goimports leaves them.
-	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\t\"os/signal\"\n\t\"syscall\"\n\n" +
+	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"net\"\n\t\"os\"\n\t\"os/signal\"\n\t\"syscall\"\n\n" +
 		"\t\"github.com/angvp/tango\"\n\t\"github.com/angvp/tango/admin\"\n\t\"github.com/angvp/tango/db\"\n\n" +
 		"\t\"myapp/migrations\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
 	if !strings.Contains(mainSource, wantImports) {
@@ -115,8 +115,16 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 	if !strings.Contains(string(gitignore), ".env") {
 		t.Fatalf(".gitignore does not ignore .env:\n%s", gitignore)
 	}
-	if !strings.Contains(stdout.String(), "tango admin create") {
-		t.Fatalf("stdout does not point to `tango admin create`:\n%s", stdout.String())
+	// The first-run order: models become migrations, migrations are
+	// applied, then the admin account can be created.
+	out := stdout.String()
+	last := -1
+	for _, step := range []string{"tango makemigrations", "tango migrate", "tango admin create <username>"} {
+		at := strings.Index(out, step)
+		if at <= last {
+			t.Fatalf("stdout does not list %q after the previous step:\n%s", step, out)
+		}
+		last = at
 	}
 }
 

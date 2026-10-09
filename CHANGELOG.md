@@ -10,6 +10,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Changed
 
+- `tango newproject` ends with the real first-run order (`tango makemigrations`, `tango migrate`, `tango admin create <username>`), and the generated project prints `admin: http://localhost:8000/admin/` after `listening on` (not with `--no-admin`). Existing projects are unchanged.
 - `tango tui`:
   - the greyed-out "Shell" item is gone;
   - "Apply pending migrations" and "Roll back the latest migration" grey out with a reason when status shows they cannot run (nothing to apply, nothing to roll back, or project status incomplete);

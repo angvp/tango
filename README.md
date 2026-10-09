@@ -54,7 +54,7 @@ cd shop
 go run .
 ```
 
-`tango newproject` scaffolds a `go.mod` and a `main.go` pre-wired for SQLite and the admin app, which runs unchanged; create your first admin account with `tango admin create <username>` and open `/admin/`. `tango newapp greetings` then scaffolds an app stub and prints the line that installs it: adding it to `main.go`'s `InstalledApps` is one line you write yourself — tanGO never edits your `main.go` for you.
+`tango newproject` scaffolds a `go.mod` and a `main.go` pre-wired for SQLite and the admin app, which runs unchanged; run `tango makemigrations`, `tango migrate` and `tango admin create <username>` to create your first admin account, then open `/admin/` (the project prints its address when it starts). `tango newapp greetings` then scaffolds an app stub and prints the line that installs it: adding it to `main.go`'s `InstalledApps` is one line you write yourself — tanGO never edits your `main.go` for you.
 
 `examples/jsonapi`'s app registers one named route:
 
