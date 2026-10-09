@@ -59,7 +59,7 @@ A migration containing `DropColumn`, `DropTable` or `AlterColumnType` is marked 
 
 ## Test coverage
 
-Statement coverage is held above **90%**, tracked via Codecov (see the badge on the [README](../README.md)). It counts the test profile plus the programs the tests build and run (the scaffolded server and `tango shell`), which a plain profile cannot see. Regenerate both with:
+Statement coverage is held above **90%**, tracked via Codecov (see the badge on the [README](../README.md)). CI uploads the test profile of each database. That profile cannot see the programs some tests build and run as a separate process (the scaffolded server and `tango shell`), so code only those tests reach, such as the interactive terminal in `tango shell`, shows as less covered than it is. `scripts/coverage.sh` counts those programs too, which adds about one point; it is not part of CI because instrumenting a project's whole dependency tree roughly doubled the test job for that gain.
 
 ```sh
 scripts/coverage.sh                        # SQLite

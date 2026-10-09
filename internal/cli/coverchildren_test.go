@@ -8,9 +8,11 @@ import (
 
 // The tests that scaffold a project, build it and run the binary exercise
 // framework code in a child process, which a plain coverage profile cannot
-// see. When TANGO_COVERDIR names a directory, they build those programs with
-// coverage instrumentation and hand the directory to them, so scripts/coverage.sh
-// can add what they ran to the profile. Unset, nothing changes.
+// see. When TANGO_COVERDIR names a directory (scripts/coverage.sh sets it),
+// they build those programs with coverage instrumentation and hand the
+// directory to them, so what they ran can be added to the profile. CI leaves
+// it unset: instrumenting a project's whole dependency tree cost more than it
+// showed. Unset, nothing changes.
 //
 // `go test` replaces GOCOVERDIR for the test process, hence the other name.
 const childCoverEnv = "TANGO_COVERDIR"

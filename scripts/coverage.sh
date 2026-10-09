@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Statement coverage as CI measures it: the test profile plus the coverage of
+# Statement coverage with the child processes counted: the test profile plus the coverage of
 # the programs the tests build and run (the scaffolded server, `tango shell`).
 #
 #   scripts/coverage.sh              # SQLite

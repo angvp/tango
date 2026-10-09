@@ -66,26 +66,17 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
-      # TANGO_COVERDIR makes the tests that build and run a scaffolded
-      # project instrument it and write its coverage here (see
-      # internal/cli/coverchildren_test.go); the second profile is uploaded
-      # with the first and Codecov merges them.
       - name: go test
-        env:
-          TANGO_COVERDIR: ${{ runner.temp }}/child-coverage
         run: |
-          mkdir -p "$TANGO_COVERDIR"
           go run gotest.tools/gotestsum@v1.13.0 \
             --junitfile "junit-${{ matrix.dialect }}.xml" \
             --format testname \
             -- ./... -count=1 -coverprofile="coverage-${{ matrix.dialect }}.out" -covermode=atomic
-          go tool covdata textfmt -i="$TANGO_COVERDIR" -pkg='github.com/angvp/tango/...' \
-            -o "coverage-${{ matrix.dialect }}-children.out"
       - name: Upload coverage to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
-          files: coverage-${{ matrix.dialect }}.out,coverage-${{ matrix.dialect }}-children.out
+          files: coverage-${{ matrix.dialect }}.out
           flags: ${{ matrix.dialect }}
           name: coverage-${{ matrix.dialect }}
           token: ${{ secrets.CODECOV_TOKEN }}
