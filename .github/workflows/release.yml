@@ -8,6 +8,9 @@
 # - the Go module proxy doesn't already serve the tag from another commit
 #   (asked last, only when everything else passed: asking pins the tag).
 # It doesn't rerun the tests: the CI run it checks is that guarantee.
+# After the release is created, scripts/follow-website.sh moves the website and
+# waits for it: a red job at that step means the release exists and the
+# website did not move.
 # See RELEASING.md.
 name: Release
 
@@ -69,6 +72,6 @@ jobs:
       - name: Move the website to the release
         env:
           GH_TOKEN: ${{ secrets.TANGO_WEB_DISPATCH_TOKEN }}
-        # --ref spares gh a default-branch lookup the token's Actions-only
-        # permission can't make.
-        run: gh workflow run follow-tango-release.yml --repo angvp/tango-web --ref main -f version="$TAG"
+        # Waits for the website's run and fails, "release published, website
+        # not updated", if it fails. The release above is not undone.
+        run: scripts/follow-website.sh "$TAG"
