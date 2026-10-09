@@ -528,3 +528,71 @@ func TestPrintStatusPlainRendersFailureStates(t *testing.T) {
 		}
 	}
 }
+
+// stopSignalsAs replaces the stop-signal watcher for one test: received says
+// whether the "user pressed Ctrl-C" while the server ran.
+func stopSignalsAs(t *testing.T, received bool) {
+	t.Helper()
+	old := watchStopSignals
+	watchStopSignals = func() func() bool { return func() bool { return received } }
+	t.Cleanup(func() { watchStopSignals = old })
+}
+
+func TestRunServerStoppedByTheUserEndsQuietlyWithZero(t *testing.T) {
+	// `go run` exits 1 after an interrupt even when the server shut down
+	// gracefully, and is killed by the signal (ExitCode -1) on SIGTERM.
+	for _, serverErr := range []error{nil, exitError(t, 1), killedBySignal(t)} {
+		stopSignalsAs(t, true)
+		var stdout strings.Builder
+		runner := &multiRecordingRunner{err: serverErr}
+		final := dashboardModel{performed: true, action: menuRunServer}
+		_, notice, done, code := advanceDashboard(context.Background(), runner, t.TempDir(), &stdout, io.Discard, final)
+		if !done || code != 0 || notice != "" {
+			t.Fatalf("server error %v: done = %v, code = %d; a stop by the user exits 0", serverErr, done, code)
+		}
+		if !strings.Contains(stdout.String(), "server stopped") {
+			t.Fatalf("server error %v: stdout = %q, want a 'server stopped' line", serverErr, stdout.String())
+		}
+	}
+}
+
+func TestRunServerFailureKeepsItsExitCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		received bool
+		err      error
+		want     int
+	}{
+		{"crashed with no signal", false, exitError(t, 1), 1},
+		{"exit code 2 with no signal", false, exitError(t, 2), 2},
+		{"exited by itself with zero", false, nil, 0},
+		{"a real failure code after the signal", true, exitError(t, 2), 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stopSignalsAs(t, tt.received)
+			var stdout strings.Builder
+			runner := &multiRecordingRunner{err: tt.err}
+			final := dashboardModel{performed: true, action: menuRunServer}
+			_, _, done, code := advanceDashboard(context.Background(), runner, t.TempDir(), &stdout, io.Discard, final)
+			if !done || code != tt.want {
+				t.Fatalf("done = %v, code = %d, want true, %d", done, code, tt.want)
+			}
+			if strings.Contains(stdout.String(), "server stopped") {
+				t.Fatalf("stdout = %q; only a stop by the user prints 'server stopped'", stdout.String())
+			}
+		})
+	}
+}
+
+// killedBySignal is the *exec.ExitError of a process the kernel killed with
+// a signal; its ExitCode is -1.
+func killedBySignal(t *testing.T) error {
+	t.Helper()
+	err := exec.Command("sh", "-c", "kill -TERM $$").Run()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != -1 {
+		t.Fatalf("expected a signal-killed exit error, got %v", err)
+	}
+	return err
+}

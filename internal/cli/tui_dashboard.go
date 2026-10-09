@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"regexp"
 	"strings"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -193,7 +196,7 @@ func advanceDashboard(ctx context.Context, runner Runner, dir string, stdout io.
 	}
 
 	if final.action == menuRunServer {
-		return tango.ProjectStatus{}, "", true, performAction(ctx, runner, dir, stdout, stderr, final.action, final.confirmed)
+		return tango.ProjectStatus{}, "", true, runServer(ctx, runner, dir, stdout, stderr, final)
 	}
 
 	captured := &lastLineWriter{w: stderr}
@@ -246,4 +249,39 @@ func (l *lastLineWriter) last() string {
 		return trimmed
 	}
 	return l.line
+}
+
+// watchStopSignals starts catching Ctrl-C and SIGTERM, and returns a function
+// that stops catching them and reports whether one arrived. While a server
+// runs from the TUI the terminal sends the signal to tango as well as to the
+// server; catching it keeps tango alive to wait for the server and report a
+// clean stop. A variable so tests can say whether the user pressed Ctrl-C.
+var watchStopSignals = func() func() bool {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	return func() bool {
+		signal.Stop(signals)
+		select {
+		case <-signals:
+			return true
+		default:
+			return false
+		}
+	}
+}
+
+// runServer runs the project's server and returns the exit code for the TUI.
+// A server the user stopped with Ctrl-C or SIGTERM is a normal stop: `go run`
+// then exits 1 (even after a graceful shutdown) or is killed by the signal
+// (exit code -1), so those codes, after a signal, print "server stopped" and
+// give 0. Any other code, or any code with no signal, is a real failure and
+// is kept.
+func runServer(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, final dashboardModel) int {
+	stopped := watchStopSignals()
+	code := performAction(ctx, runner, dir, stdout, stderr, final.action, final.confirmed)
+	if stopped() && (code == 0 || code == 1 || code == -1) {
+		fmt.Fprintln(stdout, "server stopped")
+		return 0
+	}
+	return code
 }
