@@ -544,18 +544,26 @@ func TestServeContextStopPhaseSharesOneTimeoutBudgetAcrossComponents(t *testing.
 		}
 	}
 
-	ready := make(chan struct{})
-	readySignal := Lifecycle{Name: "ready", Start: func(context.Context) error { close(ready); return nil }}
+	registerAll := tangoAppRegisteringLifecycles(makeStop("a"), makeStop("b"), makeStop("c"))
 
-	registerAll := tangoAppRegisteringLifecycles(makeStop("a"), makeStop("b"), makeStop("c"), readySignal)
-
+	// Cancel only once ServeContext is serving. Canceling while it is still
+	// starting components is a different, documented path (it rolls back and
+	// returns the cancellation), so signaling "ready" from the last Start
+	// races with it.
+	listening := captureListenerAddr(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
 		done <- ServeContext(ctx, Config{Addr: "127.0.0.1:0", InstalledApps: []App{registerAll}}, sqlDB, testdb.Dialect(), WithShutdownTimeout(shutdownTimeout))
 	}()
 
-	<-ready
+	select {
+	case <-listening:
+	case err := <-done:
+		t.Fatalf("ServeContext returned before listening: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("ServeContext never listened")
+	}
 	cancel()
 	if err := waitDone(t, done); err != nil {
 		t.Fatalf("ServeContext error = %v, want nil", err)
@@ -563,8 +571,8 @@ func TestServeContextStopPhaseSharesOneTimeoutBudgetAcrossComponents(t *testing.
 
 	mu.Lock()
 	defer mu.Unlock()
-	// Reverse registration order: readySignal (no Stop, skipped), then c,
-	// b, a — remaining[0] is c's sample, remaining[2] is a's.
+	// Reverse registration order: c, b, a — remaining[0] is c's sample,
+	// remaining[2] is a's.
 	if len(remaining) != 3 {
 		t.Fatalf("got %d Stop deadline samples, want 3", len(remaining))
 	}
