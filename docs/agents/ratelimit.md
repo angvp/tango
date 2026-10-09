@@ -9,7 +9,7 @@ Canonical example: `examples/notes-starter`. Human guide: `docs/guides/rate-limi
 - Construct one `*ratelimit.Limiter` via `ratelimit.NewLimiter(ratelimit.Options{Limit, Refill})` — both must be positive.
 - Choose or write a `ratelimit.KeyFunc`; `ratelimit.RemoteIPKey()` is the IP-only default.
 - Wrap the route(s) with `ratelimit.Middleware(limiter, key)` at whichever attachment tier fits (global, group, or route).
-- Trust `X-Forwarded-For`/`X-Real-IP` only via `RemoteIPKey(trustedCIDRs...)`, never unconditionally.
+- Trust `X-Forwarded-For` only via `RemoteIPKey(trustedCIDRs...)`, never unconditionally. It reads the header from the right, skipping trusted proxies; `X-Real-IP` is never read. `admin` and `accounts` use the same resolver through `WithTrustedProxies`.
 
 ## Choose The Shape
 
@@ -22,7 +22,7 @@ Canonical example: `examples/notes-starter`. Human guide: `docs/guides/rate-limi
 - Do not reuse `admin`/`accounts`' internal failed-login-attempt limiter for general request throttling — different semantics (failures-only vs. every request).
 - Do not treat a `KeyFunc` error the same as a rejected request — they go to `ErrorHandler`/`LimitedHandler` respectively, on purpose.
 - Do not expect a distributed/shared-state limiter — `ratelimit` is single-process, in-memory only.
-- Do not trust `X-Forwarded-For`/`X-Real-IP` without configuring `trustedProxies` — an untrusted peer can forge them.
+- Do not trust `X-Forwarded-For` without configuring `trustedProxies` — an untrusted peer can forge them.
 
 ## Check
 

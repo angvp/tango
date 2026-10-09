@@ -157,7 +157,7 @@ Three details worth noticing:
 
 `tango.Use(...)` attaches middleware to this one route. `ratelimit.NewLimiter` is a token bucket: each client IP starts with 5 attempts and gets one back every 12 seconds, so a script guessing passwords is slowed to a crawl while a person who mistypes twice never notices. Over the limit, the client gets a `429` with a `Retry-After` header.
 
-`ratelimit.RemoteIPKey()` keys on the connection's IP address. If you deploy behind a proxy or load balancer, every request arrives from the proxy's address — pass the proxy's network (`ratelimit.RemoteIPKey(proxyNet)`) so the client's real address is read from `X-Forwarded-For`, but only when the request really came through that proxy.
+`ratelimit.RemoteIPKey()` keys on the connection's IP address. If you deploy behind a proxy or load balancer, every request arrives from the proxy's address — pass the proxy's network (`ratelimit.RemoteIPKey(proxyNet)`). The key is then the address your proxy saw: `X-Forwarded-For` is read from the right, skipping your proxies, and only when the request really came from one of them. Anything a client writes to the left of that is ignored, so it can't choose its own key. This needs a proxy that adds the address it sees to `X-Forwarded-For`; `X-Real-IP` is not read.
 
 ## Requiring a token
 

@@ -20,6 +20,11 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
   - "Apply pending migrations" and "Roll back the latest migration" grey out with a reason when status shows they cannot run (nothing to apply, nothing to roll back, or project status incomplete);
   - the confirmation prompts say what they will do.
 
+### Security
+
+- `ratelimit.RemoteIPKey(trustedProxies...)` could be made to give a client the key it chose. It took the leftmost `X-Forwarded-For` entry, which the client writes when the proxy appends to the header (nginx's default), and it did not check that the value was an IP address, so a client behind a trusted proxy could rotate its key to evade a limit or flood the limiter with new keys. It also fell back to `X-Real-IP`. It now reads `X-Forwarded-For` only from a trusted peer, parses every entry as an IP address, walks the list from the right skipping trusted proxies, and takes the first other address, which is the one your nearest trusted proxy saw. `X-Real-IP` is ignored, and a valid address is returned in canonical form. Unusable data falls back to the peer's address. The failed-login limiters of `admin` and `accounts` (`admin.WithTrustedProxies`, `accounts.WithTrustedProxies`) use the same resolver. This changes behaviour under the compatibility promise's security exception.
+  - *Upgrade:* nothing changes without trusted proxies. With them, check that your proxy adds the address it sees to `X-Forwarded-For` (appending and replacing both work; passing the header through untouched does not). If you relied on `X-Real-IP`, make the proxy put the client address in `X-Forwarded-For`. Keys for IPv6 clients are now lower-case and compressed, and IPv4-mapped IPv6 addresses are keyed as IPv4, so a limit that was counted under the old spelling restarts once.
+
 ### Fixed
 
 - `tango admin create` and `resetpassword` no longer show the password as you type it on a terminal. Piped input is read as before. This adds `golang.org/x/term` to the root module ([ADR 0046](docs/adr/0046-admin-password-prompt-hides-typing-with-x-term.md)).

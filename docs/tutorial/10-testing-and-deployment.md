@@ -383,7 +383,7 @@ where `prod.env` sets `TANGO_DB_DSN` (with its `postgres://` or `sqlite://` sche
 
 - **Serve over HTTPS.** Put the app behind a proxy or load balancer that terminates TLS. `accounts` and the admin mark their cookies `Secure` when the visitor connected over HTTPS. Behind a proxy the app itself sees plain HTTP, so it goes by the proxy's `X-Forwarded-Proto` (or `Forwarded`) header; the common proxies and platforms send it by default. Make sure the proxy only accepts HTTPS from the outside.
 - **Generate real secrets.** `BOARD_JWT_SECRET` should be long and random (`openssl rand -hex 32`), different in every environment, and never committed.
-- **Tell the rate limiter about your proxy.** Behind a proxy, every request appears to come from the proxy's address. Pass its network to `ratelimit.RemoteIPKey` as described in part 7, or every visitor shares one limit.
+- **Tell the rate limiter about your proxy.** Behind a proxy, every request appears to come from the proxy's address. Pass its network to `ratelimit.RemoteIPKey` as described in part 7, or every visitor shares one limit. Your proxy must add the address it sees to `X-Forwarded-For`.
 - **Run one instance, or know what that means.** Rate limits (part 7) and the live feed (part 8) live in memory, per process. With two instances behind a load balancer, each keeps its own counts and its own WebSocket rooms.
 - **Back up the database.** For SQLite that's the `app.db` file — use `sqlite3 app.db ".backup backup.db"` rather than copying a file that's being written to. For Postgres, your provider's backups or `pg_dump`.
 - **Read [limitations and compatibility](../limitations.md)**, which lists what tanGO deliberately doesn't do yet.

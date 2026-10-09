@@ -29,7 +29,7 @@ The failed-login limiter allows 5 failures per minute per source address on each
 
 - **What you get:** the burst and the sustained rate are each multiplied by up to N across instances.
 - **Workaround:** enforce the quota that matters at the edge, and keep `ratelimit` as a second, per-instance guard. Size its `Limit` and `Refill` for one instance's share.
-- **Keys:** `ratelimit.RemoteIPKey` with trusted proxies is the supported way to key on the client address behind a proxy. See [rate limiting](rate-limiting.md).
+- **Keys:** `ratelimit.RemoteIPKey` with your proxy networks is the supported way to key on the client address behind a proxy, with the same rules as above. See [rate limiting](rate-limiting.md).
 
 ### `realtime` rooms
 
@@ -62,7 +62,7 @@ accounts.New(store, accounts.WithTrustedProxies(proxies))
 
   With that, and only for a request whose connection comes from inside one of the networks you named, the limiter reads `X-Forwarded-For` from the right, skips addresses that are themselves in your list, and takes the first other address as the client: the address your nearest proxy actually saw. Anything the client wrote further left is never used, so this works whether your proxy appends to the header (nginx's default) or replaces it. A request from anywhere else keeps its own connection address and its header is ignored. `X-Real-IP` is not read, and an entry that is not a bare IP address makes the limiter fall back to the connection address.
 - **What to put in the list:** the networks your proxies connect from, and nothing wider. Your proxy must add the address it sees to `X-Forwarded-For`; a proxy that passes the header through untouched leaves the client's own claim as the rightmost entry.
-- **Scope:** the failed-attempt limiters only. For admin that is login; for `accounts` it is login, registration, password reset and verification resend, four limiters that use this one rule for naming the client. It does not change the `ratelimit` package and adds no other proxy handling.
+- **Scope:** the failed-attempt limiters only. For admin that is login; for `accounts` it is login, registration, password reset and verification resend, four limiters that use this one rule for naming the client. The `ratelimit` package's `RemoteIPKey` follows the same rules when you give it your proxy networks, so the two cannot disagree about who a client is. Nothing else about proxies is handled.
 
 ## Where tanGO's guarantees end
 
