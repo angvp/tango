@@ -140,10 +140,16 @@ func (m dashboardModel) View() string {
 
 // runDashboard runs the interactive dashboard, performing the selected
 // action (outside bubbletea's event loop) and looping with a refreshed
-// status after any state-changing action.
-func runDashboard(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, status tango.ProjectStatus) int {
+// status after any state-changing action. programOptions, when non-nil, is
+// called once per session (each action ends a Bubble Tea program and starts
+// the next) for that program's options.
+func runDashboard(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, status tango.ProjectStatus, programOptions func() []tea.ProgramOption) int {
 	for {
-		program := tea.NewProgram(newDashboardModel(status))
+		var options []tea.ProgramOption
+		if programOptions != nil {
+			options = programOptions()
+		}
+		program := tea.NewProgram(newDashboardModel(status), options...)
 		result, err := program.Run()
 		if err != nil {
 			fmt.Fprintf(stderr, "tango tui: %v\n", err)

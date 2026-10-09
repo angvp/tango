@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
 
 	"github.com/angvp/tango"
@@ -56,7 +57,9 @@ func (m tuiMenuItem) requiresConfirmation() bool {
 }
 
 // isInteractiveTerminal reports whether both stdin and stdout are attached
-// to a real terminal capable of running the dashboard. Overridable in tests.
+// to a real terminal capable of running the dashboard. It is the one piece of
+// the TUI no test drives: tui takes it as a parameter, and every test
+// supplies its own answer.
 var isInteractiveTerminal = func() bool {
 	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
 }
@@ -64,7 +67,11 @@ var isInteractiveTerminal = func() bool {
 // tui implements `tango tui`: a read-only status dashboard with a menu of
 // actions, falling back to a plain-text status print in non-interactive
 // environments (CI, pipes, unsupported terminals).
-func tui(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, interactive func() bool) int {
+//
+// interactive and programOptions are the TUI's two seams: interactive says
+// whether a terminal is attached, and programOptions (nil in production)
+// supplies each Bubble Tea program's options, so a test can script the keys.
+func tui(ctx context.Context, runner Runner, dir string, stdout io.Writer, stderr io.Writer, interactive func() bool, programOptions func() []tea.ProgramOption) int {
 	status, err := fetchStatus(ctx, runner, dir, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "tango tui: %v\n", err)
@@ -76,7 +83,7 @@ func tui(ctx context.Context, runner Runner, dir string, stdout io.Writer, stder
 		return 0
 	}
 
-	return runDashboard(ctx, runner, dir, stdout, stderr, status)
+	return runDashboard(ctx, runner, dir, stdout, stderr, status, programOptions)
 }
 
 // fetchStatus shells `-tango-status`, the same convention `tango check`/

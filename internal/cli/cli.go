@@ -66,7 +66,7 @@ func Run(ctx context.Context, args []string, dir string, stdout io.Writer, stder
 		}
 		return newApp(dir, args[1], stdout, stderr)
 	case "tui":
-		return tui(ctx, runner, dir, stdout, stderr, isInteractiveTerminal)
+		return tui(ctx, runner, dir, stdout, stderr, isInteractiveTerminal, nil)
 	case "shell":
 		fmt.Fprintln(stderr, "tango shell is not implemented yet; ADR 0005 records Yaegi as the intended direction.")
 		return 2

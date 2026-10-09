@@ -124,7 +124,7 @@ func TestTUIFallsBackToPlainTextInNonInteractiveEnvironment(t *testing.T) {
 	runner := &jsonStdoutRunner{payload: encoded}
 
 	var stdout, stderr strings.Builder
-	code := tui(context.Background(), runner, dir, &stdout, &stderr, func() bool { return false })
+	code := tui(context.Background(), runner, dir, &stdout, &stderr, func() bool { return false }, nil)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
 	}
@@ -151,7 +151,7 @@ func TestTUIFetchStatusFailurePropagatesError(t *testing.T) {
 	runner := &jsonStdoutRunner{err: errors.New("go run failed")}
 
 	var stdout, stderr strings.Builder
-	code := tui(context.Background(), runner, dir, &stdout, &stderr, func() bool { return true })
+	code := tui(context.Background(), runner, dir, &stdout, &stderr, func() bool { return true }, nil)
 	if code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
