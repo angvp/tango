@@ -105,6 +105,8 @@ Documentation in this repository is checked, not just written: every checked-in 
 go test ./...
 ```
 
+`scripts/check.sh` runs everything CI runs: gofmt, vet, build, the tests and the offline link check (when `lychee` is installed).
+
 `TestExamplesAreIndependentModulesThatCompile` (at the repository root) builds every `examples/*` module and runs its generated `-check` flag; the migration-generation tests in `internal/cli` similarly `go build` a real generated `migrations` package rather than only inspecting its source text.
 
 ## License
