@@ -146,8 +146,8 @@ const exitInterrupted = 130
 // readPasswordNoEcho wraps term.ReadPassword. That function keeps Ctrl-C
 // enabled, so an interrupt would end the process before its deferred restore
 // ran and leave the terminal without echo. Catch the interrupt, restore the
-// saved terminal state, then exit as an interrupted process does. It is the
-// platform call and is not covered by tests.
+// saved terminal state, then exit as an interrupted process does. A pty test
+// (cli_pty_unix_test.go) runs it on a real terminal.
 func readPasswordNoEcho(fd int) ([]byte, error) {
 	saved, err := term.GetState(fd)
 	if err != nil {
