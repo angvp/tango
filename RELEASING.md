@@ -2,13 +2,25 @@
 
 This is the maintainer's checklist for cutting a release. What a release promises is in [Versioning and compatibility](docs/compatibility.md); this page is how one is made. The **Release** workflow (`.github/workflows/release.yml`) runs on a pushed tag. It checks the tag, creates the GitHub release, and moves the website to it.
 
+## Where work lands
+
+Work for the next minor release goes to the **`develop`** branch, not `main`. `main` only ever holds released code and the commit being released, so the website's `main` links (and anyone cloning) never see unreleased behaviour. CI runs on every push, so every `develop` commit is tested on both dialects.
+
+To release, make `main` equal to a green `develop` commit with a fast-forward, so the SHA CI already passed on is the one you tag:
+
+```sh
+git checkout main && git merge --ff-only develop && git push origin main
+```
+
+A fix that cannot wait for the next minor goes to `main` first, is merged back into `develop`, and is released as a patch.
+
 ## Before tagging
 
 1. **Pick the version.**
    - A **patch** (`v0.1.1`) may not break the Covered API, and the workflow refuses one that `gorelease` finds incompatible.
    - A **minor** (`v0.2.0`) may break the Covered API, but only for things whose Deprecation window has passed.
    - Changes to tanGO's own `admin`/`accounts` models ship only in a minor release.
-2. **Finish `CHANGELOG.md`** on `main`:
+2. **Finish `CHANGELOG.md`** on `develop`:
    - rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, dated the day you tag;
    - add a fresh, empty `## [Unreleased]` above it;
    - update the comparison links at the bottom.
@@ -26,7 +38,7 @@ This is the maintainer's checklist for cutting a release. What a release promise
    go test ./internal/migrationcompat/ ./internal/cli/
    TANGO_TEST_DSN="postgres://…" go test ./internal/migrationcompat/ ./internal/cli/
    ```
-4. **Commit and push to `main`, then wait for CI to pass on that exact commit.** The workflow doesn't rerun the tests. It refuses a tag unless `lint`, `test (sqlite)` and `test (postgres)` all succeeded on the commit being tagged.
+4. **Commit and push to `develop`, wait for CI to pass, then fast-forward `main` to that commit (see above) and confirm CI passed on it.** The workflow doesn't rerun the tests. It refuses a tag unless `lint`, `test (sqlite)` and `test (postgres)` all succeeded on the commit being tagged.
 5. **Optionally, check before you tag.** For a minor release, run:
 
    ```sh
