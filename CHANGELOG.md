@@ -4,9 +4,19 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Changed
+
+- `tango tui`:
+  - the greyed-out "Shell" item is gone;
+  - "Apply pending migrations" and "Roll back the latest migration" grey out with a reason when status shows they cannot run (nothing to apply, nothing to roll back, or project status incomplete);
+  - the confirmation prompts say what they will do.
+
 ### Fixed
 
 - Projects created by `tango newproject` now shut down gracefully: the generated `main.go` calls `tango.ServeContext` under `signal.NotifyContext` for Ctrl-C and `SIGTERM`, so in-flight requests finish and registered `Lifecycle` components stop. It called `tango.Serve`, which never reacts to a signal. Existing applications are unchanged; swap in `ServeContext` as the [application lifecycle guide](docs/guides/application-lifecycle.md) shows.
+- `tango tui` no longer ends the session when an apply or rollback fails. It shows `Last action failed: …` with the exit code and the command's last error line, refreshes the status, and returns to the menu; if the refresh also fails, both errors show.
+- Stopping the server started from `tango tui` with Ctrl-C or `SIGTERM` is a clean stop: tango waits for the server, prints `server stopped` and exits 0. It used to die with the signal. A server that fails, or exits with no signal, keeps its exit code.
+- `tango tui` explains a status failure (run `tango check`; an older `main.go` may need `tango.DispatchFlags`) before the raw error, which is kept.
 
 ## [0.2.0] - 2026-10-08
 
