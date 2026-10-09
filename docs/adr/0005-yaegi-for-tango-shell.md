@@ -34,15 +34,14 @@ A bounded spike checked whether Yaegi works on the Go and tanGO this project is 
 **What did not work.** Yaegi interprets an older Go than the one the shell would run on. Expressions a user would reasonably type fail:
 
 - the `min`, `max` and `clear` builtins are undefined;
-- a generic function with two type parameters fails type inference (`cannot use type func(int) string as type func(int) int`);
-- a range over a function panics, and on v0.16.1 so does a range over an integer; the panic comes out of `Eval`, so the shell must recover it or one mistyped line ends the session.
+- type inference fails for a generic function whose result type differs from its element type (a `Map[T, U]` called with a function from `int` to `string` gives `cannot use type func(int) string as type func(int) int`); a generic function with one type parameter worked;
+- a range over a function panics, and on v0.16.1 so does a range over an integer; the panic comes out of `Eval`, so the shell must recover it or one line of valid Go ends the session.
 
-**What a project has to carry.** Both approaches need a shell program in the project's own module, since only there are its model types linked; the `tango` CLI cannot reach them. It repeats the project's wiring (DSN, driver import, store, installed apps, `BuildRegistry` and `RunRegistration`). The typed approach also needs a generated symbol package that must be regenerated whenever a model changes, or it silently describes the old struct. The shell binary was 35.6 MB beside the project's 20.8 MB. All of it stays out of the root library's import graph, as with the TUI ([ADR 0007](0007-bubbletea-stack-for-tango-tui.md)).
+**What a project has to carry.** Both approaches ran as a shell program inside the project's own module, because only there are its model types linked. A `tango` CLI process does not link them, so a `tango shell` command would have to run the project's own binary, as `tango tui` does. It repeats the project's wiring (DSN, driver import, store, installed apps, `BuildRegistry` and `RunRegistration`). The typed approach also needs a generated symbol package that must be regenerated whenever a model changes, or it silently describes the old struct. The shell binary was 35.6 MB beside the project's 20.8 MB. All of it stays out of the root library's import graph, as with the TUI ([ADR 0007](0007-bubbletea-stack-for-tango-tui.md)).
 
-**Decision.** The direction stands: Yaegi remains the only option that gives a real read-eval-print loop. `tango shell` is still not implemented, and 0.3.0 ships no `tango shell` command, hidden or otherwise. Building it is a separate milestone that has to decide:
+**Decision.** The direction stands: Yaegi remains the only option that gives a real read-eval-print loop, and the spike shows a prototype can work, not that a supported shell exists. `tango shell` is still not implemented, and 0.3.0 ships no `tango shell` command, hidden or otherwise. Building it is a separate milestone that has to decide:
 
 1. How the shell reaches the project: a shell program the scaffold generates, or a flag the project's `main.go` handles, as `-tango-status` is.
 2. Typed access with generated, regenerated symbol tables, or map rows with helper functions tanGO ships and keeps stable.
 3. Which Yaegi version to depend on, given a release that predates Go 1.27 and a master that fixes only some of the gaps above, and what to tell users about the Go it cannot interpret.
 4. How panics and unsupported expressions are reported without ending the session.
-
