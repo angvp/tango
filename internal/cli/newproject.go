@@ -127,13 +127,12 @@ func renderImports(groups [][]string, blankImport string) string {
 }
 
 func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bool) string {
-	stdImports := []string{"database/sql", "fmt", "os"}
+	stdImports := []string{"context", "database/sql", "fmt", "os", "os/signal", "syscall"}
 	tangoImports := []string{"github.com/angvp/tango"}
 	installedApps := "config.InstalledApps = []tango.App{}"
 	storeLine := ""
 	adminCLIBlock := ""
 	if includeAdmin {
-		stdImports = append(stdImports, "context")
 		tangoImports = append(tangoImports, "github.com/angvp/tango/admin", "github.com/angvp/tango/db")
 		storeLine = "store := db.NewStore(sqlDB, dsn.Dialect)"
 		installedApps = `config.InstalledApps = []tango.App{
@@ -210,8 +209,13 @@ func run() error {
 		return err
 	}
 
+	// Ctrl-C and SIGTERM (what hosting platforms send on a deploy) stop the
+	// server gracefully: in-flight requests finish before the process exits.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	fmt.Println("listening on", config.Addr)
-	return tango.Serve(config, sqlDB, dsn.Dialect)
+	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
 }
 `, imports, defaultDSNBlock, storeLine, installedApps, adminCLIBlock)
 }

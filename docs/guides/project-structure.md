@@ -16,7 +16,7 @@
   - loads the `Config` with `tango.LoadConfigFromEnv(tango.WithPortFromEnv())`, so the address is `TANGO_ADDR`, else `PORT`, else `:8000`;
   - installs the admin app;
   - wraps every request, including Unmatched ones (`MiddlewareScopeAll`), in `RequestID`, `Recoverer`, `AccessLogger` and a 1 MiB `MaxBodySize`;
-  - calls `admin.HandleCLI`, `tango.DispatchFlags`, and finally `tango.Serve`. Admin accounts are created afterward with `tango admin create <username>` — see [admin registration](admin-registration.md) — not baked into any generated file. The app-side flag convention is:
+  - calls `admin.HandleCLI`, `tango.DispatchFlags`, and finally `tango.ServeContext`, under a context that Ctrl-C or `SIGTERM` cancels so the server shuts down gracefully (see [application lifecycle](application-lifecycle.md)). Admin accounts are created afterward with `tango admin create <username>` — see [admin registration](admin-registration.md) — not baked into any generated file. The app-side flag convention is:
   - `-check` — validate app registration and route compilation, then exit (see [app checks](app-checks.md)).
   - `-tango-dump-models` — print registered models as JSON, then exit. Used internally by `tango makemigrations`.
   - `-tango-status` — print registration/database/migration status as JSON, then exit. Used by `tango tui`.

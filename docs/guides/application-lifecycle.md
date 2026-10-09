@@ -2,7 +2,7 @@
 
 `ServeContext` runs your app the same way `Serve` does, but additionally starts and stops any background components you register as `Lifecycle` values, and shuts down gracefully when its context is canceled — draining in-flight HTTP requests before tearing components down, instead of the process exiting mid-request.
 
-`Serve` itself is unchanged: it delegates to `ServeContext(context.Background(), ...)`, so it still blocks forever with no caller-triggered shutdown path. Use `ServeContext` directly when you want graceful shutdown — typically driven by an OS signal.
+`Serve` itself is unchanged: it delegates to `ServeContext(context.Background(), ...)`, so it still blocks forever with no caller-triggered shutdown path. Use `ServeContext` directly when you want graceful shutdown — typically driven by an OS signal. Projects created by `tango newproject` already do: their `main.go` calls `ServeContext` under `signal.NotifyContext` for Ctrl-C and `SIGTERM`.
 
 The runnable reference is [`examples/realtime-chat`](../../examples/realtime-chat), which registers its `realtime.Hub`'s `Close` as a `Lifecycle` and wires `signal.NotifyContext` into `main`.
 

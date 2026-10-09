@@ -66,7 +66,9 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		`sql.Open(dsn.Driver, dsn.Source)`,
 		`store := db.NewStore(sqlDB, dsn.Dialect)`,
 		`tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)`,
-		`tango.Serve(config, sqlDB, dsn.Dialect)`,
+		`signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)`,
+		`defer stop()`,
+		`tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)`,
 		`admin.New(store)`,
 		`admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)`,
 		`config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())`,
@@ -91,7 +93,7 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 
 	// The generated file is the first code a reader sees, so its imports
 	// form sorted groups, the way goimports leaves them.
-	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\n" +
+	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\t\"os/signal\"\n\t\"syscall\"\n\n" +
 		"\t\"github.com/angvp/tango\"\n\t\"github.com/angvp/tango/admin\"\n\t\"github.com/angvp/tango/db\"\n\n" +
 		"\t\"myapp/migrations\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
 	if !strings.Contains(mainSource, wantImports) {
@@ -141,10 +143,10 @@ func TestNewProjectNoAdminSkipsCredentials(t *testing.T) {
 	if strings.Contains(string(mainGo), `"github.com/angvp/tango/db"`) {
 		t.Fatalf("main.go imports the unused db package with --no-admin:\n%s", mainGo)
 	}
-	if !strings.Contains(string(mainGo), "tango.Serve(config, sqlDB, dsn.Dialect)") {
+	if !strings.Contains(string(mainGo), "tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)") {
 		t.Fatalf("main.go does not serve with the dialect from TANGO_DB_DSN:\n%s", mainGo)
 	}
-	wantImports := "import (\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\n\t\"github.com/angvp/tango\"\n\n\t\"myapp/migrations\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
+	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\t\"os/signal\"\n\t\"syscall\"\n\n\t\"github.com/angvp/tango\"\n\n\t\"myapp/migrations\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
 	if !strings.Contains(string(mainGo), wantImports) {
 		t.Fatalf("main.go imports are not %q:\n%s", wantImports, mainGo)
 	}
@@ -174,7 +176,7 @@ func TestNewProjectPostgresDialect(t *testing.T) {
 		`dsn, err := tango.LoadDBConfigFromEnv()`,
 		`sql.Open(dsn.Driver, dsn.Source)`,
 		`tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)`,
-		`tango.Serve(config, sqlDB, dsn.Dialect)`,
+		`tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)`,
 	} {
 		if !strings.Contains(source, want) {
 			t.Fatalf("main.go does not contain %q:\n%s", want, source)

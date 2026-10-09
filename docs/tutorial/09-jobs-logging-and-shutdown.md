@@ -119,7 +119,7 @@ Note that `route` is the route's *pattern* (`/posts/{id}`), not the actual URL, 
 
 ## Graceful shutdown
 
-Until now, `main.go` ended with `tango.Serve`, which runs forever: stopping the process drops whatever requests were in flight. Replace the end of `run()` with `tango.ServeContext`, and let an OS signal cancel its context:
+The `main.go` that `tango newproject` generated already ends with `tango.ServeContext`, and lets an OS signal cancel its context, so stopping the process finishes the requests in flight instead of dropping them. (Plain `tango.Serve` runs forever with no way to stop it gracefully.) Pass it the logger and a shutdown timeout by replacing the end of `run()`:
 
 ```go
 // main.go
@@ -137,7 +137,7 @@ logger.Info("stopped", "clean", err == nil)
 return err
 ```
 
-(new imports: `log/slog`, `os/signal`, `syscall`; `context` and `time` are already there.) When you press Ctrl-C — or a deployment sends `SIGTERM` — `ServeContext`:
+(new imports: `log/slog`; `context`, `os/signal`, `syscall` and `time` are already there.) When you press Ctrl-C — or a deployment sends `SIGTERM` — `ServeContext`:
 
 1. stops accepting new connections and waits for requests in flight to finish, for up to the shutdown timeout;
 2. stops the job scheduler, letting a running job see its `ctx` canceled;

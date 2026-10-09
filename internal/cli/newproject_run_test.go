@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -147,5 +148,21 @@ func TestANewProjectRunsSafelyAsGenerated(t *testing.T) {
 	}
 	if !logged() {
 		t.Fatalf("the 404 wasn't access-logged as route (unmatched):\n%s", output.String())
+	}
+
+	// A hosting platform stops the project with SIGTERM: it must drain and
+	// exit cleanly, not be killed mid-request.
+	if err := server.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- server.Wait() }()
+	select {
+	case err := <-exited:
+		if err != nil {
+			t.Fatalf("the project did not exit cleanly on SIGTERM: %v\n%s", err, output.String())
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatalf("the project ignored SIGTERM:\n%s", output.String())
 	}
 }

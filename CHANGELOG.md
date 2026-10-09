@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+
+- Projects created by `tango newproject` now shut down gracefully: the generated `main.go` calls `tango.ServeContext` under `signal.NotifyContext` for Ctrl-C and `SIGTERM`, so in-flight requests finish and registered `Lifecycle` components stop. It called `tango.Serve`, which never reacts to a signal. Existing applications are unchanged; swap in `ServeContext` as the [application lifecycle guide](docs/guides/application-lifecycle.md) shows.
+
 ## [0.2.0] - 2026-10-08
 
 ### Changed

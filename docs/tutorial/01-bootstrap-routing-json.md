@@ -9,7 +9,7 @@ tango newproject board
 cd board
 ```
 
-This creates a new Go module (`board`) with a `main.go` pre-wired for SQLite and the admin app. Admin accounts live in the database rather than a generated file — you'll create one with `tango admin create` in part 3, once the admin's own tables exist. The generated `main.go` stays small: it opens the database, builds `Config`, calls `tango.DispatchFlags`, then calls `tango.Serve`. Confirm it runs:
+This creates a new Go module (`board`) with a `main.go` pre-wired for SQLite and the admin app. Admin accounts live in the database rather than a generated file — you'll create one with `tango admin create` in part 3, once the admin's own tables exist. The generated `main.go` stays small: it opens the database, builds `Config`, calls `tango.DispatchFlags`, then calls `tango.ServeContext` under a context that Ctrl-C or `SIGTERM` cancels, so the server stops gracefully. Confirm it runs:
 
 ```sh
 go run . -check

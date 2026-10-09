@@ -8,7 +8,7 @@ Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/applicati
 
 - Register a `tango.Lifecycle{Name, Start, Stop}` via `registry.RegisterLifecycle(...)` from inside an `App.Register` callback — never call `Start`/`Stop` yourself, and never register outside `Register`.
 - `Start`/`Stop` are each independently optional — nil is skipped — but at least one must be set. `Name` must be non-empty and unique.
-- Swap `tango.Serve(config, sqlDB, dialect)` for `tango.ServeContext(ctx, config, sqlDB, dialect, opts...)` where `ctx` is caller-cancelable.
+- Projects from `tango newproject` already call `ServeContext` under `signal.NotifyContext`; only an older or hand-written `main` still needs: swap `tango.Serve(config, sqlDB, dialect)` for `tango.ServeContext(ctx, config, sqlDB, dialect, opts...)` where `ctx` is caller-cancelable.
 - Build `ctx` with `signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)` in `main` — tanGO installs no signal handling itself.
 - Use `tango.WithShutdownTimeout(d)` to override the default 15s per-phase budget; `d` must be positive.
 
