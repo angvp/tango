@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/angvp/tango"
@@ -41,11 +42,11 @@ const (
 func Run(ctx context.Context, s IO, boot Boot, args []string) int {
 	inv, err := ParseArgs(args)
 	if err != nil {
-		fmt.Fprintf(s.Err, "tango shell: %v\n\n%s", err, Usage)
+		fmt.Fprintf(s.Err, "tango shell: %v\n\n%s", err, Usage())
 		return ExitUsage
 	}
 	if inv.Help {
-		fmt.Fprint(s.Out, Usage)
+		fmt.Fprint(s.Out, Usage())
 		return ExitOK
 	}
 	boot.ReadOnly = boot.ReadOnly || inv.ReadOnly
@@ -70,12 +71,12 @@ func Run(ctx context.Context, s IO, boot Boot, args []string) int {
 	if inv.HasEval {
 		input = strings.NewReader(inv.Eval)
 	}
-	return runLines(ctx, session, input, s)
+	return runLines(ctx, session, input, s, sortedKeys(boot.Helpers))
 }
 
 // runLines evaluates input a complete statement at a time and stops at the
 // first error.
-func runLines(ctx context.Context, session *Session, input io.Reader, s IO) int {
+func runLines(ctx context.Context, session *Session, input io.Reader, s IO, helperNames []string) int {
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	var pending strings.Builder
@@ -98,6 +99,10 @@ func runLines(ctx context.Context, session *Session, input io.Reader, s IO) int 
 		pending.Reset()
 		if isExit(code) {
 			return ExitOK
+		}
+		if strings.TrimSpace(code) == "help()" {
+			fmt.Fprint(s.Out, Help(helperNames))
+			continue
 		}
 		if code := evalAndPrint(session, code, s); code != ExitOK {
 			return code
@@ -132,10 +137,22 @@ func evalAndPrint(session *Session, code string, s IO) int {
 		} else {
 			fmt.Fprintf(s.Err, "error: %v\n", err)
 		}
+		if hint := hintFor(code, err); hint != "" {
+			fmt.Fprintf(s.Err, "hint: %s\n", hint)
+		}
 		return ExitError
 	}
 	if printed != "" {
 		fmt.Fprintln(s.Out, printed)
 	}
 	return ExitOK
+}
+
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

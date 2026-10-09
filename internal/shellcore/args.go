@@ -48,13 +48,19 @@ func ParseArgs(args []string) (Invocation, error) {
 	return inv, nil
 }
 
-// Usage is the text of `tango shell --help`.
-const Usage = `usage: tango shell [-c EXPR] [--readonly]
+// usageHead is the start of the text of `tango shell --help`.
+const usageHead = `usage: tango shell [-c EXPR] [--readonly]
 
   -c EXPR      evaluate EXPR, print the result and exit
   --readonly   refuse every helper that writes
   --help       print this help
 
 With no -c and input from a pipe, each complete line is evaluated in turn
-and the first error stops the run with a non-zero exit status.
+and the first error stops the run with a non-zero exit status. Results go to
+standard output; errors and the database line go to standard error.
+
 `
+
+// Usage is the text of `tango shell --help`: the options and what the
+// interpreter cannot run.
+func Usage() string { return usageHead + limitationsTable() }
