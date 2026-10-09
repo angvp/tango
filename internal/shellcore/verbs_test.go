@@ -151,6 +151,22 @@ func TestForeignKeysAreCheckedByTheStore(t *testing.T) {
 	}
 }
 
+func TestDeletingARowCascadesToTheRowsThatReferenceIt(t *testing.T) {
+	v := newVerbs(t, false)
+	if _, err := v.Create("blog.Post", map[string]any{"Title": "with comments"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.Create("blog.Comment", map[string]any{"PostID": 1, "Body": "first"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Delete("blog.Post", 1); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if n, err := v.Count("blog.Comment"); err != nil || n != 0 {
+		t.Fatalf("comments left after deleting their post = %d, %v, want the Store's cascade to remove them", n, err)
+	}
+}
+
 func TestBadInputIsAnErrorThatNamesTheProblem(t *testing.T) {
 	v := newVerbs(t, false)
 	tests := []struct {

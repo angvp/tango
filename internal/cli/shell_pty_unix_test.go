@@ -3,9 +3,12 @@
 package cli
 
 import (
+	"errors"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // TestShellOnATerminal drives the real, scaffolded shell on a pseudo-terminal:
@@ -34,4 +37,28 @@ func TestShellOnATerminal(t *testing.T) {
 		t.Fatalf("terminal session failed: %v\n%s", err, out)
 	}
 	t.Logf("%s", out)
+}
+
+// Ctrl-C during an evaluation ends a non-interactive run with status 130 too:
+// the interpreter cannot interrupt a running evaluation.
+func TestShellInterruptedDuringAnEvaluationExits130WithoutATerminal(t *testing.T) {
+	if testing.Short() {
+		t.Skip("scaffolds, builds and runs a project")
+	}
+	project, _ := migratedSQLiteProject(t, "blog")
+	binary := buildShell(t, project)
+	cmd := exec.Command(binary, "-c", "for { }")
+	cmd.Dir = project
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second) // let the loop start; the handler is installed before it
+	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+		t.Fatal(err)
+	}
+	err := cmd.Wait()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 130 {
+		t.Fatalf("shell -c after SIGINT: %v, want exit status 130", err)
+	}
 }

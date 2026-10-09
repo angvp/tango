@@ -86,6 +86,8 @@ func Run(ctx context.Context, s IO, boot Boot, args []string) int {
 	if inv.HasEval {
 		input = strings.NewReader(inv.Eval)
 	}
+	stop := exitOnInterrupt(s.Err)
+	defer stop()
 	return runLines(ctx, session, input, s, sortedKeys(boot.Helpers))
 }
 

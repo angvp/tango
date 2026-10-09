@@ -21,6 +21,25 @@ const (
 	ctrlC            = 3
 )
 
+// exitOnInterrupt ends the process with status 130 when Ctrl-C (SIGINT)
+// arrives during a non-interactive run, as it does during an evaluation at
+// the prompt: the interpreter cannot interrupt a running evaluation. The
+// returned func removes the handler.
+func exitOnInterrupt(errOut io.Writer) (stop func()) {
+	interrupts := make(chan os.Signal, 1)
+	signal.Notify(interrupts, os.Interrupt)
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-interrupts:
+			fmt.Fprintln(errOut)
+			os.Exit(ExitInterrupted)
+		case <-done:
+		}
+	}()
+	return func() { signal.Stop(interrupts); close(done) }
+}
+
 func isTerminal(v any) bool {
 	f, ok := v.(*os.File)
 	return ok && term.IsTerminal(int(f.Fd()))
