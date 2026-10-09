@@ -1,0 +1,6 @@
+		Helpers: map[string]any{
+			// Call your own application code from here. In the shell these are
+			// project.Greeting("...") and project.Fail().
+			"Greeting": func(name string) string { return "hello, " + name },
+			"Fail":     func() error { return errors.New("reindex failed") },
+		},

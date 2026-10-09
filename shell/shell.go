@@ -25,8 +25,14 @@ type Options struct {
 	// flag has the same effect; either one turns it on.
 	ReadOnly bool
 
-	// Helpers are project-defined functions reachable from the session as
-	// project.Name(...). Not wired up yet.
+	// Helpers are the project's own functions and values, reachable from
+	// the session only as project.Name, never by a bare name. Each name must
+	// be an exported Go identifier; Run refuses to start otherwise. A helper
+	// closes over what it needs (the store, application services, a
+	// context) in the project's shell/main.go: the shell passes nothing to
+	// it. Only plain values (primitives, maps, slices and error) are
+	// supported across the boundary; a value of a project type arrives, but
+	// using its fields or methods from the session is not supported.
 	Helpers map[string]any
 
 	// DatabaseLabel is shown at startup so a person can see which database

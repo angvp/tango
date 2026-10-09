@@ -68,6 +68,12 @@ func Run(ctx context.Context, s IO, boot Boot, args []string) int {
 			return ExitError
 		}
 	}
+	if len(boot.Helpers) > 0 {
+		if err := ExportHelpers(session, boot.Helpers); err != nil {
+			fmt.Fprintf(s.Err, "tango shell: %v\n", err)
+			return ExitError
+		}
+	}
 	if boot.DatabaseLabel != "" {
 		fmt.Fprintf(s.Err, "database: %s\n", boot.DatabaseLabel)
 	}

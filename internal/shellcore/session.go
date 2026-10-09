@@ -1,6 +1,7 @@
 package shellcore
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -15,7 +16,13 @@ import (
 
 // PanicError is a panic recovered from the interpreter. The session that
 // raised it is still usable.
-type PanicError struct{ Value any }
+type PanicError struct {
+	Value any
+	// Interpreted is true for a panic the program itself raised (a panic
+	// call in typed code, or a helper that panicked) and false for one the
+	// interpreter raised because it could not run the Go it was given.
+	Interpreted bool
+}
 
 func (e *PanicError) Error() string { return fmt.Sprint(e.Value) }
 
@@ -87,6 +94,11 @@ func (s *Session) Eval(code string) (printed string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			printed, err = "", &PanicError{Value: r}
+			return
+		}
+		var raised interp.Panic
+		if errors.As(err, &raised) {
+			printed, err = "", &PanicError{Value: raised.Value, Interpreted: true}
 		}
 	}()
 	final, ok := splitFinalExpr(code)

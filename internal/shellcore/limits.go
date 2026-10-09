@@ -73,8 +73,8 @@ var Limitations = []Limitation{
 			{Code: "for i := range 3 { _ = i }"},
 		},
 		matches: func(code string, err error) bool {
-			_, panicked := err.(*PanicError)
-			return panicked && rangeKeyword.MatchString(code)
+			p, panicked := err.(*PanicError)
+			return panicked && !p.Interpreted && rangeKeyword.MatchString(code)
 		},
 	},
 }
@@ -86,7 +86,7 @@ func hintFor(code string, err error) string {
 			return fmt.Sprintf("not supported by this interpreter (%s): %s. See `tango shell --help`.", l.Feature, l.Workaround)
 		}
 	}
-	if _, panicked := err.(*PanicError); panicked {
+	if p, panicked := err.(*PanicError); panicked && !p.Interpreted {
 		return "the interpreter panicked on this line; the Go it was given may be outside what it supports. See `tango shell --help`."
 	}
 	return ""

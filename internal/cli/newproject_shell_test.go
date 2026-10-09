@@ -218,6 +218,48 @@ func TestShellAgainstAScaffoldedProject(t *testing.T) {
 	})
 }
 
+// TestShellHelpersRegisteredInTheProjectsShellMain adds the helpers snippet
+// the shell guide shows to a scaffolded shell/main.go and calls them.
+func TestShellHelpersRegisteredInTheProjectsShellMain(t *testing.T) {
+	if testing.Short() {
+		t.Skip("scaffolds, builds and runs a project")
+	}
+	project, _ := scaffoldWithPosts(t, "blog")
+	snippet, err := os.ReadFile(filepath.Join("testdata", "shell_helpers_snippet.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mainGo := filepath.Join(project, "shell", "main.go")
+	source, err := os.ReadFile(mainGo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := strings.Replace(string(source), "shell.Options{\n", "shell.Options{\n"+string(snippet), 1)
+	edited = strings.Replace(edited, "import (\n", "import (\n\t\"errors\"\n", 1)
+	if edited == string(source) {
+		t.Fatal("the scaffolded shell/main.go has no shell.Options literal to add helpers to")
+	}
+	if err := os.WriteFile(mainGo, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TANGO_DB_DSN", "sqlite://"+filepath.Join(t.TempDir(), "app.db"))
+
+	shell := func(script string) (code int, out, errOut string) {
+		var o, e bytes.Buffer
+		code = Run(context.Background(), []string{"shell", "-c", script}, project, &o, &e, ExecRunner{})
+		return code, o.String(), e.String()
+	}
+	if code, out, errOut := shell(`project.Greeting("shell")`); code != 0 || out != "\"hello, shell\"\n" {
+		t.Fatalf("Greeting: code=%d out=%q err=%q", code, out, errOut)
+	}
+	if code, out, errOut := shell(`project.Fail()`); code != 1 || out != "" || !strings.Contains(errOut, "error: reindex failed") {
+		t.Fatalf("Fail: code=%d out=%q err=%q", code, out, errOut)
+	}
+	if code, out, _ := shell(`help()`); code != 0 || !strings.Contains(out, "project.Fail\n  project.Greeting\n") {
+		t.Fatalf("help: code=%d out=%q, want the helper names", code, out)
+	}
+}
+
 // buildShell builds the project's shell program and returns the binary.
 func buildShell(t *testing.T, project string) string {
 	t.Helper()
