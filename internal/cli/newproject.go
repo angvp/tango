@@ -73,6 +73,16 @@ func newProject(ctx context.Context, runner Runner, dir string, args []string, s
 		return 1
 	}
 
+	shellDir := filepath.Join(projectDir, "shell")
+	if err := os.MkdirAll(shellDir, 0o755); err != nil {
+		fmt.Fprintf(stderr, "tango newproject: %v\n", err)
+		return 1
+	}
+	if err := writeFormattedFile(filepath.Join(shellDir, "main.go"), renderShellMain(name, dialect)); err != nil {
+		fmt.Fprintf(stderr, "tango newproject: %v\n", err)
+		return 1
+	}
+
 	mainGo := renderNewProjectMain(name, dialect, !*noAdmin)
 	if err := writeFormattedFile(filepath.Join(projectDir, "main.go"), mainGo); err != nil {
 		fmt.Fprintf(stderr, "tango newproject: %v\n", err)
@@ -288,3 +298,96 @@ func run() error {
 }
 %s`, imports, defaultDSNBlock, adminCLIBlock, adminURLBlock, adminURLHelper)
 }
+
+// renderShellMain renders shell/main.go: the project's own `tango shell`
+// program. It lives in the project's module because only there are the
+// project's apps and models linked, and it shares project.Config with the
+// server so both register the same apps.
+func renderShellMain(module string, dialect projectDialect) string {
+	defaultDSNBlock := ""
+	if dialect.DefaultDSN != "" {
+		defaultDSNBlock = fmt.Sprintf(`
+	if os.Getenv("TANGO_DB_DSN") == "" {
+		os.Setenv("TANGO_DB_DSN", %q)
+	}
+`, dialect.DefaultDSN)
+	}
+	imports := renderImports(
+		[][]string{
+			{"context", "database/sql", "fmt", "net/url", "os", "strings"},
+			{"github.com/angvp/tango", "github.com/angvp/tango/db", "github.com/angvp/tango/shell"},
+			{module + "/project"},
+		},
+		dialect.DriverImport,
+	)
+	return fmt.Sprintf(`// Command shell is this project's "tango shell": an interactive Go console
+// with the project's apps, models and database loaded and nothing served.
+// Run it with "tango shell". It executes local code with this project's
+// database credentials: it is not a sandbox.
+package main
+
+%s
+
+func main() {
+	os.Exit(run())
+}
+
+func run() int {
+	if err := tango.LoadEnvFile(".env"); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+%s
+	dsn, err := tango.LoadDBConfigFromEnv()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	sqlDB, err := sql.Open(dsn.Driver, dsn.Source)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer sqlDB.Close()
+
+	store := db.NewStore(sqlDB, dsn.Dialect)
+	return shell.Run(context.Background(), project.Config(store), store, os.Args[1:], shell.Options{
+		DatabaseLabel: databaseLabel(dsn),
+	})
+}
+%s`, imports, defaultDSNBlock, databaseLabelFunc)
+}
+
+// databaseLabelFunc is the generated shell's databaseLabel. The label is
+// shown at startup so a person can see which database they are about to
+// touch; it must never carry a user name, password or anything else that
+// could be a credential, so it names only the file or the host and database.
+const databaseLabelFunc = `
+// databaseLabel says which database the shell works on, without any part
+// of the DSN that could be a credential: for SQLite the file, for PostgreSQL
+// only the host and database name. Anything it cannot read with confidence
+// is hidden rather than shown.
+func databaseLabel(dsn db.DSN) string {
+	if dsn.Dialect != db.Postgres {
+		path, _, _ := strings.Cut(dsn.Source, "?")
+		return "sqlite: " + strings.TrimPrefix(path, "file:")
+	}
+	const hidden = "postgres: (address hidden)"
+	_, rest, ok := strings.Cut(dsn.Source, "://")
+	if !ok {
+		return hidden
+	}
+	// A "@" after the first "/" means the userinfo was not escaped, so what
+	// follows cannot be told apart from a password.
+	authority, _, _ := strings.Cut(rest, "/")
+	if strings.Count(rest, "@") != strings.Count(authority, "@") || strings.Count(authority, "@") > 1 {
+		return hidden
+	}
+	u, err := url.Parse(dsn.Source)
+	if err != nil || u.Host == "" {
+		return hidden
+	}
+	return "postgres: " + u.Host + "/" + strings.TrimPrefix(u.Path, "/")
+}
+`

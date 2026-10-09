@@ -1,0 +1,22 @@
+# The session the shell guide walks through, run for real by the end-to-end
+# test. A line starting with "> " is typed into the shell; the lines after it,
+# up to the next "> " line, are what the shell prints. Lines starting with "#"
+# are comments.
+> Models()
+["admin.AdminSession" "admin.AdminUser" "posts.Post"]
+> Create("posts.Post", map[string]any{"Title": "Hello", "Published": true})
+map[ID:1 Published:true Title:"Hello"]
+> Create("posts.Post", map[string]any{"Title": "Draft"})
+map[ID:2 Published:false Title:"Draft"]
+> Count("posts.Post")
+2
+> List("posts.Post", map[string]any{"where": map[string]any{"Published": true}, "order": []string{"-ID"}, "limit": 10})
+map[ID:1 Published:true Title:"Hello"]
+> Update("posts.Post", 2, map[string]any{"Title": "Draft, revised"})
+map[ID:2 Published:false Title:"Draft, revised"]
+> rows, err := List("posts.Post")
+> len(rows)
+2
+> Delete("posts.Post", 2)
+> Count("posts.Post")
+1

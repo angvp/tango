@@ -128,6 +128,27 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		t.Fatalf("main.go imports are not %q:\n%s", wantImports, mainSource)
 	}
 
+	shellGo, err := os.ReadFile(filepath.Join(projectDir, "shell", "main.go"))
+	if err != nil {
+		t.Fatalf("read shell/main.go: %v", err)
+	}
+	for _, want := range []string{
+		`"github.com/angvp/tango/shell"`,
+		`"myapp/project"`,
+		`_ "modernc.org/sqlite"`,
+		`store := db.NewStore(sqlDB, dsn.Dialect)`,
+		`shell.Run(context.Background(), project.Config(store), store, os.Args[1:], shell.Options{`,
+		`DatabaseLabel: databaseLabel(dsn),`,
+	} {
+		if !strings.Contains(string(shellGo), want) {
+			t.Fatalf("shell/main.go does not contain %q:\n%s", want, shellGo)
+		}
+	}
+	// The shell takes its apps from project.Config, never from a list of its own.
+	if strings.Contains(string(shellGo), "InstalledApps") || strings.Contains(string(mainSource), `tango/shell"`) {
+		t.Fatalf("the app list or the interpreter leaked into the wrong file:\n%s", shellGo)
+	}
+
 	migrationsGo, err := os.ReadFile(filepath.Join(projectDir, "migrations", "migrations.go"))
 	if err != nil {
 		t.Fatalf("read migrations/migrations.go: %v", err)
@@ -221,6 +242,18 @@ func TestNewProjectPostgresDialect(t *testing.T) {
 	} {
 		if !strings.Contains(source, want) {
 			t.Fatalf("main.go does not contain %q:\n%s", want, source)
+		}
+	}
+	shellGo, err := os.ReadFile(filepath.Join(dir, "myapp", "shell", "main.go"))
+	if err != nil {
+		t.Fatalf("read shell/main.go: %v", err)
+	}
+	for _, want := range []string{
+		`_ "github.com/jackc/pgx/v5/stdlib"`,
+		`os.Setenv("TANGO_DB_DSN", "postgres://postgres:postgres@localhost:5432/myapp")`,
+	} {
+		if !strings.Contains(string(shellGo), want) {
+			t.Fatalf("shell/main.go does not contain %q:\n%s", want, shellGo)
 		}
 	}
 }

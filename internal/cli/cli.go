@@ -68,8 +68,7 @@ func Run(ctx context.Context, args []string, dir string, stdout io.Writer, stder
 	case "tui":
 		return tui(ctx, runner, dir, stdout, stderr, isInteractiveTerminal, nil)
 	case "shell":
-		fmt.Fprintln(stderr, "tango shell is not implemented yet; ADR 0005 records Yaegi as the intended direction and what a spike found.")
-		return 2
+		return shellCommand(ctx, runner, dir, args[1:], stdout, stderr)
 	case "migrate":
 		if len(args) > 1 && args[1] == "down" {
 			return runGo(ctx, runner, dir, stdout, stderr, append([]string{"run", ".", "-migrate", "-down"}, args[2:]...))
@@ -112,7 +111,9 @@ func printUsage(w io.Writer) {
                            Scaffold a new runnable project
   tango newapp <name>      Scaffold a new app stub in the current project
   tango tui                Open a status dashboard (falls back to plain text)
-  tango shell              Not implemented; see ADR 0005
+  tango shell [-c EXPR] [--readonly]
+                           Open a Go console on the project's models and database
+                           (needs the project's shell/main.go)
   tango admin create <username> [--no-staff] [--no-superuser]
                                           Create an admin account (password via stdin or TANGO_ADMIN_PASSWORD);
                                           defaults to staff+superuser access

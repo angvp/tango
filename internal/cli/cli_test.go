@@ -90,19 +90,6 @@ func TestUsageDocumentsMakeMigrationsNameFlag(t *testing.T) {
 	}
 }
 
-func TestShellDocumentsDeferredImplementation(t *testing.T) {
-	var stderr bytes.Buffer
-
-	code := Run(context.Background(), []string{"shell"}, "/app", io.Discard, &stderr, &recordingRunner{})
-
-	if code != 2 {
-		t.Fatalf("exit code = %d, want 2", code)
-	}
-	if !strings.Contains(stderr.String(), "Yaegi") || !strings.Contains(stderr.String(), "ADR 0005") {
-		t.Fatalf("stderr = %q, want Yaegi direction citing ADR 0005", stderr.String())
-	}
-}
-
 func TestMigrateCommandRunsAppWithMigrateFlag(t *testing.T) {
 	runner := &recordingRunner{}
 	code := Run(context.Background(), []string{"migrate"}, "/app", io.Discard, io.Discard, runner)
@@ -318,13 +305,15 @@ func TestTuiCommandDispatchesToStatusFetch(t *testing.T) {
 func TestRunWithNilRunnerDefaultsToExecRunner(t *testing.T) {
 	var stderr bytes.Buffer
 
-	code := Run(context.Background(), []string{"shell"}, "/app", io.Discard, &stderr, nil)
+	// A directory that does not exist makes the real runner fail, which is
+	// all this checks: a nil runner is replaced, not dereferenced.
+	code := Run(context.Background(), []string{"check"}, "/nonexistent-tango-dir", io.Discard, &stderr, nil)
 
-	if code != 2 {
-		t.Fatalf("exit code = %d, want 2", code)
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
 	}
-	if !strings.Contains(stderr.String(), "Yaegi") {
-		t.Fatalf("stderr = %q, want Yaegi direction (nil runner must not panic)", stderr.String())
+	if !strings.Contains(stderr.String(), "tango:") {
+		t.Fatalf("stderr = %q, want the runner's error (nil runner must not panic)", stderr.String())
 	}
 }
 
