@@ -1,0 +1,2 @@
+# Patches and their golden inputs carry the whitespace of the code they describe.
+internal/cli/testdata/legacy_scaffold/*.diff -whitespace

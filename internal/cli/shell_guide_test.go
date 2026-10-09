@@ -43,6 +43,16 @@ func quotedPairs(t *testing.T, path string) []transcriptPair {
 
 func normalizeSpace(s string) string { return strings.Join(strings.Fields(s), " ") }
 
+// displayForm is how a diff appears in the guide: tabs shown as four spaces
+// and no trailing whitespace, so the page needs no invisible characters.
+func displayForm(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(strings.ReplaceAll(line, "\t", "    "), " ")
+	}
+	return strings.Join(lines, "\n")
+}
+
 func TestShellDocsQuoteTheTestedSession(t *testing.T) {
 	tested := append(loadTranscript(t, "shell_session.txt"), loadTranscript(t, "shell_helpers_session.txt")...)
 	known := map[transcriptPair]bool{}
@@ -116,7 +126,7 @@ func TestShellGuideCarriesTheTestedSnippetsAndTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	mainDiff, _, _ := strings.Cut(string(diff), "diff --git a/project/project.go")
-	if !strings.Contains(guide, strings.TrimRight(mainDiff, "\n")) {
+	if !strings.Contains(guide, displayForm(strings.TrimRight(mainDiff, "\n"))) {
 		t.Errorf("the guide's upgrade section does not show the main.go diff the upgrade test applies (testdata/legacy_scaffold/upgrade_admin.diff)")
 	}
 

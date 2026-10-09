@@ -179,41 +179,41 @@ index 8e79dd6..b31def2 100644
 --- a/main.go
 +++ b/main.go
 @@ -14,6 +14,7 @@ import (
- 	"github.com/angvp/tango/db"
- 
- 	"legacyapp/migrations"
-+	"legacyapp/project"
- 
- 	_ "modernc.org/sqlite"
+     "github.com/angvp/tango/db"
+
+     "legacyapp/migrations"
++    "legacyapp/project"
+
+     _ "modernc.org/sqlite"
  )
 @@ -42,24 +43,9 @@ func run() error {
- 	defer sqlDB.Close()
- 
- 	store := db.NewStore(sqlDB, dsn.Dialect)
--	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
--	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
--	config.InstalledApps = []tango.App{
--		admin.New(store),
--	}
--	config.Middleware = []tango.Middleware{
--		tango.RequestID(),
--		tango.Recoverer(),
--		tango.AccessLogger(),
--		// Request bodies are capped at 1 MiB. If this application later needs
--		// large uploads, remove the global body-limit middleware and apply
--		// `MaxBodySize` only to the route groups or routes that should remain
--		// limited.
--		tango.MaxBodySize(1 << 20),
--	}
--	// Global middleware also wraps requests no route matches, so 404s and
--	// 405s are logged and counted too.
--	config.MiddlewareScope = tango.MiddlewareScopeAll
-+	// The installed apps, middleware and other configuration live in
-+	// project/project.go, shared with the shell.
-+	config := project.Config(store)
- 
- 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
- 		return err
+     defer sqlDB.Close()
+
+     store := db.NewStore(sqlDB, dsn.Dialect)
+-    // The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+-    config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+-    config.InstalledApps = []tango.App{
+-        admin.New(store),
+-    }
+-    config.Middleware = []tango.Middleware{
+-        tango.RequestID(),
+-        tango.Recoverer(),
+-        tango.AccessLogger(),
+-        // Request bodies are capped at 1 MiB. If this application later needs
+-        // large uploads, remove the global body-limit middleware and apply
+-        // `MaxBodySize` only to the route groups or routes that should remain
+-        // limited.
+-        tango.MaxBodySize(1 << 20),
+-    }
+-    // Global middleware also wraps requests no route matches, so 404s and
+-    // 405s are logged and counted too.
+-    config.MiddlewareScope = tango.MiddlewareScopeAll
++    // The installed apps, middleware and other configuration live in
++    // project/project.go, shared with the shell.
++    config := project.Config(store)
+
+     if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
+         return err
 ```
 
 The upgrade is tested against the scaffold as it was before the shell: [`internal/cli/testdata/legacy_scaffold`](../../internal/cli/testdata/legacy_scaffold) holds that scaffold and the full diff for both variants, and a test applies them and runs the result. A project that does not upgrade keeps running as a server; only `tango shell` needs the new files, and without them it says which file is missing and links here. Once `project/project.go` exists, `tango newapp` tells you to add new apps there.
