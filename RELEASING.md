@@ -12,7 +12,13 @@ To release, make `main` equal to a green `develop` commit with a fast-forward, s
 git checkout main && git merge --ff-only develop && git push origin main
 ```
 
-A fix that cannot wait for the next minor goes to `main` first, is merged back into `develop`, and is released as a patch.
+History stays linear: no merge commits, ever. A fix that cannot wait for the next minor goes to `main` first and is released as a patch. Then rebase `develop` onto it and update the remote:
+
+```sh
+git checkout develop && git rebase main && git push --force-with-lease origin develop
+```
+
+Rewriting `develop` this way is expected, since it is unreleased and shared by no one else. `main` is only ever fast-forwarded (`--ff-only`), and a rebase is how any branch catches up with it.
 
 ## Before tagging
 
