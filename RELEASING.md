@@ -84,4 +84,6 @@ If the workflow refuses the tag, it only asks the proxy once every other check p
 
 Create it at GitHub → Settings → Developer settings → Fine-grained tokens, then store it with `gh secret set TANGO_WEB_DISPATCH_TOKEN --repo angvp/tango`.
 
+The weekly **Release health** workflow (`scripts/release-health.sh`) also checks that the token can still read `tango-web`'s workflows and that the live site shows the latest release (allowing an hour after a release), so a lapsed token or a stuck deploy shows up as a failed run before a release needs it. It never prints the token or its expiry.
+
 Don't record the token's expiry date anywhere public. GitHub emails the token's owner before it expires: renew it then, and update the secret the same way. If a release's website step fails with an authentication error, the token has expired or been revoked.

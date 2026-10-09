@@ -1,0 +1,24 @@
+# Weekly: did the last release reach the website, and does the token that
+# moves the website still work? A red run here is the early warning, in the
+# same notifications as CI. scripts/release-health.sh has the details; it
+# never prints the token or anything about its expiry.
+name: Release health
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the site and the dispatch token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WEB_TOKEN: ${{ secrets.TANGO_WEB_DISPATCH_TOKEN }}
+        run: scripts/release-health.sh

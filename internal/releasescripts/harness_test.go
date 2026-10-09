@@ -32,8 +32,24 @@ case "$1 $2" in
 	total=$(wc -l < "$d/views")
 	[ "$n" -gt "$total" ] && n=$total
 	sed -n "${n}p" "$d/views" ;;
+"release view") cat "$d/release" ;;
+"workflow list")
+	if [ -f "$d/token_rejected" ]; then echo "HTTP 401: Bad credentials (token-secret-value)" >&2; exit 1; fi
+	echo "Follow a tanGO release	active	1" ;;
 *) echo "unexpected gh call: $*" >&2; exit 2 ;;
 esac
+`
+
+// curlStub is a stand-in `curl` for the live site: the last argument is a URL
+// whose path decides the answer. $STUB_DIR/site is the homepage; any path
+// listed in $STUB_DIR/bad_paths fails as an HTTP error would.
+const curlStub = `#!/bin/sh
+d="$STUB_DIR"
+for url; do :; done
+echo "curl $url" >> "$d/calls"
+path="/${url#*://*/}"
+if [ -f "$d/bad_paths" ] && grep -qx "$path" "$d/bad_paths"; then echo "curl: (22) 503" >&2; exit 22; fi
+if [ "$path" = "/" ]; then cat "$d/site"; else echo "<html>ok</html>"; fi
 `
 
 // scenario is what the stand-in gh answers.
@@ -42,6 +58,9 @@ type scenario struct {
 	after        string   // run ids listed after it ("" means the new run never appears)
 	views        []string // successive "status conclusion" answers for the new run
 	dispatchFail bool
+	// extra holds any other stand-in files: release ("tag published-at"),
+	// site (the homepage), bad_paths, token_rejected.
+	extra map[string]string
 }
 
 // result is one script run.
@@ -75,6 +94,12 @@ func runScript(t *testing.T, script string, sc scenario, env []string, args ...s
 		write("after", sc.after)
 	}
 	write("views", strings.Join(sc.views, "\n")+"\n")
+	for name, content := range sc.extra {
+		write(name, content)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "curl"), []byte(curlStub), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if sc.dispatchFail {
 		write("dispatch_fails", "")
 	}
