@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/angvp/tango/db"
+	"golang.org/x/term"
 )
 
 // HandleCLI scans args for the "tango admin" app-side flags
@@ -129,8 +130,28 @@ func newPassword(stdin io.Reader, stdout io.Writer) (string, error) {
 	return readPassword(stdin, stdout, "New password: ")
 }
 
+// terminalOps is the part of reading a password that needs a real terminal;
+// tests replace it. The defaults are thin wrappers over golang.org/x/term.
+type terminalOps struct {
+	isTerminal   func(fd int) bool
+	readPassword func(fd int) ([]byte, error)
+}
+
+var terminal = terminalOps{isTerminal: term.IsTerminal, readPassword: term.ReadPassword}
+
+// readPassword prompts and reads one line. When stdin is a terminal the typed
+// characters are not echoed; any other stdin (a pipe, a file) is read as a line.
 func readPassword(stdin io.Reader, stdout io.Writer, prompt string) (string, error) {
 	fmt.Fprint(stdout, prompt)
+	if f, ok := stdin.(*os.File); ok && terminal.isTerminal(int(f.Fd())) {
+		password, err := terminal.readPassword(int(f.Fd()))
+		// The Enter key was not echoed, so end the prompt line ourselves.
+		fmt.Fprintln(stdout)
+		if err != nil {
+			return "", err
+		}
+		return string(password), nil
+	}
 	scanner := bufio.NewScanner(stdin)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {

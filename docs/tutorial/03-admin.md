@@ -46,7 +46,7 @@ tango migrate
 tango admin create admin
 ```
 
-It prompts for a password on stdin — never a flag, so it doesn't end up in shell history.
+It prompts for a password on stdin, without showing what you type — never a flag, so it doesn't end up in shell history.
 
 ## Run it
 

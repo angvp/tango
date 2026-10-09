@@ -20,6 +20,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Fixed
 
+- `tango admin create` and `resetpassword` no longer show the password as you type it on a terminal. Piped input is read as before. This adds `golang.org/x/term` to the root module ([ADR 0046](docs/adr/0046-admin-password-prompt-hides-typing-with-x-term.md)).
 - Ctrl-C leaves `tango tui` even while a confirmation is showing; it used to be ignored until you answered.
 - Projects created by `tango newproject` now shut down gracefully: the generated `main.go` calls `tango.ServeContext` under `signal.NotifyContext` for Ctrl-C and `SIGTERM`, so in-flight requests finish and registered `Lifecycle` components stop. It called `tango.Serve`, which never reacts to a signal. Existing applications are unchanged; swap in `ServeContext` as the [application lifecycle guide](docs/guides/application-lifecycle.md) shows.
 - `tango tui` no longer ends the session when an apply or rollback fails. It shows `Last action failed: …` with the exit code and the command's last error line, refreshes the status, and returns to the menu; if the refresh also fails, both errors show.
