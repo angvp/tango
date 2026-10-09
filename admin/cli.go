@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
 
 	"github.com/angvp/tango/db"
@@ -137,7 +138,36 @@ type terminalOps struct {
 	readPassword func(fd int) ([]byte, error)
 }
 
-var terminal = terminalOps{isTerminal: term.IsTerminal, readPassword: term.ReadPassword}
+var terminal = terminalOps{isTerminal: term.IsTerminal, readPassword: readPasswordNoEcho}
+
+// exitInterrupted is the conventional exit status of a process ended by Ctrl-C.
+const exitInterrupted = 130
+
+// readPasswordNoEcho wraps term.ReadPassword. That function keeps Ctrl-C
+// enabled, so an interrupt would end the process before its deferred restore
+// ran and leave the terminal without echo. Catch the interrupt, restore the
+// saved terminal state, then exit as an interrupted process does. It is the
+// platform call and is not covered by tests.
+func readPasswordNoEcho(fd int) ([]byte, error) {
+	saved, err := term.GetState(fd)
+	if err != nil {
+		return nil, err
+	}
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+	done := make(chan struct{})
+	defer func() { signal.Stop(interrupt); close(done) }()
+	go func() {
+		select {
+		case <-interrupt:
+			_ = term.Restore(fd, saved)
+			fmt.Fprintln(os.Stderr)
+			os.Exit(exitInterrupted)
+		case <-done:
+		}
+	}()
+	return term.ReadPassword(fd)
+}
 
 // readPassword prompts and reads one line. When stdin is a terminal the typed
 // characters are not echoed; any other stdin (a pipe, a file) is read as a line.
