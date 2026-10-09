@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -163,5 +164,48 @@ func TestEventLoopSelectingAGreyedItemDoesNothing(t *testing.T) {
 	}
 	if len(runner.commands) != 0 {
 		t.Fatalf("a greyed item ran %v", commandLines(runner))
+	}
+}
+
+func TestEventLoopAFailedActionShowsTheErrorAndReturnsToTheMenu(t *testing.T) {
+	var screen strings.Builder
+	status, err := json.Marshal(pendingStatus())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var commands []string
+	runner := funcRunner(func(args []string, stdout, stderr io.Writer) error {
+		commands = append(commands, strings.Join(args, " "))
+		if isStatusCommand(args) {
+			_, err := stdout.Write(status)
+			return err
+		}
+		fmt.Fprintln(stderr, "migration 0002_add_title: duplicate column")
+		fmt.Fprintln(stderr, "exit status 3")
+		return exitError(t, 3)
+	})
+
+	// Session 1 applies and fails; session 2 must show why, then quits.
+	code := runDashboard(context.Background(), runner, t.TempDir(), &strings.Builder{}, &strings.Builder{}, pendingStatus(), scriptedSessions(&screen, session(keyDown, keyEnter, "y"), session("q")))
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 — the failure must not end the session", code)
+	}
+	if got := strings.Join(commands, "|"); got != "run . -migrate|run . -tango-status" {
+		t.Fatalf("commands = %q, want the apply, then a status refresh", got)
+	}
+	out := screen.String()
+	for _, want := range []string{"Last action failed: Apply pending migrations (exit code 3): migration 0002_add_title: duplicate column", "Run server"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the screen after the failure does not contain %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestAdvanceDashboardClearsTheNoticeAfterASuccessfulAction(t *testing.T) {
+	runner := statusRunner(t, pendingStatus())
+	final := dashboardModel{notice: "Last action failed: earlier", performed: true, confirmed: true, action: menuApplyMigrations}
+	_, notice, done, code := advanceDashboard(context.Background(), runner, t.TempDir(), io.Discard, io.Discard, final)
+	if done || code != 0 || notice != "" {
+		t.Fatalf("done = %v, code = %d, notice = %q; a successful action starts a clean screen", done, code, notice)
 	}
 }

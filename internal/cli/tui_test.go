@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -260,7 +262,7 @@ func TestAdvanceDashboardQuitWithoutPerformingStopsWithoutRunningAnything(t *tes
 	runner := &multiRecordingRunner{}
 
 	final := dashboardModel{performed: false}
-	next, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+	next, _, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
 
 	if !done {
 		t.Fatal("done = false, want true — quitting without a selection must stop the loop")
@@ -286,7 +288,7 @@ func TestAdvanceDashboardRefetchesStatusAfterConfirmedMigrationAction(t *testing
 	runner := &jsonStdoutRunner{payload: encoded}
 
 	final := dashboardModel{performed: true, confirmed: true, action: menuApplyMigrations}
-	next, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+	next, _, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
 
 	if done {
 		t.Fatal("done = true, want false — the dashboard should loop with the refreshed status")
@@ -316,7 +318,7 @@ func TestAdvanceDashboardDoesNotRefetchStatusForRunServer(t *testing.T) {
 	runner := &multiRecordingRunner{}
 
 	final := dashboardModel{performed: true, action: menuRunServer}
-	_, done, _ := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+	_, _, done, _ := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
 
 	if !done {
 		t.Fatal("done = false, want true — run server exits the dashboard loop")
@@ -326,18 +328,19 @@ func TestAdvanceDashboardDoesNotRefetchStatusForRunServer(t *testing.T) {
 	}
 }
 
-func TestAdvanceDashboardStatusRefetchFailurePropagatesError(t *testing.T) {
-	dir := t.TempDir()
-	runner := &jsonStdoutRunner{err: errors.New("go run failed")}
+func TestAdvanceDashboardStatusRefetchFailureAfterASuccessfulActionStopsWithOne(t *testing.T) {
+	runner := funcRunner(func(args []string, stdout, stderr io.Writer) error {
+		if isStatusCommand(args) {
+			return errors.New("go run failed")
+		}
+		return nil
+	})
 
 	final := dashboardModel{performed: true, confirmed: true, action: menuApplyMigrations}
-	_, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+	_, _, done, code := advanceDashboard(context.Background(), runner, t.TempDir(), io.Discard, io.Discard, final)
 
-	if !done {
-		t.Fatal("done = false, want true — a failed status re-fetch must stop the loop")
-	}
-	if code != 1 {
-		t.Fatalf("code = %d, want 1", code)
+	if !done || code != 1 {
+		t.Fatalf("done = %v, code = %d, want true, 1 — nothing failed to show, so a status that cannot load ends the session", done, code)
 	}
 }
 
@@ -351,7 +354,7 @@ func TestAdvanceDashboardDeclinedConfirmationStillRefetchesStatus(t *testing.T) 
 	runner := &jsonStdoutRunner{payload: encoded}
 
 	final := dashboardModel{performed: true, confirmed: false, action: menuApplyMigrations}
-	next, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+	next, _, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
 
 	if done {
 		t.Fatal("done = true, want false — a declined confirmation still loops with a refreshed status attempt")
@@ -369,21 +372,107 @@ func TestAdvanceDashboardDeclinedConfirmationStillRefetchesStatus(t *testing.T) 
 	}
 }
 
-func TestAdvanceDashboardStopsWhenPerformActionFails(t *testing.T) {
-	dir := t.TempDir()
-	runner := &multiRecordingRunner{err: errors.New("migrate failed")}
+// funcRunner runs fn for every command, so a test can fail one command and
+// answer another.
+type funcRunner func(args []string, stdout, stderr io.Writer) error
+
+func (f funcRunner) Run(ctx context.Context, dir string, name string, args []string, stdout io.Writer, stderr io.Writer) error {
+	return f(args, stdout, stderr)
+}
+
+// exitError is the *exec.ExitError a command that exited with code gives.
+func exitError(t *testing.T, code int) error {
+	t.Helper()
+	err := exec.Command("sh", "-c", fmt.Sprintf("exit %d", code)).Run()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("expected an exit error, got %v", err)
+	}
+	return err
+}
+
+func isStatusCommand(args []string) bool { return args[len(args)-1] == "-tango-status" }
+
+func TestAdvanceDashboardKeepsGoingWhenAMigrationActionFails(t *testing.T) {
+	refreshed := tango.ProjectStatus{RegistrationOK: true, DatabaseReachable: true, MigrationsTotal: 1, MigrationsPending: 1}
+	encoded, err := json.Marshal(refreshed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := funcRunner(func(args []string, stdout, stderr io.Writer) error {
+		if isStatusCommand(args) {
+			_, err := stdout.Write(encoded)
+			return err
+		}
+		fmt.Fprintln(stderr, "migration 0002_add_title: duplicate column")
+		fmt.Fprintln(stderr, "exit status 3")
+		return exitError(t, 3)
+	})
 
 	final := dashboardModel{performed: true, confirmed: true, action: menuApplyMigrations}
-	_, done, code := advanceDashboard(context.Background(), runner, dir, io.Discard, io.Discard, final)
+	next, notice, done, code := advanceDashboard(context.Background(), runner, t.TempDir(), io.Discard, io.Discard, final)
 
-	if !done {
-		t.Fatal("done = false, want true — a failed action must stop the loop without re-fetching status")
+	if done || code != 0 {
+		t.Fatalf("done = %v, code = %d; a failed action must return to the menu", done, code)
 	}
-	if code != 1 {
-		t.Fatalf("code = %d, want 1", code)
+	if next != refreshed {
+		t.Fatalf("next = %+v, want the refreshed status %+v", next, refreshed)
 	}
-	if len(runner.commands) != 1 {
-		t.Fatalf("commands = %+v, want exactly 1 (the failed action only, no status re-fetch)", runner.commands)
+	for _, want := range []string{"Last action failed: Apply pending migrations", "exit code 3", "migration 0002_add_title: duplicate column"} {
+		if !strings.Contains(notice, want) {
+			t.Fatalf("notice %q does not contain %q", notice, want)
+		}
+	}
+}
+
+func TestAdvanceDashboardReportsBothErrorsWhenTheRefreshAlsoFails(t *testing.T) {
+	runner := funcRunner(func(args []string, stdout, stderr io.Writer) error {
+		if isStatusCommand(args) {
+			return errors.New("status unavailable")
+		}
+		fmt.Fprintln(stderr, "boom")
+		return errors.New("migrate failed")
+	})
+	old := tango.ProjectStatus{RegistrationOK: true, DatabaseReachable: true, MigrationsApplied: 1}
+
+	final := dashboardModel{status: old, performed: true, confirmed: true, action: menuRollbackLast}
+	next, notice, done, code := advanceDashboard(context.Background(), runner, t.TempDir(), io.Discard, io.Discard, final)
+
+	if done || code != 0 {
+		t.Fatalf("done = %v, code = %d; the dashboard must stay up", done, code)
+	}
+	if next != old {
+		t.Fatalf("next = %+v, want the status from before the action %+v", next, old)
+	}
+	action := strings.Index(notice, "Last action failed: Roll back the latest migration")
+	refresh := strings.Index(notice, "Status refresh also failed: status unavailable")
+	if action < 0 || refresh < 0 || action > refresh {
+		t.Fatalf("notice must give the action error first, then the refresh error:\n%s", notice)
+	}
+}
+
+func TestAdvanceDashboardRunServerFailureStillExitsWithItsCode(t *testing.T) {
+	runner := &multiRecordingRunner{err: errors.New("server failed")}
+	final := dashboardModel{performed: true, action: menuRunServer}
+	_, notice, done, code := advanceDashboard(context.Background(), runner, t.TempDir(), io.Discard, io.Discard, final)
+	if !done || code != 1 || notice != "" {
+		t.Fatalf("done = %v, code = %d, notice = %q; a failing server keeps ending the TUI with its code", done, code, notice)
+	}
+}
+
+func TestLastLineWriterKeepsTheLastNonEmptyLine(t *testing.T) {
+	var out strings.Builder
+	w := &lastLineWriter{w: &out}
+	fmt.Fprint(w, "first\nsecond\n\n")
+	if got := w.last(); got != "second" {
+		t.Fatalf("last() = %q, want second", got)
+	}
+	fmt.Fprint(w, "third, no newline")
+	if got := w.last(); got != "third, no newline" {
+		t.Fatalf("last() = %q, want the unterminated line", got)
+	}
+	if out.String() != "first\nsecond\n\nthird, no newline" {
+		t.Fatalf("output was altered: %q", out.String())
 	}
 }
 
