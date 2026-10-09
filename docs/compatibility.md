@@ -22,7 +22,7 @@ Everything below is covered unless it is named under [what is not covered](#what
   - `-tango-status` prints registration/database/migration status as JSON for `tango tui`; it is read-only and does not create `tango_migrations`.
   - `-migrate` applies pending migrations; `-migrate -down` rolls back the most recently applied one.
   - the `-tango-admin-*` flags (behind `tango admin create`, `resetpassword`, `deactivate`, `grant-staff`, `revoke-staff`, `grant-superuser` and `revoke-superuser`) manage Admin accounts when the admin app is installed.
-- **Environment variables**: `TANGO_DB_DSN` (and its `sqlite://`/`postgres://` grammar), `TANGO_ADDR`, `TANGO_TEST_DSN`, and `TANGO_ADMIN_PASSWORD`.
+- **Environment variables**: `TANGO_DB_DSN` (and its `sqlite://`/`postgres://` grammar), `TANGO_ADDR`, `TANGO_TEST_DSN`, and `TANGO_ADMIN_PASSWORD` (the password for `tango admin create` and `resetpassword`; empty counts as unset).
 - **The `tango:"…"` struct tag grammar** described in [models and tags](guides/models-and-tags.md).
 - **The `tango_migrations` table**: its name and its columns (`app`, `name`, `applied_at`).
 - **The generic View-error response**: a View that returns an error, or panics behind `Recoverer`, answers `500` with the JSON body `{"error": "internal error"}`.

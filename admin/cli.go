@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/angvp/tango/db"
@@ -25,11 +26,14 @@ import (
 // tolerate seeing the other dispatcher's flags. A manual scan lets each
 // dispatcher recognize only its own flags and ignore the rest.
 //
-// create and resetpassword read the new password from stdin rather than a
-// flag value, so it never appears in a shell history or process listing.
+// create and resetpassword take the new password from TANGO_ADMIN_PASSWORD
+// when it is set and non-empty, and otherwise read it from stdin. Neither is a
+// flag value, so it never appears in a shell history or the process arguments.
+// The environment is visible to process-inspection tools, so prefer the
+// deployment platform's secret mechanism for long-lived values.
 func HandleCLI(ctx context.Context, store *db.Store, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, error) {
 	if username, ok := flagValue(args, "-tango-admin-create"); ok {
-		password, err := readPassword(stdin, stdout, "New password: ")
+		password, err := newPassword(stdin, stdout)
 		if err != nil {
 			return true, err
 		}
@@ -47,7 +51,7 @@ func HandleCLI(ctx context.Context, store *db.Store, args []string, stdin io.Rea
 		return true, nil
 	}
 	if username, ok := flagValue(args, "-tango-admin-resetpassword"); ok {
-		password, err := readPassword(stdin, stdout, "New password: ")
+		password, err := newPassword(stdin, stdout)
 		if err != nil {
 			return true, err
 		}
@@ -108,6 +112,21 @@ func flagPresent(args []string, name string) bool {
 		}
 	}
 	return false
+}
+
+// passwordEnvVar names the environment variable that supplies the password for
+// create and resetpassword without a prompt, for CI and containers.
+const passwordEnvVar = "TANGO_ADMIN_PASSWORD"
+
+// newPassword returns the password from TANGO_ADMIN_PASSWORD when it is set
+// and non-empty, and otherwise prompts on stdin. It tells the operator which
+// source it used but never prints the password itself.
+func newPassword(stdin io.Reader, stdout io.Writer) (string, error) {
+	if password := os.Getenv(passwordEnvVar); password != "" {
+		fmt.Fprintf(stdout, "using the password from %s\n", passwordEnvVar)
+		return password, nil
+	}
+	return readPassword(stdin, stdout, "New password: ")
 }
 
 func readPassword(stdin io.Reader, stdout io.Writer, prompt string) (string, error) {

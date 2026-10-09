@@ -114,9 +114,9 @@ func printUsage(w io.Writer) {
   tango tui                Open a status dashboard (falls back to plain text)
   tango shell              Not implemented; Yaegi is the intended direction
   tango admin create <username> [--no-staff] [--no-superuser]
-                                          Create an admin account (password via stdin);
+                                          Create an admin account (password via stdin or TANGO_ADMIN_PASSWORD);
                                           defaults to staff+superuser access
-  tango admin resetpassword <username>   Reset an admin account's password (via stdin)
+  tango admin resetpassword <username>   Reset an admin account's password (stdin or TANGO_ADMIN_PASSWORD)
   tango admin deactivate <username>      Deactivate an admin account
   tango admin grant-staff <username>     Grant staff access (can access the admin panel)
   tango admin revoke-staff <username>    Revoke staff access
