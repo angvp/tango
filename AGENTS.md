@@ -40,6 +40,7 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 - Application lifecycle and graceful shutdown: `docs/agents/application-lifecycle.md`
 - Configuration and deployment: `docs/agents/configuration-and-deployment.md`
 - Testing with `testdb`: `docs/agents/testing.md`
+- The `tango tui` dashboard: `docs/agents/tui.md`
 - Rate limiting: `docs/agents/ratelimit.md`
 - Localization: `docs/agents/i18n.md`
 - Middleware and View wrappers: `docs/agents/middleware.md`

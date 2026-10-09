@@ -24,6 +24,7 @@ Read in this order:
 - Recurring work: `jobs.md`; pair with `application-lifecycle.md` because Jobs run only through `ServeContext`.
 - Startup, addresses, production defaults and containers: `configuration-and-deployment.md`.
 - Tests on both databases: `testing.md`.
+- The `tango tui` dashboard (changing or documenting it): `tui.md`.
 
 Guides without a recipe, read directly when needed:
 

@@ -341,3 +341,17 @@ func TestDashboardViewRendersConfirmationPrompt(t *testing.T) {
 		t.Fatalf("View() does not contain the rollback prompt:\n%s", out)
 	}
 }
+
+func TestDashboardCtrlCLeavesEvenDuringAConfirmation(t *testing.T) {
+	m := dashboardModel{status: readyStatus(), items: menuItems(), confirm: true, action: menuApplyMigrations}
+
+	next, cmd := m.Update(typeKey(tea.KeyCtrlC))
+	got := next.(dashboardModel)
+
+	if !got.quitting || cmd == nil {
+		t.Fatalf("quitting = %v, cmd = %v; Ctrl-C must leave the dashboard", got.quitting, cmd)
+	}
+	if got.performed || got.confirmed {
+		t.Fatalf("performed = %v, confirmed = %v; leaving must not run the pending action", got.performed, got.confirmed)
+	}
+}

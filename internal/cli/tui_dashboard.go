@@ -64,6 +64,9 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "n", "N", "esc":
 			m.confirm = false
 			return m, nil
+		case "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
 		}
 		return m, nil
 	}

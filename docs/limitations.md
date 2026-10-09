@@ -68,10 +68,10 @@ go run gotest.tools/gotestsum@v1.13.0 \
   -- ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 ```
 
-A small set of lines is deliberately never exercised by a unit test, because doing so would need a live Postgres connection or a real interactive terminal rather than a meaningful behavioral test — about 23 statements (~0.7% of the codebase):
+A small set of lines is deliberately never exercised by a unit test, because doing so would need a live Postgres connection or a real interactive terminal rather than a meaningful behavioral test — a handful of statements, well under 1% of the codebase:
 
 - **`db.Store.Create`'s Postgres `RETURNING`-based insert path** (`db/store.go`) — only taken when both `dialect == db.Postgres` and the model needs a backfilled default, and only actually reachable with a live Postgres connection (the SQLite-backed test suite, which is this repo's default, never exercises it). Exercised by a Postgres run of the suite (`TANGO_TEST_DSN=postgres://…`), not by the default in-memory SQLite coverage run.
 - **`cmd/tango`'s entrypoint** (`cmd/tango/main.go`) — a single `os.Exit(cli.Run(...))` line; `cli.Run`'s own dispatch logic is fully covered separately in `internal/cli`.
-- **The real interactive TUI event loop** (`internal/cli/tui_dashboard.go`'s `runDashboard`, backed by `tea.Program.Run()`) and **the real-stdin interactivity check** (`internal/cli/tui.go`'s `isInteractiveTerminal`) — both require an actual terminal/TTY. `tui_dashboard.go`'s own model logic (`Update`/`View`/cursor movement/dashboard state transitions) is fully unit-tested independently of the real event loop that drives it.
+- **The real-terminal check** (`internal/cli/tui.go`'s `isInteractiveTerminal`) — it asks the operating system whether stdin and stdout are a real terminal, which needs an actual TTY. Everything that depends on its answer is tested: `tango tui` takes the check as a parameter, and the dashboard's model, its actions and its whole event loop run under scripted keystrokes (see the [`tango tui` guide](guides/tui.md)).
 
 A further small residual (well under 1% of the codebase) of ordinary, lower-priority gaps — mostly `database/sql` driver-failure branches (`sql.Result.RowsAffected()` erroring, `sql.Rows.Scan()`/`.Columns()` erroring, `tx.Commit()` failing) and a couple of stdlib-guaranteed-safe error checks — was deliberately not chased once the 95% target was met, per this project's own design principle against writing tests for impossible or low-value branches purely to inflate a metric.

@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- A [`tango tui` guide](docs/guides/tui.md), with screens checked against the code by a test, and the promise about the dashboard in [versioning and compatibility](docs/compatibility.md): the command, its terminal requirement, confirmation before database changes and delegation to the supported operations are covered; layout, wording and key bindings are not.
+
 ### Changed
 
 - `tango tui`:
@@ -13,6 +17,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Fixed
 
+- Ctrl-C leaves `tango tui` even while a confirmation is showing; it used to be ignored until you answered.
 - Projects created by `tango newproject` now shut down gracefully: the generated `main.go` calls `tango.ServeContext` under `signal.NotifyContext` for Ctrl-C and `SIGTERM`, so in-flight requests finish and registered `Lifecycle` components stop. It called `tango.Serve`, which never reacts to a signal. Existing applications are unchanged; swap in `ServeContext` as the [application lifecycle guide](docs/guides/application-lifecycle.md) shows.
 - `tango tui` no longer ends the session when an apply or rollback fails. It shows `Last action failed: …` with the exit code and the command's last error line, refreshes the status, and returns to the menu; if the refresh also fails, both errors show.
 - Stopping the server started from `tango tui` with Ctrl-C or `SIGTERM` is a clean stop: tango waits for the server, prints `server stopped` and exits 0. It used to die with the signal. A server that fails, or exits with no signal, keeps its exit code.
