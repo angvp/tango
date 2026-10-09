@@ -51,7 +51,12 @@ func Run(ctx context.Context, s IO, boot Boot, args []string) int {
 	}
 	boot.ReadOnly = boot.ReadOnly || inv.ReadOnly
 
-	session, err := NewSession(s.In, s.Out, s.Err, 0)
+	interactive := !inv.HasEval && isTerminal(s.In) && isTerminal(s.Out)
+	limit := 0
+	if interactive {
+		limit = interactiveLimit
+	}
+	session, err := NewSession(s.In, s.Out, s.Err, limit)
 	if err != nil {
 		fmt.Fprintf(s.Err, "tango shell: %v\n", err)
 		return ExitError
@@ -65,6 +70,10 @@ func Run(ctx context.Context, s IO, boot Boot, args []string) int {
 	}
 	if boot.DatabaseLabel != "" {
 		fmt.Fprintf(s.Err, "database: %s\n", boot.DatabaseLabel)
+	}
+
+	if interactive {
+		return runInteractive(session, s, boot, sortedKeys(boot.Helpers))
 	}
 
 	var input = s.In
