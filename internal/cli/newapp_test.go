@@ -182,6 +182,27 @@ func TestNewAppReportsFailures(t *testing.T) {
 	}
 }
 
+func TestNewAppPointsAtTheProjectPackageWhenThereIsOne(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module shop\n\ngo 1.27\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "project"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "project", "project.go"), []byte("package project\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr strings.Builder
+	if code := Run(context.Background(), []string{"newapp", "greetings"}, dir, &stdout, &stderr, nil); code != 0 {
+		t.Fatalf("exit code = %d: %s", code, stderr.String())
+	}
+	want := `Install it in project/project.go: import "shop/apps/greetings" and add greetings.App{} to config.InstalledApps.`
+	if !strings.Contains(stdout.String(), want+"\n") {
+		t.Fatalf("stdout = %q, want it to contain %q", stdout.String(), want)
+	}
+}
+
 func TestNewAppSaysHowToInstallTheApp(t *testing.T) {
 	tests := []struct {
 		name, goMod, want string

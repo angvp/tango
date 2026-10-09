@@ -56,7 +56,12 @@ func installHint(dir, name string) string {
 	if module := modulePath(dir); module != "" {
 		importPart = fmt.Sprintf("import %q", module+"/apps/"+name)
 	}
-	return fmt.Sprintf("Install it in main.go: %s and add %s.App{} to config.InstalledApps.", importPart, appPackageName(name))
+	// A project scaffolded with a project package lists its apps there.
+	file := "main.go"
+	if _, err := os.Stat(filepath.Join(dir, "project", "project.go")); err == nil {
+		file = "project/project.go"
+	}
+	return fmt.Sprintf("Install it in %s: %s and add %s.App{} to config.InstalledApps.", file, importPart, appPackageName(name))
 }
 
 // modulePath returns the module path dir's go.mod declares, or "" when

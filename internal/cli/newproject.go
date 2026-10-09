@@ -63,6 +63,16 @@ func newProject(ctx context.Context, runner Runner, dir string, args []string, s
 		return 1
 	}
 
+	projectPkg := filepath.Join(projectDir, "project")
+	if err := os.MkdirAll(projectPkg, 0o755); err != nil {
+		fmt.Fprintf(stderr, "tango newproject: %v\n", err)
+		return 1
+	}
+	if err := writeFormattedFile(filepath.Join(projectPkg, "project.go"), renderProjectGo(!*noAdmin)); err != nil {
+		fmt.Fprintf(stderr, "tango newproject: %v\n", err)
+		return 1
+	}
+
 	mainGo := renderNewProjectMain(name, dialect, !*noAdmin)
 	if err := writeFormattedFile(filepath.Join(projectDir, "main.go"), mainGo); err != nil {
 		fmt.Fprintf(stderr, "tango newproject: %v\n", err)
@@ -126,21 +136,9 @@ func renderImports(groups [][]string, blankImport string) string {
 	return b.String()
 }
 
-func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bool) string {
-	stdImports := []string{"context", "database/sql", "fmt", "os", "os/signal", "syscall"}
-	adminURLBlock, adminURLFunc := "", ""
-	tangoImports := []string{"github.com/angvp/tango"}
-	installedApps := "config.InstalledApps = []tango.App{}"
-	storeLine := ""
-	adminCLIBlock := ""
-	if includeAdmin {
-		stdImports = []string{"context", "database/sql", "fmt", "net", "os", "os/signal", "syscall"}
-		tangoImports = append(tangoImports, "github.com/angvp/tango/admin", "github.com/angvp/tango/db")
-		adminURLBlock = `
-	if url := adminURL(config.Addr); url != "" {
-		fmt.Println("admin:", url)
-	}`
-		adminURLFunc = `
+// adminURLFunc is the helper the generated main.go uses to print where the
+// admin can be opened.
+const adminURLFunc = `
 // adminURL is where the admin can be opened from this machine for the listen
 // address addr, or "" when addr is not a host:port.
 func adminURL(addr string) string {
@@ -155,10 +153,73 @@ func adminURL(addr string) string {
 	return "http://" + net.JoinHostPort(host, port) + "/admin/"
 }
 `
-		storeLine = "store := db.NewStore(sqlDB, dsn.Dialect)"
+
+// renderProjectGo renders project/project.go: the application's composition
+// (installed apps, middleware, ordinary configuration), shared by the server
+// in main.go and the shell. It neither loads the .env file nor opens a
+// database, so each process keeps control of its own lifecycle.
+func renderProjectGo(includeAdmin bool) string {
+	tangoImports := []string{"github.com/angvp/tango", "github.com/angvp/tango/db"}
+	installedApps := "config.InstalledApps = []tango.App{}"
+	if includeAdmin {
+		tangoImports = append(tangoImports, "github.com/angvp/tango/admin")
 		installedApps = `config.InstalledApps = []tango.App{
 		admin.New(store),
 	}`
+	}
+	var imports strings.Builder
+	imports.WriteString("import (\n")
+	for _, path := range slices.Sorted(slices.Values(tangoImports)) {
+		imports.WriteString("\t" + strconv.Quote(path) + "\n")
+	}
+	imports.WriteString(")")
+
+	return fmt.Sprintf(`package project
+
+%s
+
+// Config composes the application: its installed apps, middleware and
+// ordinary configuration. The server (main.go) and the shell (shell/main.go)
+// both call it, so they always register the same apps and models. Add each
+// new app to InstalledApps here.
+//
+// Config does not load the .env file or open a database: each process does
+// that itself and passes the store in.
+func Config(store *db.Store) tango.Config {
+	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	%s
+	config.Middleware = []tango.Middleware{
+		tango.RequestID(),
+		tango.Recoverer(),
+		tango.AccessLogger(),
+		// Request bodies are capped at 1 MiB. If this application later needs
+		// large uploads, remove the global body-limit middleware and apply
+		// `+"`MaxBodySize`"+` only to the route groups or routes that should remain
+		// limited.
+		tango.MaxBodySize(1 << 20),
+	}
+	// Global middleware also wraps requests no route matches, so 404s and
+	// 405s are logged and counted too.
+	config.MiddlewareScope = tango.MiddlewareScopeAll
+	return config
+}
+`, imports.String(), installedApps)
+}
+
+func renderNewProjectMain(module string, dialect projectDialect, includeAdmin bool) string {
+	stdImports := []string{"context", "database/sql", "fmt", "os", "os/signal", "syscall"}
+	adminURLBlock, adminURLHelper := "", ""
+	tangoImports := []string{"github.com/angvp/tango", "github.com/angvp/tango/db"}
+	adminCLIBlock := ""
+	if includeAdmin {
+		stdImports = []string{"context", "database/sql", "fmt", "net", "os", "os/signal", "syscall"}
+		tangoImports = append(tangoImports, "github.com/angvp/tango/admin")
+		adminURLBlock = `
+	if url := adminURL(config.Addr); url != "" {
+		fmt.Println("admin:", url)
+	}`
+		adminURLHelper = adminURLFunc
 		adminCLIBlock = `
 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 		return err
@@ -176,7 +237,7 @@ func adminURL(addr string) string {
 	}
 
 	imports := renderImports(
-		[][]string{stdImports, tangoImports, {module + "/migrations"}},
+		[][]string{stdImports, tangoImports, {module + "/migrations", module + "/project"}},
 		dialect.DriverImport,
 	)
 
@@ -207,23 +268,10 @@ func run() error {
 	}
 	defer sqlDB.Close()
 
-	%s
-	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
-	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
-	%s
-	config.Middleware = []tango.Middleware{
-		tango.RequestID(),
-		tango.Recoverer(),
-		tango.AccessLogger(),
-		// Request bodies are capped at 1 MiB. If this application later needs
-		// large uploads, remove the global body-limit middleware and apply
-		// `+"`MaxBodySize`"+` only to the route groups or routes that should remain
-		// limited.
-		tango.MaxBodySize(1 << 20),
-	}
-	// Global middleware also wraps requests no route matches, so 404s and
-	// 405s are logged and counted too.
-	config.MiddlewareScope = tango.MiddlewareScopeAll
+	store := db.NewStore(sqlDB, dsn.Dialect)
+	// The installed apps, middleware and other configuration live in
+	// project/project.go, shared with the shell.
+	config := project.Config(store)
 %s
 	handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)
 	if handled || err != nil {
@@ -238,5 +286,5 @@ func run() error {
 	fmt.Println("listening on", config.Addr)%s
 	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
 }
-%s`, imports, defaultDSNBlock, storeLine, installedApps, adminCLIBlock, adminURLBlock, adminURLFunc)
+%s`, imports, defaultDSNBlock, adminCLIBlock, adminURLBlock, adminURLHelper)
 }

@@ -61,6 +61,7 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		`"github.com/angvp/tango/admin"`,
 		`"github.com/angvp/tango/db"`,
 		`"myapp/migrations"`,
+		`"myapp/project"`,
 		`_ "modernc.org/sqlite"`,
 		`dsn, err := tango.LoadDBConfigFromEnv()`,
 		`sql.Open(dsn.Driver, dsn.Source)`,
@@ -69,33 +70,60 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		`signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)`,
 		`defer stop()`,
 		`tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)`,
-		`admin.New(store)`,
+		`config := project.Config(store)`,
 		`admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)`,
+	} {
+		if !strings.Contains(mainSource, want) {
+			t.Fatalf("main.go does not contain %q:\n%s", want, mainSource)
+		}
+	}
+	// Application composition lives in the project package, not in main.go.
+	for _, gone := range []string{"InstalledApps", "tango.MaxBodySize", "tango.LoadConfigFromEnv"} {
+		if strings.Contains(mainSource, gone) {
+			t.Fatalf("main.go still contains %q, which belongs in project/project.go:\n%s", gone, mainSource)
+		}
+	}
+	projectGo, err := os.ReadFile(filepath.Join(projectDir, "project", "project.go"))
+	if err != nil {
+		t.Fatalf("read project/project.go: %v", err)
+	}
+	projectSource := string(projectGo)
+	for _, want := range []string{
+		`package project`,
+		`func Config(store *db.Store) tango.Config {`,
 		`config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())`,
+		`admin.New(store)`,
 		`tango.MaxBodySize(1 << 20)`,
 		`config.MiddlewareScope = tango.MiddlewareScopeAll`,
 		`tango.RequestID()`,
 		`tango.Recoverer()`,
 		`tango.AccessLogger()`,
 	} {
-		if !strings.Contains(mainSource, want) {
-			t.Fatalf("main.go does not contain %q:\n%s", want, mainSource)
+		if !strings.Contains(projectSource, want) {
+			t.Fatalf("project/project.go does not contain %q:\n%s", want, projectSource)
 		}
 	}
-	if strings.Contains(mainSource, `":8000"`) {
-		t.Fatalf("main.go hardcodes :8000 instead of loading the address from the environment:\n%s", mainSource)
+	// The shared package composes the application; it never loads the
+	// .env file or opens a database (each process does that itself).
+	for _, banned := range []string{"LoadEnvFile", "LoadDBConfigFromEnv", "sql.Open"} {
+		if strings.Contains(projectSource, banned) {
+			t.Fatalf("project/project.go calls %s; main.go and shell/main.go own that:\n%s", banned, projectSource)
+		}
+	}
+	if strings.Contains(projectSource, `":8000"`) {
+		t.Fatalf("project.go hardcodes :8000 instead of loading the address from the environment:\n%s", projectSource)
 	}
 	// The upload comment, read as one sentence across its wrapped lines.
 	const uploadComment = "If this application later needs large uploads, remove the global body-limit middleware and apply `MaxBodySize` only to the route groups or routes that should remain limited."
-	if !strings.Contains(strings.Join(strings.Fields(strings.ReplaceAll(mainSource, "//", "")), " "), uploadComment) {
-		t.Fatalf("main.go does not carry the upload comment %q:\n%s", uploadComment, mainSource)
+	if !strings.Contains(strings.Join(strings.Fields(strings.ReplaceAll(projectSource, "//", "")), " "), uploadComment) {
+		t.Fatalf("project.go does not carry the upload comment %q:\n%s", uploadComment, projectSource)
 	}
 
 	// The generated file is the first code a reader sees, so its imports
 	// form sorted groups, the way goimports leaves them.
 	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"net\"\n\t\"os\"\n\t\"os/signal\"\n\t\"syscall\"\n\n" +
 		"\t\"github.com/angvp/tango\"\n\t\"github.com/angvp/tango/admin\"\n\t\"github.com/angvp/tango/db\"\n\n" +
-		"\t\"myapp/migrations\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
+		"\t\"myapp/migrations\"\n\t\"myapp/project\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
 	if !strings.Contains(mainSource, wantImports) {
 		t.Fatalf("main.go imports are not %q:\n%s", wantImports, mainSource)
 	}
@@ -143,18 +171,23 @@ func TestNewProjectNoAdminSkipsCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read main.go: %v", err)
 	}
-	if strings.Contains(string(mainGo), "admin.New") {
-		t.Fatalf("main.go contains admin wiring with --no-admin:\n%s", mainGo)
+	projectGo, err := os.ReadFile(filepath.Join(projectDir, "project", "project.go"))
+	if err != nil {
+		t.Fatalf("read project/project.go: %v", err)
 	}
-	// Without the admin app nothing uses a db.Store, so importing the db
-	// package would leave the generated project failing to compile.
-	if strings.Contains(string(mainGo), `"github.com/angvp/tango/db"`) {
-		t.Fatalf("main.go imports the unused db package with --no-admin:\n%s", mainGo)
+	if strings.Contains(string(mainGo), "admin.") || strings.Contains(string(projectGo), "admin.") {
+		t.Fatalf("generated code contains admin wiring with --no-admin:\n%s\n%s", mainGo, projectGo)
+	}
+	// The shared Config takes the store even without the admin app, so the
+	// shell can call it the same way in every project.
+	if !strings.Contains(string(projectGo), "func Config(store *db.Store) tango.Config {") ||
+		!strings.Contains(string(mainGo), "config := project.Config(store)") {
+		t.Fatalf("--no-admin project does not share Config(store):\n%s\n%s", mainGo, projectGo)
 	}
 	if !strings.Contains(string(mainGo), "tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)") {
 		t.Fatalf("main.go does not serve with the dialect from TANGO_DB_DSN:\n%s", mainGo)
 	}
-	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\t\"os/signal\"\n\t\"syscall\"\n\n\t\"github.com/angvp/tango\"\n\n\t\"myapp/migrations\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
+	wantImports := "import (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\t\"os\"\n\t\"os/signal\"\n\t\"syscall\"\n\n\t\"github.com/angvp/tango\"\n\t\"github.com/angvp/tango/db\"\n\n\t\"myapp/migrations\"\n\t\"myapp/project\"\n\n\t_ \"modernc.org/sqlite\"\n)\n"
 	if !strings.Contains(string(mainGo), wantImports) {
 		t.Fatalf("main.go imports are not %q:\n%s", wantImports, mainGo)
 	}
