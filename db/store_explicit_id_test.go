@@ -128,3 +128,44 @@ func TestConcurrentCreatesGetDistinctIDsAlongsideAnExplicitID(t *testing.T) {
 		t.Fatalf("ID after explicit 1000 = %d, want > 1000", after.ID)
 	}
 }
+
+func TestCreateWithATakenExplicitIDFailsAndLaterCreatesStillWork(t *testing.T) {
+	ctx := context.Background()
+	sqlDB, dialect, registry := openTables(t, Ticket{})
+	meta, _ := registry.Get("Ticket")
+	store := db.NewStore(sqlDB, dialect)
+
+	if err := store.Create(ctx, meta, &Ticket{ID: 50, Title: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Create(ctx, meta, &Ticket{ID: 50, Title: "second"}); err == nil {
+		t.Fatal("Create with a taken explicit ID succeeded")
+	}
+	var count int
+	if err := sqlDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM Ticket").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("rows after the failed Create = %d (%v), want 1", count, err)
+	}
+	auto := Ticket{Title: "auto"}
+	if err := store.Create(ctx, meta, &auto); err != nil {
+		t.Fatalf("Create after the failure: %v", err)
+	}
+	if auto.ID <= 50 {
+		t.Fatalf("auto ID = %d, want > 50", auto.ID)
+	}
+}
+
+func TestCreateWithAnExplicitIDHonoursACancelledContext(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, Ticket{})
+	meta, _ := registry.Get("Ticket")
+	store := db.NewStore(sqlDB, dialect)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := store.Create(ctx, meta, &Ticket{ID: 9, Title: "never"}); err == nil {
+		t.Fatal("Create on a cancelled context succeeded")
+	}
+	var count int
+	if err := sqlDB.QueryRow("SELECT COUNT(*) FROM Ticket").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("rows = %d (%v), want 0", count, err)
+	}
+}

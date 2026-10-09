@@ -1,6 +1,7 @@
 package db
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
@@ -172,5 +173,38 @@ func TestFindFieldByColumnSkipsUnexportedFieldsThenMatchesNextExported(t *testin
 	}
 	if !got.CanSet() {
 		t.Fatal("findFieldByColumn returned a field that cannot be set")
+	}
+}
+
+func TestExplicitIntegerIDReadsOnlyKeysASequenceCanAdvanceTo(t *testing.T) {
+	var (
+		text   = "7"
+		number = 7
+	)
+	tests := []struct {
+		name   string
+		value  reflect.Value
+		want   int64
+		wantOK bool
+	}{
+		{"int", reflect.ValueOf(7), 7, true},
+		{"int8", reflect.ValueOf(int8(-8)), -8, true},
+		{"int64", reflect.ValueOf(int64(math.MaxInt64)), math.MaxInt64, true},
+		{"uint8", reflect.ValueOf(uint8(200)), 200, true},
+		{"uint64 within a BIGINT", reflect.ValueOf(uint64(math.MaxInt64)), math.MaxInt64, true},
+		{"uint64 past a BIGINT", reflect.ValueOf(uint64(math.MaxInt64) + 1), 0, false},
+		{"string", reflect.ValueOf("7"), 0, false},
+		{"float", reflect.ValueOf(7.0), 0, false},
+		{"pointer", reflect.ValueOf(&number), 0, false},
+		{"pointer to string", reflect.ValueOf(&text), 0, false},
+		{"no value", reflect.Value{}, 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := explicitIntegerID(tt.value)
+			if got != tt.want || ok != tt.wantOK {
+				t.Errorf("explicitIntegerID = %d, %v; want %d, %v", got, ok, tt.want, tt.wantOK)
+			}
+		})
 	}
 }
