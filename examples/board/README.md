@@ -11,6 +11,7 @@ echo "BOARD_JWT_SECRET=$(openssl rand -hex 32)" >> .env
 go run . -migrate
 go run . -tango-admin-create=admin
 go run .
+go run ./shell -c 'Models()'
 go test ./...
 ```
 

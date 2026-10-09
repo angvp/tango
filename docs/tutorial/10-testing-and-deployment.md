@@ -4,14 +4,26 @@ Continuing from [part 9](09-jobs-logging-and-shutdown.md), this last part makes 
 
 ## One config for the app and its tests
 
-Tests should exercise the same app `main` runs — same apps, same order, same middleware — not a hand-assembled lookalike. Pull the config out of `run()` into a function both can call:
+Tests should exercise the same app `main` runs — same apps, same order, same middleware — not a hand-assembled lookalike. `tango newproject` already gave you the function for that, `project.Config`, which `main.go`, `shell/main.go` and your tests all call. The board's, in full:
 
 ```go
-// main.go
-// appConfig is the whole application: which apps are installed, in which
-// order, and the middleware around every request. The tests build the
-// exact same config.
-func appConfig(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.Config {
+// project/project.go
+// Config composes the application: its installed apps, middleware and
+// ordinary configuration. It does not load the .env file or open a database:
+// each process does that itself and passes the store in.
+func Config(store *db.Store) tango.Config {
+	// Config has no error to return, so a missing secret or a feed that
+	// cannot start stops the process here, with the message, before
+	// anything is served or opened.
+	tokens, err := newTokenService()
+	if err != nil {
+		log.Fatal(err)
+	}
+	feed, err := live.NewFeed()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv()) // TANGO_ADDR, else PORT, else :8000
 	config.InstalledApps = []tango.App{
 		accounts.New(store),
@@ -33,11 +45,11 @@ func appConfig(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.Conf
 }
 ```
 
-In `run()`, the config lines become one: `config := appConfig(store, tokens, feed)`.
+`main.go` calls it with the store it opened (`config := project.Config(store)`), and so do the tests, so a new app you add to `InstalledApps` is in all three at once.
 
 ## Tests that drive the real app
 
-Everything a test needs is a fresh database and the app's `http.Handler`. `main_test.go` builds both: a database from `testdb.Open`, with every migration applied, and the app compiled from `appConfig` exactly the way `ServeContext` does it:
+Everything a test needs is a fresh database and the app's `http.Handler`. `main_test.go` builds both: a database from `testdb.Open`, with every migration applied, and the app compiled from `project.Config` exactly the way `ServeContext` does it:
 
 ```go
 // main_test.go
@@ -61,8 +73,8 @@ import (
 	"github.com/angvp/tango/migration"
 	"github.com/angvp/tango/testdb"
 
-	"board/apps/live"
 	"board/migrations"
+	"board/project"
 )
 
 // testApp is the real application — same apps, routes, and middleware as
@@ -83,16 +95,9 @@ func newTestApp(t *testing.T) *testApp {
 	}
 
 	store := db.NewStore(sqlDB, dialect)
-	tokens, err := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", jwt.MinimumSecretBytes))}, nil, "board", "board-api")
-	if err != nil {
-		t.Fatal(err)
-	}
-	feed, err := live.NewFeed()
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Setenv("BOARD_JWT_SECRET", strings.Repeat("s", jwt.MinimumSecretBytes))
 
-	registry, err := tango.BuildRegistry(appConfig(store, tokens, feed))
+	registry, err := tango.BuildRegistry(project.Config(store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +152,7 @@ func (a *testApp) token(t *testing.T, email, password string) string {
 }
 ```
 
-`httptest.NewRecorder` captures a response without opening a network socket, so requests go straight through tanGO's routing, middleware, and views in microseconds. `testdb.Open` gives each test its own empty database — in-memory SQLite by default — and cleans it up when the test ends, so tests never see each other's data and can run in any order.
+The tests set `BOARD_JWT_SECRET` themselves, so they need no `.env` file. `httptest.NewRecorder` captures a response without opening a network socket, so requests go straight through tanGO's routing, middleware, and views in microseconds. `testdb.Open` gives each test its own empty database — in-memory SQLite by default — and cleans it up when the test ends, so tests never see each other's data and can run in any order.
 
 Now the tests themselves. Each one pins down a behavior from an earlier part — the kind of thing that's easy to break with an innocent-looking refactor:
 
@@ -155,9 +160,7 @@ Now the tests themselves. Each one pins down a behavior from an earlier part —
 // main_test.go
 func TestAppPassesChecks(t *testing.T) {
 	app := newTestApp(t)
-	tokens, _ := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", 32))}, nil, "board", "board-api")
-	feed, _ := live.NewFeed()
-	if err := tango.Check(appConfig(app.store, tokens, feed)); err != nil {
+	if err := tango.Check(project.Config(app.store)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -305,7 +308,7 @@ store := db.NewStore(sqlDB, dsn.Dialect)
 
 and `dsn.Dialect` is what you've been passing to `tango.DispatchFlags` and `tango.ServeContext` all along. The DSN's scheme picks the database: `sqlite://app.db` (the default) is a file in the working directory, `sqlite:///var/data/app.db` an absolute path, and `postgres://…` a PostgreSQL server. `tango.LoadDBConfigFromEnv` hands back a `db.DSN` holding the matching `Dialect`, the `Driver` name for `sql.Open`, and the `Source` string the driver expects, with SQLite's foreign key enforcement already switched on. A DSN without a scheme, such as a bare `app.db`, is an error.
 
-The Postgres driver needs one more import in `main.go`, next to the SQLite one:
+The Postgres driver needs one more import in `main.go` (and in `shell/main.go`, so `tango shell` can open the same database), next to the SQLite one:
 
 ```go
 // main.go
@@ -400,6 +403,6 @@ Over ten parts, the board grew from an empty directory into a complete applicati
 - A scheduled cleanup job, structured logs, and graceful shutdown (part 9)
 - Tests through the real app, and a 28 MB container image that runs on SQLite or Postgres (part 10)
 
-Nothing happened by magic along the way. Every app is listed in `main.go`, every route is declared where its app registers, every table came from a migration you generated and read, and every setting comes from the environment. That explicitness is what tanGO is for.
+Nothing happened by magic along the way. Every app is listed in `project/project.go`, every route is declared where its app registers, every table came from a migration you generated and read, and every setting comes from the environment. That explicitness is what tanGO is for.
 
 From here, the [guides](../guides/) go deeper on each topic, the [API reference](../reference.md) lists everything tanGO offers, and [application architecture](../guides/application-architecture.md) covers how to grow an app like this one as it gets bigger.

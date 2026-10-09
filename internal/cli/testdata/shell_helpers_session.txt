@@ -1,0 +1,7 @@
+# What the helpers registered by testdata/shell_helpers_snippet.txt do at the
+# prompt. Same format as shell_session.txt, but the printed lines are
+# everything the shell printed for the line, errors included.
+> project.Greeting("shell")
+"hello, shell"
+> project.Fail()
+error: reindex failed

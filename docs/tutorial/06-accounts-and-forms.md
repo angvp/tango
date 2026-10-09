@@ -4,10 +4,10 @@ Continuing from [part 5](05-html-pages.md), this part lets people sign up, log i
 
 ## Install `accounts`
 
-`accounts` is an optional app that ships with tanGO: email-and-password sign-up, login, and logout pages, with sessions stored in the database. Install it in `main.go`, before `web` (which will look up its model):
+`accounts` is an optional app that ships with tanGO: email-and-password sign-up, login, and logout pages, with sessions stored in the database. Install it in `project/project.go`, before `web` (which will look up its model):
 
 ```go
-// main.go (as of part 6)
+// project/project.go (as of part 6)
 InstalledApps: []tango.App{
 	posts.New(store),
 	accounts.New(store),

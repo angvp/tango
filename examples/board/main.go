@@ -11,17 +11,11 @@ import (
 	"time"
 
 	"github.com/angvp/tango"
-	"github.com/angvp/tango/accounts"
 	"github.com/angvp/tango/admin"
-	"github.com/angvp/tango/auth/jwt"
 	"github.com/angvp/tango/db"
 
-	"board/apps/api"
-	"board/apps/housekeeping"
-	"board/apps/live"
-	"board/apps/posts"
-	"board/apps/web"
 	"board/migrations"
+	"board/project"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
@@ -56,16 +50,7 @@ func run() error {
 	defer sqlDB.Close()
 
 	store := db.NewStore(sqlDB, dsn.Dialect)
-	tokens, err := newTokenService()
-	if err != nil {
-		return err
-	}
-	feed, err := live.NewFeed()
-	if err != nil {
-		return err
-	}
-
-	config := appConfig(store, tokens, feed)
+	config := project.Config(store)
 
 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 		return err
@@ -88,43 +73,4 @@ func run() error {
 	)
 	logger.Info("stopped", "clean", err == nil)
 	return err
-}
-
-// newTokenService builds the API's token issuer from BOARD_JWT_SECRET.
-func newTokenService() (*jwt.Service, error) {
-	secret := os.Getenv("BOARD_JWT_SECRET")
-	if len(secret) < jwt.MinimumSecretBytes {
-		return nil, fmt.Errorf("BOARD_JWT_SECRET must be set to a random value of at least %d bytes", jwt.MinimumSecretBytes)
-	}
-	return jwt.NewService(
-		jwt.Key{ID: "board-1", Secret: []byte(secret)},
-		nil,
-		"board",     // issuer
-		"board-api", // audience
-		jwt.WithMaxTTL(time.Hour),
-	)
-}
-
-// appConfig is the whole application: which apps are installed, in which
-// order, and the middleware around every request. The tests build the
-// exact same config.
-func appConfig(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.Config {
-	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv()) // TANGO_ADDR, else PORT, else :8000
-	config.InstalledApps = []tango.App{
-		accounts.New(store),
-		posts.New(store, tokens, feed),
-		api.New(store, tokens),
-		web.New(store, feed),
-		feed.App(),
-		housekeeping.New(store),
-		admin.New(store),
-	}
-	config.Middleware = []tango.Middleware{
-		tango.RequestID(),
-		tango.Recoverer(),
-		tango.AccessLogger(),
-		tango.MaxBodySize(1 << 20),
-	}
-	config.MiddlewareScope = tango.MiddlewareScopeAll
-	return config
 }

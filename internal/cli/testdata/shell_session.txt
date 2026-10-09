@@ -4,16 +4,16 @@
 # are comments.
 > Models()
 ["admin.AdminSession" "admin.AdminUser" "posts.Post"]
-> Create("posts.Post", map[string]any{"Title": "Hello", "Published": true})
-map[ID:1 Published:true Title:"Hello"]
-> Create("posts.Post", map[string]any{"Title": "Draft"})
-map[ID:2 Published:false Title:"Draft"]
+> Create("posts.Post", map[string]any{"Title": "Hello", "Body": "From the shell"})
+map[Body:"From the shell" ID:1 Title:"Hello"]
+> Create("posts.Post", map[string]any{"Title": "Draft", "Body": "Not ready"})
+map[Body:"Not ready" ID:2 Title:"Draft"]
 > Count("posts.Post")
 2
-> List("posts.Post", map[string]any{"where": map[string]any{"Published": true}, "order": []string{"-ID"}, "limit": 10})
-map[ID:1 Published:true Title:"Hello"]
+> List("posts.Post", map[string]any{"where": map[string]any{"Title": "Hello"}, "order": []string{"-ID"}, "limit": 10})
+map[Body:"From the shell" ID:1 Title:"Hello"]
 > Update("posts.Post", 2, map[string]any{"Title": "Draft, revised"})
-map[ID:2 Published:false Title:"Draft, revised"]
+map[Body:"Not ready" ID:2 Title:"Draft, revised"]
 > rows, err := List("posts.Post")
 > len(rows)
 2

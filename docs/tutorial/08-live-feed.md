@@ -129,13 +129,13 @@ By default the WebSocket view only accepts connections from pages served by the 
 
 ## Wire it up
 
-The feed is created in `main.go` and handed to the apps that publish, the same way the store and token service are:
+The feed is created in `project.Config` and handed to the apps that publish, the same way the store and token service are:
 
 ```go
-// main.go (as of part 8)
+// project/project.go (as of part 8)
 feed, err := live.NewFeed()
 if err != nil {
-	return err
+	log.Fatal(err)
 }
 
 config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())

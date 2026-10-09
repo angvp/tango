@@ -18,13 +18,15 @@ Default to Small (`models.go`/`views.go`/`urls.go`/`admin.go` at app root) unles
 
 - Put local app code under a normal Go package inside the host module, for example `apps/posts/`.
 - Give each app an explicit constructor or value returning `tango.App`.
-- Register the app from `main.go` through `tango.Config.InstalledApps`.
+- Register the app through `tango.Config.InstalledApps`, in `project/project.go` for a project from `tango newproject` (its `main.go` and `shell/main.go` both call `project.Config(store)`; a hand-written project such as `examples/api-with-admin/` lists apps in `main.go`).
 - Keep DB setup in the host project and pass shared dependencies, such as `*db.Store`, into apps that need them.
 
 Tiny shape:
 
 ```text
 main.go
+project/project.go
+shell/main.go
 apps/<name>/app.go
 apps/<name>/models.go
 apps/<name>/views.go

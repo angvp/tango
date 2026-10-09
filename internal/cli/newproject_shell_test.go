@@ -41,9 +41,9 @@ const postsApp = `package posts
 import "github.com/angvp/tango"
 
 type Post struct {
-	ID        int64 ` + "`tango:\"pk\"`" + `
-	Title     string
-	Published bool
+	ID    int64 ` + "`tango:\"pk\"`" + `
+	Title string
+	Body  string
 }
 
 var App = tango.NewApp("posts", func(r *tango.Registry) error {
@@ -244,20 +244,57 @@ func TestShellHelpersRegisteredInTheProjectsShellMain(t *testing.T) {
 	}
 	t.Setenv("TANGO_DB_DSN", "sqlite://"+filepath.Join(t.TempDir(), "app.db"))
 
-	shell := func(script string) (code int, out, errOut string) {
+	run := func(args ...string) (code int, out, errOut string) {
 		var o, e bytes.Buffer
-		code = Run(context.Background(), []string{"shell", "-c", script}, project, &o, &e, ExecRunner{})
+		code = Run(context.Background(), append([]string{"shell"}, args...), project, &o, &e, ExecRunner{})
 		return code, o.String(), e.String()
 	}
-	if code, out, errOut := shell(`project.Greeting("shell")`); code != 0 || out != "\"hello, shell\"\n" {
-		t.Fatalf("Greeting: code=%d out=%q err=%q", code, out, errOut)
+	for _, pair := range loadTranscript(t, "shell_helpers_session.txt") {
+		code, out, errOut := run("-c", pair.input)
+		var shown []string
+		for _, line := range strings.Split(strings.TrimRight(out+errOut, "\n"), "\n") {
+			if !strings.HasPrefix(line, "database: ") {
+				shown = append(shown, line)
+			}
+		}
+		if got := strings.Join(shown, "\n"); got != pair.output {
+			t.Errorf("%s printed %q, want %q", pair.input, got, pair.output)
+		}
+		if failed := strings.HasPrefix(pair.output, "error: "); failed != (code != 0) {
+			t.Errorf("%s: exit code %d, but the expected output is an error: %v", pair.input, code, failed)
+		}
 	}
-	if code, out, errOut := shell(`project.Fail()`); code != 1 || out != "" || !strings.Contains(errOut, "error: reindex failed") {
-		t.Fatalf("Fail: code=%d out=%q err=%q", code, out, errOut)
-	}
-	if code, out, _ := shell(`help()`); code != 0 || !strings.Contains(out, "project.Fail\n  project.Greeting\n") {
+	if code, out, _ := run("-c", "help()"); code != 0 || !strings.Contains(out, "project.Fail\n  project.Greeting\n") {
 		t.Fatalf("help: code=%d out=%q, want the helper names", code, out)
 	}
+}
+
+// transcriptPair is one typed line and everything the shell printed for it.
+type transcriptPair struct{ input, output string }
+
+// loadTranscript reads a testdata session file ("> " lines are typed, the
+// lines after one are printed) as typed/printed pairs.
+func loadTranscript(t *testing.T, name string) []transcriptPair {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pairs []transcriptPair
+	for _, line := range strings.Split(strings.TrimRight(string(content), "\n"), "\n") {
+		switch {
+		case strings.HasPrefix(line, "#"):
+		case strings.HasPrefix(line, "> "):
+			pairs = append(pairs, transcriptPair{input: strings.TrimPrefix(line, "> ")})
+		case len(pairs) > 0:
+			last := &pairs[len(pairs)-1]
+			if last.output != "" {
+				last.output += "\n"
+			}
+			last.output += line
+		}
+	}
+	return pairs
 }
 
 // buildShell builds the project's shell program and returns the binary.

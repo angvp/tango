@@ -1,6 +1,6 @@
 # API reference
 
-The supported public surface: the root package, `model`, `db`, `auth`, `accounts`, `i18n`, and `admin` in full; `migration` primarily through its CLI workflow. Anything not listed here that happens to be exported should be treated as an implementation detail that may change without notice. Generated package documentation (`go doc ./...` locally, or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published) complements this page with full doc comments, but this page is the map of what's actually meant for you to use.
+The supported public surface: the root package, `model`, `db`, `auth`, `accounts`, `i18n`, and `admin` in full; `migration` primarily through its CLI workflow, and `shell` for `tango shell`. Anything not listed here that happens to be exported should be treated as an implementation detail that may change without notice. Generated package documentation (`go doc ./...` locally, or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published) complements this page with full doc comments, but this page is the map of what's actually meant for you to use.
 
 For coding-agent-oriented recipes, see the root `AGENTS.md` and `docs/agents/`. Those files are compact task checklists and pointers to canonical examples, not a separate API surface.
 
@@ -265,6 +265,17 @@ CLI-internal exported surface. It is [not covered](compatibility.md#what-is-not-
 | `func Replay(...)`, `type SchemaState`, `type TableState`, `type ColumnState` | Schema reconstruction for `tango makemigrations`. |
 | `func Diff(...)`, `func DiffModels(..., renames ...Rename)`, `type Rename`, `ErrUnsupportedChange`, `ErrInvalidRename` | Diff engine behind `tango makemigrations`. A `Rename` is one `--rename` mapping (`Column` empty for a model); `ErrUnsupportedChange` names every change no step can express (a non-widening type change, a primary-key or foreign-key-target change, a default that can't convert), `ErrInvalidRename` every mapping that doesn't fit history and the models. Either way no migrations are returned. |
 | `func ApplyStep(...)` | Shared DDL translator used by migration runners and tests; use `tango migrate` / `ApplyPending` instead. |
+
+## `shell` (`github.com/angvp/tango/shell`)
+
+The console behind `tango shell`. A project's `shell/main.go` calls `Run`; everything else in the package is internal. Importing it links the Yaegi interpreter, so a server's `main` package should not.
+
+| Symbol | What it's for | See also |
+|---|---|---|
+| `func Run(ctx context.Context, config tango.Config, store *db.Store, args []string, opts Options) int` | Registers `config`'s apps against `store` without serving anything, then runs a shell session for `args` (`os.Args[1:]`) and returns the process exit code: `0` for a clean end or `--help`, `1` for the first error of a non-interactive session or a project that fails to boot, `2` for a command line it does not understand, `130` when Ctrl-C ends a running evaluation. Accepts `-c EXPR`, `--readonly` and `--help`. | [shell guide](guides/shell.md) |
+| `type Options struct{ ReadOnly bool; Helpers map[string]any; DatabaseLabel string }` | `ReadOnly` makes every helper that writes fail (as does `--readonly`). `Helpers` are the project's own functions, called in the session as `project.Name`; each name must be an exported Go identifier, and only plain values (primitives, maps, slices, `error`) are supported across the boundary. `DatabaseLabel` is display-only text shown at startup, which the project derives from its database configuration after removing every credential; it is never a DSN. | [shell guide](guides/shell.md#your-own-helpers) |
+
+Inside a session the helpers are `Models`, `Describe`, `Get`, `List`, `Count`, `Create`, `Update`, `Delete` and `Context`, plus `help()`, `exit()` and `quit()`; the [shell guide](guides/shell.md#the-helpers) lists their arguments.
 
 ## `testdb` (`github.com/angvp/tango/testdb`)
 

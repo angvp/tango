@@ -9,7 +9,7 @@ tango newproject board
 cd board
 ```
 
-This creates a new Go module (`board`) with a `main.go` pre-wired for SQLite and the admin app. Admin accounts live in the database rather than a generated file — you'll create one with `tango admin create` in part 3, once the admin's own tables exist. The generated `main.go` stays small: it opens the database, builds `Config`, calls `tango.DispatchFlags`, then calls `tango.ServeContext` under a context that Ctrl-C or `SIGTERM` cancels, so the server stops gracefully. Confirm it runs:
+This creates a new Go module (`board`) pre-wired for SQLite and the admin app: a `main.go`, a `project` package whose `Config` lists the installed apps and the middleware, and a `shell` program that `tango shell` runs (part 3 uses it). Admin accounts live in the database rather than a generated file — you'll create one with `tango admin create` in part 3, once the admin's own tables exist. The generated `main.go` stays small: it opens the database, builds the config with `project.Config`, calls `tango.DispatchFlags`, then calls `tango.ServeContext` under a context that Ctrl-C or `SIGTERM` cancels, so the server stops gracefully. Confirm it runs:
 
 ```sh
 go run . -check
@@ -33,10 +33,10 @@ Scaffold one:
 tango newapp posts
 ```
 
-This writes `apps/posts/app.go` with a stub `Name()`/`Register()`, and prints the line to add to `main.go`. It does **not** edit `main.go` for you — wiring a new app in is always one line you write yourself, so nothing about your project's composition is hidden:
+This writes `apps/posts/app.go` with a stub `Name()`/`Register()`, and prints the line to add to `project/project.go`. It does **not** edit `project/project.go` for you — wiring a new app in is always one line you write yourself, so nothing about your project's composition is hidden:
 
 ```go
-// main.go (as of part 1)
+// project/project.go (as of part 1)
 config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
 config.InstalledApps = []tango.App{
 	posts.App{},
@@ -44,7 +44,7 @@ config.InstalledApps = []tango.App{
 }
 ```
 
-The generated `main.go` reads the listen address from the environment: `TANGO_ADDR`, else the `PORT` a hosting platform sets, else `:8000`. It also sets up some middleware, which part 9 explains.
+The generated `project/project.go` reads the listen address from the environment: `TANGO_ADDR`, else the `PORT` a hosting platform sets, else `:8000`. It also sets up some middleware, which part 9 explains.
 
 (add the import for `"board/apps/posts"` alongside it.)
 

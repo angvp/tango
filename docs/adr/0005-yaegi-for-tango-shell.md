@@ -45,3 +45,5 @@ A bounded spike checked whether Yaegi works on the Go and tanGO this project is 
 2. Typed access with generated, regenerated symbol tables, or map rows with helper functions tanGO ships and keeps stable.
 3. Which Yaegi version to depend on, given a release that predates Go 1.27 and a master that fixes only some of the gaps above, and what to tell users about the Go it cannot interpret.
 4. How panics and unsupported expressions are reported without ending the session.
+
+**Built.** [ADR 0048](0048-tango-shell-is-the-projects-own-program-on-a-pinned-yaegi.md) records how the shell was built on this direction.

@@ -41,6 +41,7 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 - Configuration and deployment: `docs/agents/configuration-and-deployment.md`
 - Testing with `testdb`: `docs/agents/testing.md`
 - The `tango tui` dashboard: `docs/agents/tui.md`
+- The `tango shell` console (inspect or fix data, project helpers): `docs/agents/shell.md`
 - Running more than one instance: `docs/agents/running-more-than-one-instance.md`
 - Rate limiting: `docs/agents/ratelimit.md`
 - Localization: `docs/agents/i18n.md`

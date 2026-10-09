@@ -11,10 +11,10 @@ tango newapp web
 mkdir -p apps/web/templates apps/web/static
 ```
 
-Install it in `main.go` after `posts` — order matters, because `web` looks up models that `posts` registers:
+Install it in `project/project.go` after `posts` — order matters, because `web` looks up models that `posts` registers:
 
 ```go
-// main.go (as of part 5)
+// project/project.go (as of part 5)
 InstalledApps: []tango.App{
 	posts.New(store),
 	web.New(store),

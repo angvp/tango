@@ -15,7 +15,7 @@ tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics
 - A minimal `db.Store` for CRUD and raw SQL against SQLite or PostgreSQL, with **minimal ORM foundations**: foreign key fields, two-layer validation, and cascade delete — see [relationships and admin foreign keys](docs/guides/relationships-and-admin-foreign-keys.md).
 - Generated, typed Go migrations (`tango makemigrations`/`migrate`/`migrate down`) — no separate schema DSL.
 - A server-rendered HTML admin (list/create/edit/delete, pagination, sorting, search) behind a session-cookie login, with CSRF protection and rate-limited login attempts — accounts are managed via `tango admin create/resetpassword/deactivate`.
-- A CLI (`tango run`/`check`/`makemigrations`/`migrate`/`newproject`/`newapp`/`tui`/`admin`) that wraps ordinary `go build`/`go run` rather than replacing them.
+- A CLI (`tango run`/`check`/`makemigrations`/`migrate`/`newproject`/`newapp`/`tui`/`shell`/`admin`) that wraps ordinary `go build`/`go run` rather than replacing them.
 
 ## Principles
 
@@ -54,7 +54,7 @@ cd shop
 go run .
 ```
 
-`tango newproject` scaffolds a `go.mod` and a `main.go` pre-wired for SQLite and the admin app, which runs unchanged; run `tango makemigrations`, `tango migrate` and `tango admin create <username>` to create your first admin account, then open `/admin/` (the project prints its address when it starts). `tango newapp greetings` then scaffolds an app stub and prints the line that installs it: adding it to `main.go`'s `InstalledApps` is one line you write yourself — tanGO never edits your `main.go` for you.
+`tango newproject` scaffolds a `go.mod`, a `main.go` pre-wired for SQLite and the admin app, a `project` package where your apps are listed, and a `shell` program for `tango shell`, and it runs unchanged; run `tango makemigrations`, `tango migrate` and `tango admin create <username>` to create your first admin account, then open `/admin/` (the project prints its address when it starts). `tango newapp greetings` then scaffolds an app stub and prints the line that installs it: adding it to `InstalledApps` in `project/project.go` is one line you write yourself — tanGO never edits your code for you. `tango shell` then opens a Go prompt on your models and database for looking at, or fixing, a few rows.
 
 `examples/jsonapi`'s app registers one named route:
 

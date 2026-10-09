@@ -67,10 +67,10 @@ A `tango.Job` is a name, an interval, and a function. tanGO runs it on a ticker 
 
 `pruneSessions` deletes a bounded batch per run with the same typed `List` and `Delete` you've used all along, so it works unchanged on SQLite and Postgres. If a run returns an error or panics, tanGO logs it (as a `tango.scheduler.job_failed` event) and the next run happens on schedule anyway.
 
-Install it in `main.go`, anywhere after `accounts` (and import `"board/apps/housekeeping"`):
+Install it in `project/project.go`, anywhere after `accounts` (and import `"board/apps/housekeeping"`):
 
 ```go
-// main.go
+// project/project.go
 feed.App(),
 housekeeping.New(store),
 admin.New(store),
@@ -90,10 +90,10 @@ logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 slog.SetDefault(logger)
 ```
 
-The generated `main.go` already installs three built-in middleware, which run on every request:
+The generated `project/project.go` already installs three built-in middleware, which run on every request:
 
 ```go
-// main.go (as of part 9)
+// project/project.go (as of part 9)
 config.Middleware = []tango.Middleware{
 	tango.RequestID(),
 	tango.Recoverer(),

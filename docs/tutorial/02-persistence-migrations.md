@@ -51,19 +51,20 @@ func New(store *db.Store) tango.App {
 
 Views can't reach the registry themselves — `Context` deliberately exposes only the request/response surface (`Param`, `Query`, `Bind`, `JSON`, `Redirect`, plus raw escape hatches), not the framework's internals. So `ModelMeta` (looked up once, after registration) and `store` are both captured by closure when building each route's view, exactly like tanGO's own admin package does internally.
 
-In `main.go`, the generated code already opens the database named by `TANGO_DB_DSN` (`sqlite://app.db` unless you set it) and builds the store right before the config, so the store is in scope where you list your apps. Replace `posts.App{}` with `posts.New(store)`:
+`main.go` already opens the database named by `TANGO_DB_DSN` (`sqlite://app.db` unless you set it) and passes the store it builds to `project.Config(store)`, so the store is in scope where you list your apps. In `project/project.go`, replace `posts.App{}` with `posts.New(store)`:
 
 ```go
-// main.go (as of part 2)
-store := db.NewStore(sqlDB, dsn.Dialect)
-config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
-config.InstalledApps = []tango.App{
-	posts.New(store),
-	admin.New(store),
-}
+// project/project.go (as of part 2)
+func Config(store *db.Store) tango.Config {
+	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	config.InstalledApps = []tango.App{
+		posts.New(store),
+		admin.New(store),
+	}
+	// ...
 ```
 
-(`dsn` comes from `tango.LoadDBConfigFromEnv()` a few lines up; its `Driver` and `Source` were passed to `sql.Open`. Changing which app gets constructed with what is the kind of one-line rewiring the "no hidden setup" principle expects you to do by hand.)
+(`main.go` builds `store` from the `Driver` and `Source` that `tango.LoadDBConfigFromEnv()` returned. Changing which app gets constructed with what is the kind of one-line rewiring the "no hidden setup" principle expects you to do by hand.)
 
 ## CRUD views
 

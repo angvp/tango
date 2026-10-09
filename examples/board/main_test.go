@@ -18,8 +18,8 @@ import (
 	"github.com/angvp/tango/migration"
 	"github.com/angvp/tango/testdb"
 
-	"board/apps/live"
 	"board/migrations"
+	"board/project"
 )
 
 // testApp is the real application — same apps, routes, and middleware as
@@ -40,16 +40,9 @@ func newTestApp(t *testing.T) *testApp {
 	}
 
 	store := db.NewStore(sqlDB, dialect)
-	tokens, err := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", jwt.MinimumSecretBytes))}, nil, "board", "board-api")
-	if err != nil {
-		t.Fatal(err)
-	}
-	feed, err := live.NewFeed()
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Setenv("BOARD_JWT_SECRET", strings.Repeat("s", jwt.MinimumSecretBytes))
 
-	registry, err := tango.BuildRegistry(appConfig(store, tokens, feed))
+	registry, err := tango.BuildRegistry(project.Config(store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,9 +98,7 @@ func (a *testApp) token(t *testing.T, email, password string) string {
 
 func TestAppPassesChecks(t *testing.T) {
 	app := newTestApp(t)
-	tokens, _ := jwt.NewService(jwt.Key{ID: "test", Secret: []byte(strings.Repeat("s", 32))}, nil, "board", "board-api")
-	feed, _ := live.NewFeed()
-	if err := tango.Check(appConfig(app.store, tokens, feed)); err != nil {
+	if err := tango.Check(project.Config(app.store)); err != nil {
 		t.Fatal(err)
 	}
 }

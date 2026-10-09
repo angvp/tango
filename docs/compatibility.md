@@ -14,15 +14,20 @@ tanGO makes no v1.0 stability promise yet.
 
 Everything below is covered unless it is named under [what is not covered](#what-is-not-covered).
 
-- **Every exported identifier of every public package**: the root `tango` package, `accounts`, `admin`, `auth`, `auth/jwt`, `db`, `i18n`, `mail`, `mail/mailtest`, `migration`, `model`, `observability`, `ratelimit`, `realtime`, `realtime/websocket` and `testdb`. Exported means types, functions, methods, constants, variables, and the exported fields of exported structs.
-- **Every `tango` CLI command** (`newproject`, `newapp`, `run`, `check`, `makemigrations`, `migrate`, `migrate down`, `admin …` and `tui`; `tango help` lists them), with its flags.
+- **Every exported identifier of every public package**: the root `tango` package, `accounts`, `admin`, `auth`, `auth/jwt`, `db`, `i18n`, `mail`, `mail/mailtest`, `migration`, `model`, `observability`, `ratelimit`, `realtime`, `realtime/websocket`, `shell` and `testdb`. Exported means types, functions, methods, constants, variables, and the exported fields of exported structs.
+- **Every `tango` CLI command** (`newproject`, `newapp`, `run`, `check`, `makemigrations`, `migrate`, `migrate down`, `admin …`, `tui` and `shell`; `tango help` lists them), with its flags.
 - **The app-side flags** a generated `main.go` dispatches, with their JSON output and exit-code expectations:
   - `-check` validates registration, route compilation, and app-contributed checks, then exits non-zero on failure.
   - `-tango-dump-models` prints registered model metadata as JSON for `tango makemigrations`.
   - `-tango-status` prints registration/database/migration status as JSON for `tango tui`; it is read-only and does not create `tango_migrations`.
   - `-migrate` applies pending migrations; `-migrate -down` rolls back the most recently applied one.
   - the `-tango-admin-*` flags (behind `tango admin create`, `resetpassword`, `deactivate`, `grant-staff`, `revoke-staff`, `grant-superuser` and `revoke-superuser`) manage Admin accounts when the admin app is installed.
-- **Environment variables**: `TANGO_DB_DSN` (and its `sqlite://`/`postgres://` grammar), `TANGO_ADDR`, `TANGO_TEST_DSN`, and `TANGO_ADMIN_PASSWORD` (the password for `tango admin create` and `resetpassword`; empty counts as unset).
+- **`tango shell`**, as the [shell guide](guides/shell.md) describes it:
+  - the command, its `-c EXPR`, `--readonly` and `--help` options, and its exit codes: `0` for a session that ends cleanly, `1` for the first error of a non-interactive session or a project that fails to boot, `2` for a command line it does not understand, and `130` when Ctrl-C ends a running evaluation;
+  - `shell.Run` and `shell.Options` (`ReadOnly`, `Helpers` and `DatabaseLabel`, a display-only label the project derives from its database configuration after removing every credential) — the whole public surface of the `shell` package;
+  - the eight helpers `Models`, `Describe`, `Get`, `List`, `Count`, `Create`, `Update` and `Delete`, and `Context()`, with their documented arguments: models addressed as `app.Model`, a query that is a `map[string]any` with `where` (equality only), `order`, `limit` and `offset`, and rows that are `map[string]any` keyed by Go field name holding the stored Go values;
+  - `help()`, `exit()` and `quit()`, the `project.` qualifier through which `Options.Helpers` are called, and `TANGO_SHELL_HISTORY=off`.
+- **Environment variables**: `TANGO_DB_DSN` (and its `sqlite://`/`postgres://` grammar), `TANGO_ADDR`, `TANGO_TEST_DSN`, `TANGO_SHELL_HISTORY` (`off` keeps the shell's history from being saved) and `TANGO_ADMIN_PASSWORD` (the password for `tango admin create` and `resetpassword`; empty counts as unset).
 - **The `tango:"…"` struct tag grammar** described in [models and tags](guides/models-and-tags.md).
 - **The `tango_migrations` table**: its name and its columns (`app`, `name`, `applied_at`).
 - **The generic View-error response**: a View that returns an error, or panics behind `Recoverer`, answers `500` with the JSON body `{"error": "internal error"}`.
@@ -65,6 +70,7 @@ A minor release may add a field to any covered struct, which breaks an unkeyed l
 - **Best-effort admin extensibility**: `admin.Widget` and the types it uses, the `admin.Options` presentation fields (`Widgets`, `Labels`, `HelpText`, `ReadOnly`, `FieldOrder`), the built-in widgets, and `admin.Branding`/`admin.WithBranding`. Admin's rendering and theme are still settling, so these may change in any minor release without a Deprecation window, though the changelog always lists the change.
 - **Admin and `accounts` presentation**: their HTML, templates, CSS, presentation redirects, and admin URLs. A renamed model, for example, changes its admin URL.
 - **`tango tui`'s screen**: its layout, wording, colours and key bindings. What is covered is that the command exists; that the interactive dashboard requires a terminal; that actions that change the database ask for explicit confirmation first; and that it runs the same supported operations as `tango run`, `tango migrate` and `tango migrate down`. The interactive dashboard requires a terminal. In non-interactive environments, `tango tui` prints status only; use the dedicated CLI commands to run the server or change migrations. See the [`tango tui` guide](guides/tui.md).
+- **What `tango shell` runs on, and how it looks**: the interpreter (Yaegi, pinned at v0.16.1) and so the exact subset of Go it can run, which a release may change; the formatting of results beyond sorted map keys and one row per line; the wording of its errors, hints, help text and startup banner; where its history file lives and its format; what happens when a value of a project's own type crosses into a helper (only plain values, maps, slices and `error` are supported); and the `project/` and `shell/` files `tango newproject` writes, which are your code, not a library API.
 - **The wording of error and log messages.** Match errors with `errors.Is` against the exported sentinel errors, which are covered, never against their text.
 
 ## How defaults change

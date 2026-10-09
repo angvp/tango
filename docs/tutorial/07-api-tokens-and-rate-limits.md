@@ -12,10 +12,10 @@ Tokens are signed with a secret only the server knows. `main.go` already loads `
 echo "BOARD_JWT_SECRET=$(openssl rand -hex 32)" >> .env
 ```
 
-Then build the token service in `main.go`. It needs an issuer and an audience — names that get stamped into every token and checked on the way back in, so a token minted for one service can't be replayed against another:
+Then build the token service in `project/project.go`. It needs an issuer and an audience — names that get stamped into every token and checked on the way back in, so a token minted for one service can't be replayed against another:
 
 ```go
-// main.go
+// project/project.go
 // newTokenService builds the API's token issuer from BOARD_JWT_SECRET.
 func newTokenService() (*jwt.Service, error) {
 	secret := os.Getenv("BOARD_JWT_SECRET")
@@ -32,18 +32,19 @@ func newTokenService() (*jwt.Service, error) {
 }
 ```
 
-Call it right after creating the store, and fail at startup rather than at the first login if the secret is missing:
+Call it at the top of `Config`. `Config` has no error to return, so a missing secret stops the process right there, with the message, rather than at the first login:
 
 ```go
-// main.go
-store := db.NewStore(sqlDB, dsn.Dialect)
-tokens, err := newTokenService()
-if err != nil {
-	return err
-}
+// project/project.go (as of part 7)
+func Config(store *db.Store) tango.Config {
+	tokens, err := newTokenService()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// ...
 ```
 
-(`main.go` now imports `"github.com/angvp/tango/auth/jwt"` and `"time"`.) Everything reading `.env` includes `go run . -check` and the `tango` CLI commands that build your app, so they'll need the secret too. The JWT package brings in one new dependency; fetch it with:
+(`project/project.go` now imports `"fmt"`, `"log"`, `"os"`, `"time"` and `"github.com/angvp/tango/auth/jwt"`.) Everything that boots the project reads `.env`, which includes `go run . -check`, `tango shell` and the `tango` CLI commands that build your app, so they'll all need the secret too. The JWT package brings in one new dependency; fetch it with:
 
 ```sh
 go mod tidy
@@ -230,10 +231,10 @@ func New(store *db.Store, tokens *jwt.Service) tango.App {
 
 `tango.WithMiddleware` attaches middleware to everything in an `Include`. Middleware nests from the outside in — `Config.Middleware`, then `Include`'s `WithMiddleware`, then a route's `Use` — so by the time the rate limiter on `POST /posts/` runs, the token has already been verified. That's what lets the limiter key on the account, not the IP.
 
-`posts` now looks up the `Account` model while registering, so `accounts` has to come first in `InstalledApps`. Update `main.go` (and import `"board/apps/api"`):
+`posts` now looks up the `Account` model while registering, so `accounts` has to come first in `InstalledApps`. Update `project/project.go` (and import `"board/apps/api"`):
 
 ```go
-// main.go (as of part 7)
+// project/project.go (as of part 7)
 InstalledApps: []tango.App{
 	accounts.New(store),
 	posts.New(store, tokens),
