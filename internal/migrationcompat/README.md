@@ -10,6 +10,7 @@ Each directory here holds the migration files one tanGO release's own `tango mak
 | `v0_0_1` | `tango` v0.0.1 |
 | `v0_0_2` | `tango` v0.0.2 |
 | `v0_1_0` | `tango` v0.1.0 |
+| `v0_2_0` | `tango` v0.2.0 |
 | `unreleased` | this checkout's generator, for the step kinds no release has emitted yet |
 
 ## Regenerating
