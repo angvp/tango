@@ -31,4 +31,4 @@ Then it replaces the version's directory here.
 ./generate.sh unreleased local     # after changing what the generator writes
 ```
 
-Adding a release's output is a [release checklist](../../RELEASING.md) step. When you add a new directory, add it to `Generators` in `versions.go`, which both tests read. Never edit a released version's files by hand: they stand for what that release's users have in their repositories.
+Adding a release's output is a [release checklist](../../RELEASING.md) step, and the Release workflow refuses a tag whose directory is missing or not listed in `Generators`. When you add a new directory, add it to `Generators` in `versions.go`, which both tests read. Never edit a released version's files by hand: they stand for what that release's users have in their repositories.

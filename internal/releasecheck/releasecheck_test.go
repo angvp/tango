@@ -36,12 +36,21 @@ type fakeSources struct {
 	runs      []CIRun
 	published string
 	err       error
+	// noCorpus and unregisteredCorpus make the version's migration-compat
+	// fixtures missing, or present but not listed in Generators. The zero
+	// value is a release whose corpus is in place.
+	noCorpus           bool
+	unregisteredCorpus bool
 }
 
 func (f fakeSources) OnMain(context.Context, string) (bool, error)    { return f.onMain, f.err }
 func (f fakeSources) CIRuns(context.Context, string) ([]CIRun, error) { return f.runs, f.err }
 func (f fakeSources) PublishedCommit(context.Context, string) (string, error) {
 	return f.published, f.err
+}
+
+func (f fakeSources) CorpusRegistered(context.Context, string, string) (bool, bool, error) {
+	return !f.noCorpus, !f.noCorpus && !f.unregisteredCorpus, f.err
 }
 
 func greenRun() CIRun {
@@ -140,6 +149,8 @@ func TestCheckRefusesAReleaseThatIsNotReady(t *testing.T) {
 		}, []string{"no successful CI run", "lint"}},
 		{"patch with incompatible changes", func(r *Release, _ *fakeSources) { r.Gorelease = incompatibleReport }, []string{"patch release", "incompatible", "LoadDBDSNFromEnv: removed"}},
 		{"patch without a gorelease report", func(r *Release, _ *fakeSources) { r.Gorelease = "" }, []string{"gorelease"}},
+		{"no migration-compat corpus", func(_ *Release, s *fakeSources) { s.noCorpus = true }, []string{"v0_1_1", "migrationcompat", "generate.sh v0.1.1 local"}},
+		{"corpus not registered in Generators", func(_ *Release, s *fakeSources) { s.unregisteredCorpus = true }, []string{"v0_1_1", "Generators", "versions.go"}},
 		{"tag already published for another commit", func(_ *Release, s *fakeSources) { s.published = "4fd666747631ada5854daa820c43fb03f80851f3" }, []string{"already", "4fd666747631ada5854daa820c43fb03f80851f3", "never move"}},
 		{"a lookup fails", func(_ *Release, s *fakeSources) { s.err = errors.New("network down") }, []string{"network down"}},
 	}
@@ -163,11 +174,11 @@ func TestCheckRefusesAReleaseThatIsNotReady(t *testing.T) {
 // TestCheckReportsEveryProblemAtOnce saves a maintainer a retag per problem.
 func TestCheckReportsEveryProblemAtOnce(t *testing.T) {
 	release := Release{Tag: "v0.1.2", Commit: taggedCommit, Changelog: []byte(changelog), Gorelease: incompatibleReport}
-	_, err := Check(context.Background(), release, fakeSources{onMain: false})
+	_, err := Check(context.Background(), release, fakeSources{onMain: false, noCorpus: true})
 	if err == nil {
 		t.Fatal("Check passed, want it refused")
 	}
-	for _, want := range []string{"not reachable from main", "no section", "no successful CI run", "incompatible"} {
+	for _, want := range []string{"not reachable from main", "no section", "no successful CI run", "incompatible", "v0_1_2"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q does not mention %q", err, want)
 		}

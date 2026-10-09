@@ -3,6 +3,7 @@
 # - the tagged commit is on main;
 # - CI passed on that exact commit;
 # - CHANGELOG.md has a dated section for the version;
+# - the version's migration-compat corpus is committed and listed in Generators;
 # - for a patch release, gorelease reports no incompatible change;
 # - the Go module proxy doesn't already serve the tag from another commit
 #   (asked last, only when everything else passed: asking pins the tag).

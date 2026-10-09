@@ -46,6 +46,34 @@ func (l Live) OnMain(ctx context.Context, commit string) (bool, error) {
 	}
 }
 
+// CorpusRegistered reads commit, not the working tree: the fixture directory
+// must be in the tree being tagged, and versions.go at that commit must list
+// it as a generator.
+func (l Live) CorpusRegistered(ctx context.Context, commit, dir string) (exists, registered bool, err error) {
+	const base = "internal/migrationcompat/"
+	git := func(args ...string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = l.Dir
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		}
+		return out, nil
+	}
+	tree, err := git("ls-tree", "-d", "--name-only", commit, base+dir)
+	if err != nil {
+		return false, false, err
+	}
+	if strings.TrimSpace(string(tree)) == "" {
+		return false, false, nil
+	}
+	versions, err := git("show", commit+":"+base+"versions.go")
+	if err != nil {
+		return true, false, err
+	}
+	return true, strings.Contains(string(versions), `Dir: "`+dir+`"`), nil
+}
+
 // CIRuns returns the CI workflow's runs for commit, each with the jobs of
 // its latest attempt.
 func (l Live) CIRuns(ctx context.Context, commit string) ([]CIRun, error) {

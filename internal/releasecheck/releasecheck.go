@@ -37,6 +37,10 @@ type Sources interface {
 	// PublishedCommit returns the commit the Go module proxy already serves
 	// for tag, or "" if it doesn't know the tag.
 	PublishedCommit(ctx context.Context, tag string) (string, error)
+	// CorpusRegistered reports, as of commit, whether the migration-compat
+	// fixture directory dir (such as v0_3_0) exists, and whether it is
+	// listed in the Generators the Generated-file contract tests read.
+	CorpusRegistered(ctx context.Context, commit, dir string) (exists, registered bool, err error)
 }
 
 // CIRun is one CI workflow run and its jobs.
@@ -72,6 +76,9 @@ func Check(ctx context.Context, r Release, s Sources) (string, error) {
 	}
 	notes, err := changelogSection(r.Changelog, strings.TrimPrefix(r.Tag, "v"))
 	if err != nil {
+		problems = append(problems, err)
+	}
+	if err := checkCorpus(ctx, r, match, s); err != nil {
 		problems = append(problems, err)
 	}
 	if err := checkCI(ctx, r.Commit, s); err != nil {
@@ -227,4 +234,22 @@ func unique(values []string) []string {
 		}
 	}
 	return out
+}
+
+// checkCorpus refuses a release whose migration files are not in the
+// Generated-file contract tests. Every release's own `tango makemigrations`
+// output is held to the promise on later releases, and forgetting to add it
+// is silent, so the tag is where it is caught.
+func checkCorpus(ctx context.Context, r Release, version []string, s Sources) error {
+	dir := fmt.Sprintf("v%s_%s_%s", version[1], version[2], version[3])
+	exists, registered, err := s.CorpusRegistered(ctx, r.Commit, dir)
+	switch {
+	case err != nil:
+		return fmt.Errorf("check the migration-compat corpus %s: %w", dir, err)
+	case !exists:
+		return fmt.Errorf("no migration-compat corpus %s at commit %s: run internal/migrationcompat/generate.sh %s local, add it to Generators in internal/migrationcompat/versions.go and commit it (see RELEASING.md)", dir, r.Commit, r.Tag)
+	case !registered:
+		return fmt.Errorf("migration-compat corpus %s is not listed in Generators in internal/migrationcompat/versions.go at commit %s, so the Generated-file contract tests never read it", dir, r.Commit)
+	}
+	return nil
 }

@@ -38,7 +38,7 @@ Rewriting `develop` this way is expected, since it is unreleased and shared by n
    internal/migrationcompat/generate.sh vX.Y.Z local
    ```
 
-   Then add the new `vX_Y_Z` directory to `Generators` in `internal/migrationcompat/versions.go` (see [the fixtures' README](internal/migrationcompat/README.md)). Run them on both dialects:
+   The Release workflow refuses a tag without this directory, registered. Then add the new `vX_Y_Z` directory to `Generators` in `internal/migrationcompat/versions.go` (see [the fixtures' README](internal/migrationcompat/README.md)). Run them on both dialects:
 
    ```sh
    go test ./internal/migrationcompat/ ./internal/cli/

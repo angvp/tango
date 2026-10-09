@@ -4,7 +4,11 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -51,5 +55,70 @@ func TestLiveReadsGitHubAndTheModuleProxy(t *testing.T) {
 		if err != nil || got != want {
 			t.Fatalf("PublishedCommit(%s) = %q, %v; want %q", tag, got, err, want)
 		}
+	}
+}
+
+// gitRepoWith commits files (path to content) in a fresh repository and
+// returns its directory and the commit.
+func gitRepoWith(t *testing.T, files map[string]string) (dir, commit string) {
+	t.Helper()
+	dir = t.TempDir()
+	run := func(args ...string) string {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	run("init", "-q")
+	for path, content := range files {
+		full := filepath.Join(dir, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("add", "-A")
+	run("commit", "-q", "-m", "x")
+	return dir, run("rev-parse", "HEAD")
+}
+
+func TestLiveCorpusRegisteredReadsTheCommitNotTheWorkingTree(t *testing.T) {
+	const versions = "package migrationcompat\n\nvar Generators = []Generator{\n\t{Dir: \"v0_2_0\", Migrations: v020.Migrations},\n\t{Dir: \"v0_3_0\", Migrations: v030.Migrations},\n}\n"
+	dir, commit := gitRepoWith(t, map[string]string{
+		"internal/migrationcompat/versions.go":        versions,
+		"internal/migrationcompat/v0_3_0/models.json": "{}",
+		"internal/migrationcompat/v0_2_0/models.json": "{}",
+		"internal/migrationcompat/v0_4_0/models.json": "{}", // a directory nobody registered
+	})
+	live := Live{Dir: dir}
+
+	tests := []struct {
+		dir                string
+		wantExists, wantIn bool
+	}{
+		{"v0_3_0", true, true},
+		{"v0_4_0", true, false},
+		{"v0_5_0", false, false},
+		{"v0_3", false, false}, // a prefix of a registered name is not it
+	}
+	for _, tt := range tests {
+		exists, registered, err := live.CorpusRegistered(context.Background(), commit, tt.dir)
+		if err != nil || exists != tt.wantExists || registered != tt.wantIn {
+			t.Fatalf("%s: exists=%v registered=%v err=%v, want %v %v", tt.dir, exists, registered, err, tt.wantExists, tt.wantIn)
+		}
+	}
+
+	// Removing the files from the working tree changes nothing: the commit is what counts.
+	if err := os.RemoveAll(filepath.Join(dir, "internal")); err != nil {
+		t.Fatal(err)
+	}
+	if exists, registered, err := live.CorpusRegistered(context.Background(), commit, "v0_3_0"); err != nil || !exists || !registered {
+		t.Fatalf("after deleting the working tree: exists=%v registered=%v err=%v, want the committed state", exists, registered, err)
 	}
 }
