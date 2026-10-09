@@ -229,6 +229,27 @@ func TestStoreListAppliesLimitAndOffset(t *testing.T) {
 	}
 }
 
+// An Offset with no Limit skips rows and returns all the rest, on every
+// dialect (SQLite and MySQL refuse OFFSET without LIMIT, so the store adds one).
+func TestStoreListAppliesOffsetWithoutALimit(t *testing.T) {
+	store, meta := openCRUDStore(t)
+
+	for _, name := range []string{"a", "b", "c", "d"} {
+		widget := crudWidget{Name: name}
+		if err := store.Create(context.Background(), meta, &widget); err != nil {
+			t.Fatalf("Create returned error: %v", err)
+		}
+	}
+
+	var got []crudWidget
+	if err := store.List(context.Background(), meta, db.Query{Offset: 3, OrderBy: []string{"ID"}}, &got); err != nil {
+		t.Fatalf("List with an Offset and no Limit returned error: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "d" {
+		t.Fatalf("List = %+v, want only d", got)
+	}
+}
+
 func TestStoreListAppliesOrderByAscendingAndDescending(t *testing.T) {
 	store, meta := openCRUDStore(t)
 

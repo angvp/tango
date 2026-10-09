@@ -615,6 +615,9 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 
 	if query.Limit > 0 {
 		sqlQuery += fmt.Sprintf(" LIMIT %d", query.Limit)
+	} else if query.Offset > 0 && s.dialect == SQLite {
+		// SQLite refuses OFFSET without LIMIT; -1 means no limit.
+		sqlQuery += " LIMIT -1"
 	}
 	if query.Offset > 0 {
 		sqlQuery += fmt.Sprintf(" OFFSET %d", query.Offset)

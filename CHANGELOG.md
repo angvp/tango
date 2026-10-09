@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+
+- `db.Query` with an `Offset` and no `Limit` failed on SQLite with a SQL syntax error (SQLite refuses `OFFSET` without `LIMIT`). `List` now skips the rows and returns the rest on both dialects. It also made `tango shell`'s `List(model, map[string]any{"offset": n})` fail the same way.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
