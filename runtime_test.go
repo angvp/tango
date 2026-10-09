@@ -104,8 +104,20 @@ func TestDispatchFlagsMigrateAndDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DispatchFlags migrate returned error: %v", err)
 	}
-	if !strings.Contains(output, "migrations applied") {
-		t.Fatalf("stdout = %q, want migrations applied", output)
+	if got, want := strings.TrimSpace(output), "applied 1 migration: widgets/0001_auto"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+
+	os.Args = []string{"app", "-migrate"}
+	output, err = captureStdout(t, func() error {
+		_, err := DispatchFlags(Config{}, sqlDB, dialect, migrations)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("DispatchFlags migrate again returned error: %v", err)
+	}
+	if got, want := strings.TrimSpace(output), "no pending migrations"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 
 	os.Args = []string{"app", "-migrate", "-down"}
@@ -217,5 +229,27 @@ func TestDispatchFlagsDumpModels(t *testing.T) {
 	}
 	if strings.TrimSpace(output) != "[]" {
 		t.Fatalf("stdout = %q, want [] JSON", output)
+	}
+}
+
+func TestDispatchFlagsMigrateNamesEveryAppliedMigration(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
+	table := func(app, name, tbl string) migration.Migration {
+		return migration.Migration{App: app, Name: name, Up: []migration.Step{
+			migration.CreateTable{Table: tbl, Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true}}},
+		}}
+	}
+	migrations := []migration.Migration{table("admin", "0001_auto", "a_t"), table("blog", "0001_auto", "b_t")}
+
+	withArgs(t, "-migrate")
+	output, err := captureStdout(t, func() error {
+		_, err := DispatchFlags(Config{}, sqlDB, dialect, migrations)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.TrimSpace(output), "applied 2 migrations: admin/0001_auto, blog/0001_auto"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }

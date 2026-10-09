@@ -115,8 +115,10 @@ Inspect them — they're plain Go, not a DSL, expressing typed steps like `migra
 
 ```sh
 tango migrate
-# migrations applied
+# applied 2 migrations: admin/0001_auto_20260928023955, posts/0002_auto_20260928023955
 ```
+
+Running it again prints `no pending migrations`.
 
 This records one row per applied migration in a `tango_migrations` table (`app`, `name`, `applied_at`), Django-inspired like `django_migrations`. Run `tango check` again to confirm registration still passes, then exercise the new routes:
 

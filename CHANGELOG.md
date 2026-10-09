@@ -10,6 +10,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Changed
 
+- `tango migrate` says what it did: `applied 2 migrations: admin/0001_auto_…, blog/0002_auto_…`, or `no pending migrations`, instead of always printing `migrations applied`. A project gets the new wording when it is built against this version; the rollback line is unchanged.
 - `tango newproject` ends with the real first-run order (`tango makemigrations`, `tango migrate`, `tango admin create <username>`), and the generated project prints `admin: http://localhost:8000/admin/` after `listening on` (not with `--no-admin`). Existing projects are unchanged.
 - `tango tui`:
   - the greyed-out "Shell" item is gone;

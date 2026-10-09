@@ -227,10 +227,11 @@ func DispatchFlags(config Config, sqlDB *sql.DB, dialect db.Dialect, migrations 
 		fmt.Fprintln(os.Stdout, "rolled back last migration")
 		return true, nil
 	case *migrateFlag:
-		if err := migration.ApplyPending(context.Background(), sqlDB, dialect, migrations); err != nil {
+		applied, err := applyPendingReporting(context.Background(), sqlDB, dialect, migrations)
+		if err != nil {
 			return true, err
 		}
-		fmt.Fprintln(os.Stdout, "migrations applied")
+		fmt.Fprintln(os.Stdout, describeApplied(applied))
 		return true, nil
 	default:
 		return false, nil
@@ -359,4 +360,39 @@ func Status(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.Dialec
 	status.MigrationsPending = status.MigrationsTotal - status.MigrationsApplied
 
 	return status
+}
+
+// applyPendingReporting applies pending migrations and returns the "app/name"
+// of each one this call applied, in the order migrations lists them.
+func applyPendingReporting(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrations []migration.Migration) ([]string, error) {
+	before, err := migration.AppliedMigrations(ctx, sqlDB)
+	if err != nil && !migration.IsMissingTrackingTable(err) {
+		return nil, err
+	}
+	if err := migration.ApplyPending(ctx, sqlDB, dialect, migrations); err != nil {
+		return nil, err
+	}
+	after, err := migration.AppliedMigrations(ctx, sqlDB)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, m := range migrations {
+		key := migration.MigrationKey{App: m.App, Name: m.Name}
+		if after[key] && !before[key] {
+			names = append(names, m.App+"/"+m.Name)
+		}
+	}
+	return names, nil
+}
+
+func describeApplied(names []string) string {
+	switch len(names) {
+	case 0:
+		return "no pending migrations"
+	case 1:
+		return "applied 1 migration: " + names[0]
+	default:
+		return fmt.Sprintf("applied %d migrations: %s", len(names), strings.Join(names, ", "))
+	}
 }
