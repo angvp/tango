@@ -16,10 +16,11 @@ import (
 // adminregistry importing each other in a cycle — the same reason Options
 // itself is an alias below.
 type (
-	FieldContext = adminregistry.FieldContext
-	FieldValues  = adminregistry.FieldValues
-	Widget       = adminregistry.Widget
-	SelectOption = adminregistry.SelectOption
+	FieldContext  = adminregistry.FieldContext
+	FieldValues   = adminregistry.FieldValues
+	Widget        = adminregistry.Widget
+	PreviewWidget = adminregistry.PreviewWidget
+	SelectOption  = adminregistry.SelectOption
 )
 
 // renderWidgetTemplate executes tmpl with data and returns the result as

@@ -74,6 +74,11 @@ var listTemplate = cloneWithContent(`{{define "content"}}
 </div>
 {{end}}`)
 
+// widgetScriptTag loads the shared widget script on every form page, once.
+// It serves the live character count of the Markdown widget, which the
+// widget's own markup does not carry, and the preview and Format controls.
+var widgetScriptTag = `<script src="` + widgetsAsset.URL + `" defer></script>`
+
 var formTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
   <div class="flex items-center gap-2">
@@ -93,6 +98,7 @@ var formTemplate = cloneWithContent(`{{define "content"}}
           <button type="submit" class="btn-primary">{{.T "admin.button.save" "Save"}}</button>
           <a href="../" class="btn-secondary">{{.T "admin.button.cancel" "Cancel"}}</a>
         </div>
+      ` + widgetScriptTag + `
       </form>
     </div>
   </div>

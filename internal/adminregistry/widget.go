@@ -1,6 +1,7 @@
 package adminregistry
 
 import (
+	"context"
 	"html/template"
 	"reflect"
 	"strings"
@@ -106,4 +107,14 @@ type FieldValues interface {
 type Widget interface {
 	Render(f FieldContext) template.HTML
 	Parse(f FieldContext, form FieldValues, dest reflect.Value) error
+}
+
+// PreviewWidget is the optional extension a Widget implements when its field
+// can show a preview of the submitted text. Only the Markdown widget uses it
+// today. Admin owns the preview route: it calls Preview for the one derived,
+// staff-only endpoint of a preview field and wraps the result, so a widget
+// cannot register a route. Preview gets no request context and must not
+// persist anything; the caller applies the deadline and output limits.
+type PreviewWidget interface {
+	Preview(ctx context.Context, source string) (template.HTML, error)
 }

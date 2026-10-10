@@ -88,7 +88,7 @@ func modelRoutes(modelPath string, store *db.Store, models *model.Registry, admi
 	edit := requireSession(store, editView(store, models, adminReg, registration, nav, brand))
 	del := requireSession(store, deleteView(store, registration, nav, brand))
 
-	return tango.URLs{
+	urls := tango.URLs{
 		tango.Path(http.MethodGet, modelPath, list),
 		tango.Path(http.MethodGet, modelPath+"new/", create),
 		tango.Path(http.MethodPost, modelPath+"new/", create),
@@ -97,4 +97,5 @@ func modelRoutes(modelPath string, store *db.Store, models *model.Registry, admi
 		tango.Path(http.MethodGet, modelPath+"{pk}/delete/", del),
 		tango.Path(http.MethodPost, modelPath+"{pk}/delete/", del),
 	}
+	return append(urls, previewRoutes(modelPath, store, registration)...)
 }
