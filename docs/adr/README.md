@@ -62,3 +62,5 @@ New records take the next free number here. This directory is the single, public
 | [0054](0054-cloud-storage-adapters-are-separate-go-modules.md) | Cloud storage adapters are separate Go modules | Accepted |
 | [0055](0055-the-cache-is-an-explicit-bytes-store-with-a-fail-open-fetchjson.md) | The cache is an explicit bytes store with a fail-open `FetchJSON` | Accepted |
 | [0056](0056-remote-cache-adapters-are-separate-go-modules-with-pinned-clients.md) | Remote cache adapters are separate Go modules with pinned clients | Accepted |
+| [0057](0057-admin-widgets-extend-through-optional-interfaces-and-one-derived-preview-route.md) | Admin widgets extend through optional interfaces, and admin owns one derived preview route | Accepted |
+| [0058](0058-markdown-rendering-and-sanitization-belong-to-the-host-and-previews-are-sandboxed.md) | Markdown rendering and sanitization belong to the host, and the admin preview is a sandboxed document | Accepted |
