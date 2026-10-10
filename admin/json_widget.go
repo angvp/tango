@@ -9,21 +9,29 @@ import (
 	"unicode/utf8"
 )
 
-// jsonWidgetTemplate is a plain multi-line text control with two optional
-// browser hooks: the Format button starts hidden and the shared widget
-// script reveals it, so without JavaScript the field is an ordinary
-// textarea. The leading newline after <textarea> is dropped by the HTML
-// parser, so a value that itself starts with a newline survives the round
-// trip.
+// jsonWidgetTemplate is a plain multi-line text control inside an Edit
+// panel, plus a Formatted panel and the tab list that switches between
+// them. The tab list, the Formatted panel and the apply button start hidden
+// and the shared widget script reveals them, so without JavaScript the
+// field is an ordinary textarea. The leading newline after <textarea> is
+// dropped by the HTML parser, so a value that itself starts with a newline
+// survives the round trip.
 var jsonWidgetTemplate = template.Must(template.New("jsonWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
 <div class="json-widget" data-tango-widget="json">
-  <textarea id="field-{{.Name}}" name="{{.Name}}" class="input json-input" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off"` + ariaAttrs + `>
-{{.Value}}</textarea>
-  <div class="flex items-center gap-2">
-    <button type="button" class="btn-secondary" data-json-format hidden>Format</button>
-    <p data-json-status role="status"></p>
+  <div class="widget-tabs" role="tablist" aria-label="{{.Label}} view" data-widget-tabs hidden>
+    <button type="button" role="tab" id="field-{{.Name}}-tab-edit" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-edit" data-tab="edit">Edit</button>
+    <button type="button" role="tab" id="field-{{.Name}}-tab-view" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-view" tabindex="-1" data-tab="view">Formatted</button>
   </div>
+  <div id="field-{{.Name}}-panel-edit" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-edit" class="widget-panel">
+    <textarea id="field-{{.Name}}" name="{{.Name}}" class="input json-input" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off"` + ariaAttrs + `>
+{{.Value}}</textarea>
+  </div>
+  <div id="field-{{.Name}}-panel-view" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-view" class="widget-panel" hidden>
+    <pre class="json-formatted" data-json-formatted></pre>
+    <button type="button" class="btn-secondary" data-json-apply hidden>Use this formatting</button>
+  </div>
+  <p data-json-status role="status"></p>
   <script src="{{.ScriptURL}}" defer></script>
 </div>`))
 
@@ -39,8 +47,8 @@ type jsonWidget struct{}
 
 // JSON returns tanGO's JSON Widget for a string or text field, set via
 // Options.Widgets. It validates JSON syntax on save and offers a
-// browser-side Format button; the server stays the authority, and the
-// saved value is exactly the submitted text.
+// browser-side Formatted tab that shows the text indented; the server stays
+// the authority, and the saved value is exactly the submitted text.
 func JSON() Widget { return jsonWidget{} }
 
 func (jsonWidget) Render(f FieldContext) template.HTML {

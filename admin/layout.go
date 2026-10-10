@@ -97,7 +97,12 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 
   .input { @apply block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-indigo-500; }
   .json-input { @apply font-mono text-xs; }
-  [data-json-format][hidden] { display: none; }
+  .widget-tabs { @apply flex gap-1 border-b border-slate-300 mb-2; }
+  .widget-tab { @apply px-3 py-1.5 text-sm font-medium text-slate-600 border border-transparent rounded-t-md -mb-px hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500; }
+  .widget-tab[aria-selected="true"] { @apply bg-white text-slate-900 border-slate-300 border-b-white; }
+  .widget-tabs[hidden], .widget-panel[hidden], [data-json-apply][hidden] { display: none; }
+  .json-formatted { @apply block w-full overflow-auto rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-900 whitespace-pre; min-height: 10rem; }
+  .json-formatted[data-invalid] { @apply text-red-700 whitespace-pre-wrap; }
   .field-label { @apply block text-sm font-medium text-slate-700 mb-1.5; }
   .field-group { @apply mb-4 last:mb-0; }
   .checkbox-row { @apply flex items-center gap-2.5; }

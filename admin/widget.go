@@ -153,10 +153,12 @@ func (textareaWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value
 func Textarea() Widget { return textareaWidget{} }
 
 var readOnlyWidgetTemplate = template.Must(template.New("readOnlyWidget").Parse(
-	`<span class="field-label">{{.Label}}</span>
-<div class="input bg-slate-50 text-slate-500">{{.Value}}</div>`))
+	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+<input id="field-{{.Name}}" type="text" value="{{.Value}}" readonly class="input bg-slate-50 text-slate-500"` + ariaAttrs + `>`))
 
-// readOnlyWidget renders any read-only field, regardless of what Widget it
+// readOnlyWidget renders any read-only field as a readonly text input, so
+// its value can be focused, selected and copied. The input has no name, so
+// the browser never submits it; regardless of what Widget it
 // would otherwise use — Options.ReadOnly always wins, uniformly, rather
 // than asking every Widget implementation to know how to render itself
 // non-editably. It never parses: a read-only field's submitted data is

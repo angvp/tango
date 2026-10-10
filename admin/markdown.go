@@ -59,21 +59,26 @@ func (w markdownPreviewWidget) Preview(ctx context.Context, source string) (temp
 	return w.preview(ctx, source)
 }
 
-// markdownWidgetTemplate is the editor. The Preview controls are appended
-// only when Preview is set, so the markup of a widget without a callback is
-// exactly the plain textarea and count. The controls start hidden and the
-// shared widget script reveals them, so without JavaScript the field is an
-// ordinary textarea.
+// markdownWidgetTemplate is the editor. A widget with a preview callback
+// puts the textarea and count in a Write panel and adds a Preview tab and
+// panel; a widget without one is exactly the plain textarea and count. The
+// tab list and the Preview panel start hidden and the shared widget script
+// reveals them, so without JavaScript the field is an ordinary textarea.
 var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
-	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>{{if .Preview}}
+<div class="widget-tabs" role="tablist" aria-label="{{.Label}} view" data-widget-tabs hidden>
+  <button type="button" role="tab" id="field-{{.Name}}-tab-write" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-write" data-tab="write">Write</button>
+  <button type="button" role="tab" id="field-{{.Name}}-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-preview" tabindex="-1" data-tab="preview">Preview</button>
+</div>
+<div id="field-{{.Name}}-panel-write" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-write" class="widget-panel">{{end}}
 <textarea id="field-{{.Name}}" name="{{.Name}}" class="input font-mono resize-y" rows="12" data-tango-widget="markdown"{{if .Preview}} data-preview-url="../_preview/{{.Name}}/"{{end}}{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}}` + ariaAttrs + `>
 {{.Value}}</textarea>
 <p id="field-{{.Name}}-count" class="text-xs text-slate-500 mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
-<div class="flex items-center gap-2 mt-2">
-  <button type="button" id="field-{{.Name}}-preview-button" class="btn-secondary" data-markdown-preview aria-controls="field-{{.Name}}-preview" hidden>Preview</button>
-  <p id="field-{{.Name}}-preview-status" role="status" class="text-xs text-slate-500" data-markdown-status></p>
 </div>
-<iframe id="field-{{.Name}}-preview" title="Preview of {{.Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-slate-300 bg-white" hidden></iframe>{{end}}`))
+<div id="field-{{.Name}}-panel-preview" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-preview" class="widget-panel" hidden>
+  <p id="field-{{.Name}}-preview-status" role="status" class="text-xs text-slate-500" data-markdown-status></p>
+  <iframe id="field-{{.Name}}-preview" title="Preview of {{.Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-slate-300 bg-white"></iframe>
+</div>{{end}}`))
 
 // markdownWidgetData is what markdownWidgetTemplate renders: the field plus
 // its character count, computed on the server, and whether the preview

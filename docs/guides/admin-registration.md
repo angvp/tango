@@ -196,7 +196,7 @@ Beyond `ListDisplay`/`Search`/`Ordering`/`Label`, `admin.Options` has four more 
 
 - **`Labels`** — override a field's humanized default label, on forms and as its changelist column header. A field with no `Labels` entry keeps its default, so a registration only changes when it opts in. A synthetic `Display` column must have an entry.
 - **`HelpText`** — descriptive text shown below a field on the create and edit forms. The built-in controls reference it with `aria-describedby`.
-- **`ReadOnly`** — fields that render non-editably. On edit, a read-only field keeps its existing stored value no matter what the submitted form contains for it; on create, it stays at its Go zero value. Submitted data for a read-only field is always ignored, never parsed — this is true regardless of any `Widgets` entry for that field, since read-only rendering bypasses the field's widget entirely.
+- **`ReadOnly`** — fields that render as a read-only text input (focusable and copyable, but never submitted). On edit, a read-only field keeps its existing stored value no matter what the submitted form contains for it; on create, it stays at its Go zero value. Submitted data for a read-only field is always ignored, never parsed — this is true regardless of any `Widgets` entry for that field, since read-only rendering bypasses the field's widget entirely.
 - **Bounded strings** (`tango:"varchar=n"`) render `<input type="text" maxlength="n">`. Browsers count `maxlength` in UTF-16 units, so the server stays the authority: a create or edit whose value has more than `n` characters (runes) re-renders the form with `Title must be at most 5 characters (got 6)` beside the field, keeps everything else the person typed, and stores nothing. The message is the translatable key `admin.error.too_long` (arguments: the label, the limit, the length). Bare strings and `text` render as they always did, with no textarea; use `admin.Textarea()` for a multi-line field.
 - **`FieldOrder`** — render fields in this order; fields not listed keep their default order, appended after the ordered ones.
 
@@ -251,7 +251,7 @@ registry.Admin().Register(Profile{}, admin.Options{
 - **Validation on save.** The value must be one complete JSON document, checked by Go's decoder. A refused save keeps the exact text the person typed, re-renders it in the textarea, and shows a readable error beside the field, for example `Invalid JSON: invalid character '}' looking for beginning of object key string (at character 9)`. The position is in characters, counted from 1, when Go's decoder reports one. The textarea is `aria-invalid` and described by the error, and nothing is stored.
 - **Stored exactly as submitted.** There is no canonicalization: spacing, key order and a trailing newline are saved as typed. The widget does not check structure or a schema.
 - **Empty is not parsed.** An empty value is saved as the empty string, with the field's normal empty and required behaviour and no extra rule from the widget.
-- **Format button.** Browser-side, the widget offers a **Format** button that replaces the text with `JSON.stringify(JSON.parse(text), null, 2)`. Invalid input shows a local message and leaves the text alone. The button appears only when the shared script runs.
+- **Formatted tab.** Browser-side, the field has two tabs, **Edit** and **Formatted**. **Formatted** shows `JSON.stringify(JSON.parse(text), null, 2)` of the current text; it is a view and never changes what you will save. Invalid input shows the parse message there instead. When the formatting differs from the text, **Use this formatting** copies it into the textarea and returns to **Edit**. The tabs appear only when the shared script runs; they follow the ARIA tabs pattern, with Left, Right, Home and End moving between them.
 - **Without JavaScript** the field is an ordinary monospace textarea, and server validation is the only check.
 - **Type.** Use it on a `string` or `text` field. On any other Go kind the save reports a form-level error naming the field.
 
@@ -271,7 +271,7 @@ registry.Admin().Register(Profile{}, admin.Options{
 
 **The host owns rendering and sanitization.** tanGO ships no Markdown parser, sanitizer or rich-text dependency, and the admin never renders the stored text. Any public page that shows the Markdown must render and sanitize it under the application's own policy; an operator's text is not safe to output as HTML just because it was entered in the admin. `examples/spa-accounts` edits a profile's `Bio` this way and renders nothing.
 
-`admin.WithMarkdownPreview(fn)` gives the widget a host renderer of type `admin.MarkdownPreview`, `func(context.Context, string) (template.HTML, error)`. With a renderer the form offers a **Preview** button beside the count. Without one the field is exactly the plain editor above, and the callback is never called on save.
+`admin.WithMarkdownPreview(fn)` gives the widget a host renderer of type `admin.MarkdownPreview`, `func(context.Context, string) (template.HTML, error)`. With a renderer the field has two tabs, **Write** and **Preview**; opening **Preview** renders the current text in the sandboxed frame, and opening it again renders it again. Without one the field is exactly the plain editor above, and the callback is never called on save.
 
 ```go
 md := goldmark.New() // defaults: raw HTML is not passed through; see below
@@ -326,14 +326,14 @@ Omit it — `admin.New(store)` with no options — and the sidebar shows tanGO's
 Automated tests pin the admin's structural markup: labels, `aria-invalid` and `aria-describedby`, table captions and column scopes, the preview iframe's sandbox. They cannot see how a page behaves in a browser. Before you rely on a workflow, or after you upgrade, walk through this list in a real browser.
 
 - **Focus order.** Tab through a create or edit form, and through a changelist with filters. Focus moves in reading order, every control shows a visible focus ring, and nothing traps it.
-- **Keyboard.** Every control works without a mouse: filter selects, Search, **Format** and **Preview**. After a refused save, the error appears beside its field.
+- **Keyboard.** Every control works without a mouse: filter selects, Search, and the **Edit**/**Formatted** and **Write**/**Preview** tabs (Left, Right, Home and End move between tabs). After a refused save, the error appears beside its field.
 - **Screen reader.** A field with help text or an error reads its label, then the help text and the error. The search box and each filter announce their labels. The table announces its caption and column headers. The Markdown character count and the preview status are announced as they change.
 - **Contrast.** Text, help text, errors and focus rings stay readable against their backgrounds. The admin loads Tailwind from a CDN (ADR 0003), so check the pages as you actually deploy them.
 - **Responsive layout.** At a narrow width the filters wrap, the table scrolls rather than breaking the page, and the form controls stay usable.
-- **JSON Format.** On a JSON field, **Format** indents valid JSON and leaves invalid text untouched with a visible error. With JavaScript off, the field is a plain textarea and the server still refuses invalid JSON.
-- **Markdown Preview.** With a preview renderer set, **Preview** shows the rendered text in a frame that runs no script, loads nothing and cannot navigate the admin page. A renderer error shows beside the button and never changes the text.
+- **JSON Formatted tab.** On a JSON field, **Formatted** shows valid JSON indented and invalid text with a visible error, and never changes the textarea unless you choose **Use this formatting**. With JavaScript off, the field is a plain textarea and the server still refuses invalid JSON.
+- **Markdown Preview.** With a preview renderer set, **Preview** shows the rendered text in a frame that runs no script, loads nothing and cannot navigate the admin page. A renderer error shows in the Preview tab and never changes the text.
 
-Known limits: the widgets' messages ("Invalid JSON…", **Format**, **Preview**, the character count) are English only, because a widget's `Render` and `Parse` have no request context. The sidebar toggle, skip link, `<main>` landmark and the footer text are separate follow-ups.
+Known limits: the widgets' messages ("Invalid JSON…", **Edit**, **Formatted**, **Write**, **Preview**, the character count) are English only, because a widget's `Render` and `Parse` have no request context. The sidebar toggle, skip link, `<main>` landmark and the footer text are separate follow-ups.
 
 ## Stability
 

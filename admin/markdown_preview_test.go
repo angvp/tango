@@ -337,13 +337,20 @@ func TestPreviewWidgetRendersHiddenControlsAndASandboxedFrame(t *testing.T) {
 
 	for _, want := range []string{
 		`data-preview-url="../_preview/Body/"`,
-		`<button type="button" id="field-Body-preview-button" class="btn-secondary" data-markdown-preview aria-controls="field-Body-preview" hidden>Preview</button>`,
+		`<div class="widget-tabs" role="tablist" aria-label="Body view" data-widget-tabs hidden>`,
+		`<button type="button" role="tab" id="field-Body-tab-write" class="widget-tab" aria-selected="true" aria-controls="field-Body-panel-write" data-tab="write">Write</button>`,
+		`<button type="button" role="tab" id="field-Body-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-Body-panel-preview" tabindex="-1" data-tab="preview">Preview</button>`,
+		`<div id="field-Body-panel-write" role="tabpanel" aria-labelledby="field-Body-tab-write" class="widget-panel">`,
+		`<div id="field-Body-panel-preview" role="tabpanel" aria-labelledby="field-Body-tab-preview" class="widget-panel" hidden>`,
 		`<p id="field-Body-preview-status" role="status"`,
 		`<iframe id="field-Body-preview" title="Preview of Body" sandbox="" referrerpolicy="no-referrer"`,
 	} {
 		if !strings.Contains(widget, want) {
 			t.Errorf("preview widget missing %q:\n%s", want, widget)
 		}
+	}
+	if strings.Contains(widget, "data-markdown-preview") {
+		t.Errorf("the Preview button is replaced by the Preview tab:\n%s", widget)
 	}
 	frame := widget[strings.Index(widget, "<iframe"):]
 	for _, forbidden := range []string{"allow-", "srcdoc", "src="} {

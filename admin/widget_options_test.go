@@ -85,6 +85,10 @@ func TestReadOnlyFieldRendersAsNonEditableDisplay(t *testing.T) {
 	if !strings.Contains(editBody, "Existing Widget") {
 		t.Fatalf("edit form does not display the read-only field's current value:\n%s", editBody)
 	}
+	want := `<input id="field-Name" type="text" value="Existing Widget" readonly class="input bg-slate-50 text-slate-500">`
+	if !strings.Contains(editBody, want) {
+		t.Fatalf("a read-only field should be a readonly text input, no name so it is never submitted; want %s in:\n%s", want, editBody)
+	}
 }
 
 func TestFieldOrderReordersRenderedFields(t *testing.T) {

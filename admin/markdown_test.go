@@ -188,10 +188,11 @@ func TestMarkdownPreviewCallbackIsNeverCalledByTheForm(t *testing.T) {
 
 	wantGet := doRequest(t, plain, http.MethodGet, noteBasePath+"new/", nil).Body.String()
 	gotGet := doRequest(t, withPreview, http.MethodGet, noteBasePath+"new/", nil).Body.String()
-	// The preview adds its own data attribute and controls; apart from the
+	// The preview adds its own data attribute and tabs; apart from the
 	// data-preview-url hook, the textarea and count are unchanged.
 	withoutHook := regexp.MustCompile(` data-preview-url="[^"]*"`).ReplaceAllString(gotGet, "")
-	if markdownWidgetMarkup(t, withoutHook, "Body") != markdownWidgetMarkup(t, wantGet, "Body") {
+	fromTextarea := func(markup string) string { return markup[strings.Index(markup, "<textarea"):] }
+	if fromTextarea(markdownWidgetMarkup(t, withoutHook, "Body")) != fromTextarea(markdownWidgetMarkup(t, wantGet, "Body")) {
 		t.Errorf("a preview callback changed the textarea markup")
 	}
 	doRequest(t, withPreview, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}, "Body": {"x"}})

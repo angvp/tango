@@ -29,7 +29,7 @@ The six endpoints are `register/`, `login/`, `password-reset/`, `password-reset/
 
 ## The admin
 
-`admin.New(store)` serves the staff admin at `/admin/`, so an operator can edit a profile. Create the first account with `go run . -tango-admin-create=admin` and log in at `http://localhost:8000/admin/`. The profile's `Preferences` field uses `admin.JSON()`: a value that is not one JSON document is refused with its error and the text as typed, the **Format** button pretty-prints valid JSON, and the stored value is exactly what was submitted. The `Bio` field uses `admin.Markdown()` with a **Preview** rendered by Goldmark's defaults, which omit raw HTML and drop unsafe links; the preview shows in a sandboxed frame, and the public site renders nothing from `Bio`, so a public page would need its own sanitization policy. Run `go test .` to see the same flow over HTTP.
+`admin.New(store)` serves the staff admin at `/admin/`, so an operator can edit a profile. Create the first account with `go run . -tango-admin-create=admin` and log in at `http://localhost:8000/admin/`. The profile's `Preferences` field uses `admin.JSON()`: a value that is not one JSON document is refused with its error and the text as typed, the **Formatted** tab shows valid JSON indented (and **Use this formatting** copies it into the field), and the stored value is exactly what was submitted. The `Bio` field uses `admin.Markdown()` with a **Preview** tab rendered by Goldmark's defaults, which omit raw HTML and drop unsafe links; the preview shows in a sandboxed frame, and the public site renders nothing from `Bio`, so a public page would need its own sanitization policy. Run `go test .` to see the same flow over HTTP.
 
 ## What it shows about bounded strings
 

@@ -53,6 +53,9 @@ func New() tango.App {
 		return registry.Admin().Register(Profile{}, admin.Options{
 			ListDisplay: []string{"Username", "DisplayName"},
 			Search:      []string{"Username", "DisplayName"},
+			// The account link is set when the profile is created at
+			// registration; the admin shows it but never edits it.
+			ReadOnly: []string{"AccountID"},
 			Widgets: map[string]admin.Widget{
 				"Bio":         admin.Markdown(admin.WithMarkdownPreview(previewBio)),
 				"Preferences": admin.JSON(),

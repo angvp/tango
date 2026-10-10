@@ -65,12 +65,21 @@ func TestJSONWidgetRendersAPlainTextareaWithHooksAndNoInlineScript(t *testing.T)
 
 	for _, want := range []string{
 		`<div class="json-widget" data-tango-widget="json">`,
-		`<button type="button" class="btn-secondary" data-json-format hidden>Format</button>`,
+		`<div class="widget-tabs" role="tablist" aria-label="Body view" data-widget-tabs hidden>`,
+		`<button type="button" role="tab" id="field-Body-tab-edit" class="widget-tab" aria-selected="true" aria-controls="field-Body-panel-edit" data-tab="edit">Edit</button>`,
+		`<button type="button" role="tab" id="field-Body-tab-view" class="widget-tab" aria-selected="false" aria-controls="field-Body-panel-view" tabindex="-1" data-tab="view">Formatted</button>`,
+		`<div id="field-Body-panel-edit" role="tabpanel" aria-labelledby="field-Body-tab-edit" class="widget-panel">`,
+		`<div id="field-Body-panel-view" role="tabpanel" aria-labelledby="field-Body-tab-view" class="widget-panel" hidden>`,
+		`<pre class="json-formatted" data-json-formatted></pre>`,
+		`<button type="button" class="btn-secondary" data-json-apply hidden>Use this formatting</button>`,
 		`<p data-json-status role="status"></p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q in:\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, "data-json-format hidden") {
+		t.Errorf("the Format button is replaced by the Formatted tab:\n%s", body)
 	}
 	src := regexp.MustCompile(`<script src="(/admin/_assets/widgets\.[0-9a-f]{16}\.js)" defer></script>`).FindStringSubmatch(body)
 	if src == nil {
