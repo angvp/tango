@@ -169,7 +169,7 @@ func TestProfileBioEditPageOffersASandboxedPreview(t *testing.T) {
 	page := request(http.MethodGet, "/admin/profile/"+strconv.FormatInt(id, 10)+"/", nil).Body.String()
 
 	for _, want := range []string{
-		`data-preview-url="../_preview/Bio/"`,
+		`data-preview-url="/admin/profile/_preview/Bio/"`,
 		`<iframe id="field-Bio-preview" title="Preview of Bio" sandbox="" referrerpolicy="no-referrer"`,
 	} {
 		if !strings.Contains(page, want) {
