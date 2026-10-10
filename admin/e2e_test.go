@@ -151,7 +151,8 @@ func TestAdminSecurityJourney(t *testing.T) {
 
 	// 8. Logout kills the session; the same cookie no longer authenticates
 	// anywhere, including for further destructive actions.
-	logout := httptest.NewRequest(http.MethodPost, "/admin/logout/", nil)
+	logout := httptest.NewRequest(http.MethodPost, "/admin/logout/", strings.NewReader(url.Values{"csrf_token": {sessionCSRF}}.Encode()))
+	logout.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	logout.AddCookie(session)
 	logoutResp := httptest.NewRecorder()
 	handler.ServeHTTP(logoutResp, logout)

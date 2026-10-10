@@ -2,6 +2,8 @@ package admin_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -193,7 +195,9 @@ func TestLogoutDeletesSessionAndCookieNoLongerAuthenticates(t *testing.T) {
 	loginResponse := doLoginRequest(t, handler, "admin", "correct-password")
 	cookie := loginResponse.Result().Cookies()[0]
 
-	logoutRequest := httptest.NewRequest(http.MethodPost, "/admin/logout/", nil)
+	sessionSum := sha256.Sum256([]byte(cookie.Value))
+	logoutRequest := httptest.NewRequest(http.MethodPost, "/admin/logout/", strings.NewReader(url.Values{"csrf_token": {hex.EncodeToString(sessionSum[:])}}.Encode()))
+	logoutRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	logoutRequest.AddCookie(cookie)
 	logoutResponse := httptest.NewRecorder()
 	handler.ServeHTTP(logoutResponse, logoutRequest)

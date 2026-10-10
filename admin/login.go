@@ -109,7 +109,8 @@ func loginView(store *db.Store, limiter *security.RateLimiter, clientKey func(*h
 }
 
 // logoutView handles POST for /admin/logout/: deletes the current
-// session and clears its cookie.
+// session and clears its cookie. A request with a session cookie must also
+// carry that session's CSRF token.
 func logoutView(store *db.Store) tango.View {
 	return func(ctx *tango.Context) error {
 		if ctx.Request().Method != http.MethodPost {
@@ -117,6 +118,12 @@ func logoutView(store *db.Store) tango.View {
 		}
 
 		if cookie, err := ctx.Request().Cookie(sessionCookieName); err == nil {
+			// A cross-site POST carries the cookie but not the token, so it
+			// cannot end someone's session. Without a cookie there is no
+			// session to protect.
+			if !verifySessionCSRF(ctx) {
+				return forbiddenCSRF(ctx)
+			}
 			if err := deleteSessionByToken(ctx.Context(), store, cookie.Value); err != nil {
 				return err
 			}
