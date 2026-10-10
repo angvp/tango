@@ -80,9 +80,11 @@ Do not confuse this with a drop plus an add: a drop destroys the data, a rename 
 
 ## Widening type change
 
-A change to a field's Go type whose new column type can hold every value the old one could, so existing rows convert without loss or failure: `integer` to `real` or `text`, `real` to `text`, and `boolean` to `integer` or `text`. These are the only column type changes a generated migration expresses; any other type change is refused when migrations are generated.
+A change to a field's Go type whose new column type can hold every value the old one could, so existing rows convert without loss or failure: `integer` to `real` or `text`, `real` to `text`, and `boolean` to `integer` or `text`. A bounded string (`tango:"varchar=n"`) widens to `text` or to a larger bound. Widening type changes and the bounded-string narrowings below are the only column type changes a generated migration expresses; any other type change is refused when migrations are generated.
 
-Do not confuse this with a narrowing change (for example `text` to `integer`), where some existing values cannot convert. Changes within one column type, such as `int` to `int64`, are not type changes at all.
+A **narrowing** is the one kind of unsafe change tanGO does generate: adding `varchar=n` to a bare string, or lowering `n`. Applying it first checks every existing value in Go, before any DDL, and fails without changing data or schema if one is too long; it never truncates. A migration made only of narrowings is reversible (its `Down` widens again); any widening step makes the whole migration irreversible.
+
+Do not confuse this with a type change that cannot convert (for example `text` to `integer`), which is refused. Changes within one column type, such as `int` to `int64`, are not type changes at all.
 
 ## Covered API
 

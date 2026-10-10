@@ -243,3 +243,46 @@ func TestInvalidAlterColumnTypeLengthsFailReplay(t *testing.T) {
 		}
 	}
 }
+
+type explicitText struct {
+	ID   int64  `tango:"pk"`
+	Body string `tango:"text"`
+}
+
+type bareText struct {
+	ID   int64 `tango:"pk"`
+	Body string
+}
+
+// The compatibility gate for tango:"text": it is today's bare string, so it
+// produces the same column and, against history written for a bare string,
+// no migration at all.
+func TestExplicitTextTagIsABareStringWithNoSchemaDrift(t *testing.T) {
+	registry := model.NewRegistry()
+	if err := registry.Register(explicitText{}); err != nil {
+		t.Fatal(err)
+	}
+	explicit, _ := registry.Get("explicitText")
+	bare := model.NewRegistry()
+	if err := bare.Register(bareText{}); err != nil {
+		t.Fatal(err)
+	}
+	plain, _ := bare.Get("bareText")
+
+	explicitModels, bareModels := ModelsFromMeta([]model.ModelMeta{explicit}), ModelsFromMeta([]model.ModelMeta{plain})
+	for i, column := range explicitModels[0].Columns {
+		if column != bareModels[0].Columns[i] {
+			t.Fatalf("column %q = %+v, want the bare string's %+v", column.Name, column, bareModels[0].Columns[i])
+		}
+	}
+
+	history, err := Replay([]Migration{{App: "", Name: "0001", Up: []Step{CreateTable{Table: "bare_text", Columns: bareModels[0].Columns}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	explicitModels[0].Name = "bare_text"
+	migrations, err := DiffModels(explicitModels, history)
+	if err != nil || len(migrations) != 0 {
+		t.Fatalf("DiffModels = %v, %v; want no migration for an explicit text tag", migrations, err)
+	}
+}

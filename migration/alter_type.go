@@ -133,7 +133,7 @@ func typeLabel(columnType string, length int) string {
 // alterColumnType changes s.Column's type in one statement on PostgreSQL
 // and one transactional rebuild on SQLite, so a failure leaves the column,
 // its values and its default as they were.
-func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s AlterColumnType) error {
+func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s AlterColumnType, dataChecked bool) error {
 	if err := validateAlterLengths(s); err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 	if !ok || !(narrowing || isWidening(s.From, s.FromLength, s.To, s.ToLength)) {
 		return fmt.Errorf("tango migration: %s.%s: %s to %s is not a widening type change", s.Table, s.Column, typeLabel(s.From, s.FromLength), typeLabel(s.To, s.ToLength))
 	}
-	if narrowing {
+	if narrowing && !dataChecked {
 		if err := preflightNarrowing(ctx, sqlDB, dialect, s); err != nil {
 			return err
 		}

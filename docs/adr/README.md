@@ -54,3 +54,4 @@ New records take the next free number here. This directory is the single, public
 | [0046](0046-admin-password-prompt-hides-typing-with-x-term.md) | The admin password prompt hides typing, using `golang.org/x/term` | Accepted |
 | [0047](0047-multi-instance-state-is-not-built-yet.md) | Shared state for more than one instance is not built yet; the guide documents workarounds and four triggers reopen it | Accepted |
 | [0048](0048-tango-shell-is-the-projects-own-program-on-a-pinned-yaegi.md) | `tango shell` is the project's own program on a pinned Yaegi; app composition moves into the scaffold's `project` package | Accepted |
+| [0049](0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md) | Bounded strings are declared by tag, validated by rune count in Go, and enforced neither by SQLite nor by a `CHECK` | Accepted |

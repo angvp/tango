@@ -110,7 +110,7 @@ func ApplyPending(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrat
 			return fmt.Errorf("migration %q: %w", m.Name, err)
 		}
 		for _, step := range steps {
-			if err := ApplyStep(ctx, sqlDB, dialect, step); err != nil {
+			if err := applyStep(ctx, sqlDB, dialect, step, true); err != nil {
 				return fmt.Errorf("migration %q: %w", m.Name, err)
 			}
 		}

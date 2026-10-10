@@ -18,6 +18,13 @@ import (
 // application code should use tango migrate rather than calling ApplyStep
 // directly.
 func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step) error {
+	return applyStep(ctx, sqlDB, dialect, step, false)
+}
+
+// applyStep is ApplyStep. dataChecked says the caller already ran
+// preflightMigration for the whole migration, so a narrowing is not scanned
+// a second time; a direct ApplyStep always passes false and keeps its guard.
+func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step, dataChecked bool) error {
 	switch s := step.(type) {
 	case CreateTable:
 		for _, c := range s.Columns {
@@ -47,7 +54,7 @@ func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 	case RenameColumn:
 		return renameColumn(ctx, sqlDB, dialect, s)
 	case AlterColumnType:
-		return alterColumnType(ctx, sqlDB, dialect, s)
+		return alterColumnType(ctx, sqlDB, dialect, s, dataChecked)
 	case RenameTable:
 		return renameTable(ctx, sqlDB, dialect, s)
 	default:

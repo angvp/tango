@@ -242,7 +242,7 @@ func lengthTag(tag string, t reflect.Type) (int, error) {
 		return 0, fmt.Errorf("varchar needs a length, as varchar=200")
 	}
 	n, err := strconv.Atoi(value)
-	if err != nil || n < 1 {
+	if err != nil || n < 1 || strings.Trim(value, "0123456789") != "" {
 		return 0, fmt.Errorf("varchar needs a positive whole number, got %q", value)
 	}
 	if n > MaxVarcharLength {

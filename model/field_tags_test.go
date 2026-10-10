@@ -74,6 +74,14 @@ type varcharNotANumber struct {
 	ID int64  `tango:"pk"`
 	A  string `tango:"varchar=many"`
 }
+type varcharSigned struct {
+	ID int64  `tango:"pk"`
+	A  string `tango:"varchar=+200"`
+}
+type varcharSpaced struct {
+	ID int64  `tango:"pk"`
+	A  string `tango:"varchar=2 00"`
+}
 type varcharTooLarge struct {
 	ID int64  `tango:"pk"`
 	A  string `tango:"varchar=10485761"`
@@ -114,6 +122,8 @@ func TestMalformedLengthTagsFailAtRegistrationNamingModelAndField(t *testing.T) 
 		{"varchar=0", varcharZero{}, "varcharZero.A"},
 		{"a negative length", varcharNegative{}, "varcharNegative.A"},
 		{"a non-numeric length", varcharNotANumber{}, "varcharNotANumber.A"},
+		{"a plus sign", varcharSigned{}, "varcharSigned.A"},
+		{"a space inside the number", varcharSpaced{}, "varcharSpaced.A"},
 		{"a length above PostgreSQL's limit", varcharTooLarge{}, "varcharTooLarge.A"},
 		{"varchar and text together", varcharAndText{}, "varcharAndText.A"},
 		{"varchar twice", varcharTwice{}, "varcharTwice.A"},
