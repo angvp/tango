@@ -10,6 +10,9 @@ go vet ./...
 go build ./...
 go test -count=1 ./...
 
+# storage/s3 is its own Go module (ADR 0054), so ./... above skips it.
+(cd storage/s3 && gofmt -l . | grep . && exit 1; go vet ./... && go test -count=1 ./...)
+
 if command -v lychee >/dev/null 2>&1; then
 	lychee --offline --include-fragments --no-progress './**/*.md'
 else

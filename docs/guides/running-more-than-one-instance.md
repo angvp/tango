@@ -47,6 +47,10 @@ With `accounts.WithMail`, emails wait in an in-memory outbox in the instance tha
 - **What still holds:** the link in any email that is sent works on every instance, because the token is a database row.
 - **Workaround:** apply the edge rate limit to `/accounts/password-reset/` and `/accounts/verify/resend/`. Give the instance a long enough shutdown timeout for its outbox to drain on a deploy; see [application lifecycle](application-lifecycle.md).
 
+### Uploaded files
+
+`storage/local` writes to one machine's disk. Another instance cannot read those files, and a container replacement deletes them unless the directory is a persistent volume mounted on exactly one instance. Use `storage/s3` for any deployment with more than one instance or an ephemeral disk. The metadata rows are in your database and are shared; the bytes are what must be reachable from every instance. See [file uploads](uploads.md#choosing-a-backend).
+
 ## Behind a reverse proxy
 
 This applies with one instance too. The failed-login limiter needs to know which client a request came from.

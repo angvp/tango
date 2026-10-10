@@ -51,6 +51,10 @@ The Release job refuses the tag, creating nothing, unless the tagged commit is o
 - **Red before "Create the GitHub release":** the tag was refused and nothing was created. Read the listed reasons. The proxy is asked last, only once every other check passes, so until then you may fix the problem, delete the tag, and push it again: re-run the workflow once CI finishes if CI was still running, or fix the commit on `main` and move the tag to it.
 - **Red at "Move the website to the release":** **the release is published and the website is not updated.** Nothing is undone. Look at the failed run in `angvp/tango-web`'s Actions tab, fix the cause, and run **Follow a tanGO release** there by hand with the version. If it never started, the dispatch token may have lapsed (see [the token](#the-website-dispatch-token)). The workflow must be on `tango-web`'s default branch for either to work.
 
+## Adapter modules
+
+`storage/s3` is its own Go module (see [ADR 0054](docs/adr/0054-cloud-storage-adapters-are-separate-go-modules.md)). The root tag `vX.Y.Z` does not version it: it is tagged `storage/s3/vA.B.C` on the commit it ships from, after the root tag it requires exists, and the module's `go.mod` requires that root version (the local `replace` is for development only and is removed in the commit that is tagged). Run `scripts/check.sh`, which also tests the module, before tagging either.
+
 ## Why
 
 ### Where work lands

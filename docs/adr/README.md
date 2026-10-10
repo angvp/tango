@@ -57,3 +57,6 @@ New records take the next free number here. This directory is the single, public
 | [0049](0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md) | Bounded strings are declared by tag, validated by rune count in Go, and enforced neither by SQLite nor by a `CHECK` | Accepted |
 | [0050](0050-json-accounts-are-bearer-only-and-the-host-issues-the-token.md) | JSON accounts are bearer-only, and the host issues the token | Accepted |
 | [0051](0051-the-transaction-seam-is-a-store-bound-to-one-transaction.md) | The transaction seam is a Store bound to one transaction, with flat nesting | Accepted |
+| [0052](0052-storage-is-an-explicit-object-store-with-generated-keys-and-no-model-field.md) | Storage is an explicit object store with generated keys and no model field | Accepted |
+| [0053](0053-the-local-store-publishes-an-object-as-one-atomic-directory.md) | The local store publishes an object as one atomic directory | Accepted |
+| [0054](0054-cloud-storage-adapters-are-separate-go-modules.md) | Cloud storage adapters are separate Go modules | Accepted |

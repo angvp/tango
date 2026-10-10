@@ -177,6 +177,39 @@ Independent of `admin`/`accounts`' existing failed-login-attempt limiter, which 
 |---|---|
 | `type Sender struct{ Err error }`, `func (*Sender) Send(ctx, mail.Message) error`, `func (*Sender) Messages() []mail.Message` | A `mail.Sender` for tests that records messages instead of delivering them. It rejects invalid messages exactly as real senders do; with `Err` set, every `Send` returns it. Safe for concurrent use. |
 
+## `storage` (`github.com/angvp/tango/storage`)
+
+| Symbol | What it's for |
+|---|---|
+| `type Store interface{ Put; Stat; Open; Delete }` | The object store. `Put(ctx, r io.Reader, PutOptions) (Object, error)` streams `r` in atomically and create-only under a generated key; `Stat(ctx, key) (Info, error)`; `Open(ctx, key, offset, length) (io.ReadCloser, error)` reads a range (a negative length reads to the end); `Delete(ctx, key)` (a missing object is not an error). No listing. Every method refuses a key not made by `NewKey` with `ErrInvalidKey`. |
+| `type PutOptions struct{ MaxSize int64; AllowedTypes []string }`, `type Object struct{ Key string; Size int64; SHA256, ContentType string }`, `type Info struct{ Key; Size; SHA256; ContentType; ETag; ModTime }` | `MaxSize` is required and positive. `AllowedTypes` lists sniffed media types (`image/png`, `image/*`). `Object` is what the host copies into its own model; `ContentType` is always sniffed from the bytes. |
+| `func NewKey() string`, `func ValidKey(key string) bool`, `func ETagFor(sha256hex string) string` | A key is 160 random bits as 32 lowercase base32 characters. It is opaque and never derived from a filename. |
+| `func Inspect(r io.Reader, PutOptions) (*Inspector, error)` | For `Store` implementers: sniffs, caps and hashes a write the same way in every adapter. |
+| `func Upload(store Store, r *http.Request, UploadOptions) (UploadedFile, error)`, `type UploadOptions struct{ Field string; PutOptions }`, `type UploadedFile struct{ Object; Filename, DeclaredType string }` | Reads exactly one multipart file (field `file` unless set) into `store.Put`, with bounded memory. `Filename` is a sanitized display name and `DeclaredType` the client's claim, both plain metadata. Refuses with `ErrNotMultipart`, `ErrNoFile`, `ErrMultipleFiles`, `ErrTooManyParts`, `ErrTooLarge` (also for a body cut by `MaxBodySize`) or `ErrTypeNotAllowed`. Writes no response and logs nothing. |
+| `func Serve(w, r, store Store, key string, ServeOptions) error`, `type ServeOptions struct{ Filename string; InlineTypes []string; CacheControl string }` | Delivers an object the View has already authorized: `GET`/`HEAD`, one `Range`, `If-None-Match`, `If-Modified-Since`, `If-Range`, `ETag`, `nosniff`, the sniffed type. Attachment unless the type is in `InlineTypes`, and HTML, SVG, XML and script types are always attachments. `Cache-Control` defaults to `private, no-store`. A missing or invalid key is `404`. Returns an error only for an unexpected store failure, without having written a response. |
+| `ErrNotFound`, `ErrExists`, `ErrTooLarge`, `ErrTypeNotAllowed`, `ErrInvalidKey`, `ErrInvalidRange`, `ErrInvalidOptions`; `*TooLargeError{Max}`, `*TypeNotAllowedError{Type}` | Match with `errors.Is`; the typed errors give the limit or detected type through `errors.As`. |
+
+See [the uploads guide](guides/uploads.md) and [ADR 0052](adr/0052-storage-is-an-explicit-object-store-with-generated-keys-and-no-model-field.md).
+
+## `storage/local` (`github.com/angvp/tango/storage/local`)
+
+| Symbol | What it's for |
+|---|---|
+| `func New(dir string) (*Store, error)`, `func (*Store) Close() error` | A filesystem `storage.Store` rooted at `dir` (directories `0700`, files `0600`), reached only through `os.Root`. An object is a directory published by one rename, so a crash never leaves a partial object visible; stale temporary directories are swept when it opens. For development, tests and one host with a persistent volume. See [ADR 0053](adr/0053-the-local-store-publishes-an-object-as-one-atomic-directory.md). |
+
+## `storage/s3` (`github.com/angvp/tango/storage/s3`, its own module)
+
+| Symbol | What it's for |
+|---|---|
+| `func New(ctx, Config) (*Store, error)`, `type Config struct{ Bucket, Region, Endpoint string; PathStyle bool; Prefix string; Credentials *Credentials; TempDir string; PartSize int64 }`, `type Credentials struct{ AccessKeyID, SecretAccessKey, SessionToken string }` | A `storage.Store` on Amazon S3, Cloudflare R2 or another S3-compatible provider (`Endpoint`, `PathStyle`). Nil `Credentials` uses the SDK's standard chain. Create-only writes use a conditional put. `Put` spools to `TempDir` before uploading, since the SHA-256 is metadata fixed when the upload starts. Its own module, so no cloud SDK reaches the root `go.mod`. See [ADR 0054](adr/0054-cloud-storage-adapters-are-separate-go-modules.md). |
+
+## `storagetest` (`github.com/angvp/tango/storagetest`)
+
+| Symbol | What it's for |
+|---|---|
+| `func NewMemory() *Memory`, `func NewMemoryWithKeys(next func() string) *Memory` | An in-memory `storage.Store` for tests; the second forces key collisions. |
+| `func Run(t *testing.T, f Factory)`, `type Factory struct{ New; NewWithKeys }` | The conformance suite every `Store` passes: round trip, ranges, missing and invalid keys, size and type refusals storing nothing, create-only, concurrency, cancelled contexts. `NewWithKeys` is optional and enables the checks that need a controlled key. |
+
 ## `accounts` (`github.com/angvp/tango/accounts`)
 
 | Symbol | What it's for |

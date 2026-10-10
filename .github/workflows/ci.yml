@@ -72,6 +72,13 @@ jobs:
             --junitfile "junit-${{ matrix.dialect }}.xml" \
             --format testname \
             -- ./... -count=1 -coverprofile="coverage-${{ matrix.dialect }}.out" -covermode=atomic
+      # storage/s3 is its own Go module, so ./... above skips it (ADR 0054).
+      - name: go test storage/s3
+        if: ${{ matrix.dialect == 'sqlite' }}
+        working-directory: storage/s3
+        run: |
+          go vet ./...
+          go test -count=1 ./...
       - name: Upload coverage to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7

@@ -16,6 +16,7 @@ Read in this order:
 
 - Authentication: `auth-and-accounts.md`; use `jwt-auth.md` for stateless API/WebSocket tokens.
 - Outgoing email: `mail.md`.
+- File uploads and durable storage: `storage.md`.
 - Relationships: `relationships.md`.
 - Reusable package: `reusable-apps.md`.
 - Request cross-cutting concern: `middleware.md`; use `ratelimit.md` for quotas and `observability.md` for logs/metrics.
