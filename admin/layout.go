@@ -121,6 +121,8 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 
   .alert-error { @apply mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700; }
 
+  .field-error { @apply mt-1 text-sm text-red-700; }
+
   .empty-state { @apply flex flex-col items-center justify-center gap-1 px-5 py-16 text-center; }
   .empty-state-title { @apply text-sm font-medium text-slate-700; }
   .empty-state-body { @apply text-sm text-slate-500; }

@@ -45,7 +45,19 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 			}
 
 			if err := store.Create(ctx.Context(), meta, instancePtr.Interface()); err != nil {
-				return err
+				fieldErrors, tooLong := tooLongFieldErrors(ctx.Context(), err, registration.Options)
+				if !tooLong {
+					return err
+				}
+				formOpts := formOptionsFromRequest(ctx)
+				formOpts.FieldErrors = fieldErrors
+				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
+				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
+					chrome:    pageChrome.withContext(ctx.Context()),
+					Title:     title,
+					Fields:    fields,
+					CSRFToken: csrfTokenFromRequest(ctx.Request()),
+				})
 			}
 
 			target := basePath

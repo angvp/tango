@@ -32,6 +32,11 @@ type FieldContext struct {
 	// Value is the field's current value, formatted for display. Empty for
 	// a new (zero) instance.
 	Value string
+	// MaxLength is the field's declared maximum length in characters (a
+	// tango:"varchar=n" string), or 0 when the field is unbounded. The
+	// built-in input renders it as the maxlength attribute; the server stays
+	// the authority, since browsers count in UTF-16 units.
+	MaxLength int
 	// Checked is the field's current boolean value, for checkbox-shaped
 	// widgets.
 	Checked bool

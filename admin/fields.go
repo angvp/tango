@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -117,13 +118,16 @@ type formContextOptions struct {
 	CurrentURL     string
 	PreselectField string
 	PreselectValue string
+	// FieldErrors maps a field's Go name to the message shown beside it.
+	FieldErrors map[string]string
 }
 
 func buildFieldContext(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, opts adminregistry.Options, instance reflect.Value, formOpts formContextOptions) (FieldContext, bool) {
 	fc := FieldContext{
-		Name:     field.Name,
-		Label:    humanizeFieldName(field.Name),
-		ReadOnly: contains(opts.ReadOnly, field.Name),
+		Name:      field.Name,
+		Label:     humanizeFieldName(field.Name),
+		MaxLength: field.MaxLength,
+		ReadOnly:  contains(opts.ReadOnly, field.Name),
 	}
 	if label, ok := opts.Labels[field.Name]; ok {
 		fc.Label = label
@@ -200,7 +204,7 @@ func buildFormFields(ctx context.Context, store *db.Store, models *model.Registr
 	for _, field := range orderedEditableFields(meta, opts.FieldOrder) {
 		fc, fkResolved := buildFieldContext(ctx, store, models, adminReg, field, opts, instance, formOpts)
 		widget := widgetForField(field, opts, fc, fkResolved)
-		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(fc)})
+		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(fc), Error: formOpts.FieldErrors[field.Name]})
 	}
 
 	return fields
@@ -356,4 +360,20 @@ func primaryKeyField(meta model.ModelMeta) (model.FieldMeta, error) {
 		}
 	}
 	return model.FieldMeta{}, fmt.Errorf("model %s has no primary key field", meta.Name)
+}
+
+// tooLongFieldErrors turns a db.ValueTooLongError from Store.Create or
+// Store.Update into the message shown beside the offending field, using the
+// field's label, and reports whether err was one.
+func tooLongFieldErrors(ctx context.Context, err error, opts adminregistry.Options) (map[string]string, bool) {
+	var tooLong *db.ValueTooLongError
+	if !errors.As(err, &tooLong) {
+		return nil, false
+	}
+	label := humanizeFieldName(tooLong.Field)
+	if custom, ok := opts.Labels[tooLong.Field]; ok {
+		label = custom
+	}
+	message := i18n.T(ctx, "admin.error.too_long", "%s must be at most %d characters (got %d)", label, tooLong.Max, tooLong.Got)
+	return map[string]string{tooLong.Field: message}, true
 }

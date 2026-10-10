@@ -46,7 +46,7 @@ func setFieldFromReflectedString(dest reflect.Value, raw string, present bool) e
 
 var inputWidgetTemplate = template.Must(template.New("inputWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
-<input id="field-{{.Name}}" type="{{.InputType}}" name="{{.Name}}" value="{{.Value}}" class="input">`))
+<input id="field-{{.Name}}" type="{{.InputType}}" name="{{.Name}}" value="{{.Value}}"{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}} class="input">`))
 
 // inputWidget is the built-in generic text/number/date-time field — one
 // plain <input>, its HTML type attribute driven by the Go field's kind.

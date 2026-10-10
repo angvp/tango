@@ -78,7 +78,19 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				if errors.Is(err, db.ErrNotFound) {
 					return notFound(ctx)
 				}
-				return err
+				fieldErrors, tooLong := tooLongFieldErrors(ctx.Context(), err, registration.Options)
+				if !tooLong {
+					return err
+				}
+				formOpts := formOptionsFromRequest(ctx)
+				formOpts.FieldErrors = fieldErrors
+				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
+				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
+					chrome:    pageChrome.withContext(ctx.Context()),
+					Title:     title,
+					Fields:    fields,
+					CSRFToken: csrfTokenFromRequest(ctx.Request()),
+				})
 			}
 
 			return ctx.Redirect(basePath)
