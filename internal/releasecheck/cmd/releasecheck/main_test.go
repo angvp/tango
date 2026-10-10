@@ -72,3 +72,73 @@ func TestACheckBeforeTaggingNeverAsksTheModuleProxy(t *testing.T) {
 		t.Fatal("the module proxy was asked about a tag that is not pushed")
 	}
 }
+
+// readySources answers as a release whose commit is on main, whose CI is
+// green and whose migration-compat corpus is in place.
+type readySources struct {
+	onMain bool
+	jobs   []string
+}
+
+func (s readySources) OnMain(context.Context, string) (bool, error) { return s.onMain, nil }
+func (s readySources) CIRuns(context.Context, string) ([]releasecheck.CIRun, error) {
+	run := releasecheck.CIRun{Status: "completed", Conclusion: "success"}
+	for _, name := range s.jobs {
+		run.Jobs = append(run.Jobs, releasecheck.CIJob{Name: name, Status: "completed", Conclusion: "success"})
+	}
+	return []releasecheck.CIRun{run}, nil
+}
+func (readySources) PublishedCommit(context.Context, string) (string, error) { return "", nil }
+func (readySources) CorpusRegistered(context.Context, string, string) (bool, bool, error) {
+	return true, true, nil
+}
+
+const readyChangelog = "# Changelog\n\n## [Unreleased]\n\n## [0.4.0] - 2026-11-02\n\n### Added\n\n- Caching.\n"
+
+func TestVerdictSaysSoAndWritesTheNotesForAReleasableTag(t *testing.T) {
+	notes := filepath.Join(t.TempDir(), "notes.md")
+	release := releasecheck.Release{Tag: "v0.4.0", Commit: "abc123", Changelog: []byte(readyChangelog)}
+	var out strings.Builder
+	if err := verdict(context.Background(), release, readySources{onMain: true, jobs: releasecheck.RequiredJobs}, notes, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "v0.4.0 at abc123 may be released.") {
+		t.Fatalf("output = %q", out.String())
+	}
+	body, err := os.ReadFile(notes)
+	if err != nil || !strings.Contains(string(body), "Caching.") || !strings.HasSuffix(string(body), "\n") {
+		t.Fatalf("notes = %q, %v", body, err)
+	}
+}
+
+func TestVerdictOnADryRunNamesWhatItDidNotCheck(t *testing.T) {
+	release := releasecheck.Release{Tag: "v0.4.0", Commit: "abc123", Changelog: []byte(readyChangelog), DryRun: true}
+	var out strings.Builder
+	if err := verdict(context.Background(), release, readySources{onMain: false, jobs: releasecheck.RequiredJobs}, "", &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "dry run: v0.4.0 at abc123 passes every check it makes.") || !strings.Contains(out.String(), "dry run: not checked:") {
+		t.Fatalf("output = %q", out.String())
+	}
+}
+
+func TestVerdictRefusesAndWritesNothingWhenACheckFails(t *testing.T) {
+	notes := filepath.Join(t.TempDir(), "notes.md")
+	release := releasecheck.Release{Tag: "v0.4.0", Commit: "abc123", Changelog: []byte(readyChangelog)}
+	var out strings.Builder
+	err := verdict(context.Background(), release, readySources{onMain: false, jobs: releasecheck.RequiredJobs}, notes, &out)
+	if err == nil || !strings.Contains(err.Error(), "not reachable from main") || out.Len() != 0 {
+		t.Fatalf("err = %v, output %q", err, out.String())
+	}
+	if _, statErr := os.Stat(notes); statErr == nil {
+		t.Fatal("release notes were written for a refused release")
+	}
+}
+
+func TestVerdictReportsAnUnwritableNotesFile(t *testing.T) {
+	release := releasecheck.Release{Tag: "v0.4.0", Commit: "abc123", Changelog: []byte(readyChangelog)}
+	err := verdict(context.Background(), release, readySources{onMain: true, jobs: releasecheck.RequiredJobs}, filepath.Join(t.TempDir(), "no", "such", "dir", "notes.md"), &strings.Builder{})
+	if err == nil || !strings.Contains(err.Error(), "write the release notes") {
+		t.Fatalf("err = %v", err)
+	}
+}

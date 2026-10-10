@@ -11,6 +11,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -65,17 +66,23 @@ func run(tag, commit, changelogPath, goreleasePath, notesPath, repo string, dryR
 		sources = notYetTagged{sources}
 	}
 	release := releasecheck.Release{Tag: tag, Commit: commit, Changelog: changelog, Gorelease: string(report), DryRun: dryRun}
+	return verdict(ctx, release, sources, notesPath, os.Stdout)
+}
+
+// verdict runs the checks against sources, says what it found on out, and
+// writes the release notes when notesPath is set.
+func verdict(ctx context.Context, release releasecheck.Release, sources releasecheck.Sources, notesPath string, out io.Writer) error {
 	body, err := releasecheck.Check(ctx, release, sources)
 	if err != nil {
 		return err
 	}
-	if dryRun {
-		fmt.Printf("dry run: %s at %s passes every check it makes.\n", tag, commit)
+	if release.DryRun {
+		fmt.Fprintf(out, "dry run: %s at %s passes every check it makes.\n", release.Tag, release.Commit)
 		for _, skipped := range releasecheck.Skipped(release) {
-			fmt.Printf("dry run: not checked: %s.\n", skipped)
+			fmt.Fprintf(out, "dry run: not checked: %s.\n", skipped)
 		}
 	} else {
-		fmt.Printf("%s at %s may be released.\n", tag, commit)
+		fmt.Fprintf(out, "%s at %s may be released.\n", release.Tag, release.Commit)
 	}
 	if notesPath != "" {
 		if err := os.WriteFile(notesPath, []byte(body+"\n"), 0o644); err != nil {
