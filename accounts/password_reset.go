@@ -57,13 +57,13 @@ func (m *mailer) askForReset(ctx *tango.Context, limiter *security.RateLimiter) 
 		})
 	}
 	email := normalizeEmail(address.Address)
-	m.requestPasswordReset(ctx.Context(), email)
+	m.requestPasswordReset(ctx.Context(), email, m.pageLinker("/accounts/password-reset/confirm/"))
 	return render(ctx, http.StatusOK, passwordResetSentTemplate, nil)
 }
 
 // prepareReset issues a reset token for email's account and returns its
 // email, or ok=false when there is no active account for email.
-func (m *mailer) prepareReset(ctx context.Context, email string) (delivery, bool, error) {
+func (m *mailer) prepareReset(ctx context.Context, email string, link linker) (delivery, bool, error) {
 	account, ok, err := findAccountByEmail(ctx, m.store, email)
 	if err != nil || !ok || !account.Active {
 		return delivery{}, false, err
@@ -72,7 +72,7 @@ func (m *mailer) prepareReset(ctx context.Context, email string) (delivery, bool
 	if err != nil {
 		return delivery{}, false, err
 	}
-	return m.emailWithLink(account, token, "/accounts/password-reset/confirm/", "Reset your password",
+	return m.emailWithLink(account, token, link, "Reset your password",
 		"Someone asked to reset the password for this email address.\n\n"+
 			"To choose a new password, open this link within 1 hour:\n\n%s\n\n"+
 			"If you didn't ask, ignore this email: your password stays the same.\n"), true, nil

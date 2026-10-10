@@ -130,7 +130,7 @@ func register(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *
 		return err
 	}
 	if m != nil {
-		m.queueVerification(ctx.Context(), account)
+		m.queueVerification(ctx.Context(), account, m.pageLinker("/accounts/verify/"))
 	}
 	return ctx.Redirect(safeAccountsNext(next, defaultPostLoginRedirect))
 }

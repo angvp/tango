@@ -147,12 +147,25 @@ func (m *mailer) queue(ctx context.Context, email string, job outboxJob) {
 	}
 }
 
+// linker builds the link an email carries for a token: the HTML flow's
+// /accounts/... page, or a JSON-mode template pointing at a separate client.
+type linker func(token string) string
+
+// pageLinker links to one of accounts' own pages on the base URL.
+func (m *mailer) pageLinker(path string) linker {
+	return func(token string) string { return m.baseURL + path + "?token=" + token }
+}
+
+// templateLinker fills a validated JSON-mode link template.
+func templateLinker(template string) linker {
+	return func(token string) string { return strings.Replace(template, "{token}", token, 1) }
+}
+
 // emailWithLink is the delivery for an email to account carrying token in
-// a link to path.
-func (m *mailer) emailWithLink(account Account, token, path, subject, text string) delivery {
-	link := m.baseURL + path + "?token=" + token
+// a link.
+func (m *mailer) emailWithLink(account Account, token string, link linker, subject, text string) delivery {
 	return delivery{
-		message: tangomail.Message{From: m.cfg.mail.From, To: account.Email, Subject: subject, Text: fmt.Sprintf(text, link)},
+		message: tangomail.Message{From: m.cfg.mail.From, To: account.Email, Subject: subject, Text: fmt.Sprintf(text, link(token))},
 		secret:  token,
 	}
 }

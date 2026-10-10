@@ -24,7 +24,8 @@ type jsonAPI struct {
 // in the JSON error shape.
 func (j *jsonAPI) routes() tango.URLs {
 	endpoints := map[string]func(*tango.Context) error{
-		"login/": j.login,
+		"login/":    j.login,
+		"register/": j.register,
 	}
 	var routes tango.URLs
 	for path, endpoint := range endpoints {

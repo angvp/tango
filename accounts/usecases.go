@@ -90,10 +90,10 @@ func rejectUnknown(password string) {
 // requestPasswordReset queues a reset email for an already-normalized
 // address. It never looks the account up on the request: the outbox does,
 // so every address takes the same path.
-func (m *mailer) requestPasswordReset(ctx context.Context, email string) {
+func (m *mailer) requestPasswordReset(ctx context.Context, email string, link linker) {
 	m.queue(ctx, email, outboxJob{
 		purpose: PurposePasswordReset,
-		prepare: func(jobCtx context.Context) (delivery, bool, error) { return m.prepareReset(jobCtx, email) },
+		prepare: func(jobCtx context.Context) (delivery, bool, error) { return m.prepareReset(jobCtx, email, link) },
 	})
 }
 

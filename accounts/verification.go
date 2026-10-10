@@ -13,18 +13,18 @@ import (
 
 // queueVerification queues a verification email for account, unless its
 // address is in its cooldown.
-func (m *mailer) queueVerification(ctx context.Context, account Account) {
+func (m *mailer) queueVerification(ctx context.Context, account Account, link linker) {
 	id := account.ID
 	m.queue(ctx, normalizeEmail(account.Email), outboxJob{
 		purpose: PurposeEmailVerification,
-		prepare: func(jobCtx context.Context) (delivery, bool, error) { return m.prepareVerification(jobCtx, id) },
+		prepare: func(jobCtx context.Context) (delivery, bool, error) { return m.prepareVerification(jobCtx, id, link) },
 	})
 }
 
 // prepareVerification issues a verification token for the account and
 // returns its email, or ok=false when the account is gone, inactive or
 // already verified.
-func (m *mailer) prepareVerification(ctx context.Context, accountID int64) (delivery, bool, error) {
+func (m *mailer) prepareVerification(ctx context.Context, accountID int64, link linker) (delivery, bool, error) {
 	var account Account
 	if err := m.store.Get(ctx, accountMeta(), accountID, &account); err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -39,7 +39,7 @@ func (m *mailer) prepareVerification(ctx context.Context, accountID int64) (deli
 	if err != nil {
 		return delivery{}, false, err
 	}
-	return m.emailWithLink(account, token, "/accounts/verify/", "Confirm your email address",
+	return m.emailWithLink(account, token, link, "Confirm your email address",
 		"Please confirm that this is your email address by opening this link within 24 hours:\n\n%s\n\n"+
 			"If you didn't create an account, ignore this email.\n"), true, nil
 }
@@ -88,7 +88,7 @@ func resendVerificationView(m *mailer, limiter *security.RateLimiter) tango.View
 		}
 		limiter.RecordFailure(key)
 		if account.EmailVerifiedAt.IsZero() {
-			m.queueVerification(ctx.Context(), account)
+			m.queueVerification(ctx.Context(), account, m.pageLinker("/accounts/verify/"))
 		}
 		return render(ctx, http.StatusOK, verificationSentTemplate, nil)
 	}
