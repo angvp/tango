@@ -43,6 +43,10 @@ func OnError(fn func(op string, err error)) FetchOption {
 //   - if writing the loaded value fails, FetchJSON reports it and still
 //     returns the value.
 //
+// A key or ttl that is not valid (ErrInvalidKey, ErrInvalidTTL) is a
+// programming error, not a cache failure: FetchJSON returns it before calling
+// load, and never works around it.
+//
 // A load failure is returned as is (it is not a cache error). Cache failures
 // go to the OnError hook when one is supplied. Without a hook they are not
 // returned when loading succeeds, since observability is the hook's job, but
@@ -51,6 +55,14 @@ func OnError(fn func(op string, err error)) FetchOption {
 // FetchJSON does not coalesce concurrent calls for the same key: when a hot
 // key expires, every caller loads. Wrap load with singleflight to avoid it.
 func FetchJSON[T any](ctx context.Context, store Store, key string, ttl time.Duration, load func(context.Context) (T, error), opts ...FetchOption) (T, error) {
+	if !ValidKey(key) {
+		var zero T
+		return zero, ErrInvalidKey
+	}
+	if err := CheckTTL(ttl); err != nil {
+		var zero T
+		return zero, err
+	}
 	var cfg fetchConfig
 	for _, opt := range opts {
 		opt(&cfg)

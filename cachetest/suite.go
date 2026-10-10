@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
@@ -120,7 +121,7 @@ func ownership(t *testing.T, s cache.Store) {
 
 func invalidKeys(t *testing.T, s cache.Store) {
 	ctx := context.Background()
-	for _, k := range []string{"", strings.Repeat("k", 201), "has space", "tab\there", "new\nline", "nul\x00", "café", "del\x7f"} {
+	for _, k := range []string{"", strings.Repeat("k", cache.MaxKeyLength+1), "has space", "tab\there", "new\nline", "nul\x00", "café", "del\x7f"} {
 		if _, _, err := s.Get(ctx, k); !errors.Is(err, cache.ErrInvalidKey) {
 			t.Errorf("Get(%q): %v, want ErrInvalidKey", k, err)
 		}
@@ -131,7 +132,7 @@ func invalidKeys(t *testing.T, s cache.Store) {
 			t.Errorf("Delete(%q): %v, want ErrInvalidKey", k, err)
 		}
 	}
-	if err := s.Set(ctx, strings.Repeat("k", 200), []byte("v"), time.Minute); err != nil {
+	if err := s.Set(ctx, strings.Repeat("k", cache.MaxKeyLength), []byte("v"), time.Minute); err != nil {
 		t.Errorf("a 200-byte key: %v, want it accepted", err)
 	}
 }
@@ -214,6 +215,26 @@ func oversized(t *testing.T, s cache.Store) {
 	}
 }
 
+// raceStep does one Set, Get or Delete of the shared key, by step number, and
+// fails on an error or a torn value.
+func raceStep(ctx context.Context, s cache.Store, k string, values [][]byte, step int) error {
+	switch step % 3 {
+	case 0:
+		return s.Set(ctx, k, values[step%len(values)], time.Minute)
+	case 1:
+		got, ok, err := s.Get(ctx, k)
+		if err != nil {
+			return err
+		}
+		if ok && !isOneOf(got, values) {
+			return fmt.Errorf("Get returned a torn value of %d bytes", len(got))
+		}
+		return nil
+	default:
+		return s.Delete(ctx, k)
+	}
+}
+
 func concurrent(t *testing.T, s cache.Store) {
 	ctx, k := context.Background(), key("race")
 	values := [][]byte{bytes.Repeat([]byte("a"), 4096), bytes.Repeat([]byte("b"), 4096), bytes.Repeat([]byte("c"), 4096)}
@@ -223,27 +244,9 @@ func concurrent(t *testing.T, s cache.Store) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 20; j++ {
-				switch (i + j) % 3 {
-				case 0:
-					if err := s.Set(ctx, k, values[(i+j)%len(values)], time.Minute); err != nil {
-						t.Error(err)
-						return
-					}
-				case 1:
-					got, ok, err := s.Get(ctx, k)
-					if err != nil {
-						t.Error(err)
-						return
-					}
-					if ok && !isOneOf(got, values) {
-						t.Errorf("Get returned a torn value of %d bytes", len(got))
-						return
-					}
-				default:
-					if err := s.Delete(ctx, k); err != nil {
-						t.Error(err)
-						return
-					}
+				if err := raceStep(ctx, s, k, values, i+j); err != nil {
+					t.Error(err)
+					return
 				}
 			}
 		}()

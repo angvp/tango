@@ -3,5 +3,6 @@
 /coverage.out
 /coverage-children.out
 /junit.xml
+/examples/cache/cache
 /examples/jwt-api/jwt-api
 /examples/realtime-chat/realtime-chat

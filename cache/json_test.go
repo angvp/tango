@@ -291,7 +291,7 @@ func TestFetchJSONHookCannotChangeCacheBehaviorAndAPanicPropagates(t *testing.T)
 		cache.OnError(func(string, error) { panic("host bug") }))
 }
 
-func TestFetchJSONPassesItsContextToLoadAndKeyAndTTLRulesToTheHook(t *testing.T) {
+func TestFetchJSONPassesItsContextToLoadAndRefusesABadKeyOrTTLUpFront(t *testing.T) {
 	type ctxKey struct{}
 	ctx := context.WithValue(context.Background(), ctxKey{}, "marker")
 	var rec recorder
@@ -303,19 +303,14 @@ func TestFetchJSONPassesItsContextToLoadAndKeyAndTTLRulesToTheHook(t *testing.T)
 	if err != nil || seen != "marker" {
 		t.Fatalf("load got context value %v (err %v), want the caller's context", seen, err)
 	}
-	rec = recorder{}
 	calls := 0
-	if _, err := cache.FetchJSON(ctx, newLocal(t), "bad key", time.Minute, loader(&calls, profile{}, nil), rec.hook()); err != nil {
-		t.Fatal(err)
+	if _, err := cache.FetchJSON(ctx, newLocal(t), "bad key", time.Minute, loader(&calls, profile{}, nil), rec.hook()); !errors.Is(err, cache.ErrInvalidKey) {
+		t.Fatalf("err = %v, want ErrInvalidKey", err)
 	}
-	if len(rec.errs) != 2 || !errors.Is(rec.errs[0], cache.ErrInvalidKey) || !errors.Is(rec.errs[1], cache.ErrInvalidKey) {
-		t.Fatalf("hook errors = %v, want ErrInvalidKey for the read and the write", rec.errs)
+	if _, err := cache.FetchJSON(ctx, newLocal(t), "k", 0, loader(&calls, profile{}, nil), rec.hook()); !errors.Is(err, cache.ErrInvalidTTL) {
+		t.Fatalf("err = %v, want ErrInvalidTTL", err)
 	}
-	rec = recorder{}
-	if _, err := cache.FetchJSON(ctx, newLocal(t), "k", 0, loader(&calls, profile{}, nil), rec.hook()); err != nil {
-		t.Fatal(err)
-	}
-	if len(rec.errs) != 1 || !errors.Is(rec.errs[0], cache.ErrInvalidTTL) {
-		t.Fatalf("hook errors = %v, want ErrInvalidTTL for the write", rec.errs)
+	if calls != 0 {
+		t.Fatalf("loader ran %d times for a call that was refused up front", calls)
 	}
 }

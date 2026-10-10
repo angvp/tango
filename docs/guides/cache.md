@@ -61,7 +61,7 @@ rate, err := cache.FetchJSON(ctx, store, "rate:EUR", 30*time.Second,
 )
 ```
 
-It **fails open**, on purpose. If the cache read or decode fails, it reports the failure and calls your loader; if the cache write fails after a successful load, it reports it and still returns the value. A cache outage slows the request down and never fails it. `OnError` is where you log or count those failures; it is called synchronously, once per failed cache operation, and cannot change what `FetchJSON` does. Your loader's own error is returned as it is and is never sent to the hook. Without a hook, a successful fallback returns the value and `nil`, and if both the cache and the loader fail, the errors are returned joined.
+It **fails open**, on purpose. If the cache read or decode fails, it reports the failure and calls your loader; if the cache write fails after a successful load, it reports it and still returns the value. A cache outage slows the request down and never fails it. A key or TTL that breaks the rules above is your bug, not an outage: `FetchJSON` returns `ErrInvalidKey` or `ErrInvalidTTL` straight away, before calling the loader. `OnError` is where you log or count those failures; it is called synchronously, once per failed cache operation, and cannot change what `FetchJSON` does. Your loader's own error is returned as it is and is never sent to the hook. Without a hook, a successful fallback returns the value and `nil`, and if both the cache and the loader fail, the errors are returned joined.
 
 ### Stampedes
 
