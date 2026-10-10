@@ -52,7 +52,7 @@ func (j *jsonAPI) requestReset(ctx *tango.Context) error {
 	}
 	email := normalizeEmail(address.Address)
 	if emailTooLong(email) {
-		return fieldError("email", "must be at most 254 characters")
+		return emailTooLongError("email")
 	}
 	j.mail.requestPasswordReset(ctx.Context(), email, templateLinker(j.cfg.json.ResetURL))
 	return accepted(ctx)

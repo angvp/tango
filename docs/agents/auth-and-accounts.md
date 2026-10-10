@@ -28,6 +28,11 @@ Tiny shape:
 protected := accounts.RequireLogin(store, accounts.DefaultSessionCookieName, "/accounts/login/", Dashboard)
 ```
 
+## Do With `Store.InTx`
+
+- Write several rows that must succeed together with `store.InTx(ctx, func(tx *db.Store) error { … })`: nil commits, an error rolls back and is returned as is, a panic rolls back and re-panics.
+- Use `tx` for every call inside the callback; the outer store is another connection. A nested `InTx` joins the outer transaction (no savepoints), so an inner error only rolls back if it reaches the outermost callback. Canonical file: `db/store.go`; proof: `examples/spa-accounts/apps/profiles`.
+
 ## Do With `auth`
 
 - Use `auth.HashPassword`, `auth.VerifyPassword`, `auth.CreateSession`, `auth.SessionUser`, `auth.DeleteSession`, `auth.RequireLogin`, and `auth.CurrentUserID` for custom identity flows.

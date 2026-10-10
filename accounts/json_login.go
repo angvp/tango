@@ -61,9 +61,9 @@ func (j *jsonAPI) login(ctx *tango.Context) error {
 	if err != nil {
 		return err
 	}
-	if emailTooLong(identifier) {
+	if strings.Contains(identifier, "@") && emailTooLong(identifier) {
 		j.loginLimiter.RecordFailure(key)
-		return fieldError("identifier", "must be at most 254 characters")
+		return emailTooLongError("identifier")
 	}
 
 	account, ok, err := j.authenticateIdentifier(ctx, identifier, password)

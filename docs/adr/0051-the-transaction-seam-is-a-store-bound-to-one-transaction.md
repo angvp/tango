@@ -4,6 +4,8 @@ A registration has to create an `Account` and the host's own rows (a profile, sa
 
 Nesting is flat: `InTx` on a store that is already in a transaction joins it, with no savepoints. An inner error rolls the work back only if it propagates out of the outermost callback; an outer callback that swallows it can still commit the inner writes. Operations that open their own transaction when called directly (a PostgreSQL insert with an explicit ID, a cascading `Delete`) run on the enclosing one, so the table lock is held until it ends.
 
+The rows the callback writes keep the Store's validation, including the rune-counted limits of [ADR 0049](0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md).
+
 Rejected:
 
 - **`Begin`/`Commit` handles on `Store`.** They invite a forgotten rollback and a leaked connection; a callback makes both impossible.

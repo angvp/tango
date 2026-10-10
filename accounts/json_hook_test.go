@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -133,6 +134,23 @@ func TestAHookFieldErrorIs422RollsBackEverythingAndCountsAsAFailedAttempt(t *tes
 	}
 	if got := registerWithProfile(site, `{}`).Code; got != http.StatusTooManyRequests {
 		t.Fatalf("after five field errors status = %d, want 429", got)
+	}
+}
+
+func TestAWrappedJoinOfFieldErrorsKeepsEveryMessage(t *testing.T) {
+	hook := func(ctx context.Context, tx *db.Store, reg accounts.Registration) error {
+		return fmt.Errorf("profile: %w", errors.Join(
+			accounts.FieldError{Field: "username", Message: "is reserved"},
+			accounts.FieldError{Field: "bio", Message: "is too short"},
+		))
+	}
+	site := newJSONSiteWith(t, accounts.JSONConfig{Auth: &fakeAuth{}, OnRegister: hook})
+	withProfileTable(t, site)
+
+	response := registerWithProfile(site, `{}`)
+	fields, _ := decode(t, response)["fields"].(map[string]any)
+	if response.Code != http.StatusUnprocessableEntity || fields["username"] != "is reserved" || fields["bio"] != "is too short" {
+		t.Fatalf("status %d: %s; want both messages", response.Code, response.Body.String())
 	}
 }
 

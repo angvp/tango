@@ -13,4 +13,6 @@ Rejected:
 - **A server-side token table with logout and refresh.** That is a session system; hosts that want one have `auth`'s cookie sessions or can build it behind `JSONAuth`.
 - **A separate `accountsapi` app.** It would duplicate the limiters, the outbox and the use cases, and the two flows would drift.
 
+A profile the host writes at registration lives in its own model, with its text fields bounded by `tango:"varchar=n"` ([ADR 0049](0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md)); the hook's `*db.ValueTooLongError` becomes a `422` without the host mapping it.
+
 Consequences: the host writes about thirty lines (`Issue`, `Authenticate`) and owns CORS; revoking an issued access token before it expires is not possible without the host adding state of its own; the six endpoints, their status and `code` values, and the Go surface (`WithJSON`, `JSONConfig`, `JSONAuth`, `AuthGrant`, `Registration`, `FieldError`) join the Covered API.

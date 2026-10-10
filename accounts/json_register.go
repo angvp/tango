@@ -45,12 +45,10 @@ func (j *jsonAPI) register(ctx *tango.Context) error {
 	}
 
 	email := normalizeEmail(rawEmail)
-	switch {
-	case email == "":
-		return refuse(fieldError("email", "is required"))
-	case emailTooLong(email):
-		return refuse(fieldError("email", "must be at most 254 characters"))
-	case password == "":
+	if problem := emailProblem(email); problem != nil {
+		return refuse(problem)
+	}
+	if password == "" {
 		return refuse(fieldError("password", "is required"))
 	}
 	outcome, err := j.create(ctx, email, password, profile)

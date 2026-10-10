@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
+	netmail "net/mail"
 	"unicode/utf8"
 
 	"github.com/angvp/tango"
@@ -169,6 +171,27 @@ func contains(items []string, item string) bool {
 
 // emailTooLong reports whether email is over maxEmailLength characters.
 func emailTooLong(email string) bool { return utf8.RuneCountInString(email) > maxEmailLength }
+
+// emailTooLongError is the 422 for an email over maxEmailLength, keyed by
+// the request member the client sent it in.
+func emailTooLongError(member string) *apiError {
+	return fieldError(member, fmt.Sprintf("must be at most %d characters", maxEmailLength))
+}
+
+// emailProblem returns the 422 for an unusable normalized email, or nil. The
+// address must be a bare mailbox: "Ada <ada@example.com>" is refused.
+func emailProblem(email string) *apiError {
+	if email == "" {
+		return fieldError("email", "is required")
+	}
+	if emailTooLong(email) {
+		return emailTooLongError("email")
+	}
+	if address, err := netmail.ParseAddress(email); err != nil || address.Address != email {
+		return fieldError("email", "must be a valid email address")
+	}
+	return nil
+}
 
 // admit applies the failed-attempt limiter for the request's client.
 func (j *jsonAPI) admit(ctx *tango.Context, limiter *security.RateLimiter) (key string, err error) {

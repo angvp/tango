@@ -175,32 +175,30 @@ func fieldErrorsIn(err error) (map[string]string, bool) {
 	return fields, true
 }
 
+// collectFieldErrors walks err, through wrappers and joins, gathering the
+// client-fixable errors into fields. It reports whether err held nothing
+// else.
 func collectFieldErrors(err error, fields map[string]string) bool {
-	if err == nil {
+	switch e := err.(type) {
+	case nil:
 		return true
-	}
-	var fieldErr FieldError
-	var tooLong *db.ValueTooLongError
-	switch {
-	case errors.As(err, &fieldErr) && !isJoined(err):
-		fields[fieldErr.Field] = fieldErr.Message
+	case FieldError:
+		fields[e.Field] = e.Message
 		return true
-	case errors.As(err, &tooLong) && !isJoined(err):
-		fields[tooLong.Field] = fmt.Sprintf("must be at most %d characters (got %d)", tooLong.Max, tooLong.Got)
+	case *FieldError:
+		fields[e.Field] = e.Message
 		return true
+	case *db.ValueTooLongError:
+		fields[e.Field] = fmt.Sprintf("must be at most %d characters (got %d)", e.Max, e.Got)
+		return true
+	case interface{ Unwrap() []error }:
+		all := true
+		for _, inner := range e.Unwrap() {
+			all = collectFieldErrors(inner, fields) && all
+		}
+		return all
+	case interface{ Unwrap() error }:
+		return collectFieldErrors(e.Unwrap(), fields)
 	}
-	joined, ok := err.(interface{ Unwrap() []error })
-	if !ok {
-		return false
-	}
-	all := true
-	for _, inner := range joined.Unwrap() {
-		all = collectFieldErrors(inner, fields) && all
-	}
-	return all
-}
-
-func isJoined(err error) bool {
-	_, ok := err.(interface{ Unwrap() []error })
-	return ok
+	return false
 }

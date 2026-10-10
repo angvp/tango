@@ -76,6 +76,8 @@ func TestRegisterFieldProblemsAre422WithFields(t *testing.T) {
 		{"no password", `{"email":"a@example.com"}`, "password"},
 		{"a short password", `{"email":"a@example.com","password":"short"}`, "password"},
 		{"a 73 byte password", `{"email":"a@example.com","password":"` + strings.Repeat("a", 73) + `"}`, "password"},
+		{"an email without a domain", `{"email":"not-an-email","password":"correct-horse"}`, "email"},
+		{"a display-name address", `{"email":"Ada <a@example.com>","password":"correct-horse"}`, "email"},
 		{"an email over 254 characters", `{"email":"` + strings.Repeat("é", 250) + `@example.com","password":"correct-horse"}`, "email"},
 	}
 	for _, tt := range tests {

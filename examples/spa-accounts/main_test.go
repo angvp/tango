@@ -221,7 +221,7 @@ func TestBoundedProfileFieldsAreRefusedAndRolledBackWhole(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := s.post("/accounts/api/register/", `{"email":"`+strings.ReplaceAll(tt.name, " ", "")+`@example.com","password":"correct-horse","profile":`+tt.profile+`}`)
+			r := s.post("/accounts/api/register/", `{"email":"`+strings.NewReplacer(" ", "", "@", "at").Replace(tt.name)+`@example.com","password":"correct-horse","profile":`+tt.profile+`}`)
 			fields, _ := r.json()["fields"].(map[string]any)
 			if r.Code != http.StatusUnprocessableEntity || r.json()["code"] != "invalid_field" || fields[tt.field] == nil {
 				t.Fatalf("status %d: %s; want 422 with fields.%s", r.Code, r.Body.String(), tt.field)
