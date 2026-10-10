@@ -328,3 +328,23 @@ func TestFetchJSONReturnsErrInvalidKeyWhenAPrefixMakesTheFinalKeyTooLong(t *test
 		t.Fatalf("loader ran %d times and hook %d times; want neither", calls, len(rec.errs))
 	}
 }
+
+func TestCorruptAndEncodeErrorsNameTheKeyAndUnwrapTheCause(t *testing.T) {
+	store := newLocal(t)
+	if err := store.Set(context.Background(), "k", []byte("{not json"), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := cache.GetJSON[profile](context.Background(), store, "k")
+	var corrupt *cache.CorruptError
+	if !errors.As(err, &corrupt) || corrupt.Key != "k" || corrupt.Err == nil || !errors.Is(err, cache.ErrCorrupt) {
+		t.Fatalf("err = %v, want a CorruptError for k matching ErrCorrupt", err)
+	}
+	if !strings.Contains(err.Error(), `"k"`) || errors.Unwrap(err) != corrupt.Err {
+		t.Fatalf("message %q or unwrap %v wrong", err.Error(), errors.Unwrap(err))
+	}
+
+	err = cache.SetJSON(context.Background(), store, "k2", make(chan int), time.Minute)
+	if err == nil || !strings.Contains(err.Error(), `"k2"`) || errors.Unwrap(err) == nil {
+		t.Fatalf("encode error = %v, want one naming k2 with a cause", err)
+	}
+}
