@@ -3,7 +3,7 @@
 The backend of a separate client (a Next.js or other single-page app) that needs registration, login, password reset and email verification without cookies. It uses the `accounts` app's JSON mode, `accounts.WithJSON`, with bearer tokens from `auth/jwt`.
 
 - **`auth.go`** is the application's side of the bearer contract: it issues and checks JWTs, so `accounts` imports no token package.
-- **`apps/profiles`** is the host's own data: a `Profile` with a bounded `Username` (`varchar=30`, unique) and `DisplayName` (`varchar=60`), and an unbounded `Bio`. `OnRegister` creates the profile in the same transaction as the account, so there is never an account without one; `ResolveUsername` lets login take the username instead of the email.
+- **`apps/profiles`** is the host's own data: a `Profile` with a bounded `Username` (`varchar=30`, unique), `DisplayName` (`varchar=60`), an unbounded `Bio`, and `Preferences`, JSON text that the admin edits with `admin.JSON()`. `OnRegister` creates the profile in the same transaction as the account, so there is never an account without one; `ResolveUsername` lets login take the username instead of the email.
 - **`cors.go`** is host-owned CORS middleware for the client's origin. tanGO ships none.
 - **`main.go`** wires it together. Emailed links point at the client (`CLIENT_URL/verify#token=…`, `CLIENT_URL/reset#token=…`); a token in the fragment never reaches a server log or a `Referer` header.
 
@@ -26,6 +26,10 @@ curl -s localhost:8000/accounts/api/register/ -d '{"email":"ada@example.com","pa
 The response carries the account and a `grant` with the access token; the verification email, with its link, is printed in the server's terminal. Use the token on the application's own route: `curl -s localhost:8000/api/me/ -H "Authorization: Bearer <access_token>"`.
 
 The six endpoints are `register/`, `login/`, `password-reset/`, `password-reset/confirm/`, `verify/` and `verify/resend/` under `/accounts/api/`. `login/` takes `{"identifier", "password"}`, where the identifier is an email or a username.
+
+## The admin
+
+`admin.New(store)` serves the staff admin at `/admin/`, so an operator can edit a profile. Create the first account with `go run . -tango-admin-create=admin` and log in at `http://localhost:8000/admin/`. The profile's `Preferences` field uses `admin.JSON()`: a value that is not one JSON document is refused with its error and the text as typed, the **Format** button pretty-prints valid JSON, and the stored value is exactly what was submitted. Run `go test .` to see the same flow over HTTP.
 
 ## What it shows about bounded strings
 

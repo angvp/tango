@@ -186,6 +186,27 @@ A widget's `Render` output may include its own `<link>`/`<script>` tags for CSS/
 
 A `Parse` failure surfaces exactly like a built-in widget's parse failure would: a generic form-level error string, not a per-field inline error — that's a real admin-UX feature, but a separate one this doesn't provide yet.
 
+## JSON fields
+
+`admin.JSON()` is a built-in widget for a string or text field that holds a JSON document. Set it per field, like any widget:
+
+```go
+registry.Admin().Register(Profile{}, admin.Options{
+	Widgets: map[string]admin.Widget{"Preferences": admin.JSON()},
+})
+```
+
+- **Validation on save.** The value must be one complete JSON document, checked by Go's decoder. A refused save keeps the exact text the person typed, re-renders it in the textarea, and shows a readable error beside the field, for example `Invalid JSON: invalid character '}' looking for beginning of object key string (at character 9)`. The position is in characters, counted from 1, when Go's decoder reports one. The textarea is `aria-invalid` and described by the error, and nothing is stored.
+- **Stored exactly as submitted.** There is no canonicalization: spacing, key order and a trailing newline are saved as typed. The widget does not check structure or a schema.
+- **Empty is not parsed.** An empty value is saved as the empty string, with the field's normal empty and required behaviour and no extra rule from the widget.
+- **Format button.** Browser-side, the widget offers a **Format** button that replaces the text with `JSON.stringify(JSON.parse(text), null, 2)`. Invalid input shows a local message and leaves the text alone. The button appears only when the shared script runs.
+- **Without JavaScript** the field is an ordinary monospace textarea, and server validation is the only check.
+- **Type.** Use it on a `string` or `text` field. On any other Go kind the save reports a form-level error naming the field.
+
+### The shared widget script
+
+`admin.JSON()` emits no inline script. Its markup includes one `<script src="/admin/_assets/widgets.<hash>.js" defer>` tag, and the admin serves that file from its own embedded assets. The URL is content-hashed from the file's exact bytes and served with `Cache-Control: public, max-age=31536000, immutable`. The route, the file name and the script's contents are presentation details, not part of tanGO's compatibility promise. Repeated tags are harmless: the script guards itself, so a second copy does nothing. The source is `admin/assets/widgets.js`; each widget with behaviour marks its markup with `data-tango-widget="<name>"` and registers a setup function under that name. The admin sets no site-wide Content-Security-Policy, so a host that adds one must allow that script.
+
 ## Branding
 
 `admin.WithBranding` replaces the sidebar's generic title and mark with your own name and logo — the only two customization slots outside per-field widgets; there is no broader template or theme override mechanism:
