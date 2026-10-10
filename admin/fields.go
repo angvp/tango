@@ -377,9 +377,19 @@ func primaryKeyField(meta model.ModelMeta) (model.FieldMeta, error) {
 	return model.FieldMeta{}, fmt.Errorf("model %s has no primary key field", meta.Name)
 }
 
-// tooLongFieldErrors turns a db.ValueTooLongError from Store.Create or
-// Store.Update into the message shown beside the offending field, using the
-// field's label, and reports whether err was one.
+// storeFieldErrors turns a field-specific refusal from Store.Create or
+// Store.Update into the message shown beside the offending field, and
+// reports whether err was one. The messages never include the submitted
+// value: a too-long value gets its length, invalid JSON gets a fixed text.
+func storeFieldErrors(ctx context.Context, err error, opts adminregistry.Options) (map[string]string, bool) {
+	if messages, ok := tooLongFieldErrors(ctx, err, opts); ok {
+		return messages, true
+	}
+	return invalidJSONFieldErrors(ctx, err)
+}
+
+// tooLongFieldErrors turns a db.ValueTooLongError into the message shown
+// beside the offending field, using the field's label.
 func tooLongFieldErrors(ctx context.Context, err error, opts adminregistry.Options) (map[string]string, bool) {
 	var tooLong *db.ValueTooLongError
 	if !errors.As(err, &tooLong) {
@@ -391,4 +401,16 @@ func tooLongFieldErrors(ctx context.Context, err error, opts adminregistry.Optio
 	}
 	message := i18n.T(ctx, "admin.error.too_long", "%s must be at most %d characters (got %d)", label, tooLong.Max, tooLong.Got)
 	return map[string]string{tooLong.Field: message}, true
+}
+
+// invalidJSONFieldErrors turns a db.InvalidJSONError from Store.Create or
+// Store.Update into a fixed message beside the field. The decoder's own
+// error text is deliberately not shown: it can quote the document.
+func invalidJSONFieldErrors(ctx context.Context, err error) (map[string]string, bool) {
+	var invalid *db.InvalidJSONError
+	if !errors.As(err, &invalid) {
+		return nil, false
+	}
+	message := i18n.T(ctx, "admin.error.invalid_json", "Not valid JSON.")
+	return map[string]string{invalid.Field: message}, true
 }

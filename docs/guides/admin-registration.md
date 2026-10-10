@@ -236,19 +236,23 @@ registry.Admin().Register(Post{}, admin.Options{
 })
 ```
 
+Without an entry, a field gets the default widget for its Go type, with one exception: a field declared `tango:"json"` (see [models and tags](models-and-tags.md)) defaults to `admin.JSON()`. An explicit `Options.Widgets` entry for that field always wins, so `admin.Textarea()` there gives a plain textarea. A `ReadOnly` field stays the generic readonly input whatever its tag or widget, and the changelist is unchanged. Because a plain-text override skips the JSON widget's own check, a save refused by the store for invalid JSON still re-renders the form with `Not valid JSON.` (translation key `admin.error.invalid_json`) beside the field, keeps the text as typed and stores nothing.
+
 A widget's `Render` output may include its own `<link>`/`<script>` tags for CSS/JS it needs — typically served via its owning app's own `embed.FS` route (see [reusable apps](reusable-apps.md)), the same convention any app already uses for static assets. There's no shared deduplication mechanism, so that output must be **idempotent**: safe to emit once per rendered instance of the widget, since the same widget used on multiple fields will render its tags more than once. `examples/reusable-greetings`'s `Greeting.Name` field uses a real custom widget shipped by a reusable app this way — see its `greetings/widget.go`.
 
 A `Parse` failure surfaces exactly like a built-in widget's parse failure would: a generic form-level error string, not a per-field inline error — that's a real admin-UX feature, but a separate one this doesn't provide yet.
 
 ## JSON fields
 
-`admin.JSON()` is a built-in widget for a string or text field that holds a JSON document. Set it per field, like any widget:
+`admin.JSON()` is a built-in widget for a string or text field that holds a JSON document. A field declared `tango:"json"` uses it by default, with no `Options.Widgets` entry needed. For any other string field, set it per field, like any widget:
 
 ```go
 registry.Admin().Register(Profile{}, admin.Options{
 	Widgets: map[string]admin.Widget{"Preferences": admin.JSON()},
 })
 ```
+
+An explicit entry for a `tango:"json"` field replaces the default, and the store still refuses invalid JSON on save. A `ReadOnly` field renders as the generic readonly input.
 
 - **Validation on save.** The value must be one complete JSON document, checked by Go's decoder. A refused save keeps the exact text the person typed, re-renders it in the textarea, and shows a readable error beside the field, for example `Invalid JSON: invalid character '}' looking for beginning of object key string (at character 9)`. The position is in characters, counted from 1, when Go's decoder reports one. The textarea is `aria-invalid` and described by the error, and nothing is stored.
 - **Stored exactly as submitted.** There is no canonicalization: spacing, key order and a trailing newline are saved as typed. The widget does not check structure or a schema.

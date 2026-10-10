@@ -81,8 +81,8 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				if errors.Is(err, db.ErrNotFound) {
 					return notFound(ctx)
 				}
-				fieldErrors, tooLong := tooLongFieldErrors(ctx.Context(), err, registration.Options)
-				if !tooLong {
+				fieldErrors, refused := storeFieldErrors(ctx.Context(), err, registration.Options)
+				if !refused {
 					return err
 				}
 				formOpts := formOptionsFromRequest(ctx)

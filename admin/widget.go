@@ -125,6 +125,9 @@ func defaultWidgetForField(field model.FieldMeta) Widget {
 	if field.Type.Kind() == reflect.Bool {
 		return checkboxWidget{}
 	}
+	if field.JSON {
+		return jsonWidget{}
+	}
 	return inputWidget{InputType: inputTypeForKind(field.Type)}
 }
 

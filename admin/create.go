@@ -48,8 +48,8 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 			}
 
 			if err := store.Create(ctx.Context(), meta, instancePtr.Interface()); err != nil {
-				fieldErrors, tooLong := tooLongFieldErrors(ctx.Context(), err, registration.Options)
-				if !tooLong {
+				fieldErrors, refused := storeFieldErrors(ctx.Context(), err, registration.Options)
+				if !refused {
 					return err
 				}
 				formOpts := formOptionsFromRequest(ctx)
