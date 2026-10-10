@@ -97,3 +97,54 @@ func describeKey(column string, key any) string {
 		return fmt.Sprintf("%s = %v", column, v)
 	}
 }
+
+// preflightMigration checks every narrowing in steps against the database as
+// it is now, before the migration runs any DDL, so a refused narrowing leaves
+// the schema as well as the data unchanged. A step names its table and column
+// as they are after the earlier steps, so earlier renames are undone to find
+// the physical names; a narrowing of a table or column the migration itself
+// creates has no existing data and is skipped.
+func preflightMigration(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, steps []Step) error {
+	for i, step := range steps {
+		s, ok := step.(AlterColumnType)
+		if !ok || !isNarrowing(s.From, s.FromLength, s.To, s.ToLength) {
+			continue
+		}
+		table, column, created := physicalNames(steps[:i], s.Table, s.Column)
+		if created {
+			continue
+		}
+		s.Table, s.Column = table, column
+		if err := preflightNarrowing(ctx, sqlDB, dialect, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// physicalNames walks earlier backwards from the names a later step uses to
+// the names the database holds before any of them ran. created reports a
+// table or column that one of them creates.
+func physicalNames(earlier []Step, table, column string) (string, string, bool) {
+	for j := len(earlier) - 1; j >= 0; j-- {
+		switch e := earlier[j].(type) {
+		case RenameTable:
+			if table == e.To {
+				table = e.From
+			}
+		case RenameColumn:
+			if table == e.Table && column == e.To {
+				column = e.From
+			}
+		case CreateTable:
+			if table == e.Table {
+				return table, column, true
+			}
+		case AddColumn:
+			if table == e.Table && column == e.Column.Name {
+				return table, column, true
+			}
+		}
+	}
+	return table, column, false
+}

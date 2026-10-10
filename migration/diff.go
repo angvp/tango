@@ -205,9 +205,9 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 		m := byApp[app]
 		if len(m.Up) > 0 {
 			if !m.Reversible {
-				// No partial rollback: a reverse narrowing step is only
-				// meaningful when the whole migration reverses.
-				m.Down = withoutAlterColumnType(m.Down)
+				// Any irreversible step makes the whole migration
+				// irreversible: no partial rollback is generated.
+				m.Down = nil
 			}
 			m.Down = reversedSteps(m.Down)
 			result = append(result, *m)
@@ -404,16 +404,4 @@ func diffColumns(m *Migration, table string, columns []Column, existing []Column
 		m.Up = append(m.Up, DropColumn{Table: table, Column: name})
 		m.Reversible = false
 	}
-}
-
-// withoutAlterColumnType drops the generated AlterColumnType reverses of an
-// irreversible migration.
-func withoutAlterColumnType(steps []Step) []Step {
-	var kept []Step
-	for _, step := range steps {
-		if _, alter := step.(AlterColumnType); !alter {
-			kept = append(kept, step)
-		}
-	}
-	return kept
 }

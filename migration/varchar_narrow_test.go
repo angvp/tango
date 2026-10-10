@@ -276,3 +276,93 @@ func TestRollingBackAWideningIsRefusedAndNarrowingBackWouldFail(t *testing.T) {
 		t.Fatalf("narrowing back = %v, want the preflight to refuse the new value", err)
 	}
 }
+
+func TestIrreversibleMigrationHasNoDownAtAll(t *testing.T) {
+	base := baseHeadlines(narrowingModels(idKey, map[string]int{"title": 5}))
+	models := narrowingModels(idKey, nil) // widens title to text...
+	models[0].Columns = append(models[0].Columns, Column{Name: "extra", Type: "text", Indexed: true})
+	models[0].Fields["extra"] = "Extra" // ...and adds an indexed column, each with a reverse of its own
+	m := generated(t, base, models)
+	if m.Reversible {
+		t.Fatal("a widening migration is marked reversible")
+	}
+	if len(m.Down) != 0 {
+		t.Fatalf("Down = %#v, want no steps at all for an irreversible migration", m.Down)
+	}
+}
+
+func columnNamesOf(t *testing.T, sqlDB *sql.DB, dialect db.Dialect) []string {
+	t.Helper()
+	return columnNames(t, sqlDB, dialect, "headline")
+}
+
+func TestFailedNarrowingLeavesTheSchemaOfEarlierStepsUnchanged(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
+	base := baseHeadlines(narrowingModels(idKey, nil))
+	if err := applyAll(t, sqlDB, dialect, base); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.Exec("INSERT INTO headline (title, slug) VALUES ('far too long', 'a')"); err != nil {
+		t.Fatal(err)
+	}
+	before := columnNamesOf(t, sqlDB, dialect)
+	m := Migration{App: "news", Name: "0002_change", Up: []Step{
+		AddColumn{Table: "headline", Column: Column{Name: "extra", Type: "text"}},
+		CreateIndex{Table: "headline", Column: "slug"},
+		AlterColumnType{Table: "headline", Column: "title", From: "text", To: "varchar", ToLength: 5},
+	}}
+	err := applyAll(t, sqlDB, dialect, base, m)
+	if err == nil || !strings.Contains(err.Error(), "1 row") {
+		t.Fatalf("error = %v, want the narrowing refusal", err)
+	}
+	if after := columnNamesOf(t, sqlDB, dialect); !reflect.DeepEqual(after, before) {
+		t.Fatalf("columns = %v after the failure, want %v", after, before)
+	}
+	if indexExists(t, sqlDB, dialect, "idx_headline_slug") {
+		t.Fatal("an earlier CreateIndex survived the failed migration")
+	}
+	if got := titles(t, sqlDB); !reflect.DeepEqual(got, []string{"far too long"}) {
+		t.Fatalf("data = %q", got)
+	}
+	applied, _ := AppliedMigrations(context.Background(), sqlDB)
+	if applied[MigrationKey{App: "news", Name: "0002_change"}] {
+		t.Fatal("the failed migration was recorded")
+	}
+}
+
+func TestNarrowingPreflightSeesPhysicalNamesBeforeARenameInTheSameMigration(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		title   string
+		wantErr bool
+	}{{"fits", "short", false}, {"too long", "far too long", true}} {
+		t.Run(tt.name, func(t *testing.T) {
+			sqlDB, dialect := testdb.Open(t)
+			base := baseHeadlines(narrowingModels(idKey, nil))
+			if err := applyAll(t, sqlDB, dialect, base); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := sqlDB.Exec("INSERT INTO headline (title, slug) VALUES ($1, 'a')", tt.title); err != nil {
+				t.Fatal(err)
+			}
+			m := Migration{App: "news", Name: "0002_change", Up: []Step{
+				RenameTable{From: "headline", To: "article"},
+				RenameColumn{Table: "article", From: "title", To: "heading"},
+				AlterColumnType{Table: "article", Column: "heading", From: "text", To: "varchar", ToLength: 5},
+			}}
+			err := applyAll(t, sqlDB, dialect, base, m)
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "1 row") || !strings.Contains(err.Error(), "headline.title") {
+					t.Fatalf("error = %v, want a refusal naming the physical headline.title", err)
+				}
+				if !tableExists(t, sqlDB, dialect, "headline") || tableExists(t, sqlDB, dialect, "article") {
+					t.Fatal("the rename ran although the narrowing was refused")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("rename plus narrowing: %v", err)
+			}
+		})
+	}
+}

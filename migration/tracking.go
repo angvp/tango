@@ -105,7 +105,11 @@ func ApplyPending(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrat
 	}
 
 	for _, m := range ordered {
-		for _, step := range stepOrder(m, m.Up) {
+		steps := stepOrder(m, m.Up)
+		if err := preflightMigration(ctx, sqlDB, dialect, steps); err != nil {
+			return fmt.Errorf("migration %q: %w", m.Name, err)
+		}
+		for _, step := range steps {
 			if err := ApplyStep(ctx, sqlDB, dialect, step); err != nil {
 				return fmt.Errorf("migration %q: %w", m.Name, err)
 			}
