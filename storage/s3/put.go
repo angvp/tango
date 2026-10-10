@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 
+	"github.com/angvp/tango/internal/storagekit"
 	"github.com/angvp/tango/storage"
 )
 
@@ -33,12 +34,12 @@ func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (
 		spool.Close()
 		os.Remove(spool.Name())
 	}()
-	if _, err := io.Copy(spool, &contextReader{ctx: ctx, r: inspected}); err != nil {
+	if _, err := io.Copy(spool, &storagekit.ContextReader{Ctx: ctx, R: inspected}); err != nil {
 		return storage.Object{}, err
 	}
 	obj := inspected.Object("")
 
-	for attempt := 0; attempt < keyAttempts; attempt++ {
+	for attempt := 0; attempt < storagekit.KeyAttempts; attempt++ {
 		key := s.nextKey()
 		if !storage.ValidKey(key) {
 			return storage.Object{}, fmt.Errorf("storage/s3: generated key %q is invalid", key)
@@ -130,17 +131,4 @@ func (s *Store) uploadParts(ctx context.Context, file *os.File, obj storage.Obje
 		return mapError(err)
 	}
 	return nil
-}
-
-// contextReader stops a copy as soon as ctx is done.
-type contextReader struct {
-	ctx context.Context
-	r   io.Reader
-}
-
-func (c *contextReader) Read(p []byte) (int, error) {
-	if err := c.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return c.r.Read(p)
 }

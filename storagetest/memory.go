@@ -7,12 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/angvp/tango/internal/storagekit"
 	"github.com/angvp/tango/storage"
 )
-
-// keyAttempts is how many generated keys a write tries before it reports a
-// collision as storage.ErrExists.
-const keyAttempts = 3
 
 type memoryObject struct {
 	info storage.Info
@@ -52,7 +49,7 @@ func (m *Memory) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) 
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for attempt := 0; attempt < keyAttempts; attempt++ {
+	for attempt := 0; attempt < storagekit.KeyAttempts; attempt++ {
 		key := m.nextKey()
 		if _, exists := m.objects[key]; exists {
 			continue
@@ -95,7 +92,7 @@ func (m *Memory) Open(ctx context.Context, key string, offset, length int64) (io
 
 // Delete implements storage.Store.
 func (m *Memory) Delete(ctx context.Context, key string) error {
-	if err := check(ctx, key); err != nil {
+	if err := storagekit.Check(ctx, key); err != nil {
 		return err
 	}
 	m.mu.Lock()
@@ -105,7 +102,7 @@ func (m *Memory) Delete(ctx context.Context, key string) error {
 }
 
 func (m *Memory) get(ctx context.Context, key string) (memoryObject, error) {
-	if err := check(ctx, key); err != nil {
+	if err := storagekit.Check(ctx, key); err != nil {
 		return memoryObject{}, err
 	}
 	m.mu.Lock()
@@ -115,15 +112,4 @@ func (m *Memory) get(ctx context.Context, key string) (memoryObject, error) {
 		return memoryObject{}, storage.ErrNotFound
 	}
 	return object, nil
-}
-
-// check is the preamble every call shares: the context, then the key's form.
-func check(ctx context.Context, key string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if !storage.ValidKey(key) {
-		return storage.ErrInvalidKey
-	}
-	return nil
 }

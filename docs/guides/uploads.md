@@ -80,7 +80,7 @@ tango.Path("POST", "/", upload, tango.Use(tango.MaxBodySize(4<<20+64<<10))),
 tango.Path("GET", "/{id}/download/", download, tango.Use(tango.MaxBodySize(64<<10))),
 ```
 
-`Upload` also enforces its own per-file cap, so a generous route limit never buffers a whole upload.
+A strict limit set further out, as global middleware or on an enclosing group, still applies to the upload route, which cannot raise it: keep the large limit on the upload route and do not put a small one around it. `Upload` also enforces its own per-file cap, so a generous route limit never buffers a whole upload.
 
 ## Keep the key and the metadata in your model
 

@@ -31,6 +31,7 @@ import (
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 
+	"github.com/angvp/tango/internal/storagekit"
 	"github.com/angvp/tango/storage"
 )
 
@@ -43,7 +44,6 @@ const (
 	// maxParts is S3's limit on the parts of one upload.
 	maxParts = 10000
 
-	keyAttempts = 3
 	shaMetadata = "sha256"
 
 	// abortTimeout bounds the clean-up of a failed multipart upload, which
@@ -174,21 +174,10 @@ func normalizePrefix(prefix string) (string, error) {
 
 func (s *Store) objectName(key string) string { return s.prefix + key }
 
-// check is the preamble every call shares: the context, then the key's form.
-func check(ctx context.Context, key string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if !storage.ValidKey(key) {
-		return storage.ErrInvalidKey
-	}
-	return nil
-}
-
 // Stat implements storage.Store. An object is present only when it carries
 // a valid SHA-256, which marks it as one this package wrote completely.
 func (s *Store) Stat(ctx context.Context, key string) (storage.Info, error) {
-	if err := check(ctx, key); err != nil {
+	if err := storagekit.Check(ctx, key); err != nil {
 		return storage.Info{}, err
 	}
 	out, err := s.client.HeadObject(ctx, &awss3.HeadObjectInput{Bucket: &s.bucket, Key: aws.String(s.objectName(key))})
@@ -236,7 +225,7 @@ func (s *Store) Open(ctx context.Context, key string, offset, length int64) (io.
 // Delete implements storage.Store. S3 deletes a missing object without
 // complaint, so a missing object is not an error here either.
 func (s *Store) Delete(ctx context.Context, key string) error {
-	if err := check(ctx, key); err != nil {
+	if err := storagekit.Check(ctx, key); err != nil {
 		return err
 	}
 	if _, err := s.client.DeleteObject(ctx, &awss3.DeleteObjectInput{Bucket: &s.bucket, Key: aws.String(s.objectName(key))}); err != nil {

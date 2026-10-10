@@ -3,6 +3,7 @@ package storage_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -288,5 +289,30 @@ func TestAPartialLocalObjectIs404ThroughServe(t *testing.T) {
 		if rec := serve(t, store, obj.Key, storage.ServeOptions{}, http.MethodGet, nil); rec.Code != 404 {
 			t.Fatalf("object missing %s: status %d, want 404", name, rec.Code)
 		}
+	}
+}
+
+// vanishingStore reports an object in Stat and loses it before Open, as a
+// concurrent Delete would.
+type vanishingStore struct{ storage.Store }
+
+func (v vanishingStore) Open(context.Context, string, int64, int64) (io.ReadCloser, error) {
+	return nil, storage.ErrNotFound
+}
+
+func TestAnObjectDeletedBetweenStatAndOpenIs404WithNoObjectHeaders(t *testing.T) {
+	memory := storagetest.NewMemory()
+	obj := putObject(t, memory, []byte("secret bytes"))
+	rec := serve(t, vanishingStore{memory}, obj.Key, storage.ServeOptions{Filename: "secret.txt"}, "GET", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	for _, name := range []string{"ETag", "Last-Modified", "Content-Disposition", "Accept-Ranges", "Content-Length"} {
+		if got := rec.Header().Get(name); got != "" {
+			t.Errorf("%s = %q on a 404, want none", name, got)
+		}
+	}
+	if !strings.HasPrefix(rec.Header().Get("Content-Type"), "application/json") {
+		t.Errorf("Content-Type = %q, want the JSON error's", rec.Header().Get("Content-Type"))
 	}
 }

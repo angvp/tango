@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/angvp/tango/internal/storagekit"
 	"github.com/angvp/tango/storage"
 )
 
@@ -37,6 +38,9 @@ const (
 	objectsDir = "objects"
 	tmpDir     = "tmp"
 
+	// trashPrefix names a deleted object on its way out of tmp.
+	trashPrefix = "deleted-"
+
 	dataName = "data"
 	metaName = "meta"
 
@@ -44,8 +48,6 @@ const (
 	// sweeps it, so opening a second Store on the same root never removes
 	// another writer's work in progress.
 	staleAfter = time.Hour
-
-	keyAttempts = 3
 )
 
 // Store is a filesystem storage.Store. Close it when done.
@@ -126,51 +128,64 @@ func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (
 	if err := s.root.Mkdir(staging, dirMode); err != nil {
 		return storage.Object{}, fmt.Errorf("storage/local: stage: %w", err)
 	}
-	published := false
-	defer func() {
-		if !published {
-			_ = s.root.RemoveAll(staging)
-		}
-	}()
+	// Until publish succeeds the staging directory is garbage; after it, the
+	// rename has moved it away and there is nothing left to remove.
+	defer func() { _ = s.root.RemoveAll(staging) }()
 
-	if err := s.writeFile(path.Join(staging, dataName), &contextReader{ctx: ctx, r: inspected}); err != nil {
+	if err := s.stage(ctx, staging, inspected); err != nil {
 		return storage.Object{}, err
+	}
+	key, err := s.publish(staging)
+	if err != nil {
+		return storage.Object{}, err
+	}
+	return inspected.Object(key), nil
+}
+
+// stage writes the object's bytes and description into the staging
+// directory and syncs them.
+func (s *Store) stage(ctx context.Context, staging string, inspected *storage.Inspector) error {
+	if err := s.writeFile(path.Join(staging, dataName), &storagekit.ContextReader{Ctx: ctx, R: inspected}); err != nil {
+		return err
 	}
 	obj := inspected.Object("")
 	description, err := json.Marshal(meta{Size: obj.Size, SHA256: obj.SHA256, ContentType: obj.ContentType, Created: time.Now().UTC()})
 	if err != nil {
-		return storage.Object{}, err
+		return err
 	}
 	if err := s.writeFile(path.Join(staging, metaName), bytes.NewReader(description)); err != nil {
-		return storage.Object{}, err
+		return err
 	}
-	if err := s.syncDir(staging); err != nil {
-		return storage.Object{}, err
-	}
+	return s.syncDir(staging)
+}
 
-	for attempt := 0; attempt < keyAttempts; attempt++ {
+// publish renames the staging directory to a new object's path and returns
+// its key. A key that is taken is retried with a new one; if flushing the
+// published entry fails, the object is removed again so a failed Put leaves
+// nothing behind.
+func (s *Store) publish(staging string) (string, error) {
+	for attempt := 0; attempt < storagekit.KeyAttempts; attempt++ {
 		key := s.nextKey()
 		if !storage.ValidKey(key) {
-			return storage.Object{}, fmt.Errorf("storage/local: generated key %q is invalid", key)
+			return "", fmt.Errorf("storage/local: generated key %q is invalid", key)
 		}
 		parent := path.Dir(objectPath(key))
 		if err := s.root.MkdirAll(parent, dirMode); err != nil {
-			return storage.Object{}, fmt.Errorf("storage/local: create %s: %w", parent, err)
+			return "", fmt.Errorf("storage/local: create %s: %w", parent, err)
 		}
 		err := s.root.Rename(staging, objectPath(key))
 		if errors.Is(err, fs.ErrExist) || errors.Is(err, syscall.ENOTEMPTY) {
 			continue // a collision: the published object stays untouched
 		}
 		if err != nil {
-			return storage.Object{}, fmt.Errorf("storage/local: publish: %w", err)
+			return "", fmt.Errorf("storage/local: publish: %w", err)
 		}
-		published = true
 		if err := s.syncDir(parent); err != nil {
-			return storage.Object{}, err
+			return "", errors.Join(err, s.removeObject(key))
 		}
-		return inspected.Object(key), nil
+		return key, nil
 	}
-	return storage.Object{}, storage.ErrExists
+	return "", storage.ErrExists
 }
 
 // writeFile creates name exclusively, copies r into it and syncs it.
@@ -207,7 +222,7 @@ func (s *Store) syncDir(name string) error {
 // Stat implements storage.Store. An object is present only when its
 // directory holds a readable meta and a data file of the size meta records.
 func (s *Store) Stat(ctx context.Context, key string) (storage.Info, error) {
-	if err := check(ctx, key); err != nil {
+	if err := storagekit.Check(ctx, key); err != nil {
 		return storage.Info{}, err
 	}
 	return s.info(key)
@@ -247,7 +262,7 @@ func absent(err error) error {
 
 // Open implements storage.Store.
 func (s *Store) Open(ctx context.Context, key string, offset, length int64) (io.ReadCloser, error) {
-	if err := check(ctx, key); err != nil {
+	if err := storagekit.Check(ctx, key); err != nil {
 		return nil, err
 	}
 	info, err := s.info(key)
@@ -271,10 +286,16 @@ func (s *Store) Open(ctx context.Context, key string, offset, length int64) (io.
 // Delete implements storage.Store. The object leaves by one rename, so it is
 // never half there, and its bytes are removed afterwards.
 func (s *Store) Delete(ctx context.Context, key string) error {
-	if err := check(ctx, key); err != nil {
+	if err := storagekit.Check(ctx, key); err != nil {
 		return err
 	}
-	trash := path.Join(tmpDir, "deleted-"+storage.NewKey())
+	return s.removeObject(key)
+}
+
+// removeObject renames the object's directory out of place, then removes it.
+// A missing object is not an error.
+func (s *Store) removeObject(key string) error {
+	trash := path.Join(tmpDir, trashPrefix+storage.NewKey())
 	if err := s.root.Rename(objectPath(key), trash); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
@@ -287,17 +308,6 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// check is the preamble every call shares: the context, then the key's form.
-func check(ctx context.Context, key string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if !storage.ValidKey(key) {
-		return storage.ErrInvalidKey
-	}
-	return nil
-}
-
 // section reads a range of a file and closes the file with it.
 type section struct {
 	*io.SectionReader
@@ -305,16 +315,3 @@ type section struct {
 }
 
 func (s *section) Close() error { return s.file.Close() }
-
-// contextReader stops a copy as soon as ctx is done.
-type contextReader struct {
-	ctx context.Context
-	r   io.Reader
-}
-
-func (c *contextReader) Read(p []byte) (int, error) {
-	if err := c.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return c.r.Read(p)
-}

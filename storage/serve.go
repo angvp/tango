@@ -88,8 +88,11 @@ func Serve(w http.ResponseWriter, r *http.Request, store Store, key string, opts
 	}
 	body, err := store.Open(r.Context(), key, start, length)
 	if errors.Is(err, ErrNotFound) {
-		// Deleted between Stat and Open.
-		w.Header().Del("Content-Length")
+		// Deleted between Stat and Open: answer as if it never existed, with
+		// none of the object's headers.
+		for _, name := range []string{"Content-Length", "Content-Disposition", "Content-Type", "ETag", "Last-Modified", "Accept-Ranges"} {
+			w.Header().Del(name)
+		}
 		writeError(w, http.StatusNotFound, "not found")
 		return nil
 	}
