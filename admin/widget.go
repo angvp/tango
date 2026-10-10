@@ -44,9 +44,14 @@ func setFieldFromReflectedString(dest reflect.Value, raw string, present bool) e
 	return setFieldFromString(dest, dest.Type(), raw, present)
 }
 
+// ariaAttrs is the accessibility wiring every built-in control shares: it
+// is empty for a field with no help text and no error, so such a field's
+// markup is unchanged.
+const ariaAttrs = `{{if .Error}} aria-invalid="true"{{end}}{{with .DescribedBy}} aria-describedby="{{.}}"{{end}}`
+
 var inputWidgetTemplate = template.Must(template.New("inputWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
-<input id="field-{{.Name}}" type="{{.InputType}}" name="{{.Name}}" value="{{.Value}}"{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}} class="input">`))
+<input id="field-{{.Name}}" type="{{.InputType}}" name="{{.Name}}" value="{{.Value}}"{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}} class="input"` + ariaAttrs + `>`))
 
 // inputWidget is the built-in generic text/number/date-time field — one
 // plain <input>, its HTML type attribute driven by the Go field's kind.
@@ -69,7 +74,7 @@ func (inputWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) e
 
 var checkboxWidgetTemplate = template.Must(template.New("checkboxWidget").Parse(
 	`<div class="checkbox-row">
-  <input type="checkbox" id="field-{{.Name}}" name="{{.Name}}" {{if .Checked}}checked{{end}} class="checkbox">
+  <input type="checkbox" id="field-{{.Name}}" name="{{.Name}}" {{if .Checked}}checked{{end}} class="checkbox"` + ariaAttrs + `>
   <label for="field-{{.Name}}" class="text-sm font-medium text-slate-700">{{.Label}}</label>
 </div>`))
 
@@ -88,7 +93,7 @@ func (checkboxWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value
 var selectWidgetTemplate = template.Must(template.New("selectWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
 <div class="flex items-center gap-2">
-  <select id="field-{{.Name}}" name="{{.Name}}" class="input">
+  <select id="field-{{.Name}}" name="{{.Name}}" class="input"` + ariaAttrs + `>
     {{range .SelectOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Text}}</option>{{end}}
   </select>
   {{if .RelatedCreateURL}}<a href="{{.RelatedCreateURL}}" class="btn-secondary" aria-label="{{.RelatedCreateLabel}}">+</a>{{end}}
@@ -124,7 +129,7 @@ func defaultWidgetForField(field model.FieldMeta) Widget {
 
 var textareaWidgetTemplate = template.Must(template.New("textareaWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
-<textarea id="field-{{.Name}}" name="{{.Name}}" class="input" rows="4">{{.Value}}</textarea>`))
+<textarea id="field-{{.Name}}" name="{{.Name}}" class="input" rows="4"` + ariaAttrs + `>{{.Value}}</textarea>`))
 
 // textareaWidget is a built-in multi-line text field, for a string field
 // that needs more room than the default single-line input. Unlike the

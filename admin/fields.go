@@ -135,6 +135,7 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 	if helpText, ok := opts.HelpText[field.Name]; ok {
 		fc.HelpText = helpText
 	}
+	fc.Error = formOpts.FieldErrors[field.Name]
 
 	if instance.IsValid() {
 		fieldValue := instance.FieldByName(field.Name)
@@ -204,7 +205,7 @@ func buildFormFields(ctx context.Context, store *db.Store, models *model.Registr
 	for _, field := range orderedEditableFields(meta, opts.FieldOrder) {
 		fc, fkResolved := buildFieldContext(ctx, store, models, adminReg, field, opts, instance, formOpts)
 		widget := widgetForField(field, opts, fc, fkResolved)
-		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(fc), Error: formOpts.FieldErrors[field.Name]})
+		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(fc), HelpText: fc.HelpText, Error: fc.Error})
 	}
 
 	return fields
@@ -232,6 +233,7 @@ func formatFieldValue(v reflect.Value) string {
 // current values, matching what the form was actually rendered from) —
 // not just a bare field name — per the Widget interface's own contract.
 func populateFromForm(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, dest reflect.Value, meta model.ModelMeta, opts adminregistry.Options, form FieldValues, existing reflect.Value) error {
+	var fieldErrors map[string]string
 	for _, field := range meta.Fields {
 		if field.PrimaryKey {
 			continue
@@ -250,10 +252,20 @@ func populateFromForm(ctx context.Context, store *db.Store, models *model.Regist
 		widget := widgetForField(field, opts, fc, fkResolved)
 
 		if err := widget.Parse(fc, form, fieldValue); err != nil {
-			return fmt.Errorf("field %q: %w", field.Name, err)
+			messages := fieldErrorMessages(ctx, err)
+			if len(messages) == 0 {
+				return fmt.Errorf("field %q: %w", field.Name, err)
+			}
+			if fieldErrors == nil {
+				fieldErrors = map[string]string{}
+			}
+			fieldErrors[field.Name] = strings.Join(messages, " ")
 		}
 	}
 
+	if fieldErrors != nil {
+		return &formFieldErrors{messages: fieldErrors}
+	}
 	return nil
 }
 

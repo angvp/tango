@@ -34,11 +34,14 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 
 			instancePtr := reflect.New(meta.Type)
 			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, ctx.Request().PostForm, reflect.Value{}); err != nil {
-				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOptionsFromRequest(ctx))
+				fieldErrors, formError := parseFailure(err)
+				formOpts := formOptionsFromRequest(ctx)
+				formOpts.FieldErrors = fieldErrors
+				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
 					chrome:    pageChrome.withContext(ctx.Context()),
 					Title:     title,
-					Error:     err.Error(),
+					Error:     formError,
 					Fields:    fields,
 					CSRFToken: csrfTokenFromRequest(ctx.Request()),
 				})

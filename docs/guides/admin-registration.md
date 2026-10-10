@@ -143,7 +143,7 @@ List and form field labels are humanized for display — `CreatedAt` renders as 
 Beyond `ListDisplay`/`Search`/`Ordering`/`Label`, `admin.Options` has four more field-name-keyed controls for the create/edit form, all validated against the model's real fields the same way:
 
 - **`Labels`** — override a field's humanized default label.
-- **`HelpText`** — descriptive text shown with a field.
+- **`HelpText`** — descriptive text shown below a field on the create and edit forms. The built-in controls reference it with `aria-describedby`.
 - **`ReadOnly`** — fields that render non-editably. On edit, a read-only field keeps its existing stored value no matter what the submitted form contains for it; on create, it stays at its Go zero value. Submitted data for a read-only field is always ignored, never parsed — this is true regardless of any `Widgets` entry for that field, since read-only rendering bypasses the field's widget entirely.
 - **Bounded strings** (`tango:"varchar=n"`) render `<input type="text" maxlength="n">`. Browsers count `maxlength` in UTF-16 units, so the server stays the authority: a create or edit whose value has more than `n` characters (runes) re-renders the form with `Title must be at most 5 characters (got 6)` beside the field, keeps everything else the person typed, and stores nothing. The message is the translatable key `admin.error.too_long` (arguments: the label, the limit, the length). Bare strings and `text` render as they always did, with no textarea; use `admin.Textarea()` for a multi-line field.
 - **`FieldOrder`** — render fields in this order; fields not listed keep their default order, appended after the ordered ones.
@@ -168,7 +168,9 @@ type Widget interface {
 }
 ```
 
-`FieldContext` carries what a widget needs — field name, label, help text, current value, maximum length (`MaxLength`, `0` when unbounded), read-only flag, and (for a foreign key field) the related model's select options plus an optional related-object create URL — and is passed to *both* `Render` and `Parse`, so a widget can derive its own submitted form key(s) from `FieldContext.Name` identically on both sides. A simple widget reads `form.Get(f.Name)`; a widget needing more than one HTML input for its one Go field (a date/time picker split into separate controls, say) derives extra names from `f.Name` — e.g. `f.Name + "_date"` and `f.Name + "_time"` — using the same derivation in `Render` and `Parse` so the two never drift apart.
+`FieldContext` carries what a widget needs — field name, label, help text, the field's error message after a failed save (`Error`), current value, maximum length (`MaxLength`, `0` when unbounded), read-only flag, and (for a foreign key field) the related model's select options plus an optional related-object create URL — and is passed to *both* `Render` and `Parse`, so a widget can derive its own submitted form key(s) from `FieldContext.Name` identically on both sides. A simple widget reads `form.Get(f.Name)`; a widget needing more than one HTML input for its one Go field (a date/time picker split into separate controls, say) derives extra names from `f.Name` — e.g. `f.Name + "_date"` and `f.Name + "_time"` — using the same derivation in `Render` and `Parse` so the two never drift apart.
+
+A widget reports a problem with its own field by returning `admin.FieldError{Message: ...}` from `Parse`, directly, wrapped with `%w`, or inside `errors.Join`. Admin collects every `FieldError` from every field, re-renders the form with a 422, shows each message beside its field and marks that field's built-in control `aria-invalid="true"` with `aria-describedby` pointing at the help text and error. Any other `Parse` error stays a single form-level error. A custom widget can read `FieldContext.Error` and `FieldContext.DescribedBy()` to do the same in its own markup.
 
 Set a widget per field via `Options.Widgets`:
 

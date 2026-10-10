@@ -3,6 +3,7 @@ package adminregistry
 import (
 	"html/template"
 	"reflect"
+	"strings"
 )
 
 // SelectOption is one <option> in a foreign key field's <select>.
@@ -58,6 +59,25 @@ type FieldContext struct {
 	// RelatedCreateLabel is the accessible label for RelatedCreateURL.
 	// Empty means widgets may fall back to their own default.
 	RelatedCreateLabel string
+	// Error is the message the form shows beside this field after a failed
+	// save, or empty when the field has no error. The built-in widgets mark
+	// their control aria-invalid when it is set; a custom widget may do the
+	// same.
+	Error string
+}
+
+// DescribedBy returns the value for the control's aria-describedby: the ids
+// of the field's help text and error element, in that order, separated by a
+// space. It is empty when the field has neither.
+func (f FieldContext) DescribedBy() string {
+	var ids []string
+	if f.HelpText != "" {
+		ids = append(ids, "field-"+f.Name+"-help")
+	}
+	if f.Error != "" {
+		ids = append(ids, "field-"+f.Name+"-error")
+	}
+	return strings.Join(ids, " ")
 }
 
 // FieldValues is the whole submitted form, so a Widget's Parse can read

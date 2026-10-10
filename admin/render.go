@@ -77,7 +77,7 @@ var formTemplate = cloneWithContent(`{{define "content"}}
       {{if .Error}}<div class="alert-error">{{.Error}}</div>{{end}}
       <form method="post">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      {{range .Fields}}<div class="field-group">{{.HTML}}{{if .Error}}<p class="field-error" role="alert">{{.Error}}</p>{{end}}</div>
+      {{range .Fields}}<div class="field-group">{{.HTML}}{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}{{if .Error}}<p class="field-error" id="field-{{.Name}}-error" role="alert">{{.Error}}</p>{{end}}</div>
       {{end}}
         <div class="flex items-center gap-2 pt-2">
           <button type="submit" class="btn-primary">{{.T "admin.button.save" "Save"}}</button>
@@ -134,9 +134,10 @@ type listPageData struct {
 }
 
 type formField struct {
-	Name  string
-	HTML  template.HTML
-	Error string
+	Name     string
+	HTML     template.HTML
+	HelpText string
+	Error    string
 }
 
 type formPageData struct {
