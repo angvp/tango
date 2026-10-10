@@ -1,9 +1,8 @@
 // Behaviour for admin widgets, shared by every widget that needs it.
 //
-// A widget marks its markup with data-tango-widget="<name>". A setup
-// function registered under that name runs once for each such element in
-// the document. To add a widget's behaviour, register a setup function
-// below; the widget's markup and its data attributes do the rest.
+// Built-in admin widgets mark their markup with data-tango-widget="<name>".
+// A setup function registered under that name runs once for each such
+// element in the document. Only this package's own widgets register here.
 (function () {
   "use strict";
 

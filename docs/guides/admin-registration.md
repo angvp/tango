@@ -177,7 +177,7 @@ Set a widget per field via `Options.Widgets`:
 ```go
 registry.Admin().Register(Post{}, admin.Options{
 	Widgets: map[string]admin.Widget{
-		"Body": admin.Textarea(), // the one built-in beyond the default five
+		"Body": admin.Textarea(), // a multi-line text field; admin.JSON() is covered below
 	},
 })
 ```
@@ -205,7 +205,7 @@ registry.Admin().Register(Profile{}, admin.Options{
 
 ### The shared widget script
 
-`admin.JSON()` emits no inline script. Its markup includes one `<script src="/admin/_assets/widgets.<hash>.js" defer>` tag, and the admin serves that file from its own embedded assets. The URL is content-hashed from the file's exact bytes and served with `Cache-Control: public, max-age=31536000, immutable`. The route, the file name and the script's contents are presentation details, not part of tanGO's compatibility promise. Repeated tags are harmless: the script guards itself, so a second copy does nothing. The source is `admin/assets/widgets.js`; each widget with behaviour marks its markup with `data-tango-widget="<name>"` and registers a setup function under that name. The admin sets no site-wide Content-Security-Policy, so a host that adds one must allow that script.
+`admin.JSON()` emits no inline script. Its markup includes one `<script src="/admin/_assets/widgets.<hash>.js" defer>` tag, and the admin serves that file from its own embedded assets. The URL is content-hashed from the file's exact bytes and served with `Cache-Control: public, max-age=31536000, immutable`. The route, the file name and the script's contents are presentation details, not part of tanGO's compatibility promise. Repeated tags are harmless: the script guards itself, so a second copy does nothing. The source is `admin/assets/widgets.js`, which the admin's own built-in widgets use. It is not a public extension point: a third-party widget that needs behaviour should ship its own script, as described above. The admin sets no site-wide Content-Security-Policy, so a host that adds one must allow that script.
 
 ## Branding
 
