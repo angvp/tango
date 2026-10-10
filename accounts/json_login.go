@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -80,9 +81,33 @@ func (j *jsonAPI) login(ctx *tango.Context) error {
 // password. An identifier that is not an email names no account, and takes as
 // long as a wrong password.
 func (j *jsonAPI) authenticateIdentifier(ctx *tango.Context, identifier, password string) (Account, bool, error) {
-	if !strings.Contains(identifier, "@") {
+	if strings.Contains(identifier, "@") {
+		return authenticate(ctx.Context(), j.store, normalizeEmail(identifier), password)
+	}
+	resolve := j.cfg.json.ResolveIdentifier
+	if resolve == nil {
 		rejectUnknown(password)
 		return Account{}, false, nil
 	}
-	return authenticate(ctx.Context(), j.store, normalizeEmail(identifier), password)
+	id, found, err := resolve(ctx.Context(), j.store, identifier)
+	if err != nil {
+		return Account{}, false, err
+	}
+	var account Account
+	if found {
+		if err := j.store.Get(ctx.Context(), accountMeta(), id, &account); err != nil {
+			if !errors.Is(err, db.ErrNotFound) {
+				return Account{}, false, err
+			}
+			found = false
+		}
+	}
+	if !found {
+		rejectUnknown(password)
+		return Account{}, false, nil
+	}
+	if !checkPassword(account, password) {
+		return Account{}, false, nil
+	}
+	return account, true, nil
 }

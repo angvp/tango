@@ -61,13 +61,18 @@ func authenticate(ctx context.Context, store *db.Store, email, password string) 
 		rejectUnknown(password)
 		return Account{}, false, nil
 	}
-	// The password is checked even for an inactive account, so how long a
-	// refusal takes says nothing about why.
-	matches := auth.VerifyPassword(account.PasswordHash, password)
-	if !account.Active || !matches {
+	if !checkPassword(account, password) {
 		return Account{}, false, nil
 	}
 	return account, true, nil
+}
+
+// checkPassword reports whether account is active and password is its own.
+// The password is compared even for an inactive account, so how long a
+// refusal takes says nothing about why.
+func checkPassword(account Account, password string) bool {
+	matches := auth.VerifyPassword(account.PasswordHash, password)
+	return account.Active && matches
 }
 
 var (

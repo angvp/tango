@@ -60,6 +60,15 @@ type JSONConfig struct {
 	// invalid_field; any other error is logged and answered with a generic
 	// 500, and a panic rolls back and propagates.
 	OnRegister func(ctx context.Context, tx *db.Store, reg Registration) error
+	// ResolveIdentifier, when set, lets login take something other than an
+	// email, such as a username the host stores. It receives an identifier
+	// that does not contain "@" (one that does is an email and never reaches
+	// it) and returns the id of the account it names. The host guarantees its
+	// identifiers never contain "@". An error is an operational failure and
+	// answers a generic 500. accounts still loads the account, checks Active
+	// and compares the password, so found=false and a wrong password look the
+	// same to the client.
+	ResolveIdentifier func(ctx context.Context, store *db.Store, identifier string) (accountID int64, found bool, err error)
 }
 
 // Registration is what OnRegister is told about a new account. It
