@@ -59,11 +59,30 @@ A mapping that breaks any of these makes the run fail, naming what you asked for
 | `boolean` (`bool`) | `integer` | `true` → `1`, `false` → `0` |
 | `boolean` | `text` | `"true"` / `"false"` |
 
-`NULL` stays `NULL`. Every other type change — anything from `text` or `timestamp`, anything narrowing, and any change to a primary key's type — fails `makemigrations` before anything is written; do it by hand in steps you control (add a new field, copy and convert the data, then rename and drop).
+A bounded string (`tango:"varchar=n"`) has two more widening changes, and its values never change:
+
+| From | To | Each value becomes |
+|---|---|---|
+| `varchar(n)` | `text` (the tag removed) | the same string |
+| `varchar(n)` | `varchar(m)`, `m > n` | the same string |
+
+`NULL` stays `NULL`. Every other type change — anything from `timestamp`, `text` to anything but a bounded string, and any change to a primary key's type — fails `makemigrations` before anything is written; do it by hand in steps you control (add a new field, copy and convert the data, then rename and drop).
+
+### Narrowing a string
+
+Adding `varchar=n` to a bare string, or lowering `n`, is a **narrowing**: it can only work if every value already fits. `makemigrations` generates it as an `AlterColumnType`, and applying it first checks the data in Go, before any DDL. It reads each row's primary key and value, counts runes exactly as `Store.Create` does (never the database's own `length()`, so SQLite and PostgreSQL agree), and, if any value is too long, fails the migration with the number of rows and one offending key:
+
+```text
+tango migration: headline.title: cannot narrow text to varchar(5): 2 rows hold a longer value (lengths count characters), for example the row with id = 2; shorten or clean that data first, then run the migration again
+```
+
+Every narrowing in a migration is checked before the migration's first step runs (a rename in the same migration is checked under the names the database holds now), so nothing is truncated or rewritten, the schema and the data stay as they were, and the migration is not recorded as applied. Shorten or clean the data, then run `tango migrate` again. The check finds the table's own primary-key column, whatever it is called and whatever its type.
 
 The conversion is explicit SQL for each database, never an implicit cast. If the column has a default (from an `AddColumn` with `Default`), the default is converted the same way (`TRUE` becomes `1` for `boolean` to `integer`) and the column keeps it and its `NOT NULL`; a default that isn't a plain literal of the old type makes `makemigrations` refuse, naming the column and the default. A type change never stops halfway: PostgreSQL changes the type and default in one `ALTER TABLE` statement, and SQLite rebuilds the table in one transaction, so on any failure the column, its values and its default are left as they were.
 
 A migration with a type change is **irreversible**, even if it also renames fields: going back would be a narrowing change. Renaming and widening the same field in one run is fine — the rename comes first, then the type change under the new name.
+
+Reversibility is decided per migration, and only length changes of a string can reverse. A migration whose type changes are all narrowings (`text` to `varchar(n)`, or a smaller `varchar`) is reversible: its `Down` widens each column again, which is always safe. A migration with any widening step (`varchar` to `text`, a larger `varchar`, or any change in the table above) is irreversible as a whole and has no `Down`, even when it also holds a narrowing. Rolling one back is refused, because values longer than the old limit may have been written since; to go back, change the tag and run `makemigrations`, which generates an explicit narrowing that checks the data first.
 
 ## Dropping a model or field
 
@@ -117,7 +136,7 @@ If foreign keys between apps form a cycle (app A's initial migration references 
 tango migrate down
 ```
 
-Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. Migrations recorded with the same `applied_at` are rolled back in the reverse of the order they were applied in, so another app's table that a foreign key references is dropped only after the table referencing it. `Down` steps are generated automatically for reversible operations (`CreateTable`↔`DropTable`, `AddColumn`↔`DropColumn`, `CreateIndex`↔`DropIndex`). A migration containing a lossy step (`DropColumn`, `DropTable`) or a type change (`AlterColumnType`) is marked **irreversible**: `tango migrate down` on it fails explicitly with a clear error rather than attempting to "restore" data it can no longer recover.
+Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. Migrations recorded with the same `applied_at` are rolled back in the reverse of the order they were applied in, so another app's table that a foreign key references is dropped only after the table referencing it. `Down` steps are generated automatically for reversible operations (`CreateTable`↔`DropTable`, `AddColumn`↔`DropColumn`, `CreateIndex`↔`DropIndex`). A migration containing a lossy step (`DropColumn`, `DropTable`) or a widening type change (`AlterColumnType`) is marked **irreversible**: `tango migrate down` on it fails explicitly with a clear error rather than attempting to "restore" data it can no longer recover.
 
 ## Migration identity
 

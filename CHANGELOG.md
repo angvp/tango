@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- **Bounded strings.** `tango:"varchar=n"` declares a `string` field of at most `n` characters (1 to 10,485,760), and `tango:"text"` states an unbounded one explicitly; a bare `string` stays unbounded text and generates no migration. `model.FieldMeta.MaxLength` carries the limit and a malformed tag fails `Register` with `model.ErrInvalidFieldTag`. `Store.Create` and `Store.Update` refuse a longer value before any SQL with a `*db.ValueTooLongError` (`db.ErrValueTooLong`), counting runes the way PostgreSQL counts characters; SQLite does not enforce the length and raw SQL is not checked. `tango makemigrations` writes a `VARCHAR(n)` column (`Column.Length`, additive, with no `CHECK`), generates the widening changes (`varchar(n)` to `text` or a larger `varchar`) and the narrowing ones (`text` to `varchar(n)` or a smaller `varchar`), and a narrowing checks the existing data in Go first, failing with the number of rows and one offending key instead of truncating anything. A migration of narrowings is reversible; a widening makes its migration irreversible. The admin renders `maxlength` and shows a translatable per-field message (`admin.error.too_long`) for a refused save, and `admin.FieldContext` gains `MaxLength`. Built-in models are not retagged. See [models and tags](docs/guides/models-and-tags.md#bounded-strings) and [changing a field's type](docs/guides/migrations.md#changing-a-fields-type).
+
 ## [0.3.1] - 2026-10-09
 
 ### Fixed

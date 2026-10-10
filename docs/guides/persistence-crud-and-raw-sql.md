@@ -94,3 +94,5 @@ err := store.QueryRow(ctx, &result, "SELECT COUNT(*) AS count FROM post WHERE ti
 ## Errors
 
 `db.ErrNotFound` is the sentinel for "no matching row" on `Get`/`Update`/`Delete`; check it with `errors.Is`.
+
+`db.ErrValueTooLong` is the sentinel for a [bounded string](models-and-tags.md#bounded-strings) longer than its `varchar=n` limit on `Create`/`Update`. Use `errors.As` with `*db.ValueTooLongError` for the model, field, limit (`Max`) and length (`Got`, in runes). The check runs before any SQL, on SQLite and PostgreSQL alike. `Store.Query`, `QueryRow` and any hand-written SQL skip it; PostgreSQL still rejects an over-long value there, SQLite stores it.

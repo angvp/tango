@@ -28,7 +28,7 @@ Use the actual project workflow if it wraps these commands differently.
 - Do not leave an accidental migration diff after exploratory model changes.
 - Do not assume `makemigrations` applied anything; generation and application are separate steps.
 - When a field or model was renamed, pass `--rename app.Model.Field=NewField` or `--rename app.Model=NewModel` so its data is kept; never `--allow-drop` it. Name a renamed model's fields by the model's old name.
-- Only widening type changes are generated (`integer`→`real`/`text`, `real`→`text`, `boolean`→`integer`/`text`); for any other, add a new field, copy the data, then rename and drop, rather than editing the generated migration.
+- Only widening type changes and string narrowings are generated (`integer`→`real`/`text`, `real`→`text`, `boolean`→`integer`/`text`, `varchar(n)`→`text` or a larger `varchar`; `text`→`varchar(n)` or a smaller `varchar`). A narrowing checks the data first and fails without changing anything if a value is too long: shorten that data, then migrate again. A narrowing-only migration is reversible; any widening makes the migration irreversible; for any other, add a new field, copy the data, then rename and drop, rather than editing the generated migration.
 - Do not pass `--allow-drop` to get past a refused run unless the model or field really should be deleted with its data; each `--allow-drop` names exactly one `app.Model` or `app.Model.Field`.
 
 ## Check

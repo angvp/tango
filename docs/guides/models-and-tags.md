@@ -22,8 +22,31 @@ The `tango` struct tag takes a comma-separated list of options:
 | `pk` | This field is the primary key. Exactly one field must be tagged `pk` — zero or more than one fails `Register` with a clear error. There is no `ID`-name auto-detection: tanGO never guesses. |
 | `unique` | A unique constraint. Enforced at the database level once a migration adds it (see the [migrations guide](migrations.md)'s `AlterColumnUnique` step). |
 | `index` | A database index, created via the `CreateIndex` migration step. |
+| `varchar=n` | A bounded string: at most `n` characters, `n` from 1 to 10,485,760. Only on a `string` field. See [bounded strings](#bounded-strings). |
+| `text` | An explicit unbounded string, the same as a bare `string` field. Only on a `string` field; it cannot be combined with `varchar=n`. |
 
 Combine them: `tango:"pk,unique"` is valid, though redundant (a primary key is already unique).
+
+## Bounded strings
+
+A bare `string` field is `text`: any length, today and in every later release. Add `varchar=n` when the field has a real maximum, such as a title or a slug:
+
+<!-- snippet: bounded-strings -->
+```go
+type Headline struct {
+	ID    int64  `tango:"pk"`
+	Title string `tango:"varchar=200"`
+	Slug  string `tango:"varchar=80,unique"`
+	Body  string `tango:"text"`
+}
+```
+
+What the limit means:
+
+- **Registration**: a malformed tag fails `Register` with `model.ErrInvalidFieldTag`, naming the model and field: `varchar` with no value, `varchar=0`, a negative or non-numeric value, a value above 10,485,760, `varchar` together with `text`, a repeated tag, or either tag on a field that is not a `string`. `FieldMeta.MaxLength` is the limit, or `0` for an unbounded field.
+- **Counting**: the limit counts characters as runes, the way PostgreSQL counts `VARCHAR(n)`. `é` is one rune, an emoji is one rune, a letter followed by a combining accent is two, and each byte of invalid UTF-8 counts as one. The `maxlength` attribute the admin renders counts UTF-16 units instead, so the server is the authority.
+- **Enforcement**: `Store.Create` and `Store.Update` check every bounded field before any SQL runs and return a `*db.ValueTooLongError` (matching `db.ErrValueTooLong`) carrying the model, field, limit and length. An empty string and a string of exactly `n` runes are valid. The migration creates the column as `VARCHAR(n)` on both databases and adds no `CHECK` constraint: PostgreSQL enforces the length itself, SQLite does not, so on SQLite the Go check is the only guarantee. Raw SQL (`Store.Exec`, `Query`) is outside it.
+- **Changing it later**: see [changing a field's type](migrations.md#changing-a-fields-type). Adding or lowering a limit checks the existing data first and never truncates it.
 
 ## Supported field kinds
 
