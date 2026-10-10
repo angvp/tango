@@ -207,6 +207,20 @@ registry.Admin().Register(Profile{}, admin.Options{
 
 `admin.JSON()` emits no inline script. Its markup includes one `<script src="/admin/_assets/widgets.<hash>.js" defer>` tag, and the admin serves that file from its own embedded assets. The URL is content-hashed from the file's exact bytes and served with `Cache-Control: public, max-age=31536000, immutable`. The route, the file name and the script's contents are presentation details, not part of tanGO's compatibility promise. Repeated tags are harmless: the script guards itself, so a second copy does nothing. The source is `admin/assets/widgets.js`, which the admin's own built-in widgets use. It is not a public extension point: a third-party widget that needs behaviour should ship its own script, as described above. The admin sets no site-wide Content-Security-Policy, so a host that adds one must allow that script.
 
+## Markdown fields
+
+`admin.Markdown()` is a built-in widget for an authored text field: a monospace, resizable textarea with a server-rendered character count (`n characters`, or `n / max characters` for a bounded field). It stores the submitted text exactly as typed, with no normalization.
+
+```go
+registry.Admin().Register(Profile{}, admin.Options{
+	Widgets: map[string]admin.Widget{"Bio": admin.Markdown()},
+})
+```
+
+**The host owns rendering and sanitization.** tanGO ships no Markdown parser, sanitizer or rich-text dependency, and the admin never renders the stored text. Any public page that shows the Markdown must render and sanitize it under the application's own policy; an operator's text is not safe to output as HTML just because it was entered in the admin. `examples/spa-accounts` edits a profile's `Bio` this way and renders nothing.
+
+`admin.WithMarkdownPreview(fn)` records a host renderer of type `admin.MarkdownPreview` (`func(context.Context, string) (template.HTML, error)`) on the widget. The preview UI that uses it is not yet part of the admin: until it ships, the option is accepted but the form is unchanged, and the callback is never called on save.
+
 ## Branding
 
 `admin.WithBranding` replaces the sidebar's generic title and mark with your own name and logo — the only two customization slots outside per-field widgets; there is no broader template or theme override mechanism:
