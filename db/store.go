@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -39,6 +40,32 @@ func (e *ValueTooLongError) Error() string {
 
 // Is reports whether target is ErrValueTooLong.
 func (e *ValueTooLongError) Is(target error) bool { return target == ErrValueTooLong }
+
+// ErrInvalidJSON is matched (with errors.Is) by the error Create and Update
+// return when a JSON field, tagged tango:"json", holds text that is not one
+// valid JSON document. Use errors.As with *InvalidJSONError for the details.
+var ErrInvalidJSON = errors.New("tango db: invalid JSON")
+
+// InvalidJSONError says which JSON field was refused and where the syntax
+// went wrong. Err carries only the byte offset of the problem, never any of
+// the submitted text, so the error is safe to log and to show to a client.
+// The check runs only in Create and Update: reads return stored text as it is,
+// and raw SQL is outside the guarantee.
+type InvalidJSONError struct {
+	Model string
+	Field string
+	Err   error
+}
+
+func (e *InvalidJSONError) Error() string {
+	return fmt.Sprintf("%v: %s.%s is not valid JSON (%v)", ErrInvalidJSON, e.Model, e.Field, e.Err)
+}
+
+// Is reports whether target is ErrInvalidJSON.
+func (e *InvalidJSONError) Is(target error) bool { return target == ErrInvalidJSON }
+
+// Unwrap returns the syntax problem.
+func (e *InvalidJSONError) Unwrap() error { return e.Err }
 
 // ErrNotFound is returned by Get, Update, and Delete when no row matches
 // the given primary key.
@@ -178,6 +205,43 @@ func (s *Store) ident(name string) string {
 	return sqlident.Quote(style, ColumnName(name))
 }
 
+// validateJSON checks every JSON field of structValue, in declaration order,
+// returning a *InvalidJSONError for the first one whose text is not one valid
+// JSON document. The empty string is the unset value and is always valid;
+// whitespace-only text is not. It runs before any SQL.
+func validateJSON(meta model.ModelMeta, structValue reflect.Value) error {
+	for _, field := range meta.Fields {
+		if !field.JSON {
+			continue
+		}
+		fieldValue := structValue.FieldByName(field.Name)
+		if !fieldValue.IsValid() || fieldValue.Kind() != reflect.String {
+			continue
+		}
+		text := fieldValue.String()
+		if text == "" || json.Valid([]byte(text)) {
+			continue
+		}
+		return &InvalidJSONError{Model: meta.Name, Field: field.Name, Err: jsonSyntaxProblem(text)}
+	}
+	return nil
+}
+
+// jsonSyntaxProblem describes why text is not JSON using only a position. The
+// standard library's own messages quote the offending character, which would
+// copy a piece of the submitted text into the error.
+func jsonSyntaxProblem(text string) error {
+	var raw json.RawMessage
+	var syntax *json.SyntaxError
+	if err := json.Unmarshal([]byte(text), &raw); errors.As(err, &syntax) {
+		if syntax.Offset >= int64(len(text)) {
+			return errors.New("unexpected end of input")
+		}
+		return fmt.Errorf("syntax error at byte %d", syntax.Offset)
+	}
+	return errors.New("not a single JSON document")
+}
+
 // validateLengths checks every bounded string field of structValue against its
 // declared maximum, returning a *ValueTooLongError for the first one, in
 // declaration order, that holds too many runes. It runs before any SQL, so it
@@ -259,6 +323,9 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 	structValue := value.Elem()
 
 	if err := validateLengths(meta, structValue); err != nil {
+		return err
+	}
+	if err := validateJSON(meta, structValue); err != nil {
 		return err
 	}
 	if err := s.validateForeignKeys(ctx, meta, structValue); err != nil {
@@ -468,6 +535,9 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 	structValue := value.Elem()
 
 	if err := validateLengths(meta, structValue); err != nil {
+		return err
+	}
+	if err := validateJSON(meta, structValue); err != nil {
 		return err
 	}
 	if err := s.validateForeignKeys(ctx, meta, structValue); err != nil {
