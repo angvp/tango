@@ -523,3 +523,23 @@ func TestDeleteViewPostOnAlreadyDeletedRowReturns404(t *testing.T) {
 		t.Fatalf("second status = %d, want %d", second.Code, http.StatusNotFound)
 	}
 }
+
+func TestListViewOutOfRangePageShowsTheLastPage(t *testing.T) {
+	handler, sqlDB := buildProductAdmin(t)
+	for i := 1; i <= 30; i++ {
+		seedProduct(t, sqlDB, fmt.Sprintf("Item%02d", i), float64(i))
+	}
+
+	for _, target := range []string{"?page=3", "?page=999"} {
+		body := doRequest(t, handler, http.MethodGet, crudBasePath+target, nil).Body.String()
+		if !strings.Contains(body, "Item26") || !strings.Contains(body, "Item30") {
+			t.Errorf("%s: rows should be the last page (Item26-Item30):\n%s", target, body)
+		}
+		if strings.Contains(body, "Item01") {
+			t.Errorf("%s: shows rows from page 1", target)
+		}
+		if strings.Contains(body, "No results") || strings.Contains(body, "Next page") {
+			t.Errorf("%s: pager and rows disagree:\n%s", target, body)
+		}
+	}
+}

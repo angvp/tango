@@ -24,10 +24,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 
 		page := parsePage(ctx.Query("page"))
 		q := ctx.Query("q")
-		// Fetch one extra row beyond the page size so HasNext reflects
-		// whether a next page actually has rows, rather than assuming one
-		// exists whenever this page happens to be exactly full.
-		query := db.Query{Limit: pageSize + 1, Offset: (page - 1) * pageSize, OrderBy: registration.Options.Ordering}
+		query := db.Query{OrderBy: registration.Options.Ordering}
 		if q != "" {
 			for _, field := range registration.Options.Search {
 				query.Any = append(query.Any, db.Condition{Field: field, Op: db.OpLike, Value: "%" + q + "%"})
@@ -38,6 +35,26 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			return err
 		}
 		query.Where = filters.Where
+
+		// Count first so an out-of-range page is clamped to the last page
+		// before any rows are fetched; rows and pager then describe the
+		// same page.
+		total, err := store.Count(ctx.Context(), meta, query)
+		if err != nil {
+			return err
+		}
+		totalPages := (total + pageSize - 1) / pageSize
+		if totalPages < 1 {
+			totalPages = 1
+		}
+		if page > totalPages {
+			page = totalPages
+		}
+		// Fetch one extra row beyond the page size so HasNext reflects
+		// whether a next page actually has rows, rather than assuming one
+		// exists whenever this page happens to be exactly full.
+		query.Limit = pageSize + 1
+		query.Offset = (page - 1) * pageSize
 
 		sliceType := reflect.SliceOf(meta.Type)
 		destPtr := reflect.New(sliceType)
@@ -56,17 +73,6 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			rows = rows[:pageSize]
 		}
 
-		total, err := store.Count(ctx.Context(), meta, query)
-		if err != nil {
-			return err
-		}
-		totalPages := (total + pageSize - 1) / pageSize
-		if totalPages < 1 {
-			totalPages = 1
-		}
-		if page > totalPages {
-			page = totalPages
-		}
 		params := listParams(q, filters.Params)
 
 		columns := make([]string, len(registration.Options.ListDisplay))

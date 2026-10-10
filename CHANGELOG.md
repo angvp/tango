@@ -18,6 +18,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Changed
 
+- An admin changelist `?page=` beyond the last page now shows the last page, so the rows and the pager always describe the same page (before, it showed an empty list under a pager that named the last page).
+
 - The admin foreign key select now starts with a "— None —" choice (translation key `admin.fk.none`), and an unset foreign key shows an em dash in the changelist instead of `0`. Saving "None" stores the same unset value (NULL) as before.
 
 - `POST /admin/logout/` now requires the session's CSRF token when the request carries a session cookie, so a cross-site form cannot sign an admin out. A missing or wrong token gets 403 and leaves the session in place. A request without a session cookie still redirects to the login page.
