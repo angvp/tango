@@ -21,15 +21,16 @@ import (
 // strings: tango:"varchar=n" makes Store.Create refuse a longer value
 // (counted in characters, on SQLite as well as PostgreSQL), and the
 // migration gives the column VARCHAR(n). Bio is not bounded: a bare string
-// is text of any length. Preferences is JSON text, which the admin edits
-// with its JSON widget; the server stores exactly what it is given.
+// is text of any length. Preferences is a JSON field (tango:"json"): the
+// Store refuses text that is not valid JSON, the admin edits it with its JSON
+// widget by default, and the server stores exactly what it is given.
 type Profile struct {
 	ID          int64  `tango:"pk"`
 	AccountID   int64  `tango:"fk=Account,unique"`
 	Username    string `tango:"varchar=30,unique"`
 	DisplayName string `tango:"varchar=60"`
 	Bio         string
-	Preferences string
+	Preferences string `tango:"json"`
 }
 
 // meta is Profile's model metadata, for the Store calls the registration
@@ -58,8 +59,7 @@ func New() tango.App {
 			// created by hand in the admin therefore has no account.)
 			ReadOnly: []string{"AccountID"},
 			Widgets: map[string]admin.Widget{
-				"Bio":         admin.Markdown(admin.WithMarkdownPreview(previewBio)),
-				"Preferences": admin.JSON(),
+				"Bio": admin.Markdown(admin.WithMarkdownPreview(previewBio)),
 			},
 		})
 	})

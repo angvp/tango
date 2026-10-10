@@ -3,7 +3,7 @@
 The backend of a separate client (a Next.js or other single-page app) that needs registration, login, password reset and email verification without cookies. It uses the `accounts` app's JSON mode, `accounts.WithJSON`, with bearer tokens from `auth/jwt`.
 
 - **`auth.go`** is the application's side of the bearer contract: it issues and checks JWTs, so `accounts` imports no token package.
-- **`apps/profiles`** is the host's own data: a `Profile` with a bounded `Username` (`varchar=30`, unique), `DisplayName` (`varchar=60`), an unbounded `Bio`, and `Preferences`, JSON text that the admin edits with `admin.JSON()`. `OnRegister` creates the profile in the same transaction as the account, so there is never an account without one; `ResolveUsername` lets login take the username instead of the email.
+- **`apps/profiles`** is the host's own data: a `Profile` with a bounded `Username` (`varchar=30`, unique), `DisplayName` (`varchar=60`), an unbounded `Bio`, and `Preferences`, a JSON field (`tango:"json"`): the Store refuses text that is not valid JSON, and the admin edits it with its JSON editor by default. `OnRegister` creates the profile in the same transaction as the account, so there is never an account without one; `ResolveUsername` lets login take the username instead of the email.
 - **`cors.go`** is host-owned CORS middleware for the client's origin. tanGO ships none.
 - **`main.go`** wires it together. Emailed links point at the client (`CLIENT_URL/verify#token=…`, `CLIENT_URL/reset#token=…`); a token in the fragment never reaches a server log or a `Referer` header.
 
@@ -29,7 +29,7 @@ The six endpoints are `register/`, `login/`, `password-reset/`, `password-reset/
 
 ## The admin
 
-`admin.New(store)` serves the staff admin at `/admin/`, so an operator can edit a profile. Create the first account with `go run . -tango-admin-create=admin` and log in at `http://localhost:8000/admin/`. The profile's `Preferences` field uses `admin.JSON()`: a value that is not one JSON document is refused with its error and the text as typed, the **Formatted** tab shows valid JSON indented (and **Use this formatting** copies it into the field), and the stored value is exactly what was submitted. The `Bio` field uses `admin.Markdown()` with a **Preview** tab rendered by Goldmark's defaults, which omit raw HTML and drop unsafe links; the preview shows in a sandboxed frame, and the public site renders nothing from `Bio`, so a public page would need its own sanitization policy. Run `go test .` to see the same flow over HTTP.
+`admin.New(store)` serves the staff admin at `/admin/`, so an operator can edit a profile. Create the first account with `go run . -tango-admin-create=admin` and log in at `http://localhost:8000/admin/`. The profile's `Preferences` field is tagged `tango:"json"`, so it gets the JSON editor without any admin configuration: a value that is not one JSON document is refused with its error and the text as typed, the **Formatted** tab shows valid JSON indented (and **Use this formatting** copies it into the field), and the stored value is exactly what was submitted. The `Bio` field uses `admin.Markdown()` with a **Preview** tab rendered by Goldmark's defaults, which omit raw HTML and drop unsafe links; the preview shows in a sandboxed frame, and the public site renders nothing from `Bio`, so a public page would need its own sanitization policy. Run `go test .` to see the same flow over HTTP.
 
 ## What it shows about bounded strings
 
