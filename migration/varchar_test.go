@@ -99,14 +99,14 @@ func TestBareStringStaysATextColumnWithoutALength(t *testing.T) {
 	}
 }
 
-func TestDiffRefusesLengthChangesUntilTheyAreSupported(t *testing.T) {
+func TestDiffRefusesBoundedChangesNoStepCanExpress(t *testing.T) {
 	tests := []struct {
 		name string
 		from ColumnState
 		to   int
 	}{
-		{"text to varchar", ColumnState{Name: "title", Type: "text"}, 200},
-		{"varchar to a shorter varchar", ColumnState{Name: "title", Type: "varchar", Length: 300}, 200},
+		{"integer to varchar", ColumnState{Name: "title", Type: "integer"}, 200},
+		{"boolean to varchar", ColumnState{Name: "title", Type: "boolean"}, 200},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -83,4 +83,32 @@ var Migrations = []migration.Migration{
 		},
 		Down: []migration.Step{},
 	},
+	{App: "blog", Name: "0010_add_bounded_field", Reversible: true,
+		Up: []migration.Step{
+			migration.AddColumn{Table: "post", Column: migration.Column{Name: "slug", Type: "varchar", Length: 80, PrimaryKey: false, Unique: false, Indexed: false}},
+		},
+		Down: []migration.Step{
+			migration.DropColumn{Table: "post", Column: "slug"},
+		},
+	},
+	{App: "blog", Name: "0011_narrow_to_varchar", Reversible: true,
+		Up: []migration.Step{
+			migration.AlterColumnType{Table: "comment", Column: "text", From: "text", To: "varchar", ToLength: 500},
+		},
+		Down: []migration.Step{
+			migration.AlterColumnType{Table: "comment", Column: "text", From: "varchar", FromLength: 500, To: "text"},
+		},
+	},
+	{App: "blog", Name: "0012_widen_bound", Reversible: false,
+		Up: []migration.Step{
+			migration.AlterColumnType{Table: "post", Column: "slug", From: "varchar", FromLength: 80, To: "varchar", ToLength: 200},
+		},
+		Down: []migration.Step{},
+	},
+	{App: "blog", Name: "0013_widen_to_text", Reversible: false,
+		Up: []migration.Step{
+			migration.AlterColumnType{Table: "post", Column: "slug", From: "varchar", FromLength: 200, To: "text"},
+		},
+		Down: []migration.Step{},
+	},
 }

@@ -21,7 +21,8 @@ Each directory here holds the migration files one tanGO release's own `tango mak
 - adding columns;
 - changing unique and index flags;
 - dropping an index, a column and a table;
-- renaming a field and a model, and a widening type change (only on releases that support them).
+- renaming a field and a model, and a widening type change (only on releases that support them);
+- a bounded string (`tango:"varchar=n"`) added, narrowed from text, widened and made text again (only on v0.4.0 and later, and `unreleased`).
 
 Then it replaces the version's directory here.
 

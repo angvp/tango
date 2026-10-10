@@ -152,19 +152,20 @@ func TestApplyStepTurnsAVarcharColumnBackIntoText(t *testing.T) {
 	}
 }
 
-func TestApplyStepRefusesALengthChangeThatIsNotWidening(t *testing.T) {
+func TestApplyStepRefusesAChangeThatIsNeitherWideningNorNarrowing(t *testing.T) {
 	steps := []AlterColumnType{
-		{Table: "headline", Column: "title", From: "varchar", FromLength: 5, To: "varchar", ToLength: 3},
 		{Table: "headline", Column: "title", From: "varchar", FromLength: 5, To: "varchar", ToLength: 5},
-		{Table: "headline", Column: "title", From: "text", To: "varchar", ToLength: 9},
+		{Table: "headline", Column: "title", From: "integer", To: "varchar", ToLength: 9},
+		{Table: "headline", Column: "title", From: "varchar", FromLength: 5, To: "integer"},
 	}
 	for _, step := range steps {
 		sqlDB, dialect := boundedTitleFixture(t, 5)
+		declaredBefore := declaredType(t, sqlDB, dialect, "headline", "title")
 		err := ApplyStep(context.Background(), sqlDB, dialect, step)
 		if err == nil || !strings.Contains(err.Error(), "headline.title") || !strings.Contains(err.Error(), "widening") {
 			t.Errorf("ApplyStep(%+v) error = %v, want a widening refusal naming headline.title", step, err)
 		}
-		if got := declaredType(t, sqlDB, dialect, "headline", "title"); strings.Contains(got, "9") || strings.Contains(got, "3") {
+		if got := declaredType(t, sqlDB, dialect, "headline", "title"); got != declaredBefore {
 			t.Errorf("the refused step changed the column to %q", got)
 		}
 	}

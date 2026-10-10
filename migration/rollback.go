@@ -46,7 +46,7 @@ func RollbackLast(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrat
 		return fmt.Errorf("tango migration: applied migration %q/%q not found among provided migrations", lastKey.App, lastKey.Name)
 	}
 	if !target.Reversible {
-		return fmt.Errorf("%w: %q", ErrIrreversibleMigration, target.Name)
+		return fmt.Errorf("%w: %q%s", ErrIrreversibleMigration, target.Name, wideningHint(*target))
 	}
 
 	for _, step := range stepOrder(*target, target.Down) {
@@ -121,4 +121,15 @@ func lastOfTied(tied []MigrationKey, migrations []Migration) MigrationKey {
 	}
 	last := ordered[len(ordered)-1]
 	return MigrationKey{App: last.App, Name: last.Name}
+}
+
+// wideningHint explains why a migration that widens a bounded string cannot
+// be rolled back, and what to do instead.
+func wideningHint(m Migration) string {
+	for _, step := range m.Up {
+		if s, ok := step.(AlterColumnType); ok && isWidening(s.From, s.FromLength, s.To, s.ToLength) && (s.From == "varchar") {
+			return fmt.Sprintf(" (it widens %s.%s, and values longer than the old bound may exist now; to go back, change the field's tag and run makemigrations for an explicit narrowing migration, which checks the data first)", s.Table, s.Column)
+		}
+	}
+	return ""
 }

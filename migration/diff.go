@@ -204,6 +204,11 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 	for _, app := range apps {
 		m := byApp[app]
 		if len(m.Up) > 0 {
+			if !m.Reversible {
+				// No partial rollback: a reverse narrowing step is only
+				// meaningful when the whole migration reverses.
+				m.Down = withoutAlterColumnType(m.Down)
+			}
 			m.Down = reversedSteps(m.Down)
 			result = append(result, *m)
 		}
@@ -217,7 +222,8 @@ func typeChangeProblems(name string, current ColumnState, column Column) []strin
 	switch {
 	case current.PrimaryKey || column.PrimaryKey:
 		return []string{fmt.Sprintf("%s changes type from %s to %s, but a primary key's type cannot change", name, current.Type, column.Type)}
-	case !isWidening(current.Type, current.Length, column.Type, column.Length):
+	case !isWidening(current.Type, current.Length, column.Type, column.Length) &&
+		!isNarrowing(current.Type, current.Length, column.Type, column.Length):
 		return []string{fmt.Sprintf("%s changes type from %s to %s, which is not a widening type change", name, typeLabel(current.Type, current.Length), typeLabel(column.Type, column.Length))}
 	}
 	if _, ok := convertDefault(current.Type, column.Type, current.Default); !ok {
@@ -349,13 +355,24 @@ func diffColumns(m *Migration, table string, columns []Column, existing []Column
 
 		if current.Type != column.Type || current.Length != column.Length {
 			def, _ := convertDefault(current.Type, column.Type, current.Default)
-			m.Up = append(m.Up, AlterColumnType{
+			step := AlterColumnType{
 				Table: table, Column: column.Name,
 				From: current.Type, FromLength: current.Length,
 				To: column.Type, ToLength: column.Length,
 				Default: def,
-			})
-			m.Reversible = false
+			}
+			m.Up = append(m.Up, step)
+			if isNarrowing(step.From, step.FromLength, step.To, step.ToLength) {
+				// Widening again is always safe, so a narrowing reverses.
+				m.Down = append(m.Down, AlterColumnType{
+					Table: table, Column: column.Name,
+					From: step.To, FromLength: step.ToLength,
+					To: step.From, ToLength: step.FromLength,
+					Default: def,
+				})
+			} else {
+				m.Reversible = false
+			}
 		}
 
 		if current.Unique != column.Unique {
@@ -387,4 +404,16 @@ func diffColumns(m *Migration, table string, columns []Column, existing []Column
 		m.Up = append(m.Up, DropColumn{Table: table, Column: name})
 		m.Reversible = false
 	}
+}
+
+// withoutAlterColumnType drops the generated AlterColumnType reverses of an
+// irreversible migration.
+func withoutAlterColumnType(steps []Step) []Step {
+	var kept []Step
+	for _, step := range steps {
+		if _, alter := step.(AlterColumnType); !alter {
+			kept = append(kept, step)
+		}
+	}
+	return kept
 }

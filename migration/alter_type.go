@@ -58,6 +58,8 @@ var wideningConversions = map[wideningKey]wideningConversion{
 	// longer-only rule for varchar to varchar lives in isWidening.
 	{"varchar", "text"}:    unchangedValues,
 	{"varchar", "varchar"}: unchangedValues,
+	// Narrowing copies values too; applying it first runs preflightNarrowing.
+	{"text", "varchar"}: unchangedValues,
 	{"boolean", "integer"}: {
 		sql: map[db.Dialect]func(string) string{
 			db.SQLite:   booleanTo("1", "0"),
@@ -101,10 +103,23 @@ func isWideningTypeChange(from, to string) bool {
 // isWidening is isWideningTypeChange for typed columns: a bounded string
 // only widens to a strictly longer bound, and to text.
 func isWidening(from string, fromLength int, to string, toLength int) bool {
-	if from == "varchar" && to == "varchar" {
-		return toLength > fromLength
+	if to == "varchar" {
+		return from == "varchar" && toLength > fromLength
 	}
 	return isWideningTypeChange(from, to)
+}
+
+// isNarrowing reports whether a column can become a bounded string only if
+// its existing values fit: an unbounded string given a bound, or a bound
+// lowered. Applying it checks the data first and never truncates.
+func isNarrowing(from string, fromLength int, to string, toLength int) bool {
+	switch {
+	case from == "text" && to == "varchar":
+		return true
+	case from == "varchar" && to == "varchar":
+		return toLength < fromLength
+	}
+	return false
 }
 
 // typeLabel names a column type for messages, with a bounded string's length.
@@ -123,8 +138,14 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 		return err
 	}
 	conversion, ok := wideningConversions[wideningKey{s.From, s.To}]
-	if !ok || !isWidening(s.From, s.FromLength, s.To, s.ToLength) {
+	narrowing := isNarrowing(s.From, s.FromLength, s.To, s.ToLength)
+	if !ok || !(narrowing || isWidening(s.From, s.FromLength, s.To, s.ToLength)) {
 		return fmt.Errorf("tango migration: %s.%s: %s to %s is not a widening type change", s.Table, s.Column, typeLabel(s.From, s.FromLength), typeLabel(s.To, s.ToLength))
+	}
+	if narrowing {
+		if err := preflightNarrowing(ctx, sqlDB, dialect, s); err != nil {
+			return err
+		}
 	}
 	convert := conversion.sql[dialect]
 	if dialect == db.Postgres {

@@ -48,6 +48,12 @@ v0.0.1 | v0.0.2) extended=false ;;
 *) extended=true ;;
 esac
 
+# Bounded strings (tango:"varchar=n") arrive in v0.4.0.
+case $version in
+unreleased | v0.4.*) bounded=true ;;
+*) bounded=false ;;
+esac
+
 cat >main.go <<'EOF'
 package main
 
@@ -353,6 +359,110 @@ type Comment struct {
 	ID     int64 `tango:"pk"`
 	PostID int64 `tango:"fk=Post"`
 	Text   string
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}} }'
+fi
+
+# Bounded strings: a new bounded column, a narrowing (reversible), then a
+# widening of the bound and its removal (both irreversible).
+if $bounded; then
+	stage add_bounded_field '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string `tango:"varchar=80"`
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}} }'
+
+	stage narrow_to_varchar '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string `tango:"varchar=80"`
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}} }'
+
+	stage widen_bound '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string `tango:"varchar=200"`
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}} }'
+
+	stage widen_to_text '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
 }
 
 func models() []any { return []any{Writer{}, Post{}, Comment{}} }'
