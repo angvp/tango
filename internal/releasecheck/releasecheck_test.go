@@ -58,6 +58,7 @@ func greenRun() CIRun {
 		{Name: "lint", Status: "completed", Conclusion: "success"},
 		{Name: "test (sqlite)", Status: "completed", Conclusion: "success"},
 		{Name: "test (postgres)", Status: "completed", Conclusion: "success"},
+		{Name: "cache adapters", Status: "completed", Conclusion: "success"},
 	}}
 }
 
@@ -144,6 +145,9 @@ func TestCheckRefusesAReleaseThatIsNotReady(t *testing.T) {
 		{"a required job failed", func(_ *Release, s *fakeSources) {
 			s.runs = []CIRun{withJob(greenRun(), "test (postgres)", "completed", "failure")}
 		}, []string{"no successful CI run", "test (postgres)"}},
+		{"the cache adapters job failed", func(_ *Release, s *fakeSources) {
+			s.runs = []CIRun{withJob(greenRun(), "cache adapters", "completed", "failure")}
+		}, []string{"no successful CI run", "cache adapters"}},
 		{"a required job is missing", func(_ *Release, s *fakeSources) {
 			s.runs = []CIRun{withJob(greenRun(), "lint", "", "")}
 		}, []string{"no successful CI run", "lint"}},

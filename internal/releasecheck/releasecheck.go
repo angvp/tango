@@ -16,7 +16,11 @@ import (
 
 // RequiredJobs are the CI jobs that must all succeed on the exact commit a
 // release tags.
-var RequiredJobs = []string{"lint", "test (sqlite)", "test (postgres)"}
+//
+// "cache adapters" runs the Redis, Valkey and Memcached conformance suites
+// against the exact server versions the documentation claims (ADR 0056), so a
+// release whose adapters were never run against a server cannot be tagged.
+var RequiredJobs = []string{"lint", "test (sqlite)", "test (postgres)", "cache adapters"}
 
 // Release is a pushed tag and what the workflow gathered about it.
 type Release struct {
