@@ -18,11 +18,10 @@ for module in storage/s3 cache/redis cache/memcache; do
 	(cd "$module" && ! gofmt -l . | grep . && go vet ./... && go test -count=1 ./...)
 done
 
-LYCHEE_ARGS="--offline --include-fragments --no-progress ./**/*.md"
 if command -v lychee >/dev/null 2>&1; then
-	lychee $LYCHEE_ARGS
+	lychee --offline --include-fragments --no-progress './**/*.md'
 elif docker info >/dev/null 2>&1; then
-	docker run --rm -v "$PWD":/input:ro -w /input lycheeverse/lychee:0.24.2 $LYCHEE_ARGS
+	docker run --rm -v "$PWD":/input:ro -w /input lycheeverse/lychee:0.24.2 --offline --include-fragments --no-progress './**/*.md'
 else
 	echo "SKIPPED: Markdown links (install lychee: brew install lychee, or start Docker)" >&2
 fi
