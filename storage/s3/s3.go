@@ -201,12 +201,9 @@ func (s *Store) Open(ctx context.Context, key string, offset, length int64) (io.
 	if err != nil {
 		return nil, err
 	}
-	if offset < 0 || offset > info.Size {
-		return nil, storage.ErrInvalidRange
-	}
-	end := info.Size
-	if length >= 0 && offset+length < info.Size {
-		end = offset + length
+	end, err := storagekit.Range(info.Size, offset, length)
+	if err != nil {
+		return nil, err
 	}
 	if end == offset {
 		return io.NopCloser(strings.NewReader("")), nil // S3 refuses an empty range

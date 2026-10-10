@@ -195,7 +195,7 @@ See [the uploads guide](guides/uploads.md) and [ADR 0052](adr/0052-storage-is-an
 
 | Symbol | What it's for |
 |---|---|
-| `func New(dir string) (*Store, error)`, `func (*Store) Close() error` | A filesystem `storage.Store` rooted at `dir` (directories `0700`, files `0600`), reached only through `os.Root`. An object is a directory published by one rename, so a crash never leaves a partial object visible; stale temporary directories are swept when it opens. For development, tests and one host with a persistent volume. See [ADR 0053](adr/0053-the-local-store-publishes-an-object-as-one-atomic-directory.md). |
+| `func New(dir string) (*Store, error)`, `func (*Store) Close() error` | A filesystem `storage.Store` rooted at `dir` (directories `0700`, files `0600`), reached only through `os.Root`. An object is a directory published by one rename, so a crash never leaves a partial object visible; stale temporary directories are swept when it opens. `New` fails, naming the directory and the `chmod 700` to run, if an existing root, `objects` or `tmp` directory grants group or other access; it never changes one for you. For development, tests and one host with a persistent volume. See [ADR 0053](adr/0053-the-local-store-publishes-an-object-as-one-atomic-directory.md). |
 
 ## `storage/s3` (`github.com/angvp/tango/storage/s3`, its own module)
 

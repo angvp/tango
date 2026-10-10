@@ -21,6 +21,8 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -85,11 +87,36 @@ func New(dir string) (*Store, error) {
 			return nil, fmt.Errorf("storage/local: create %s: %w", sub, err)
 		}
 	}
+	if err := s.requirePrivate(dir); err != nil {
+		root.Close()
+		return nil, err
+	}
 	if err := s.sweep(); err != nil {
 		root.Close()
 		return nil, err
 	}
 	return s, nil
+}
+
+// requirePrivate refuses a root, objects or tmp directory that grants group
+// or other access. An operator's existing directory is never changed behind
+// their back: the error says how to make it private. Permission bits mean
+// nothing on Windows, where the check is skipped.
+func (s *Store) requirePrivate(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	for _, sub := range []string{".", objectsDir, tmpDir} {
+		info, err := s.root.Stat(sub)
+		if err != nil {
+			return fmt.Errorf("storage/local: stat %s: %w", sub, err)
+		}
+		if mode := info.Mode().Perm(); mode&0o077 != 0 {
+			shown := filepath.Join(dir, sub)
+			return fmt.Errorf("storage/local: %s is accessible to group or others (mode %04o); run `chmod 700 %s` or use a private directory", shown, mode, shown)
+		}
+	}
+	return nil
 }
 
 // Close releases the root directory.
@@ -269,12 +296,9 @@ func (s *Store) Open(ctx context.Context, key string, offset, length int64) (io.
 	if err != nil {
 		return nil, err
 	}
-	if offset < 0 || offset > info.Size {
-		return nil, storage.ErrInvalidRange
-	}
-	end := info.Size
-	if length >= 0 && offset+length < info.Size {
-		end = offset + length
+	end, err := storagekit.Range(info.Size, offset, length)
+	if err != nil {
+		return nil, err
 	}
 	f, err := s.root.Open(path.Join(objectPath(key), dataName))
 	if err != nil {

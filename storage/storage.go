@@ -28,7 +28,8 @@ type Store interface {
 	// Stat describes the object at key, or fails with ErrNotFound.
 	Stat(ctx context.Context, key string) (Info, error)
 	// Open reads length bytes of the object at key from offset; a negative
-	// length reads to the end and a length past the end is shortened. An
+	// length, or one that reaches or exceeds the remaining bytes (math.MaxInt64
+	// included), reads to the end. An
 	// offset beyond the end fails with ErrInvalidRange. The caller closes
 	// the reader.
 	Open(ctx context.Context, key string, offset, length int64) (io.ReadCloser, error)

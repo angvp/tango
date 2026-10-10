@@ -28,6 +28,8 @@ The runnable proof is [`examples/uploads`](../../examples/uploads). [ADR 0052](.
 objects, err := local.New("/var/lib/myapp/uploads") // directories 0700, files 0600
 ```
 
+`local.New` creates the directory private. If the root, or its `objects` or `tmp` subdirectory, already exists with any group or other permission (a `0755` volume mount, say), `New` fails with an error that names the directory and tells you to `chmod 700` it. It never changes an existing directory's permissions for you.
+
 ```go
 objects, err := s3.New(ctx, s3.Config{
 	Bucket:   "myapp-uploads",

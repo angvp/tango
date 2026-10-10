@@ -41,3 +41,18 @@ func (c *ContextReader) Read(p []byte) (int, error) {
 	}
 	return c.R.Read(p)
 }
+
+// Range resolves an Open request against an object of size bytes: it returns
+// the end of the range starting at offset. A negative length, or one that
+// reaches or exceeds the remaining bytes (math.MaxInt64 included), reads to
+// the end. An offset that is negative or beyond the end is
+// storage.ErrInvalidRange. It never overflows, whatever length is.
+func Range(size, offset, length int64) (end int64, err error) {
+	if offset < 0 || offset > size {
+		return 0, storage.ErrInvalidRange
+	}
+	if length < 0 || length >= size-offset {
+		return size, nil
+	}
+	return offset + length, nil
+}

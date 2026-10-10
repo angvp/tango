@@ -62,8 +62,10 @@ func TestExamplesAreIndependentModulesThatCompile(t *testing.T) {
 			"BOARD_JWT_SECRET="+strings.Repeat("s", 32),
 			// examples/spa-accounts signs its access tokens with this.
 			"SPA_JWT_SECRET="+strings.Repeat("s", 32),
-			// examples/uploads keeps uploaded files here; -check opens it.
-			"UPLOADS_DIR="+t.TempDir(),
+			// examples/uploads keeps uploaded files here; -check opens it. It must
+			// not exist yet: storage/local refuses an existing directory that is
+			// open to group or others, and t.TempDir() is.
+			"UPLOADS_DIR="+filepath.Join(t.TempDir(), "uploads"), // storage/local creates it private (0700)
 		)
 		var checkOut strings.Builder
 		checkCmd.Stdout = &checkOut

@@ -206,3 +206,73 @@ func TestNewRefusesAnEmptyRoot(t *testing.T) {
 		t.Fatal("New(\"\") succeeded")
 	}
 }
+
+func TestNewRefusesExistingDirectoriesOpenToGroupOrOthers(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		make func(t *testing.T, root string)
+	}{
+		{"the root", func(t *testing.T, root string) { mkdir(t, root, 0o755) }},
+		{"the root, group-writable", func(t *testing.T, root string) { mkdir(t, root, 0o770) }},
+		{"objects", func(t *testing.T, root string) {
+			mkdir(t, root, 0o700)
+			mkdir(t, filepath.Join(root, "objects"), 0o750)
+		}},
+		{"tmp", func(t *testing.T, root string) {
+			mkdir(t, root, 0o700)
+			mkdir(t, filepath.Join(root, "objects"), 0o700)
+			mkdir(t, filepath.Join(root, "tmp"), 0o705)
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "uploads")
+			tt.make(t, root)
+			s, err := local.New(root)
+			if err == nil {
+				s.Close()
+				t.Fatal("New accepted a directory that grants group or other access")
+			}
+			if !strings.Contains(err.Error(), "chmod 700") {
+				t.Errorf("error %q does not tell the operator how to fix it", err)
+			}
+		})
+	}
+}
+
+func TestNewLeavesAPermissiveDirectoryAsItFoundIt(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "uploads")
+	mkdir(t, root, 0o755)
+	if s, err := local.New(root); err == nil {
+		s.Close()
+		t.Fatal("New accepted a 0755 root")
+	}
+	if info, err := os.Stat(root); err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("the operator's directory was changed: %v, %v", info.Mode().Perm(), err)
+	}
+}
+
+func TestNewAcceptsPrivateExistingDirectories(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "uploads")
+	for _, dir := range []string{root, filepath.Join(root, "objects"), filepath.Join(root, "tmp")} {
+		mkdir(t, dir, 0o700)
+	}
+	s, err := local.New(root)
+	if err != nil {
+		t.Fatalf("New refused private directories: %v", err)
+	}
+	defer s.Close()
+	if _, err := s.Put(context.Background(), bytes.NewReader(pngBytes), storage.PutOptions{MaxSize: 1 << 20}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// mkdir creates dir with exactly mode, whatever the umask.
+func mkdir(t *testing.T, dir string, mode os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, mode); err != nil {
+		t.Fatal(err)
+	}
+}

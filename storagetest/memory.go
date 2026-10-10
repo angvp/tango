@@ -79,13 +79,9 @@ func (m *Memory) Open(ctx context.Context, key string, offset, length int64) (io
 	if err != nil {
 		return nil, err
 	}
-	size := int64(len(object.data))
-	if offset < 0 || offset > size {
-		return nil, storage.ErrInvalidRange
-	}
-	end := size
-	if length >= 0 && offset+length < size {
-		end = offset + length
+	end, err := storagekit.Range(int64(len(object.data)), offset, length)
+	if err != nil {
+		return nil, err
 	}
 	return io.NopCloser(bytes.NewReader(object.data[offset:end])), nil
 }

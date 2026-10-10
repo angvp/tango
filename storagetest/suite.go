@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -104,6 +105,11 @@ func openRanges(t *testing.T, s storage.Store) {
 		{"a length past the end is shortened", 8, 100, "89"},
 		{"zero length", 5, 0, ""},
 		{"offset at the end", 10, -1, ""},
+		{"a maximal length from the start", 0, math.MaxInt64, "0123456789"},
+		{"a maximal length from the middle", 3, math.MaxInt64, "3456789"},
+		{"a maximal length at the end", 10, math.MaxInt64, ""},
+		{"a length that exactly reaches the end", 4, 6, "456789"},
+		{"a length one past the end", 4, 7, "456789"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := readAll(t, s, key, tt.offset, tt.length)
