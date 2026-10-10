@@ -37,6 +37,7 @@ type accountsConfig struct {
 	sessionDuration   time.Duration
 	sessionCookieName string
 	mail              *MailConfig
+	json              *JSONConfig
 	now               func() time.Time
 	outboxCapacity    int
 	trustedProxies    []*net.IPNet
@@ -116,6 +117,12 @@ func New(store *db.Store, opts ...Option) tango.App {
 			}
 		}
 
+		if cfg.json != nil {
+			if err := cfg.json.validate(cfg.mail != nil); err != nil {
+				return err
+			}
+		}
+
 		registerLimiter := security.NewRateLimiter(registerRateLimitAttempts, registerRateLimitWindow)
 		loginLimiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 		routes := tango.URLs{
@@ -127,6 +134,10 @@ func New(store *db.Store, opts ...Option) tango.App {
 		}
 		if m != nil {
 			routes = append(routes, m.routes()...)
+		}
+		if cfg.json != nil {
+			api := &jsonAPI{store: store, cfg: cfg, auth: cfg.json.Auth, mail: m, loginLimiter: loginLimiter, registerLimiter: registerLimiter}
+			routes = append(routes, api.routes()...)
 		}
 
 		return registry.Routes().Include("/", routes)

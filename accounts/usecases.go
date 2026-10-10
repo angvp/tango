@@ -2,6 +2,9 @@ package accounts
 
 import (
 	"context"
+	"sync"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/angvp/tango/auth"
 	"github.com/angvp/tango/db"
@@ -54,10 +57,34 @@ func authenticate(ctx context.Context, store *db.Store, email, password string) 
 	if err != nil {
 		return Account{}, false, err
 	}
-	if !exists || !account.Active || !auth.VerifyPassword(account.PasswordHash, password) {
+	if !exists {
+		rejectUnknown(password)
+		return Account{}, false, nil
+	}
+	// The password is checked even for an inactive account, so how long a
+	// refusal takes says nothing about why.
+	matches := auth.VerifyPassword(account.PasswordHash, password)
+	if !account.Active || !matches {
 		return Account{}, false, nil
 	}
 	return account, true, nil
+}
+
+var (
+	unknownHashOnce sync.Once
+	unknownHash     string
+)
+
+// rejectUnknown spends the time of a password comparison for a login that
+// names no account, so an unknown identifier takes as long as a wrong password.
+func rejectUnknown(password string) {
+	unknownHashOnce.Do(func() {
+		hash, err := bcrypt.GenerateFromPassword([]byte("no such account"), bcrypt.DefaultCost)
+		if err == nil {
+			unknownHash = string(hash)
+		}
+	})
+	auth.VerifyPassword(unknownHash, password)
 }
 
 // requestPasswordReset queues a reset email for an already-normalized
