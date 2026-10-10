@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/angvp/tango/model"
@@ -51,17 +52,9 @@ func mustDiffModels(t *testing.T, models []Model, state SchemaState) []Migration
 	return migrations
 }
 
+// modelName is the registry key of a test model: its Go type name.
 func modelName(value any) string {
-	switch value.(type) {
-	case diffUser:
-		return "diffUser"
-	case diffPost:
-		return "diffPost"
-	case diffJSONDoc:
-		return "diffJSONDoc"
-	default:
-		panic("unknown test model")
-	}
+	return reflect.TypeOf(value).Name()
 }
 
 func TestDiffNewModelProducesCreateTable(t *testing.T) {
