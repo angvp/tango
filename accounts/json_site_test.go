@@ -13,6 +13,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
+	"github.com/angvp/tango/mail"
 	"github.com/angvp/tango/mail/mailtest"
 )
 
@@ -25,6 +26,7 @@ const (
 type fakeAuth struct {
 	mu       sync.Mutex
 	issueErr error
+	authErr  error
 	issued   []accounts.Account
 }
 
@@ -39,6 +41,9 @@ func (a *fakeAuth) Issue(_ context.Context, account accounts.Account) (accounts.
 }
 
 func (a *fakeAuth) Authenticate(_ context.Context, r *http.Request) (int64, bool, error) {
+	if a.authErr != nil {
+		return 0, false, a.authErr
+	}
 	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer tok-")
 	if !ok {
 		return 0, false, nil
@@ -125,4 +130,17 @@ func registrationError(t *testing.T, auth accounts.JSONConfig, withMail bool) er
 		t.Fatal(err)
 	}
 	return registry.RunRegistration()
+}
+
+// bearer sets the Authorization header for account.
+func bearer(account accounts.Account) func(*http.Request) {
+	return func(r *http.Request) { r.Header.Set("Authorization", "Bearer tok-"+strconv.FormatInt(account.ID, 10)) }
+}
+
+// messages stops the outbox, which first sends what is queued, and returns
+// every message sent: the way to assert that nothing else was mailed.
+func (s *mailSite) messages() []mail.Message {
+	s.t.Helper()
+	s.stop()
+	return s.sender.Messages()
 }

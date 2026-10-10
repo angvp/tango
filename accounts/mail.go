@@ -93,6 +93,10 @@ type mailer struct {
 	baseURL  string
 	outbox   *outbox
 	cooldown *cooldown
+	// resetLimiter and resendLimiter are the per-client budgets of the
+	// reset-request and resend endpoints, shared by the HTML and JSON flows.
+	resetLimiter  *security.RateLimiter
+	resendLimiter *security.RateLimiter
 }
 
 // newMailer validates cfg.mail and registers the outbox's worker.
@@ -107,6 +111,9 @@ func newMailer(registry *tango.Registry, store *db.Store, cfg accountsConfig) (*
 		baseURL:  baseURL,
 		outbox:   newOutbox(cfg.outboxCapacity, cfg.mail.Sender, cfg.mail.Logger),
 		cooldown: newCooldown(mailCooldown),
+
+		resetLimiter:  security.NewRateLimiter(mailRateLimitAttempts, mailRateLimitWindow),
+		resendLimiter: security.NewRateLimiter(mailRateLimitAttempts, mailRateLimitWindow),
 	}
 	if err := registry.RegisterLifecycle(m.outbox.lifecycle()); err != nil {
 		return nil, err
@@ -116,10 +123,10 @@ func newMailer(registry *tango.Registry, store *db.Store, cfg accountsConfig) (*
 
 // routes are the mail flows' routes, mounted only with WithMail.
 func (m *mailer) routes() tango.URLs {
-	reset := passwordResetView(m, security.NewRateLimiter(mailRateLimitAttempts, mailRateLimitWindow))
+	reset := passwordResetView(m, m.resetLimiter)
 	confirm := m.tokenLinkView(m.resetLink())
 	verify := m.tokenLinkView(m.verifyLink())
-	resend := resendVerificationView(m, security.NewRateLimiter(mailRateLimitAttempts, mailRateLimitWindow))
+	resend := resendVerificationView(m, m.resendLimiter)
 	return tango.URLs{
 		tango.Path(http.MethodGet, "/accounts/password-reset/", reset),
 		tango.Path(http.MethodPost, "/accounts/password-reset/", reset),
