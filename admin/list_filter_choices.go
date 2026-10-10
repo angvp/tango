@@ -57,27 +57,63 @@ func loadFilterChoices(ctx context.Context, store *db.Store, models *model.Regis
 	return choices, false, nil
 }
 
+// loadFilterChoice looks up the one related row a bookmarked URL names, for a
+// foreign key filter too large to list. It reports false, without error, for
+// a value that is malformed or names no row, so a stale URL still renders.
+func loadFilterChoice(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, target, raw string) (filterChoice, bool, error) {
+	relatedMeta, ok := models.Get(target)
+	if !ok {
+		return filterChoice{}, false, fmt.Errorf("tango admin: filter target %q is not a registered model", target)
+	}
+	pkField, err := primaryKeyField(relatedMeta)
+	if err != nil {
+		return filterChoice{}, false, err
+	}
+	key, err := keyValue(pkField.Type, pkField.Name, raw)
+	if err != nil {
+		return filterChoice{}, false, nil // malformed: ignored
+	}
+
+	destPtr := reflect.New(reflect.SliceOf(relatedMeta.Type))
+	query := db.Query{Where: []db.Condition{{Field: pkField.Name, Op: db.OpEq, Value: key}}, Limit: 1}
+	if err := store.List(ctx, relatedMeta, query, destPtr.Interface()); err != nil {
+		return filterChoice{}, false, fmt.Errorf("tango admin: look up %s filter value: %w", target, err)
+	}
+	rows := destPtr.Elem()
+	if rows.Len() == 0 {
+		return filterChoice{}, false, nil
+	}
+	row := rows.Index(0)
+	value := fmt.Sprint(row.FieldByName(pkField.Name).Interface())
+	return filterChoice{Value: value, Text: relatedChoiceText(row, labelFieldFor(adminReg, target), value)}, true, nil
+}
+
 // foreignKeyValue converts a related primary key, as it appears in a query
 // value, to the Go value the foreign key field stores.
 func foreignKeyValue(field model.FieldMeta, raw string) (any, error) {
-	value := reflect.New(field.Type).Elem()
-	switch field.Type.Kind() {
+	return keyValue(field.Type, field.Name, raw)
+}
+
+// keyValue parses raw as a value of type typ, a string or integer key.
+func keyValue(typ reflect.Type, name, raw string) (any, error) {
+	value := reflect.New(typ).Elem()
+	switch typ.Kind() {
 	case reflect.String:
 		value.SetString(raw)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		n, err := strconv.ParseInt(raw, 10, field.Type.Bits())
+		n, err := strconv.ParseInt(raw, 10, typ.Bits())
 		if err != nil {
-			return nil, fmt.Errorf("tango admin: filter value %q for %s: %w", raw, field.Name, err)
+			return nil, fmt.Errorf("tango admin: filter value %q for %s: %w", raw, name, err)
 		}
 		value.SetInt(n)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		n, err := strconv.ParseUint(raw, 10, field.Type.Bits())
+		n, err := strconv.ParseUint(raw, 10, typ.Bits())
 		if err != nil {
-			return nil, fmt.Errorf("tango admin: filter value %q for %s: %w", raw, field.Name, err)
+			return nil, fmt.Errorf("tango admin: filter value %q for %s: %w", raw, name, err)
 		}
 		value.SetUint(n)
 	default:
-		return nil, fmt.Errorf("tango admin: filter on %s has unsupported kind %s", field.Name, field.Type.Kind())
+		return nil, fmt.Errorf("tango admin: filter on %s has unsupported kind %s", name, typ.Kind())
 	}
 	return value.Interface(), nil
 }

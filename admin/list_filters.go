@@ -35,6 +35,10 @@ type filterControl struct {
 	Label   string
 	Options []filterOption
 	Message string
+	// Applied is the label of the related row an over-cap filter applies, so
+	// the page can show and keep it although it offers no select.
+	Applied      string
+	AppliedValue string
 }
 
 // appliedFilter is one filter the request actually applied: the condition
@@ -122,9 +126,7 @@ func foreignKeyFilter(ctx context.Context, store *db.Store, models *model.Regist
 		return filterControl{}, nil, err
 	}
 	if overCap {
-		control.Message = i18n.T(ctx, "admin.list.filter_too_many",
-			"%s cannot be filtered here: more than %d related rows.", control.Label, maxFilterChoices)
-		return control, nil, nil
+		return overCapFilter(ctx, store, models, adminReg, field, control, raw)
 	}
 
 	options := []filterOption{{Value: filterAny, Text: i18n.T(ctx, "admin.list.filter_any", "Any")}}
@@ -147,6 +149,31 @@ func foreignKeyFilter(ctx context.Context, store *db.Store, models *model.Regist
 	}
 	control.Options = markSelected(options, selected)
 	return control, applied, nil
+}
+
+// overCapFilter handles a foreign key filter whose related model is too
+// large to list. The cap limits what is offered, not what can be filtered: a
+// value in the URL is looked up on its own and applied when the row exists.
+func overCapFilter(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, control filterControl, raw string) (filterControl, *appliedFilter, error) {
+	control.Message = i18n.T(ctx, "admin.list.filter_too_many",
+		"%s has too many values to list (more than %d).", control.Label, maxFilterChoices)
+	if raw == "" {
+		return control, nil, nil
+	}
+	choice, found, err := loadFilterChoice(ctx, store, models, adminReg, field.ForeignKey, raw)
+	if err != nil || !found {
+		return control, nil, err
+	}
+	value, err := foreignKeyValue(field, choice.Value)
+	if err != nil {
+		return filterControl{}, nil, err
+	}
+	control.Applied = choice.Text
+	control.AppliedValue = choice.Value
+	return control, &appliedFilter{
+		Condition: db.Condition{Field: field.Name, Op: db.OpEq, Value: value},
+		Value:     choice.Value,
+	}, nil
 }
 
 // markSelected returns options with the one whose Value is selected marked.

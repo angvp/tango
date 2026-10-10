@@ -204,7 +204,7 @@ func TestForeignKeyFilterOverCapExplainsItselfAndOffersNoChoices(t *testing.T) {
 	seedBook(t, sqlDB, "Orphan Notes", true, last)
 
 	body := doRequest(t, handler, "GET", flBookPath, nil).Body.String()
-	if !strings.Contains(body, "more than 100 related rows") {
+	if !strings.Contains(body, "too many values to list") {
 		t.Fatalf("over-cap filter should explain itself:\n%s", body)
 	}
 	if strings.Contains(body, `<select id="filter-author_id"`) {
@@ -214,9 +214,29 @@ func TestForeignKeyFilterOverCapExplainsItselfAndOffersNoChoices(t *testing.T) {
 		t.Fatalf("over-cap filter has no control, so its label must not point at one:\n%s", body)
 	}
 
-	body = doRequest(t, handler, "GET", flBookPath+"?filter_author_id="+strconv.FormatInt(last, 10), nil).Body.String()
-	if !strings.Contains(body, "Orphan Notes") || strings.Contains(body, `filter_author_id=`+strconv.FormatInt(last, 10)) {
-		t.Fatalf("over-cap filter value should be ignored, not applied or reflected:\n%s", body)
+	// A bookmarked value still filters: the cap limits listing, not filtering.
+	other := seedFilterAuthor(t, sqlDB, "Someone Else")
+	seedBook(t, sqlDB, "Other Notes", true, other)
+	id := strconv.FormatInt(last, 10)
+	body = doRequest(t, handler, "GET", flBookPath+"?filter_author_id="+id, nil).Body.String()
+	if !strings.Contains(body, "Orphan Notes") || strings.Contains(body, "Other Notes") {
+		t.Fatalf("a valid over-cap value should filter the list:\n%s", body)
+	}
+	if !strings.Contains(body, `<input type="hidden" name="filter_author_id" value="`+id+`">`) {
+		t.Fatalf("the applied value should survive a form resubmit:\n%s", body)
+	}
+	if !strings.Contains(body, "Author 100") {
+		t.Fatalf("the applied row's label should be shown:\n%s", body)
+	}
+	if strings.Contains(body, `<select id="filter-author_id"`) {
+		t.Fatalf("applying a value must not bring back the select:\n%s", body)
+	}
+
+	for _, bad := range []string{"999999", "ada", "-1"} {
+		body = doRequest(t, handler, "GET", flBookPath+"?filter_author_id="+bad, nil).Body.String()
+		if !strings.Contains(body, "Orphan Notes") || !strings.Contains(body, "Other Notes") || strings.Contains(body, `filter_author_id=`+bad) {
+			t.Fatalf("over-cap value %q should be ignored, not applied or reflected:\n%s", bad, body)
+		}
 	}
 }
 

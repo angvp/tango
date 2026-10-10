@@ -71,7 +71,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 
 		columns := make([]string, len(registration.Options.ListDisplay))
 		for i, name := range registration.Options.ListDisplay {
-			columns[i] = listHeader(meta, name, registration.Options)
+			columns[i] = listHeader(name, registration.Options)
 		}
 
 		data := listPageData{

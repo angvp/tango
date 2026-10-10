@@ -187,3 +187,19 @@ func TestListViewDisplayPanicUsesTheFrameworkRecoverer(t *testing.T) {
 		t.Fatalf("status = %d, want 500 from the framework Recoverer", response.Code)
 	}
 }
+
+func TestLabelsOverrideARegisteredFieldHeaderOnlyWhenSet(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
+		ListDisplay: []string{"Name", "Price"},
+		Labels:      map[string]string{"Name": "Product name"},
+	})
+	seedProduct(t, sqlDB, "Alpha", 1)
+
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	if !strings.Contains(body, `<th scope="col">Product name</th>`) {
+		t.Fatalf("Labels did not override the Name header:\n%s", body)
+	}
+	if !strings.Contains(body, `<th scope="col">Price</th>`) {
+		t.Fatalf("a field without a Labels entry lost its default header:\n%s", body)
+	}
+}

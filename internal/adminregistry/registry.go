@@ -182,8 +182,20 @@ func validateListDisplay(meta model.ModelMeta, opts Options) error {
 		if fn == nil {
 			return fmt.Errorf("tango admin: Display %q on %s is nil", name, meta.Name)
 		}
+		if !hasModelField(meta, name) && opts.Labels[name] == "" {
+			return fmt.Errorf("tango admin: Display column %q on %s is not a model field, so it needs a Labels entry for its header", name, meta.Name)
+		}
 	}
 	return nil
+}
+
+func hasModelField(meta model.ModelMeta, name string) bool {
+	for _, field := range meta.Fields {
+		if field.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // validateLabelKeys validates Labels like any field-name map, except that a

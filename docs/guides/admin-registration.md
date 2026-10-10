@@ -25,7 +25,7 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 - **`Search`** — string fields a free-text search box filters against. Registration rejects non-string fields; search uses SQL `LIKE`, so `%` and `_` in the query retain wildcard meaning and case matching follows the database dialect.
 - **`Display`** — computed changelist cells, keyed by a `ListDisplay` name. See [Computed changelist cells](#computed-changelist-cells-with-display).
 - **`Ordering`** — the static default order the list page's rows are shown in (not interactive/click-to-sort). Prefix a field with `-` for descending, e.g. `"-CreatedAt"`.
-- **`Filters`** — boolean and foreign key fields shown as filter selects above the list. A boolean offers Any, Yes and No. A foreign key offers Any plus the related rows, labelled as the related model's `Label` and ordered by primary key, as in the foreign key select. A foreign key whose related model has more than 100 rows offers no choices and says why. Registration rejects any other kind of field. See [Changelist filters](#changelist-filters).
+- **`Filters`** — boolean and foreign key fields shown as filter selects above the list. A boolean offers Any, Yes and No. A foreign key offers Any plus the related rows, labelled as the related model's `Label` and ordered by primary key, as in the foreign key select. A foreign key whose related model has more than 100 rows offers no choices and says why, but still filters by a primary key given in the URL. Registration rejects any other kind of field. See [Changelist filters](#changelist-filters).
 
 ## Adding the admin app
 
@@ -161,7 +161,7 @@ admin.Options{
 }
 ```
 
-- A `Display` key is a registered field (its value is replaced) or a **synthetic column**: a name in `ListDisplay` that is not a model field. A synthetic column needs a `Labels` entry for its header; without one its header is the humanized name. Registration rejects a `Display` key that is not in `ListDisplay`, a nil function, and a synthetic name in any other option (`Search`, `Ordering`, form options).
+- A `Display` key is a registered field (its value is replaced) or a **synthetic column**: a name in `ListDisplay` that is not a model field. A synthetic column must have a `Labels` entry for its header. Registration rejects a `Display` key that is not in `ListDisplay`, a nil function, a synthetic column without a `Labels` entry, and a synthetic name in any other option (`Search`, `Ordering`, form options).
 - The function receives a pointer to the model row, so it can read any field. An empty `Display` yields an empty cell.
 - `Text` is always HTML-escaped. `Href` is a link only when it is a relative URL (`/path`, `path`, `?q=1`, `#frag`) or an absolute `http`/`https` URL with a host. Scheme-relative `//host`, backslashes, whitespace or control characters, userinfo and every other scheme (`javascript:`, `data:`, ...) are refused, and the cell falls back to plain escaped text. A link is rendered with `rel="noopener noreferrer"`. If `Text` is empty the link shows its URL.
 - A panic in the function is a bug in the host. Admin does not recover it: behind `tango.Recoverer()` (or your own recovery middleware) it becomes a 500, otherwise it propagates like any other panic.
@@ -184,7 +184,7 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 ```
 
 - A boolean filter applies `yes` or `no`; `any` (or no parameter) applies nothing.
-- A foreign key filter applies one related primary key. Its choices come from one query on the related model, in primary key order, capped at 100. Above the cap the filter shows an explanation and offers no choices, and its value in the URL is ignored.
+- A foreign key filter applies one related primary key. Its choices come from one query on the related model, in primary key order, capped at 100. The cap limits what is listed, not what can be filtered. Above it the filter shows "too many values to list" and offers no select, but a value in the URL (a bookmark, say) is looked up as that one related row and applied when it exists, with its label shown and kept when the form is resubmitted. A value that is malformed or names no row is ignored. The extra lookup happens only when a value is supplied.
 - Filters combine with search and ordering using AND. The row count, the pagination and the pagination links all use the filtered set, and each link carries the search and the applied filters, encoded.
 - Unknown field names, malformed values and foreign key IDs that the related model does not have are ignored. Only applied filters appear in the page state.
 
@@ -194,7 +194,7 @@ Each filter is a query parameter named `filter_` followed by the column name: `f
 
 Beyond `ListDisplay`/`Search`/`Ordering`/`Label`, `admin.Options` has four more field-name-keyed controls for the create/edit form, all validated against the model's real fields the same way:
 
-- **`Labels`** — override a field's humanized default label.
+- **`Labels`** — override a field's humanized default label, on forms and as its changelist column header. A field with no `Labels` entry keeps its default, so a registration only changes when it opts in. A synthetic `Display` column must have an entry.
 - **`HelpText`** — descriptive text shown below a field on the create and edit forms. The built-in controls reference it with `aria-describedby`.
 - **`ReadOnly`** — fields that render non-editably. On edit, a read-only field keeps its existing stored value no matter what the submitted form contains for it; on create, it stays at its Go zero value. Submitted data for a read-only field is always ignored, never parsed — this is true regardless of any `Widgets` entry for that field, since read-only rendering bypasses the field's widget entirely.
 - **Bounded strings** (`tango:"varchar=n"`) render `<input type="text" maxlength="n">`. Browsers count `maxlength` in UTF-16 units, so the server stays the authority: a create or edit whose value has more than `n` characters (runes) re-renders the form with `Title must be at most 5 characters (got 6)` beside the field, keeps everything else the person typed, and stores nothing. The message is the translatable key `admin.error.too_long` (arguments: the label, the limit, the length). Bare strings and `text` render as they always did, with no textarea; use `admin.Textarea()` for a multi-line field.

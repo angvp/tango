@@ -21,6 +21,30 @@ func TestRegisterAcceptsSyntheticListColumnWithDisplay(t *testing.T) {
 	}
 }
 
+func TestRegisterRejectsSyntheticListColumnWithoutALabel(t *testing.T) {
+	r := newTestRegistry(t)
+
+	err := r.Register(RegistryTestPost{}, Options{
+		ListDisplay: []string{"Title", "Summary"},
+		Display:     map[string]DisplayFunc{"Summary": displayFor},
+	})
+	if err == nil || !strings.Contains(err.Error(), `Display column "Summary"`) || !strings.Contains(err.Error(), "Labels") {
+		t.Fatalf("Register error = %v, want a missing-label error naming Summary and Labels", err)
+	}
+}
+
+func TestRegisterDisplayOnARegisteredFieldNeedsNoLabel(t *testing.T) {
+	r := newTestRegistry(t)
+
+	err := r.Register(RegistryTestPost{}, Options{
+		ListDisplay: []string{"Title"},
+		Display:     map[string]DisplayFunc{"Title": displayFor},
+	})
+	if err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
+}
+
 func TestRegisterRejectsSyntheticListColumnWithoutDisplay(t *testing.T) {
 	r := newTestRegistry(t)
 

@@ -78,20 +78,12 @@ func (r listRenderer) cell(row reflect.Value, column string) listCell {
 	return plainCell(formatFieldValue(fieldValue))
 }
 
-// listHeader is a column's header: a synthetic column's Labels entry when
-// one is set, otherwise the humanized field name.
-func listHeader(meta model.ModelMeta, name string, opts adminregistry.Options) string {
-	if !hasField(meta, name) && opts.Labels[name] != "" {
-		return opts.Labels[name]
+// listHeader is a column's header: its Labels entry when the host set one,
+// otherwise the humanized name. A synthetic column has no other source, so
+// registration requires its label.
+func listHeader(name string, opts adminregistry.Options) string {
+	if label := opts.Labels[name]; label != "" {
+		return label
 	}
 	return humanizeFieldName(name)
-}
-
-func hasField(meta model.ModelMeta, name string) bool {
-	for _, field := range meta.Fields {
-		if field.Name == name {
-			return true
-		}
-	}
-	return false
 }
