@@ -36,7 +36,7 @@ func Run(t *testing.T, f Factory) {
 	t.Run("CallerOwnsBothSlices", func(t *testing.T) { ownership(t, f.New(t)) })
 	t.Run("InvalidKeys", func(t *testing.T) { invalidKeys(t, f.New(t)) })
 	t.Run("TTLRange", func(t *testing.T) { ttlRange(t, f.New(t)) })
-	t.Run("ATTLNeverExpiresEarly", func(t *testing.T) { neverEarly(t, f.New(t)) })
+	t.Run("ATTLIsNotElapsedEarly", func(t *testing.T) { ttlNotElapsedEarly(t, f.New(t)) })
 	t.Run("AShortTTLExpires", func(t *testing.T) { shortTTLExpires(t, f.New(t)) })
 	t.Run("ACancelledContext", func(t *testing.T) { cancelled(t, f.New(t)) })
 	t.Run("OversizedValue", func(t *testing.T) { oversized(t, f.New(t)) })
@@ -152,11 +152,13 @@ func ttlRange(t *testing.T, s cache.Store) {
 	}
 }
 
-func neverEarly(t *testing.T, s cache.Store) {
+func ttlNotElapsedEarly(t *testing.T, s cache.Store) {
 	ctx, k := context.Background(), key("early")
 	if err := s.Set(ctx, k, []byte("v"), time.Hour); err != nil {
 		t.Fatal(err)
 	}
+	// Interpretation of the TTL, not a retention guarantee: a value an hour
+	// from its TTL, read straight back, must not look expired.
 	if _, ok, err := s.Get(ctx, k); err != nil || !ok {
 		t.Fatalf("a value with an hour to live was already gone: ok=%v err=%v", ok, err)
 	}
@@ -165,7 +167,7 @@ func neverEarly(t *testing.T, s cache.Store) {
 func shortTTLExpires(t *testing.T, s cache.Store) {
 	ctx, k := context.Background(), key("short")
 	// 1ms is below some backends' granularity (Memcached rounds up to a
-	// second); the contract is that it is gone eventually, never early.
+	// second); the TTL must be read as at least what was asked, and the value gone soon after.
 	if err := s.Set(ctx, k, []byte("v"), time.Millisecond); err != nil {
 		t.Fatal(err)
 	}

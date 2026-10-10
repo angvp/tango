@@ -33,7 +33,11 @@ type Store interface {
 	// Store does not retain value after Set returns. It fails with
 	// ErrInvalidKey, or ErrInvalidTTL unless 0 < ttl <= MaxTTL, before any
 	// request, and with ErrTooLarge for a value the backend refuses for size.
-	// A value never expires sooner than ttl.
+	// ttl is the longest the value may be served: a Store never treats it as
+	// elapsed sooner than asked (a backend with coarser time units rounds
+	// up). It is not a promise of retention. A bounded or remote cache may
+	// evict the value, lose it in a restart, or have it deleted earlier, so
+	// a later Get can miss; store only what can be recomputed.
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
 	// Delete removes key. Deleting a missing key is not an error.
 	Delete(ctx context.Context, key string) error

@@ -45,7 +45,8 @@ func OnError(fn func(op string, err error)) FetchOption {
 //
 // A key or ttl that is not valid (ErrInvalidKey, ErrInvalidTTL) is a
 // programming error, not a cache failure: FetchJSON returns it before calling
-// load, and never works around it.
+// load, and never works around it. That includes a key the store itself
+// refuses, such as one a Prefix made too long.
 //
 // A load failure is returned as is (it is not a cache error). Cache failures
 // go to the OnError hook when one is supplied. Without a hook they are not
@@ -77,6 +78,9 @@ func FetchJSON[T any](ctx context.Context, store Store, key string, ttl time.Dur
 	}
 
 	value, ok, err := GetJSON[T](ctx, store, key)
+	if errors.Is(err, ErrInvalidKey) {
+		return value, err // a key the store refuses (say, behind a long Prefix) is a bug, not an outage
+	}
 	if err != nil {
 		report(readOp(err), err)
 	} else if ok {

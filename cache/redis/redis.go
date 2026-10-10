@@ -160,7 +160,8 @@ func (s *Store) Get(ctx context.Context, key string) ([]byte, bool, error) {
 }
 
 // Set implements cache.Store. The expiry is sent in whole milliseconds,
-// rounded up, so a value never expires sooner than ttl.
+// rounded up, so the TTL never elapses sooner than asked (the server may still
+// evict the value earlier under its memory policy).
 func (s *Store) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if err := check(ctx, key); err != nil {
 		return err

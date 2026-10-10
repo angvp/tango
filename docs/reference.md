@@ -214,7 +214,7 @@ See [the uploads guide](guides/uploads.md) and [ADR 0052](adr/0052-storage-is-an
 
 | Symbol | What it's for |
 |---|---|
-| `type Store interface{ Get; Set; Delete }` | The cache. `Get(ctx, key) ([]byte, bool, error)`: a miss is `ok == false` with a nil error, an error means the backend failed, the slice is the caller's. `Set(ctx, key, value, ttl) error`: replaces, keeps none of the caller's memory, never expires sooner than `ttl`. `Delete(ctx, key) error`: a missing key is not an error. |
+| `type Store interface{ Get; Set; Delete }` | The cache. `Get(ctx, key) ([]byte, bool, error)`: a miss is `ok == false` with a nil error, an error means the backend failed, the slice is the caller's. `Set(ctx, key, value, ttl) error`: replaces, keeps none of the caller's memory, `ttl` is the longest the value may be served (never counted as elapsed sooner than asked) and not a promise of retention: eviction, restart or `Delete` can make a later `Get` miss. `Delete(ctx, key) error`: a missing key is not an error. |
 | `func ValidKey(key string) bool`, `func CheckTTL(ttl time.Duration) error`, `const MaxKeyLength = 200`, `const MaxTTL` | A key is 1 to 200 bytes of printable ASCII with no spaces; a TTL is `0 < ttl <= MaxTTL` (30 days). Violations are `ErrInvalidKey` and `ErrInvalidTTL`, before any request. |
 | `func Prefix(store Store, prefix string) Store` | Namespaces every key, validating the final key. Bump a version in the prefix to invalidate in bulk. |
 | `func GetJSON[T](ctx, store, key) (T, bool, error)`, `func SetJSON[T](ctx, store, key, value, ttl) error` | Typed values as JSON. A value that does not decode is `ErrCorrupt`. |

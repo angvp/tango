@@ -8,7 +8,7 @@ Use it to make a **recomputable read** cheaper: a rate worked out from several s
 
 Do not use it for anything that must be right or must last:
 
-- **Durable data.** Keep it in your database or object storage. The portable retention is at most 30 days, and a cache may forget sooner.
+- **Durable data.** Keep it in your database or object storage. The longest TTL is 30 days, and a cache may forget sooner.
 - **Authorization, sessions, rate limits, locks or queues.** A miss or a failure must never change who may do what.
 - **Anything the database must stay authoritative about.** The cache accelerates reads; `db.Store` is the source of truth. tanGO does not cache database queries or models, and does not invalidate anything when you write.
 
@@ -24,7 +24,7 @@ type Store interface {
 
 A **miss is not an error**: `Get` returns `ok == false` with a nil error, including for an expired value. An error always means the backend failed, so a hit, a miss and a failure are three different outcomes. `Get` returns a slice you own and `Set` does not keep yours, on every backend.
 
-**Keys** are 1 to 200 bytes of printable ASCII with no spaces (`cache.ValidKey`), a rule every backend can store. Anything else is `cache.ErrInvalidKey` before any request. **TTLs** are `0 < ttl <= 30 days` (`cache.MaxTTL`); anything else is `cache.ErrInvalidTTL`. There is no "forever": a TTL is how long a stale answer may be served. A backend with coarser time resolution rounds up, never down, so a value never expires sooner than you asked. A value a backend refuses for size is `cache.ErrTooLarge`; treat values over about 1 MiB as not portable.
+**Keys** are 1 to 200 bytes of printable ASCII with no spaces (`cache.ValidKey`), a rule every backend can store. Anything else is `cache.ErrInvalidKey` before any request. **TTLs** are `0 < ttl <= 30 days` (`cache.MaxTTL`); anything else is `cache.ErrInvalidTTL`. There is no "forever": a TTL is the **longest** a stale answer may be served, not a promise to keep it that long. A backend with coarser time resolution rounds up, never down, so the TTL never counts as elapsed sooner than you asked. But a cache may still miss before the TTL: a bounded cache evicts the least recently used entry, a Redis or Memcached server evicts under memory pressure, and a restart or an explicit `Delete` empties it. Cache only what you can recompute. A value a backend refuses for size is `cache.ErrTooLarge`; treat values over about 1 MiB as not portable.
 
 The store and the helpers never log. Errors come back to you, and you decide what is worth recording.
 
@@ -84,7 +84,7 @@ store, err := local.New(local.Config{MaxEntries: 10_000, MaxBytes: 64 << 20})
 
 `cache/redis` and `cache/memcache` are separate Go modules, so a project that never imports them never sees a Redis or Memcached client in its `go.mod`. Both pass the same conformance suite, `cachetest.Run`, as `cache/local`; run it against your own `Store` too.
 
-**Redis and Valkey** (`github.com/angvp/tango/cache/redis`): `redis.New(ctx, redis.Config{URL: "redis://host:6379/3"})` where the database is the URL path, `rediss://` for TLS, optional `Username`, `Password`, timeouts and pool size. `New` pings the server and fails fast on a bad address or credentials. For Cluster, Sentinel, rotating credentials or a Unix socket, build the client yourself and wrap it with `redis.NewFromClient`; that function does not ping and its `Close` does nothing, so you keep closing the client you supplied. Support is claimed only for the Redis and Valkey versions in CI.
+**Redis and Valkey** (`github.com/angvp/tango/cache/redis`): `redis.New(ctx, redis.Config{URL: "redis://host:6379/3"})` where the database is the URL path, `rediss://` for TLS, optional `Username`, `Password`, timeouts and pool size. `New` pings the server and fails fast on a bad address or credentials. For Cluster, Sentinel, rotating credentials or a Unix socket, build the client yourself and wrap it with `redis.NewFromClient`; that function does not ping and its `Close` does nothing, so you keep closing the client you supplied. Support is claimed only for the versions CI tests: Redis 7.4.11 and Valkey 8.1.10. Memcached support is likewise claimed only for 1.6.45.
 
 **Memcached** (`github.com/angvp/tango/cache/memcache`): `memcache.New(memcache.Config{Servers: []string{"cache1:11211"}})`. Memcached differs from Redis and the adapter does not hide it:
 

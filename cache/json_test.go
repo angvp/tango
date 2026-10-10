@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -312,5 +313,18 @@ func TestFetchJSONPassesItsContextToLoadAndRefusesABadKeyOrTTLUpFront(t *testing
 	}
 	if calls != 0 {
 		t.Fatalf("loader ran %d times for a call that was refused up front", calls)
+	}
+}
+
+func TestFetchJSONReturnsErrInvalidKeyWhenAPrefixMakesTheFinalKeyTooLong(t *testing.T) {
+	store := cache.Prefix(newLocal(t), strings.Repeat("p", cache.MaxKeyLength-1))
+	var rec recorder
+	calls := 0
+	_, err := cache.FetchJSON(context.Background(), store, "kk", time.Minute, loader(&calls, profile{}, nil), rec.hook())
+	if !errors.Is(err, cache.ErrInvalidKey) {
+		t.Fatalf("err = %v, want ErrInvalidKey", err)
+	}
+	if calls != 0 || len(rec.errs) != 0 {
+		t.Fatalf("loader ran %d times and hook %d times; want neither", calls, len(rec.errs))
 	}
 }
