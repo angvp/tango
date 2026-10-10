@@ -102,7 +102,7 @@ There is no per-model, named, or object-level permission — `IsStaff`/`IsSuperu
 
 Once registered, a model at `/admin/<table>/` gets:
 
-- `GET /admin/<table>/` — list, with pagination, sorting, and search.
+- `GET /admin/<table>/` — list, with pagination, search, filters and the ordering you configure with `Options.Ordering` (column headers are not clickable).
 - `GET`/`POST /admin/<table>/new/` — create.
 - `GET`/`POST /admin/<table>/{pk}/` — edit.
 - `GET`/`POST /admin/<table>/{pk}/delete/` — delete confirmation.
@@ -320,6 +320,20 @@ admin.New(store, admin.WithBranding(admin.Branding{
 ```
 
 Omit it — `admin.New(store)` with no options — and the sidebar shows tanGO's generic default, unchanged.
+
+## Operator checklist
+
+Automated tests pin the admin's structural markup: labels, `aria-invalid` and `aria-describedby`, table captions and column scopes, the preview iframe's sandbox. They cannot see how a page behaves in a browser. Before you rely on a workflow, or after you upgrade, walk through this list in a real browser.
+
+- **Focus order.** Tab through a create or edit form, and through a changelist with filters. Focus moves in reading order, every control shows a visible focus ring, and nothing traps it.
+- **Keyboard.** Every control works without a mouse: filter selects, Search, **Format** and **Preview**. After a refused save, the error appears beside its field.
+- **Screen reader.** A field with help text or an error reads its label, then the help text and the error. The search box and each filter announce their labels. The table announces its caption and column headers. The Markdown character count and the preview status are announced as they change.
+- **Contrast.** Text, help text, errors and focus rings stay readable against their backgrounds. The admin loads Tailwind from a CDN (ADR 0003), so check the pages as you actually deploy them.
+- **Responsive layout.** At a narrow width the filters wrap, the table scrolls rather than breaking the page, and the form controls stay usable.
+- **JSON Format.** On a JSON field, **Format** indents valid JSON and leaves invalid text untouched with a visible error. With JavaScript off, the field is a plain textarea and the server still refuses invalid JSON.
+- **Markdown Preview.** With a preview renderer set, **Preview** shows the rendered text in a frame that runs no script, loads nothing and cannot navigate the admin page. A renderer error shows beside the button and never changes the text.
+
+Known limits: the widgets' messages ("Invalid JSON…", **Format**, **Preview**, the character count) are English only, because a widget's `Render` and `Parse` have no request context. The sidebar toggle, skip link, `<main>` landmark and the footer text are separate follow-ups.
 
 ## Stability
 

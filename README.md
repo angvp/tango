@@ -14,7 +14,7 @@ tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics
 - A model metadata engine that reads plain Go structs and a handful of tags (`tango:"pk"`, `tango:"unique"`, `tango:"index"`, `tango:"fk=Other"`).
 - A minimal `db.Store` for CRUD and raw SQL against SQLite or PostgreSQL, with **minimal ORM foundations**: foreign key fields, two-layer validation, and cascade delete — see [relationships and admin foreign keys](docs/guides/relationships-and-admin-foreign-keys.md).
 - Generated, typed Go migrations (`tango makemigrations`/`migrate`/`migrate down`) — no separate schema DSL.
-- A server-rendered HTML admin (list/create/edit/delete, pagination, sorting, search) behind a session-cookie login, with CSRF protection and rate-limited login attempts — accounts are managed via `tango admin create/resetpassword/deactivate`.
+- A server-rendered HTML admin (list/create/edit/delete, pagination, search, filters, the ordering you configure) behind a session-cookie login, with CSRF protection and rate-limited login attempts — accounts are managed via `tango admin create/resetpassword/deactivate`.
 - A CLI (`tango run`/`check`/`makemigrations`/`migrate`/`newproject`/`newapp`/`tui`/`shell`/`admin`) that wraps ordinary `go build`/`go run` rather than replacing them.
 
 ## Principles

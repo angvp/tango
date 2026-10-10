@@ -14,6 +14,8 @@ Canonical example: `examples/api-with-admin/apps/posts/app.go`. Human guide: `do
 - Use `Label` on related models when foreign-key selects should display a friendly value.
 - Use `Labels`, `HelpText`, `ReadOnly`, and `FieldOrder` only for clear form ergonomics; all keys are Go field names and are validated at registration.
 - Use `Widgets` only when the built-in form widget is genuinely insufficient. Widgets are best-effort extensibility, not a stable long-term contract.
+- Use `admin.JSON()` for a string field holding JSON and `admin.Markdown(...)` for authored text; pass `admin.WithMarkdownPreview(fn)` only with a renderer whose sanitization you have decided. Never assume admin sanitizes it.
+- Use `Filters` for boolean and foreign-key fields operators filter by, and `Display` with `admin.DisplayFunc` for computed list cells; a `Display` column that is not a model field needs a `Labels` entry. Build a download link in your own authorized View and pass it as `Href`; admin must never learn storage keys.
 - Behind a reverse proxy, pass `admin.WithTrustedProxies(networks...)` (and `accounts.WithTrustedProxies` if `accounts` is installed) or every user shares one login-limiter bucket. Never trust `X-Forwarded-For` without it.
 - Use `admin.WithBranding` or `admin.WithMiddleware` on `admin.New(store, ...)` for admin-wide branding or `/admin/`-scoped HTTP behavior.
 
