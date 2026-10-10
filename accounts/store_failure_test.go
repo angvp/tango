@@ -2,6 +2,7 @@ package accounts_test
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -80,5 +81,109 @@ func TestEveryFormPageAnswersA500WhenTheStoreFails(t *testing.T) {
 			response := site.postForm(tt.path, tt.form)
 			assertGeneric500(t, tt.name, response.Body.String(), response.Code)
 		})
+	}
+}
+
+// dropTable removes a table the way a broken deployment or a lost
+// migration would, leaving the rest of the schema usable.
+func dropTable(t *testing.T, site *mailSite, table string) {
+	t.Helper()
+	if _, err := site.db.Exec(`DROP TABLE ` + table); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTokenLinksAnswerA500WhenTheTokenTableIsGone(t *testing.T) {
+	for _, path := range []string{"/accounts/password-reset/confirm/", "/accounts/verify/"} {
+		t.Run(path, func(t *testing.T) {
+			site := newJSONSite(t, &fakeAuth{})
+			site.createAccount("member@example.com", true)
+			dropTable(t, site, "account_token")
+			link := path + "?token=" + strings.Repeat("a", 43)
+
+			response := site.get(link)
+			assertGeneric500(t, "GET "+link, response.Body.String(), response.Code)
+			response = site.postForm(link, url.Values{"password": {"correct-horse-2"}})
+			assertGeneric500(t, "POST "+link, response.Body.String(), response.Code)
+		})
+	}
+}
+
+func TestIssuingATokenFailsCleanlyWhenTheTokenTableIsGone(t *testing.T) {
+	site := newJSONSite(t, &fakeAuth{})
+	site.createAccount("member@example.com", true)
+	dropTable(t, site, "account_token")
+	// A reset request is always the same 202; the failure is the outbox's to
+	// retry, never something a client can learn the account's existence from.
+	response := site.postJSON("/accounts/api/password-reset/", `{"email":"member@example.com"}`)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status %d: %s; want the same 202 as for any address", response.Code, response.Body.String())
+	}
+	if got := len(site.messages()); got != 0 {
+		t.Fatalf("%d message(s) sent without a token to put in them", got)
+	}
+}
+
+func TestACompletedResetThatCannotClearSessionsIsA500NotASilentSuccess(t *testing.T) {
+	site := newJSONSite(t, &fakeAuth{})
+	site.createAccount("member@example.com", true)
+	token := site.resetToken("member@example.com")
+	dropTable(t, site, "account_session")
+
+	response := site.postJSON("/accounts/api/password-reset/confirm/", `{"token":"`+token+`","password":"correct-horse-2"}`)
+	assertGeneric500(t, "reset confirm without a session table", response.Body.String(), response.Code)
+}
+
+func TestSessionStoreFailuresAreA500NotALoginRedirectOrALogout(t *testing.T) {
+	setup := func(t *testing.T) (*mailSite, *http.Cookie) {
+		site := newJSONSite(t, &fakeAuth{})
+		site.createAccount("member@example.com", true)
+		cookie := site.logIn("member@example.com", "old-password")
+		if cookie == nil {
+			t.Fatal("no session cookie after logging in")
+		}
+		return site, cookie
+	}
+	t.Run("logging in without a session table", func(t *testing.T) {
+		site, _ := setup(t)
+		dropTable(t, site, "account_session")
+		response := site.postForm("/accounts/login/", url.Values{"email": {"member@example.com"}, "password": {"old-password"}}, func(r *http.Request) { r.RemoteAddr = "198.51.100.9:1" })
+		assertGeneric500(t, "login", response.Body.String(), response.Code)
+	})
+	t.Run("logging out without a session table", func(t *testing.T) {
+		site, cookie := setup(t)
+		dropTable(t, site, "account_session")
+		request := httptest.NewRequest(http.MethodPost, "/accounts/logout/", nil)
+		request.AddCookie(cookie)
+		response := httptest.NewRecorder()
+		site.handler.ServeHTTP(response, request)
+		assertGeneric500(t, "logout", response.Body.String(), response.Code)
+	})
+	t.Run("a protected page without a session table", func(t *testing.T) {
+		site, cookie := setup(t)
+		dropTable(t, site, "account_session")
+		response := site.get("/private/", cookie)
+		assertGeneric500(t, "protected page", response.Body.String(), response.Code)
+	})
+	t.Run("a protected page without an account table", func(t *testing.T) {
+		site, cookie := setup(t)
+		// Renamed rather than dropped: other tables point at it.
+		if _, err := site.db.Exec(`ALTER TABLE account RENAME TO account_gone`); err != nil {
+			t.Fatal(err)
+		}
+		response := site.get("/private/", cookie)
+		assertGeneric500(t, "protected page", response.Body.String(), response.Code)
+	})
+}
+
+func TestRegisteringWithoutASessionTableIsA500AndNeverAHalfSignedInPage(t *testing.T) {
+	site := newJSONSite(t, &fakeAuth{})
+	dropTable(t, site, "account_session")
+	response := site.postForm("/accounts/register/", url.Values{"email": {"new@example.com"}, "password": {"correct-horse"}})
+	assertGeneric500(t, "register", response.Body.String(), response.Code)
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == "tango_account_session" && cookie.Value != "" {
+			t.Fatalf("a session cookie %q was set for a session that was never stored", cookie.Name)
+		}
 	}
 }
