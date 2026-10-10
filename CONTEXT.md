@@ -143,3 +143,9 @@ Do not confuse this with an account being active, which is an operator's decisio
 ## Public base URL
 
 The absolute origin, such as `https://example.com`, that links sent outside a request are built on, for example in an email. It is configured by the application, never taken from the request that caused the email.
+
+## JSON field
+
+A text field a model declares as holding JSON. tanGO checks that the text is valid JSON whenever the model is written, and stores exactly the text it was given: the same bytes come back, with no reformatting and no key reordering, on every database. It is still an ordinary text column that the application reads and writes as a string.
+
+Do not call this a JSON type or a `jsonb` column. tanGO does not query inside it, index it or check it against a schema, and a field that merely holds JSON text without being declared this way is not checked.
