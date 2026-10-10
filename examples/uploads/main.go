@@ -21,6 +21,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
+	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/storage"
 	"github.com/angvp/tango/storage/local"
@@ -55,7 +56,11 @@ func run() error {
 	}
 	defer objects.Close()
 
-	config := appConfig(db.NewStore(sqlDB, dsn.Dialect), objects)
+	store := db.NewStore(sqlDB, dsn.Dialect)
+	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
+		return err
+	}
+	config := appConfig(store, objects)
 	if handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations); handled || err != nil {
 		return err
 	}
@@ -81,6 +86,7 @@ func appConfig(store *db.Store, objects storage.Store) tango.Config {
 	config.InstalledApps = []tango.App{
 		accounts.New(store),
 		documents.New(store, objects, documents.DefaultLimits()),
+		admin.New(store),
 	}
 	return config
 }

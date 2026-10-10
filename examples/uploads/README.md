@@ -5,6 +5,7 @@ A document locker. Signed-in accounts upload a file, list their files, download 
 - **`storage.Upload`** reads one multipart file, streaming it into the object store with a size cap and a content-type allowlist. The type is sniffed from the bytes; the type the browser declares is never used.
 - **The host keeps the key and the metadata** in its own model, `Document` (`apps/documents`), with bounded strings (`varchar=n`, see [ADR 0049](../../docs/adr/0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md)). The generated key is never shown to a client and never decides access: the owner check does.
 - **Bytes first, then the row, in a transaction.** If the row cannot be written, the new object is deleted. Deleting a document removes the row first and the bytes best-effort, so a failure leaves an unreachable object, never a row pointing at nothing.
+- **An admin changelist** (`apps/documents/admin.go`) lists every file with its size (`admin.ByteSize`), a shortened digest (`admin.ShortHash`) and a download link. The admin never reads the bytes or the key: the link is the same owner-only download route the API uses, so a staff session alone does not download a file.
 - **`storage.Serve`** delivers a download the View has already authorized: attachment by default, `nosniff`, ranges and conditional requests. `?inline=1` shows an image in the browser; any other type stays an attachment.
 - **Body limits:** every route that carries no file keeps a 64 KiB limit; the upload route has its own, larger one, outside the small one.
 
@@ -25,6 +26,14 @@ curl -b cookies.txt localhost:8000/documents/
 curl -b cookies.txt -OJ localhost:8000/documents/1/download/
 curl -b cookies.txt -X DELETE localhost:8000/documents/1/
 ```
+
+The admin is at `/admin/`. Create a staff account with the admin CLI, then sign in at `/admin/login/` to see the Documents changelist:
+
+```sh
+go run . -tango-admin-create=staff
+```
+
+The list links each file to `/documents/{id}/download/`, which still asks for the owning account's session. Signing in as staff does not open another account's file.
 
 ## Things to know
 

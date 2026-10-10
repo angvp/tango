@@ -25,4 +25,14 @@ var Migrations = []migration.Migration{
 			migration.DropTable{Table: "document"},
 		},
 	},
+	{App: "admin", Name: "0003_auto_20261010184026", Reversible: true,
+		Up: []migration.Step{
+			migration.CreateTable{Table: "admin_session", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "token", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, {Name: "user_id", Type: "integer", PrimaryKey: false, Unique: false, Indexed: true}, {Name: "expires_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+			migration.CreateTable{Table: "admin_user", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "username", Type: "text", PrimaryKey: false, Unique: true, Indexed: false}, {Name: "password_hash", Type: "text", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "active", Type: "boolean", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "is_staff", Type: "boolean", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "is_superuser", Type: "boolean", PrimaryKey: false, Unique: false, Indexed: false}, {Name: "created_at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false}}},
+		},
+		Down: []migration.Step{
+			migration.DropTable{Table: "admin_user"},
+			migration.DropTable{Table: "admin_session"},
+		},
+	},
 }

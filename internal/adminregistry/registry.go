@@ -11,8 +11,12 @@ import (
 // Options controls how a model appears in the admin.
 type Options struct {
 	ListDisplay []string
-	Search      []string
-	Ordering    []string
+	// Display computes changelist cells, keyed by a name in ListDisplay: a
+	// registered field (overriding its value) or a synthetic column, which
+	// needs a Labels entry for its header. See DisplayFunc.
+	Display  map[string]DisplayFunc
+	Search   []string
+	Ordering []string
 	// Label names one of this model's own fields to display whenever it is
 	// shown as a related object elsewhere (e.g. on a Post's admin page for
 	// a Post.AuthorID foreign key). Unset falls back to showing the raw
@@ -73,7 +77,7 @@ func (r *Registry) Register(value any, opts Options) error {
 		}
 	}
 
-	if err := validateFields(meta, opts.ListDisplay, "ListDisplay"); err != nil {
+	if err := validateListDisplay(meta, opts); err != nil {
 		return err
 	}
 	if err := validateFields(meta, opts.Search, "Search"); err != nil {
@@ -94,7 +98,7 @@ func (r *Registry) Register(value any, opts Options) error {
 			return err
 		}
 	}
-	if err := validateFieldMapKeys(meta, opts.Labels, "Labels"); err != nil {
+	if err := validateLabelKeys(meta, opts); err != nil {
 		return err
 	}
 	if err := validateFieldMapKeys(meta, opts.HelpText, "HelpText"); err != nil {
@@ -144,6 +148,49 @@ func validateFieldMapKeys[V any](meta model.ModelMeta, m map[string]V, option st
 		names = append(names, name)
 	}
 	return validateFields(meta, names, option)
+}
+
+// validateListDisplay accepts a ListDisplay name that is a registered field,
+// or a synthetic column that has a Display function. Any other name is the
+// same unknown-field error it always was. Every Display key must be in
+// ListDisplay, and no Display function may be nil.
+func validateListDisplay(meta model.ModelMeta, opts Options) error {
+	plain := make([]string, 0, len(opts.ListDisplay))
+	for _, name := range opts.ListDisplay {
+		if _, synthetic := opts.Display[name]; !synthetic {
+			plain = append(plain, name)
+		}
+	}
+	if err := validateFields(meta, plain, "ListDisplay"); err != nil {
+		return err
+	}
+
+	listed := make(map[string]struct{}, len(opts.ListDisplay))
+	for _, name := range opts.ListDisplay {
+		listed[name] = struct{}{}
+	}
+	for name, fn := range opts.Display {
+		if _, ok := listed[name]; !ok {
+			return fmt.Errorf("tango admin: Display references %q on %s, which is not in ListDisplay", name, meta.Name)
+		}
+		if fn == nil {
+			return fmt.Errorf("tango admin: Display %q on %s is nil", name, meta.Name)
+		}
+	}
+	return nil
+}
+
+// validateLabelKeys validates Labels like any field-name map, except that a
+// key naming a Display column (which is not a model field) is accepted: its
+// membership in ListDisplay is checked by validateListDisplay.
+func validateLabelKeys(meta model.ModelMeta, opts Options) error {
+	names := make([]string, 0, len(opts.Labels))
+	for name := range opts.Labels {
+		if _, synthetic := opts.Display[name]; !synthetic {
+			names = append(names, name)
+		}
+	}
+	return validateFields(meta, names, "Labels")
 }
 
 // validateOrderingFields validates Ordering the same way validateFields

@@ -41,7 +41,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			return err
 		}
 
-		rows, err := buildRows(ctx.Context(), store, models, adminReg, destPtr.Elem(), meta, registration.Options.ListDisplay)
+		rows, err := buildRows(ctx.Context(), store, models, adminReg, destPtr.Elem(), meta, registration.Options)
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 
 		columns := make([]string, len(registration.Options.ListDisplay))
 		for i, name := range registration.Options.ListDisplay {
-			columns[i] = humanizeFieldName(name)
+			columns[i] = listHeader(meta, name, registration.Options)
 		}
 
 		data := listPageData{
@@ -89,33 +89,22 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 	}
 }
 
-func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, sliceValue reflect.Value, meta model.ModelMeta, columns []string) ([]listRow, error) {
+func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, sliceValue reflect.Value, meta model.ModelMeta, opts adminregistry.Options) ([]listRow, error) {
 	pkField, err := primaryKeyField(meta)
 	if err != nil {
 		return nil, err
 	}
 
-	columnFK := make(map[string]string, len(meta.Fields))
-	for _, field := range meta.Fields {
-		if field.ForeignKey != "" {
-			columnFK[field.Name] = field.ForeignKey
-		}
-	}
-
+	cells := listRenderer{ctx: ctx, store: store, models: models, adminReg: adminReg, meta: meta, display: opts.Display}
 	rows := make([]listRow, 0, sliceValue.Len())
 	for i := 0; i < sliceValue.Len(); i++ {
 		elem := sliceValue.Index(i)
 		row := listRow{
-			PK:     fmt.Sprint(elem.FieldByName(pkField.Name).Interface()),
-			Values: make([]string, len(columns)),
+			PK:    fmt.Sprint(elem.FieldByName(pkField.Name).Interface()),
+			Cells: make([]listCell, len(opts.ListDisplay)),
 		}
-		for j, column := range columns {
-			fieldValue := elem.FieldByName(column)
-			if target, ok := columnFK[column]; ok {
-				row.Values[j] = relatedLabel(ctx, store, models, adminReg, target, fieldValue.Interface())
-				continue
-			}
-			row.Values[j] = formatFieldValue(fieldValue)
+		for j, column := range opts.ListDisplay {
+			row.Cells[j] = cells.cell(elem, column)
 		}
 		rows = append(rows, row)
 	}

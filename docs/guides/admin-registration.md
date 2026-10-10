@@ -23,6 +23,7 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 
 - **`ListDisplay`** — columns shown on the list page.
 - **`Search`** — string fields a free-text search box filters against. Registration rejects non-string fields; search uses SQL `LIKE`, so `%` and `_` in the query retain wildcard meaning and case matching follows the database dialect.
+- **`Display`** — computed changelist cells, keyed by a `ListDisplay` name. See [Computed changelist cells](#computed-changelist-cells-with-display).
 - **`Ordering`** — the static default order the list page's rows are shown in (not interactive/click-to-sort). Prefix a field with `-` for descending, e.g. `"-CreatedAt"`.
 
 ## Adding the admin app
@@ -137,6 +138,35 @@ This is a full-page navigation, not a popup. Any unsaved changes in the parent f
 ## List page display
 
 List and form field labels are humanized for display — `CreatedAt` renders as "Created At", `UserID` as "User ID" — without you naming anything twice; the underlying field name (used for sorting, search, and form submission) is untouched. The list page also reports a true total row count and a paginator with page-number links, using a Django-admin-inspired truncated-range presentation once there are many pages (`1 2 … 7 8 9 10 … 19 20`).
+
+### Computed changelist cells with `Display`
+
+`Display` lets the host compute what a changelist cell shows from the whole row, for values a plain column cannot express: a file's size in human units, a shortened digest, or a link the host has already authorized. It is set per column name:
+
+```go
+admin.Options{
+	ListDisplay: []string{"Name", "Size", "Download"},
+	Display: map[string]admin.DisplayFunc{
+		"Size":     func(_ context.Context, row any) admin.Display {
+			doc := row.(*Document)
+			return admin.Display{Text: admin.ByteSize(doc.Size)}
+		},
+		"Download": func(_ context.Context, row any) admin.Display {
+			doc := row.(*Document)
+			return admin.Display{Text: "Download", Href: "/documents/" + strconv.FormatInt(doc.ID, 10) + "/download/"}
+		},
+	},
+	Labels: map[string]string{"Download": "File"},
+}
+```
+
+- A `Display` key is a registered field (its value is replaced) or a **synthetic column**: a name in `ListDisplay` that is not a model field. A synthetic column needs a `Labels` entry for its header; without one its header is the humanized name. Registration rejects a `Display` key that is not in `ListDisplay`, a nil function, and a synthetic name in any other option (`Search`, `Ordering`, form options).
+- The function receives a pointer to the model row, so it can read any field. An empty `Display` yields an empty cell.
+- `Text` is always HTML-escaped. `Href` is a link only when it is a relative URL (`/path`, `path`, `?q=1`, `#frag`) or an absolute `http`/`https` URL with a host. Scheme-relative `//host`, backslashes, whitespace or control characters, userinfo and every other scheme (`javascript:`, `data:`, ...) are refused, and the cell falls back to plain escaped text. A link is rendered with `rel="noopener noreferrer"`. If `Text` is empty the link shows its URL.
+- A panic in the function is a bug in the host. Admin does not recover it: behind `tango.Recoverer()` (or your own recovery middleware) it becomes a 500, otherwise it propagates like any other panic.
+- `admin.ByteSize(int64)` formats a byte count with binary units (`1.5 MiB`), and `admin.ShortHash(string)` keeps the first twelve characters of a digest.
+
+Admin never reads storage, builds URLs or exposes keys on its own. For files, the host's `Display` supplies the link, and that link must point at a route the host authorizes; the uploads example links to its owner-only download View (see [`examples/uploads`](../../examples/uploads/README.md)).
 
 ## Customizing form fields
 

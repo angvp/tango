@@ -59,6 +59,9 @@ func New(store *db.Store, objects storage.Store, limits Limits) tango.App {
 		if err := registry.Models().Register(Document{}); err != nil {
 			return err
 		}
+		if err := registerAdmin(registry); err != nil {
+			return err
+		}
 		meta, _ := registry.Models().Get("Document")
 		h := &handlers{store: store, meta: meta, objects: objects, limits: limits}
 		return registry.Routes().Include("/documents/", h.routes())

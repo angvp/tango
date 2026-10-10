@@ -1,0 +1,97 @@
+package admin
+
+import (
+	"context"
+	"reflect"
+
+	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/adminregistry"
+	"github.com/angvp/tango/model"
+)
+
+// DisplayFunc computes one changelist cell from a model row, which is passed
+// as a pointer to the model value. Set it through Options.Display; see
+// adminregistry.DisplayFunc.
+type DisplayFunc = adminregistry.DisplayFunc
+
+// Display is what one changelist cell shows: escaped Text, and an optional
+// Href that is rendered only when it is a safe URL (see safeHref).
+type Display = adminregistry.Display
+
+// listCell is one rendered changelist cell. Badge marks a plain boolean
+// value ("yes" or "no") for the badge styling; Href makes the cell a link.
+type listCell struct {
+	Text  string
+	Href  string
+	Badge string
+}
+
+// plainCell is a cell holding an ordinary formatted field value.
+func plainCell(text string) listCell {
+	cell := listCell{Text: text}
+	switch text {
+	case "true":
+		cell.Badge = "yes"
+	case "false":
+		cell.Badge = "no"
+	}
+	return cell
+}
+
+// displayCell runs a host DisplayFunc for one row. A link with no text shows
+// its own URL, so the cell is never an invisible link.
+func displayCell(ctx context.Context, fn DisplayFunc, row reflect.Value) listCell {
+	display := fn(ctx, row.Interface())
+	cell := listCell{Text: display.Text}
+	if href, ok := safeHref(display.Href); ok {
+		cell.Href = href
+		if cell.Text == "" {
+			cell.Text = href
+		}
+	}
+	return cell
+}
+
+// listRenderer builds the cells of one changelist page's rows.
+type listRenderer struct {
+	ctx      context.Context
+	store    *db.Store
+	models   *model.Registry
+	adminReg *adminregistry.Registry
+	meta     model.ModelMeta
+	display  map[string]DisplayFunc
+}
+
+// cell renders column for one row. A Display function wins over the field
+// of the same name; otherwise a foreign key shows its related label and any
+// other field its formatted value.
+func (r listRenderer) cell(row reflect.Value, column string) listCell {
+	if fn, ok := r.display[column]; ok {
+		return displayCell(r.ctx, fn, row.Addr())
+	}
+	fieldValue := row.FieldByName(column)
+	for _, field := range r.meta.Fields {
+		if field.Name == column && field.ForeignKey != "" {
+			return plainCell(relatedLabel(r.ctx, r.store, r.models, r.adminReg, field.ForeignKey, fieldValue.Interface()))
+		}
+	}
+	return plainCell(formatFieldValue(fieldValue))
+}
+
+// listHeader is a column's header: a synthetic column's Labels entry when
+// one is set, otherwise the humanized field name.
+func listHeader(meta model.ModelMeta, name string, opts adminregistry.Options) string {
+	if !hasField(meta, name) && opts.Labels[name] != "" {
+		return opts.Labels[name]
+	}
+	return humanizeFieldName(name)
+}
+
+func hasField(meta model.ModelMeta, name string) bool {
+	for _, field := range meta.Fields {
+		if field.Name == name {
+			return true
+		}
+	}
+	return false
+}

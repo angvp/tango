@@ -32,7 +32,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         <thead><tr>{{range .Columns}}<th>{{.}}</th>{{end}}<th class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
-          {{range .Values}}<td>{{if eq . "true"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq . "false"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.}}{{end}}</td>{{end}}
+          {{range .Cells}}<td>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
           <td class="text-right">
             <div class="table-actions">
               <a href="{{$.BasePath}}{{.PK}}/" class="btn-ghost">{{$.T "admin.button.edit" "Edit"}}</a>
@@ -112,8 +112,8 @@ var deleteTemplate = cloneWithContent(`{{define "content"}}
 {{end}}`)
 
 type listRow struct {
-	PK     string
-	Values []string
+	PK    string
+	Cells []listCell
 }
 
 type listPageData struct {
