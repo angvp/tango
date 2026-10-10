@@ -12,6 +12,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
+	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/model"
 )
@@ -20,13 +21,15 @@ import (
 // strings: tango:"varchar=n" makes Store.Create refuse a longer value
 // (counted in characters, on SQLite as well as PostgreSQL), and the
 // migration gives the column VARCHAR(n). Bio is not bounded: a bare string
-// is text of any length.
+// is text of any length. Preferences is JSON text, which the admin edits
+// with its JSON widget; the server stores exactly what it is given.
 type Profile struct {
 	ID          int64  `tango:"pk"`
 	AccountID   int64  `tango:"fk=Account,unique"`
 	Username    string `tango:"varchar=30,unique"`
 	DisplayName string `tango:"varchar=60"`
 	Bio         string
+	Preferences string
 }
 
 // meta is Profile's model metadata, for the Store calls the registration
@@ -40,10 +43,18 @@ var meta = func() model.ModelMeta {
 	return m
 }()
 
-// New is the profiles app: it registers the Profile model.
+// New is the profiles app: it registers the Profile model, and its admin
+// page, where an operator edits Preferences as JSON.
 func New() tango.App {
 	return tango.NewApp("profiles", func(registry *tango.Registry) error {
-		return registry.Models().Register(Profile{})
+		if err := registry.Models().Register(Profile{}); err != nil {
+			return err
+		}
+		return registry.Admin().Register(Profile{}, admin.Options{
+			ListDisplay: []string{"Username", "DisplayName"},
+			Search:      []string{"Username", "DisplayName"},
+			Widgets:     map[string]admin.Widget{"Preferences": admin.JSON()},
+		})
 	})
 }
 

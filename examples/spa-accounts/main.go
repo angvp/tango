@@ -20,6 +20,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
+	"github.com/angvp/tango/admin"
 	tangojwt "github.com/angvp/tango/auth/jwt"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/mail"
@@ -60,8 +61,12 @@ func run() error {
 	defer sqlDB.Close()
 
 	addr := tango.LoadConfigFromEnv(tango.WithPortFromEnv()).Addr
-	config, err := appConfig(db.NewStore(sqlDB, dsn.Dialect), mail.WriterSender(os.Stdout), settingsFromEnv(addr))
+	store := db.NewStore(sqlDB, dsn.Dialect)
+	config, err := appConfig(store, mail.WriterSender(os.Stdout), settingsFromEnv(addr))
 	if err != nil {
+		return err
+	}
+	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 		return err
 	}
 	if handled, err := tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations); handled || err != nil {
@@ -122,6 +127,7 @@ func appConfig(store *db.Store, sender mail.Sender, s settings) (tango.Config, e
 		),
 		profiles.New(),
 		apiApp(store, service),
+		admin.New(store),
 	}
 	return config, nil
 }
