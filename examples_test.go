@@ -62,6 +62,8 @@ func TestExamplesAreIndependentModulesThatCompile(t *testing.T) {
 			"BOARD_JWT_SECRET="+strings.Repeat("s", 32),
 			// examples/spa-accounts signs its access tokens with this.
 			"SPA_JWT_SECRET="+strings.Repeat("s", 32),
+			// examples/uploads keeps uploaded files here; -check opens it.
+			"UPLOADS_DIR="+t.TempDir(),
 		)
 		var checkOut strings.Builder
 		checkCmd.Stdout = &checkOut
