@@ -30,7 +30,7 @@ The recipe index is `docs/agents/README.md`: choose the smallest task-specific r
 
 When a public API or canonical example changes, review affected files in `docs/agents/`:
 
-- A new public package goes in the import line above, and a new recipe is linked from `docs/agents/README.md`. `agent_recipes_test.go` fails until both are done.
+- A new public package goes in the import line above, and a new recipe is linked from `docs/agents/README.md`. `agent_index_test.go` fails until both are done.
 - A behavior change that makes a recipe's directive false fixes that directive in the same change.
 - Each public feature either has an agent recipe, extends an existing one, or is too narrow to need one (for example a presentation-only change); say which in the commit message.
-- Recipes prefer references over duplicated code. The test also fails when a recipe names a file, example or docs page that doesn't exist, or links no human guide. Whether the prose still describes the code is caught by review.
+- Recipes prefer references over duplicated code. `agent_recipes_test.go` also fails when a recipe names a file, example or docs page that doesn't exist, or links no human guide. Whether the prose still describes the code is caught by review.

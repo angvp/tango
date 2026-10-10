@@ -16,9 +16,9 @@ import (
 
 var recipeFileName = regexp.MustCompile("`([a-z0-9-]+\\.md)`")
 
-// notImportable are public packages an application should not import, so the
+// exemptFromGuardrail are public packages an application need not import, so the
 // guardrail line need not name them: conformance suites for adapter authors.
-var notImportable = []string{"cachetest", "storagetest"}
+var exemptFromGuardrail = []string{"cachetest", "storagetest"}
 
 // indexProblems compares the README's recipe links with the recipe files
 // (base names): a recipe the README never links, and a link to no recipe.
@@ -47,7 +47,7 @@ func indexProblems(readme string, recipes []string) []string {
 func packageProblems(agents string, packages []string) []string {
 	var problems []string
 	for _, pkg := range packages {
-		if slices.Contains(notImportable, pkg) || strings.Contains(agents, "`"+pkg+"`") {
+		if slices.Contains(exemptFromGuardrail, pkg) || strings.Contains(agents, "`"+pkg+"`") {
 			continue
 		}
 		problems = append(problems, "AGENTS.md does not name package "+pkg)
