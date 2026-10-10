@@ -34,7 +34,7 @@ func TestListViewRendersSyntheticDisplayColumnWithLabel(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", response.Code)
 	}
-	if !strings.Contains(body, "<th>Product summary</th>") {
+	if !strings.Contains(body, `<th scope="col">Product summary</th>`) {
 		t.Fatalf("header for the synthetic column is missing:\n%s", body)
 	}
 	if !strings.Contains(body, "Widget at 9.5") {
