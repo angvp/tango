@@ -94,6 +94,7 @@ curl http://localhost:8000/greetings/World/
   - [`accounts-mail`](examples/accounts-mail): the `accounts` app's password reset and email verification, with emails printed to the terminal;
   - [`spa-accounts`](examples/spa-accounts): the backend of a single-page app: `accounts`' JSON mode with bearer tokens, a host profile written in the registration transaction, and bounded `varchar` fields;
   - [`uploads`](examples/uploads): a document locker: `storage.Upload` reads one multipart file, the host keeps the generated key in its own model, and `storage.Serve` delivers it to its owner, on the local disk;
+  - [`cache`](examples/cache): `cache.FetchJSON` over a bounded in-process cache for a recomputable read, with a versioned prefix and a fail-open hook;
   - [`reusable-greetings`](examples/reusable-greetings) and [`reusable-greetings-host`](examples/reusable-greetings-host): a reusable app with contributed migrations and static assets, and a host installing it;
   - [`board`](examples/board): the tutorial's finished application, deployable as a container.
 - **[Versioning and compatibility](docs/compatibility.md)** — what each release promises not to break, deprecations, and the [changelog](CHANGELOG.md).

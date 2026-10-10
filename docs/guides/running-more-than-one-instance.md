@@ -47,6 +47,10 @@ With `accounts.WithMail`, emails wait in an in-memory outbox in the instance tha
 - **What still holds:** the link in any email that is sent works on every instance, because the token is a database row.
 - **Workaround:** apply the edge rate limit to `/accounts/password-reset/` and `/accounts/verify/resend/`. Give the instance a long enough shutdown timeout for its outbox to drain on a deploy; see [application lifecycle](application-lifecycle.md).
 
+### A cache
+
+`cache/local` is per process. Each instance has its own, so a value cached on one instance is a miss on the next and a `Delete` reaches only the instance that ran it. A Redis or Memcached cache (`cache/redis`, `cache/memcache`) is shared by every instance and is the right choice for recomputable reads across several. It shares only the cache: a remote cache does not make the login limiter, `ratelimit`, `realtime` rooms or the `accounts` mail outbox shared, and it never holds anything that must be correct or last. See [caching](cache.md).
+
 ### Uploaded files
 
 `storage/local` writes to one machine's disk. Another instance cannot read those files, and a container replacement deletes them unless the directory is a persistent volume mounted on exactly one instance. Use `storage/s3` for any deployment with more than one instance or an ephemeral disk. The metadata rows are in your database and are shared; the bytes are what must be reachable from every instance. See [file uploads](uploads.md#choosing-a-backend).

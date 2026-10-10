@@ -210,6 +210,44 @@ See [the uploads guide](guides/uploads.md) and [ADR 0052](adr/0052-storage-is-an
 | `func NewMemory() *Memory`, `func NewMemoryWithKeys(next func() string) *Memory` | An in-memory `storage.Store` for tests; the second forces key collisions. |
 | `func Run(t *testing.T, f Factory)`, `type Factory struct{ New; NewWithKeys }` | The conformance suite every `Store` passes: round trip, ranges, missing and invalid keys, size and type refusals storing nothing, create-only, concurrency, cancelled contexts. `NewWithKeys` is optional and enables the checks that need a controlled key. |
 
+## `cache` (`github.com/angvp/tango/cache`)
+
+| Symbol | What it's for |
+|---|---|
+| `type Store interface{ Get; Set; Delete }` | The cache. `Get(ctx, key) ([]byte, bool, error)`: a miss is `ok == false` with a nil error, an error means the backend failed, the slice is the caller's. `Set(ctx, key, value, ttl) error`: replaces, keeps none of the caller's memory, never expires sooner than `ttl`. `Delete(ctx, key) error`: a missing key is not an error. |
+| `func ValidKey(key string) bool`, `func CheckTTL(ttl time.Duration) error`, `const MaxKeyLength = 200`, `const MaxTTL` | A key is 1 to 200 bytes of printable ASCII with no spaces; a TTL is `0 < ttl <= MaxTTL` (30 days). Violations are `ErrInvalidKey` and `ErrInvalidTTL`, before any request. |
+| `func Prefix(store Store, prefix string) Store` | Namespaces every key, validating the final key. Bump a version in the prefix to invalidate in bulk. |
+| `func GetJSON[T](ctx, store, key) (T, bool, error)`, `func SetJSON[T](ctx, store, key, value, ttl) error` | Typed values as JSON. A value that does not decode is `ErrCorrupt`. |
+| `func FetchJSON[T](ctx, store, key, ttl, load func(context.Context) (T, error), opts ...FetchOption) (T, error)`, `func OnError(func(op string, err error)) FetchOption`, `OpGet`, `OpDecode`, `OpEncode`, `OpSet` | Fail-open read-through: a cache failure goes to the hook and the loader still runs. A loader error is returned as is. No in-process coalescing. |
+| `ErrInvalidKey`, `ErrInvalidTTL`, `ErrTooLarge`, `ErrCorrupt`, `*CorruptError{Key, Err}` | Match with `errors.Is`; `errors.As` gives the key and decode error of a corrupt value. |
+
+See [the caching guide](guides/cache.md) and [ADR 0055](adr/0055-the-cache-is-an-explicit-bytes-store-with-a-fail-open-fetchjson.md).
+
+## `cache/local` (`github.com/angvp/tango/cache/local`)
+
+| Symbol | What it's for |
+|---|---|
+| `func New(Config) (*Store, error)`, `type Config struct{ MaxEntries int; MaxBytes int64; Now func() time.Time }` | A bounded in-process `cache.Store`. `MaxEntries` is required and positive; `MaxBytes` (full key plus value) is optional and non-negative; least-recently-used eviction after expired entries; no goroutine. An entry larger than `MaxBytes` is `ErrTooLarge`. Per process. |
+
+## `cache/redis` (`github.com/angvp/tango/cache/redis`, its own module)
+
+| Symbol | What it's for |
+|---|---|
+| `func New(ctx, Config) (*Store, error)`, `type Config struct{ URL, Username, Password string; TLSConfig *tls.Config; DialTimeout, ReadTimeout, WriteTimeout time.Duration; PoolSize int }`, `func (*Store) Close() error` | A `cache.Store` on Redis or Valkey. `URL` is required (`redis://` or `rediss://`; the database is the URL path; a `TLSConfig` needs `rediss://`). Explicit credentials override the URL's. `New` pings and closes the client it created if the ping fails. |
+| `func NewFromClient(goredis.UniversalClient) *Store` | For Cluster, Sentinel, dynamic credentials or a Unix socket. It does not ping and its `Close` does nothing: the host closes the client it supplied. |
+
+## `cache/memcache` (`github.com/angvp/tango/cache/memcache`, its own module)
+
+| Symbol | What it's for |
+|---|---|
+| `func New(Config) (*Store, error)`, `type Config struct{ Servers []string; Timeout time.Duration; MaxIdleConns int; TLSConfig *tls.Config }`, `func (*Store) Close() error` | A `cache.Store` on Memcached. No authentication; TLS only through the dialer; `Timeout` (default 500 ms) bounds a call because an in-flight call cannot be cancelled; several servers shard keys without replication; expiry is rounded up to whole seconds. See [ADR 0056](adr/0056-remote-cache-adapters-are-separate-go-modules-with-pinned-clients.md). |
+
+## `cachetest` (`github.com/angvp/tango/cachetest`)
+
+| Symbol | What it's for |
+|---|---|
+| `func Run(t *testing.T, f Factory)`, `type Factory struct{ New func(*testing.T) cache.Store }` | The conformance suite every `cache.Store` passes: round trip, miss versus error, ownership of both slices, key and TTL rules, expiry, cancelled contexts, an oversized value, concurrent use. |
+
 ## `accounts` (`github.com/angvp/tango/accounts`)
 
 | Symbol | What it's for |

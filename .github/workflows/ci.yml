@@ -30,6 +30,60 @@ jobs:
           lycheeVersion: v0.24.2
           args: --offline --include-fragments --no-progress './**/*.md'
 
+  # cache/redis and cache/memcache are their own Go modules (ADR 0056), so the
+  # test job's ./... skips them. Each runs the cachetest conformance suite
+  # against the pinned server versions it claims to support.
+  cache-adapters:
+    name: cache adapters
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      memcached:
+        image: memcached:1.6-alpine
+        ports:
+          - 11211:11211
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+      - name: go test cache/redis (Redis)
+        working-directory: cache/redis
+        env:
+          TANGO_TEST_REDIS_URL: redis://localhost:6379/0
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+      - name: go test cache/redis (Valkey)
+        working-directory: cache/redis
+        env:
+          TANGO_TEST_REDIS_URL: redis://localhost:6380/0
+        run: go test -count=1 ./...
+      - name: go test cache/memcache
+        working-directory: cache/memcache
+        env:
+          TANGO_TEST_MEMCACHE_ADDR: localhost:11211
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+
   test:
     name: test (${{ matrix.dialect }})
     runs-on: ubuntu-latest

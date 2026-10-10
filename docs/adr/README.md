@@ -60,3 +60,5 @@ New records take the next free number here. This directory is the single, public
 | [0052](0052-storage-is-an-explicit-object-store-with-generated-keys-and-no-model-field.md) | Storage is an explicit object store with generated keys and no model field | Accepted |
 | [0053](0053-the-local-store-publishes-an-object-as-one-atomic-directory.md) | The local store publishes an object as one atomic directory | Accepted |
 | [0054](0054-cloud-storage-adapters-are-separate-go-modules.md) | Cloud storage adapters are separate Go modules | Accepted |
+| [0055](0055-the-cache-is-an-explicit-bytes-store-with-a-fail-open-fetchjson.md) | The cache is an explicit bytes store with a fail-open `FetchJSON` | Accepted |
+| [0056](0056-remote-cache-adapters-are-separate-go-modules-with-pinned-clients.md) | Remote cache adapters are separate Go modules with pinned clients | Accepted |
