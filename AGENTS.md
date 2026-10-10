@@ -9,7 +9,7 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 - Treat plain Go structs as the source of truth for models and metadata.
 - Register apps explicitly through `tango.Config{InstalledApps: []tango.App{...}}`.
 - Register models, admin config, routes, checks, and app-owned assets from an app's `Register(*tango.Registry)` path.
-- Use public packages and documented APIs first: `tango`, `model`, `db`, `auth`, `auth/jwt`, `accounts`, `admin`, `i18n`, `mail`, `mail/mailtest`, `ratelimit`, `realtime`, `realtime/websocket`, `observability`, `shell` (only for `tango shell`), and `migration` through the documented workflow.
+- Use public packages and documented APIs first: `tango`, `model`, `db`, `auth`, `auth/jwt`, `accounts`, `admin`, `i18n`, `mail`, `mail/mailtest`, `ratelimit`, `realtime`, `realtime/websocket`, `observability`, `cache`, `cache/local`, `cache/redis`, `cache/memcache`, `storage`, `storage/local`, `storage/s3`, `testdb` (tests only), `shell` (only for `tango shell`), and `migration` through the documented workflow. `storage/s3`, `cache/redis` and `cache/memcache` are separate Go modules with their own `go.mod`: add one to a project only when it needs that backend.
 - Use `db.Store` for persistence unless a real query need forces raw SQL through `Store.Query`/`QueryRow`.
 - Keep Chi as tanGO's internal routing implementation detail. Do not expose Chi types from app APIs.
 - Run the shared validation checklist in `docs/agents/checklist.md` before calling a change done.
@@ -24,30 +24,7 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 
 ## Recipes
 
-- Start-here reading order: `docs/agents/README.md`
-- Project/app shape: `docs/agents/project-shape.md`
-- Models: `docs/agents/models.md`
-- Migrations: `docs/agents/migrations.md`
-- Routing and reverse lookup: `docs/agents/routing.md`
-- Admin registration: `docs/agents/admin-registration.md`
-- Reusable apps: `docs/agents/reusable-apps.md`
-- Relationships and foreign keys: `docs/agents/relationships.md`
-- Auth and accounts: `docs/agents/auth-and-accounts.md`
-- Outgoing email: `docs/agents/mail.md`
-- JWT authentication: `docs/agents/jwt-auth.md`
-- Realtime rooms and WebSockets: `docs/agents/realtime.md`
-- Background jobs: `docs/agents/jobs.md`
-- Application lifecycle and graceful shutdown: `docs/agents/application-lifecycle.md`
-- Configuration and deployment: `docs/agents/configuration-and-deployment.md`
-- Testing with `testdb`: `docs/agents/testing.md`
-- The `tango tui` dashboard: `docs/agents/tui.md`
-- The `tango shell` console (inspect or fix data, project helpers): `docs/agents/shell.md`
-- Running more than one instance: `docs/agents/running-more-than-one-instance.md`
-- Rate limiting: `docs/agents/ratelimit.md`
-- Localization: `docs/agents/i18n.md`
-- Middleware and View wrappers: `docs/agents/middleware.md`
-- Structured logging and metrics: `docs/agents/observability.md`
-- Optional prompt snippets: `docs/agents/prompts.md`
+The recipe index is `docs/agents/README.md`: choose the smallest task-specific recipe there. It lists every recipe, including storage and cache, and is the only index.
 
 ## Sync Rule
 
