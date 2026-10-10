@@ -115,3 +115,29 @@ func TestAlterColumnTypeLengthsSurviveTheHeaderAndTheLiteral(t *testing.T) {
 		t.Fatalf("a step without lengths must not mention them: %s", plain.String())
 	}
 }
+
+func TestMakeMigrationsWritesAWideningAndIsQuietAfterwards(t *testing.T) {
+	dir := t.TempDir()
+	run := func(column migration.Column) string {
+		var stdout, stderr strings.Builder
+		if code := Run(context.Background(), []string{"makemigrations"}, dir, &stdout, &stderr, headlineModel(column)); code != 0 {
+			t.Fatalf("makemigrations: %d\n%s%s", code, stdout.String(), stderr.String())
+		}
+		return stdout.String()
+	}
+	run(migration.Column{Name: "title", Type: "varchar", Length: 100})
+	run(migration.Column{Name: "title", Type: "varchar", Length: 200})
+	run(migration.Column{Name: "title", Type: "text"})
+
+	second := readAll(t, filepath.Join(dir, "migrations", "0002_*.go"))
+	if want := `migration.AlterColumnType{Table: "headline", Column: "title", From: "varchar", FromLength: 100, To: "varchar", ToLength: 200}`; !strings.Contains(second, want) || strings.Contains(second, "Reversible: true") {
+		t.Fatalf("0002 lacks %s or is reversible:\n%s", want, second)
+	}
+	third := readAll(t, filepath.Join(dir, "migrations", "0003_*.go"))
+	if want := `From: "varchar", FromLength: 200, To: "text"`; !strings.Contains(third, want) {
+		t.Fatalf("0003 lacks %s:\n%s", want, third)
+	}
+	if out := run(migration.Column{Name: "title", Type: "text"}); !strings.Contains(out, "no changes detected") {
+		t.Fatalf("fourth run = %q, want no changes detected", out)
+	}
+}

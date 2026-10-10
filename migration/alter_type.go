@@ -53,6 +53,11 @@ var wideningConversions = map[wideningKey]wideningConversion{
 		},
 		convertDefault: realToTextDefault,
 	},
+	// A bounded string becomes text, or a longer bounded string: every value
+	// already fits, so the column's values are copied as they are. The
+	// longer-only rule for varchar to varchar lives in isWidening.
+	{"varchar", "text"}:    unchangedValues,
+	{"varchar", "varchar"}: unchangedValues,
 	{"boolean", "integer"}: {
 		sql: map[db.Dialect]func(string) string{
 			db.SQLite:   booleanTo("1", "0"),
@@ -67,6 +72,14 @@ var wideningConversions = map[wideningKey]wideningConversion{
 		},
 		convertDefault: booleanDefault("'true'", "'false'"),
 	},
+}
+
+var unchangedValues = wideningConversion{
+	sql: map[db.Dialect]func(string) string{
+		db.SQLite:   func(c string) string { return c },
+		db.Postgres: func(c string) string { return c },
+	},
+	convertDefault: func(def string) (string, bool) { return def, true },
 }
 
 // booleanTo converts a boolean with an explicit CASE, never a cast:
@@ -85,6 +98,23 @@ func isWideningTypeChange(from, to string) bool {
 	return ok
 }
 
+// isWidening is isWideningTypeChange for typed columns: a bounded string
+// only widens to a strictly longer bound, and to text.
+func isWidening(from string, fromLength int, to string, toLength int) bool {
+	if from == "varchar" && to == "varchar" {
+		return toLength > fromLength
+	}
+	return isWideningTypeChange(from, to)
+}
+
+// typeLabel names a column type for messages, with a bounded string's length.
+func typeLabel(columnType string, length int) string {
+	if columnType == "varchar" {
+		return fmt.Sprintf("varchar(%d)", length)
+	}
+	return columnType
+}
+
 // alterColumnType changes s.Column's type in one statement on PostgreSQL
 // and one transactional rebuild on SQLite, so a failure leaves the column,
 // its values and its default as they were.
@@ -93,13 +123,13 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 		return err
 	}
 	conversion, ok := wideningConversions[wideningKey{s.From, s.To}]
-	if !ok {
-		return fmt.Errorf("tango migration: %s.%s: %s to %s is not a widening type change", s.Table, s.Column, s.From, s.To)
+	if !ok || !isWidening(s.From, s.FromLength, s.To, s.ToLength) {
+		return fmt.Errorf("tango migration: %s.%s: %s to %s is not a widening type change", s.Table, s.Column, typeLabel(s.From, s.FromLength), typeLabel(s.To, s.ToLength))
 	}
 	convert := conversion.sql[dialect]
 	if dialect == db.Postgres {
 		column := quote(dialect, s.Column)
-		actions := []string{fmt.Sprintf("ALTER COLUMN %s TYPE %s USING %s", column, baseTypeSQL(dialect, s.To, 0), convert(column))}
+		actions := []string{fmt.Sprintf("ALTER COLUMN %s TYPE %s USING %s", column, baseTypeSQL(dialect, s.To, s.ToLength), convert(column))}
 		if s.Default != "" {
 			actions = append([]string{"ALTER COLUMN " + column + " DROP DEFAULT"}, actions...)
 			actions = append(actions, "ALTER COLUMN "+column+" SET DEFAULT "+s.Default)
@@ -117,7 +147,7 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 			if c.name != s.Column {
 				continue
 			}
-			reshaped[i].declType = baseTypeSQL(dialect, s.To, 0)
+			reshaped[i].declType = baseTypeSQL(dialect, s.To, s.ToLength)
 			reshaped[i].source = convert(quote(dialect, c.name))
 			if s.Default != "" {
 				reshaped[i].defaultValue = sql.NullString{String: s.Default, Valid: true}

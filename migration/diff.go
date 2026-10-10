@@ -217,8 +217,8 @@ func typeChangeProblems(name string, current ColumnState, column Column) []strin
 	switch {
 	case current.PrimaryKey || column.PrimaryKey:
 		return []string{fmt.Sprintf("%s changes type from %s to %s, but a primary key's type cannot change", name, current.Type, column.Type)}
-	case !isWideningTypeChange(current.Type, column.Type):
-		return []string{fmt.Sprintf("%s changes type from %s to %s, which is not a widening type change", name, current.Type, column.Type)}
+	case !isWidening(current.Type, current.Length, column.Type, column.Length):
+		return []string{fmt.Sprintf("%s changes type from %s to %s, which is not a widening type change", name, typeLabel(current.Type, current.Length), typeLabel(column.Type, column.Length))}
 	}
 	if _, ok := convertDefault(current.Type, column.Type, current.Default); !ok {
 		return []string{fmt.Sprintf("%s changes type from %s to %s, but its default %s cannot be converted", name, current.Type, column.Type, current.Default)}
@@ -240,10 +240,8 @@ func unsupportedChanges(model Model, existing []ColumnState) []string {
 			continue
 		}
 		name := model.fieldName(column.Name)
-		if current.Type != column.Type {
+		if current.Type != column.Type || current.Length != column.Length {
 			changes = append(changes, typeChangeProblems(name, current, column)...)
-		} else if current.Length != column.Length {
-			changes = append(changes, fmt.Sprintf("%s changes its length from %d to %d, which is not supported yet", name, current.Length, column.Length))
 		}
 		switch {
 		case current.PrimaryKey && !column.PrimaryKey:
@@ -349,9 +347,14 @@ func diffColumns(m *Migration, table string, columns []Column, existing []Column
 			continue
 		}
 
-		if current.Type != column.Type {
+		if current.Type != column.Type || current.Length != column.Length {
 			def, _ := convertDefault(current.Type, column.Type, current.Default)
-			m.Up = append(m.Up, AlterColumnType{Table: table, Column: column.Name, From: current.Type, To: column.Type, Default: def})
+			m.Up = append(m.Up, AlterColumnType{
+				Table: table, Column: column.Name,
+				From: current.Type, FromLength: current.Length,
+				To: column.Type, ToLength: column.Length,
+				Default: def,
+			})
 			m.Reversible = false
 		}
 

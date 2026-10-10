@@ -106,9 +106,7 @@ func TestDiffRefusesLengthChangesUntilTheyAreSupported(t *testing.T) {
 		to   int
 	}{
 		{"text to varchar", ColumnState{Name: "title", Type: "text"}, 200},
-		{"varchar to a longer varchar", ColumnState{Name: "title", Type: "varchar", Length: 100}, 200},
 		{"varchar to a shorter varchar", ColumnState{Name: "title", Type: "varchar", Length: 300}, 200},
-		{"varchar to text", ColumnState{Name: "title", Type: "varchar", Length: 100}, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
