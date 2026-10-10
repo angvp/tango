@@ -29,10 +29,10 @@ func TestBaseTypeSQLAcrossDialects(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.columnType, func(t *testing.T) {
-			if got := baseTypeSQL(db.SQLite, tc.columnType); got != tc.wantSQLite {
+			if got := baseTypeSQL(db.SQLite, tc.columnType, 0); got != tc.wantSQLite {
 				t.Errorf("baseTypeSQL(SQLite, %q) = %q, want %q", tc.columnType, got, tc.wantSQLite)
 			}
-			if got := baseTypeSQL(db.Postgres, tc.columnType); got != tc.wantPostgres {
+			if got := baseTypeSQL(db.Postgres, tc.columnType, 0); got != tc.wantPostgres {
 				t.Errorf("baseTypeSQL(Postgres, %q) = %q, want %q", tc.columnType, got, tc.wantPostgres)
 			}
 		})

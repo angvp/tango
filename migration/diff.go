@@ -71,9 +71,14 @@ func desiredColumn(field model.FieldMeta) Column {
 	if field.ForeignKey != "" {
 		references = db.ColumnName(field.ForeignKey)
 	}
+	columnType, length := sqlType(field.Type), 0
+	if columnType == "text" && field.MaxLength > 0 {
+		columnType, length = "varchar", field.MaxLength
+	}
 	return Column{
 		Name:       db.ColumnName(field.Name),
-		Type:       sqlType(field.Type),
+		Type:       columnType,
+		Length:     length,
 		PrimaryKey: field.PrimaryKey,
 		Unique:     field.Unique,
 		Indexed:    field.Indexed,
@@ -237,6 +242,8 @@ func unsupportedChanges(model Model, existing []ColumnState) []string {
 		name := model.fieldName(column.Name)
 		if current.Type != column.Type {
 			changes = append(changes, typeChangeProblems(name, current, column)...)
+		} else if current.Length != column.Length {
+			changes = append(changes, fmt.Sprintf("%s changes its length from %d to %d, which is not supported yet", name, current.Length, column.Length))
 		}
 		switch {
 		case current.PrimaryKey && !column.PrimaryKey:

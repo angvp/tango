@@ -20,10 +20,18 @@ import (
 func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step) error {
 	switch s := step.(type) {
 	case CreateTable:
+		for _, c := range s.Columns {
+			if err := validateColumn(s.Table, c); err != nil {
+				return err
+			}
+		}
 		return execAll(ctx, sqlDB, createTableSQL(dialect, s))
 	case DropTable:
 		return exec(ctx, sqlDB, fmt.Sprintf("DROP TABLE %s", quote(dialect, s.Table)))
 	case AddColumn:
+		if err := validateColumn(s.Table, s.Column); err != nil {
+			return err
+		}
 		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", quote(dialect, s.Table), addColumnDefSQL(dialect, s.Column)))
 	case DropColumn:
 		if dialect == db.Postgres {
@@ -141,7 +149,7 @@ func columnDefSQL(dialect db.Dialect, c Column) string {
 		return name + " INTEGER PRIMARY KEY AUTOINCREMENT" + referencesSQL(dialect, c)
 	}
 
-	typ := baseTypeSQL(dialect, c.Type)
+	typ := baseTypeSQL(dialect, c.Type, c.Length)
 	if c.PrimaryKey {
 		typ += " PRIMARY KEY"
 	}
@@ -173,10 +181,12 @@ func referencesSQL(dialect db.Dialect, c Column) string {
 	return " REFERENCES " + quote(dialect, c.References)
 }
 
-func baseTypeSQL(dialect db.Dialect, columnType string) string {
+func baseTypeSQL(dialect db.Dialect, columnType string, length int) string {
 	switch columnType {
 	case "text":
 		return "TEXT"
+	case "varchar":
+		return fmt.Sprintf("VARCHAR(%d)", length)
 	case "boolean":
 		return "BOOLEAN"
 	case "real":

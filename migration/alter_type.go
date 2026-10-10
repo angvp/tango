@@ -89,6 +89,9 @@ func isWideningTypeChange(from, to string) bool {
 // and one transactional rebuild on SQLite, so a failure leaves the column,
 // its values and its default as they were.
 func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s AlterColumnType) error {
+	if err := validateAlterLengths(s); err != nil {
+		return err
+	}
 	conversion, ok := wideningConversions[wideningKey{s.From, s.To}]
 	if !ok {
 		return fmt.Errorf("tango migration: %s.%s: %s to %s is not a widening type change", s.Table, s.Column, s.From, s.To)
@@ -96,7 +99,7 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 	convert := conversion.sql[dialect]
 	if dialect == db.Postgres {
 		column := quote(dialect, s.Column)
-		actions := []string{fmt.Sprintf("ALTER COLUMN %s TYPE %s USING %s", column, baseTypeSQL(dialect, s.To), convert(column))}
+		actions := []string{fmt.Sprintf("ALTER COLUMN %s TYPE %s USING %s", column, baseTypeSQL(dialect, s.To, 0), convert(column))}
 		if s.Default != "" {
 			actions = append([]string{"ALTER COLUMN " + column + " DROP DEFAULT"}, actions...)
 			actions = append(actions, "ALTER COLUMN "+column+" SET DEFAULT "+s.Default)
@@ -114,7 +117,7 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 			if c.name != s.Column {
 				continue
 			}
-			reshaped[i].declType = baseTypeSQL(dialect, s.To)
+			reshaped[i].declType = baseTypeSQL(dialect, s.To, 0)
 			reshaped[i].source = convert(quote(dialect, c.name))
 			if s.Default != "" {
 				reshaped[i].defaultValue = sql.NullString{String: s.Default, Valid: true}

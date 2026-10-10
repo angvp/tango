@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/internal/migrationcompat"
+	"github.com/angvp/tango/migration"
 )
 
 // rawDumpRunner answers -tango-dump-models with a recorded output.
@@ -57,4 +59,52 @@ func TestReleasedGeneratorHeadersReadBack(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRegeneratingReleasedCorporaIsByteIdentical is the compatibility release
+// gate for field semantics: writing each committed file's decoded migrations
+// back out with the current generator reproduces the file byte for byte, so
+// no change to the writer (a new additive field, say) alters what an older
+// release produced.
+func TestRegeneratingReleasedCorporaIsByteIdentical(t *testing.T) {
+	for _, gen := range migrationcompat.Generators {
+		t.Run(gen.Dir, func(t *testing.T) {
+			fixture := filepath.Join("..", "migrationcompat", gen.Dir, "migrations")
+			files, err := filepath.Glob(filepath.Join(fixture, "[0-9][0-9][0-9][0-9]_*.go"))
+			if err != nil || len(files) == 0 {
+				t.Fatalf("glob %s: %v (%d files)", fixture, err, len(files))
+			}
+			for _, file := range files {
+				committed, err := os.ReadFile(file)
+				if err != nil {
+					t.Fatal(err)
+				}
+				stem := strings.TrimSuffix(filepath.Base(file), ".go")
+				decoded, err := decodeFile(committed)
+				if err != nil {
+					t.Fatalf("%s: %v", file, err)
+				}
+				out := filepath.Join(t.TempDir(), filepath.Base(file))
+				if err := writeMigrationFile(out, migrationVarName(stem), decoded); err != nil {
+					t.Fatalf("%s: %v", file, err)
+				}
+				regenerated, err := os.ReadFile(out)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(regenerated) != string(committed) {
+					t.Errorf("%s is not byte-identical when regenerated:\n--- committed\n%s\n--- regenerated\n%s", file, committed, regenerated)
+				}
+			}
+		})
+	}
+}
+
+func decodeFile(content []byte) ([]migration.Migration, error) {
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.HasPrefix(line, migrationJSONPrefix) {
+			return decodeMigrations([]byte(strings.TrimPrefix(line, migrationJSONPrefix)))
+		}
+	}
+	return nil, errors.New("no migration-json header")
 }

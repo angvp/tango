@@ -24,9 +24,11 @@ type encodedStep struct {
 	Def     migration.Column   `json:"def,omitempty"`
 	// To is a rename's new name (Column holds the old one) or a type
 	// change's new type (From holds the old one).
-	To      string `json:"to,omitempty"`
-	From    string `json:"from,omitempty"`
-	Default string `json:"default,omitempty"`
+	To         string `json:"to,omitempty"`
+	From       string `json:"from,omitempty"`
+	ToLength   int    `json:"toLength,omitempty"`
+	FromLength int    `json:"fromLength,omitempty"`
+	Default    string `json:"default,omitempty"`
 }
 
 func encodeMigrations(migrations []migration.Migration) ([]encodedMigration, error) {
@@ -101,7 +103,7 @@ func encodeSteps(steps []migration.Step) ([]encodedStep, error) {
 		case migration.RenameTable:
 			encoded[i] = encodedStep{Kind: "RenameTable", Table: s.From, To: s.To}
 		case migration.AlterColumnType:
-			encoded[i] = encodedStep{Kind: "AlterColumnType", Table: s.Table, Column: s.Column, From: s.From, To: s.To, Default: s.Default}
+			encoded[i] = encodedStep{Kind: "AlterColumnType", Table: s.Table, Column: s.Column, From: s.From, To: s.To, FromLength: s.FromLength, ToLength: s.ToLength, Default: s.Default}
 		default:
 			return nil, fmt.Errorf("unsupported migration step type %T", step)
 		}
@@ -132,7 +134,7 @@ func decodeSteps(steps []encodedStep) ([]migration.Step, error) {
 		case "RenameTable":
 			decoded[i] = migration.RenameTable{From: step.Table, To: step.To}
 		case "AlterColumnType":
-			decoded[i] = migration.AlterColumnType{Table: step.Table, Column: step.Column, From: step.From, To: step.To, Default: step.Default}
+			decoded[i] = migration.AlterColumnType{Table: step.Table, Column: step.Column, From: step.From, To: step.To, FromLength: step.FromLength, ToLength: step.ToLength, Default: step.Default}
 		default:
 			return nil, fmt.Errorf("unknown migration step kind %q", step.Kind)
 		}

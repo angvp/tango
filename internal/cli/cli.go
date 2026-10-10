@@ -555,7 +555,14 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 	case migration.RenameTable:
 		fmt.Fprintf(builder, "migration.RenameTable{From: %q, To: %q},\n", s.From, s.To)
 	case migration.AlterColumnType:
-		fmt.Fprintf(builder, "migration.AlterColumnType{Table: %q, Column: %q, From: %q, To: %q", s.Table, s.Column, s.From, s.To)
+		fmt.Fprintf(builder, "migration.AlterColumnType{Table: %q, Column: %q, From: %q", s.Table, s.Column, s.From)
+		if s.FromLength != 0 {
+			fmt.Fprintf(builder, ", FromLength: %d", s.FromLength)
+		}
+		fmt.Fprintf(builder, ", To: %q", s.To)
+		if s.ToLength != 0 {
+			fmt.Fprintf(builder, ", ToLength: %d", s.ToLength)
+		}
 		if s.Default != "" {
 			fmt.Fprintf(builder, ", Default: %q", s.Default)
 		}
@@ -568,7 +575,11 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 // prefix — callers add that prefix themselves when it isn't already
 // supplied by an enclosing []migration.Column slice's element type.
 func writeColumnFields(builder *strings.Builder, c migration.Column) {
-	fmt.Fprintf(builder, "{Name: %q, Type: %q, PrimaryKey: %t, Unique: %t, Indexed: %t", c.Name, c.Type, c.PrimaryKey, c.Unique, c.Indexed)
+	fmt.Fprintf(builder, "{Name: %q, Type: %q", c.Name, c.Type)
+	if c.Length != 0 {
+		fmt.Fprintf(builder, ", Length: %d", c.Length)
+	}
+	fmt.Fprintf(builder, ", PrimaryKey: %t, Unique: %t, Indexed: %t", c.PrimaryKey, c.Unique, c.Indexed)
 	if c.References != "" {
 		fmt.Fprintf(builder, ", References: %q", c.References)
 	}

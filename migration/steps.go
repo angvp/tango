@@ -11,8 +11,12 @@ type Step interface {
 // for generated migration files and CLI diffing, not as a hand-authored
 // application API.
 type Column struct {
-	Name       string
-	Type       string
+	Name string
+	Type string
+	// Length is the maximum number of characters of a "varchar" column, and
+	// 0 for every other type. It is an additive field: generated files
+	// written before it existed leave it 0 and mean what they always meant.
+	Length     int `json:",omitempty"`
 	PrimaryKey bool
 	Unique     bool
 	Indexed    bool
@@ -107,11 +111,16 @@ type RenameTable struct {
 // is irreversible. It is exported for generated migration files;
 // application code should use the tango CLI.
 type AlterColumnType struct {
-	Table   string
-	Column  string
-	From    string
-	To      string
-	Default string
+	Table  string
+	Column string
+	From   string
+	// FromLength and ToLength are the varchar lengths of From and To, and 0
+	// for any other type. They are additive: files written without them
+	// mean what they always meant.
+	FromLength int `json:",omitempty"`
+	To         string
+	ToLength   int `json:",omitempty"`
+	Default    string
 }
 
 // Migration groups the up/down steps for one generated migration file. It is

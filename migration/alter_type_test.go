@@ -106,7 +106,7 @@ func TestAlterColumnTypeConvertsEveryRowOnBothDialects(t *testing.T) {
 				AlterColumnType{Table: "sample", Column: "d", From: w.from, To: w.to, Default: w.defaultTo},
 			)
 
-			wantType := strings.ToLower(baseTypeSQL(dialect, w.to))
+			wantType := strings.ToLower(baseTypeSQL(dialect, w.to, 0))
 			for _, column := range []string{"v", "d"} {
 				if got := columnType(t, sqlDB, dialect, "sample", column); got != wantType {
 					t.Fatalf("%s type = %q, want %q", column, got, wantType)

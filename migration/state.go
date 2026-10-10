@@ -7,6 +7,7 @@ import "fmt"
 type ColumnState struct {
 	Name       string
 	Type       string
+	Length     int
 	PrimaryKey bool
 	Unique     bool
 	Indexed    bool
@@ -58,7 +59,10 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		}
 		columns := make([]ColumnState, len(s.Columns))
 		for i, c := range s.Columns {
-			columns[i] = ColumnState{Name: c.Name, Type: c.Type, PrimaryKey: c.PrimaryKey, Unique: c.Unique, Indexed: c.Indexed, References: c.References}
+			if err := validateColumn(s.Table, c); err != nil {
+				return err
+			}
+			columns[i] = ColumnState{Name: c.Name, Type: c.Type, Length: c.Length, PrimaryKey: c.PrimaryKey, Unique: c.Unique, Indexed: c.Indexed, References: c.References}
 		}
 		state.Tables[s.Table] = TableState{Name: s.Table, App: app, Columns: columns}
 
@@ -76,8 +80,11 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		if columnIndex(table.Columns, s.Column.Name) != -1 {
 			return fmt.Errorf("tango migration: column %q already exists on table %q", s.Column.Name, s.Table)
 		}
+		if err := validateColumn(s.Table, s.Column); err != nil {
+			return err
+		}
 		table.Columns = append(table.Columns, ColumnState{
-			Name: s.Column.Name, Type: s.Column.Type, PrimaryKey: s.Column.PrimaryKey,
+			Name: s.Column.Name, Type: s.Column.Type, Length: s.Column.Length, PrimaryKey: s.Column.PrimaryKey,
 			Unique: s.Column.Unique, Indexed: s.Column.Indexed, References: s.Column.References,
 			Default: s.Column.Default,
 		})
@@ -134,7 +141,11 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 			return err
 		}
 		columns := append([]ColumnState(nil), table.Columns...)
+		if err := validateAlterLengths(s); err != nil {
+			return err
+		}
 		columns[index].Type = s.To
+		columns[index].Length = s.ToLength
 		columns[index].Default = s.Default
 		table.Columns = columns
 		state.Tables[s.Table] = table
