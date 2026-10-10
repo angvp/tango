@@ -57,6 +57,8 @@ func modelName(value any) string {
 		return "diffUser"
 	case diffPost:
 		return "diffPost"
+	case diffJSONDoc:
+		return "diffJSONDoc"
 	default:
 		panic("unknown test model")
 	}

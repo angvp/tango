@@ -69,6 +69,10 @@ type FieldMeta struct {
 	// MaxLength is the most runes a bounded string may hold, from
 	// tango:"varchar=n"; 0 means unbounded (a bare string or tango:"text").
 	MaxLength int
+	// JSON is true for a string field declared tango:"json": it holds JSON
+	// text, which Store.Create and Store.Update check is valid. The column is
+	// ordinary text.
+	JSON bool
 }
 
 // Registry stores model metadata by Go type name.
@@ -143,6 +147,11 @@ func (r *Registry) Register(value any) error {
 			return fmt.Errorf("%w: %s.%s: %v", ErrInvalidFieldTag, name, field.Name, err)
 		}
 
+		isJSON, err := jsonTag(tag, field.Type)
+		if err != nil {
+			return fmt.Errorf("%w: %s.%s: %v", ErrInvalidFieldTag, name, field.Name, err)
+		}
+
 		meta.Fields = append(meta.Fields, FieldMeta{
 			Name:       field.Name,
 			Type:       field.Type,
@@ -152,6 +161,7 @@ func (r *Registry) Register(value any) error {
 			Editable:   !primaryKey,
 			ForeignKey: fk,
 			MaxLength:  maxLength,
+			JSON:       isJSON,
 		})
 	}
 
@@ -249,6 +259,42 @@ func lengthTag(tag string, t reflect.Type) (int, error) {
 		return 0, fmt.Errorf("varchar=%d is above the largest length, %d", n, MaxVarcharLength)
 	}
 	return n, nil
+}
+
+// jsonTag reads tango:"json" from tag for a field of type t. It rejects a
+// json declaration that is repeated, carries a value, sits on a non-string
+// field, or is combined with a tag that would make the field compare or
+// bound its text as something other than JSON text.
+func jsonTag(tag string, t reflect.Type) (bool, error) {
+	declared := 0
+	for _, part := range strings.Split(tag, ",") {
+		name, _, hasValue := strings.Cut(strings.TrimSpace(part), "=")
+		if strings.TrimSpace(name) != "json" {
+			continue
+		}
+		if hasValue {
+			return false, fmt.Errorf("json takes no value, got %q", strings.TrimSpace(part))
+		}
+		declared++
+	}
+	if declared == 0 {
+		return false, nil
+	}
+	if declared > 1 {
+		return false, fmt.Errorf("json is declared more than once")
+	}
+	if t.Kind() != reflect.String {
+		return false, fmt.Errorf("json applies to string fields, not %s", t)
+	}
+	for _, other := range []string{"varchar", "text", "pk", "unique", "index"} {
+		if _, hasValue := tagValue(tag, other); hasValue || hasTagOption(tag, other) {
+			return false, fmt.Errorf("json cannot be combined with %s", other)
+		}
+	}
+	if _, isFK := tagValue(tag, "fk"); isFK {
+		return false, fmt.Errorf("json cannot be combined with fk")
+	}
+	return true, nil
 }
 
 func hasTagOption(tag string, option string) bool {
