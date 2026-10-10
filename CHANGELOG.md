@@ -20,7 +20,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - The admin foreign key select now starts with a "— None —" choice (translation key `admin.fk.none`), and an unset foreign key shows an em dash in the changelist instead of `0`. Saving "None" stores the same unset value (NULL) as before.
 
-- `POST /admin/logout/` now requires the session's CSRF token when the request carries a session cookie, so a cross-site form cannot sign an admin out. A request without a session cookie still redirects to the login page.
+- `POST /admin/logout/` now requires the session's CSRF token when the request carries a session cookie, so a cross-site form cannot sign an admin out. A missing or wrong token gets 403 and leaves the session in place. A request without a session cookie still redirects to the login page.
 
 - The admin sidebar footer no longer says "Signed in over Basic Auth" (admin has used session logins since 0.3). It now shows "Signed in as <username>" with a **Log out** button that posts to `/admin/logout/` with the session's CSRF token. The translation key `admin.layout.signed_in` is replaced by `admin.layout.signed_in_as` and `admin.layout.logout`.
 

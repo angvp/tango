@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
 
 	"github.com/angvp/tango/db"
@@ -64,7 +65,10 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 	sliceType := reflect.SliceOf(relatedMeta.Type)
 	destPtr := reflect.New(sliceType)
 	if err := store.List(ctx, relatedMeta, db.Query{OrderBy: []string{relatedPKField.Name}}, destPtr.Interface()); err != nil {
-		return nil, true
+		// The form still renders, with only the None choice, so an unrelated
+		// outage on the related table does not hide the whole page.
+		slog.ErrorContext(ctx, "admin: listing related rows for a foreign key select failed", "model", targetName, "error", err)
+		return []SelectOption{noneOption(ctx, currentValue)}, true
 	}
 
 	labelField := labelFieldFor(adminReg, targetName)
@@ -73,11 +77,7 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 	// A foreign key at its zero value is unset (stored as NULL), so every
 	// foreign key select offers an explicit way to leave it that way.
 	options := make([]SelectOption, 1+sliceValue.Len())
-	options[0] = SelectOption{
-		Value:    "",
-		Text:     i18n.T(ctx, "admin.fk.none", "— None —"),
-		Selected: currentValue == "" || currentValue == "0",
-	}
+	options[0] = noneOption(ctx, currentValue)
 	for i := 0; i < sliceValue.Len(); i++ {
 		elem := sliceValue.Index(i)
 		pkValue := elem.FieldByName(relatedPKField.Name).Interface()
@@ -87,6 +87,16 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 	}
 
 	return options, true
+}
+
+// noneOption is the blank choice that leaves a foreign key unset; it is
+// selected while the current value is empty or zero.
+func noneOption(ctx context.Context, currentValue string) SelectOption {
+	return SelectOption{
+		Value:    "",
+		Text:     i18n.T(ctx, "admin.fk.none", "— None —"),
+		Selected: currentValue == "" || currentValue == "0",
+	}
 }
 
 // relatedChoiceText is the text shown for one related row: its labelField
