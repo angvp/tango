@@ -88,8 +88,56 @@ type Query struct {
 // Store is tanGO's persistence boundary over a database/sql connection.
 type Store struct {
 	db      *sql.DB
+	tx      *sql.Tx // set on the Store InTx hands its callback
 	dialect Dialect
 	models  *model.Registry
+}
+
+// conn is where the Store's statements run: the transaction on a Store
+// bound to one, otherwise the connection pool.
+func (s *Store) conn() interface {
+	execer
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+} {
+	if s.tx != nil {
+		return s.tx
+	}
+	return s.db
+}
+
+// InTx runs fn in one database transaction. tx is a Store bound to it, so
+// every method works on it, with the same validation: it commits when fn
+// returns nil, rolls back when fn returns an error (returned as is), and on
+// a panic rolls back and re-panics with the same value, so a programmer
+// error is never turned into a returned error.
+//
+// InTx on a Store that is already bound to a transaction joins it: there are
+// no savepoints. An error from the inner callback rolls the work back only if
+// it propagates out of the outermost callback; an outer callback that
+// swallows it can still commit the inner writes. Operations that open their
+// own transaction when called directly (a PostgreSQL insert with an explicit
+// ID, which locks the table, and a cascading Delete) run on the enclosing one,
+// so the lock is held until it ends.
+func (s *Store) InTx(ctx context.Context, fn func(tx *Store) error) (err error) {
+	if s.tx != nil {
+		return fn(s)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			_ = tx.Rollback()
+			panic(r)
+		}
+	}()
+	bound := &Store{db: s.db, tx: tx, dialect: s.dialect, models: s.models}
+	if err := fn(bound); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // NewStore wraps sqlDB in a Store that generates SQL for dialect.
@@ -186,7 +234,7 @@ func (s *Store) validateForeignKeys(ctx context.Context, meta model.ModelMeta, s
 		)
 
 		var exists int
-		err = s.db.QueryRowContext(ctx, query, fieldValue.Interface()).Scan(&exists)
+		err = s.conn().QueryRowContext(ctx, query, fieldValue.Interface()).Scan(&exists)
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: %s.%s references nonexistent %s %v", ErrInvalidForeignKey, meta.Name, field.Name, field.ForeignKey, fieldValue.Interface())
 		}
@@ -256,7 +304,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 		)
 
 		var id int64
-		if err := s.db.QueryRowContext(ctx, query, args...).Scan(&id); err != nil {
+		if err := s.conn().QueryRowContext(ctx, query, args...).Scan(&id); err != nil {
 			return err
 		}
 
@@ -276,7 +324,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 		}
 	}
 
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.conn().ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -312,6 +360,27 @@ WHERE seq IS NOT NULL AND $3 > COALESCE(pg_sequence_last_value(seq), 0)`
 // backwards. Only this path takes it: Creates without an ID use the
 // sequence alone and are not serialised.
 func (s *Store) insertWithExplicitID(ctx context.Context, meta model.ModelMeta, pkField model.FieldMeta, id int64, insertSQL string, args []any) error {
+	return s.withTx(ctx, func(tx execer) error {
+		tableName := s.ident(meta.Name)
+		if _, err := tx.ExecContext(ctx, "LOCK TABLE "+tableName+" IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+			return fmt.Errorf("tango db: lock %s for explicit-ID insert: %w", meta.Name, err)
+		}
+		if _, err := tx.ExecContext(ctx, insertSQL, args...); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, advanceSequenceSQL, tableName, ColumnName(pkField.Name), id); err != nil {
+			return fmt.Errorf("tango db: advance %s.%s sequence: %w", meta.Name, pkField.Name, err)
+		}
+		return nil
+	})
+}
+
+// withTx runs fn in a transaction of its own, or, on a Store already bound to
+// one (see InTx), on that transaction, leaving its commit to the owner.
+func (s *Store) withTx(ctx context.Context, fn func(tx execer) error) error {
+	if s.tx != nil {
+		return fn(s.tx)
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -322,22 +391,13 @@ func (s *Store) insertWithExplicitID(ctx context.Context, meta model.ModelMeta, 
 			_ = tx.Rollback()
 		}
 	}()
-
-	tableName := s.ident(meta.Name)
-	if _, err := tx.ExecContext(ctx, "LOCK TABLE "+tableName+" IN SHARE ROW EXCLUSIVE MODE"); err != nil {
-		return fmt.Errorf("tango db: lock %s for explicit-ID insert: %w", meta.Name, err)
-	}
-	if _, err := tx.ExecContext(ctx, insertSQL, args...); err != nil {
+	if err := fn(tx); err != nil {
 		return err
-	}
-	if _, err := tx.ExecContext(ctx, advanceSequenceSQL, tableName, ColumnName(pkField.Name), id); err != nil {
-		return fmt.Errorf("tango db: advance %s.%s sequence: %w", meta.Name, pkField.Name, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	committed = true
-
 	return nil
 }
 
@@ -387,7 +447,7 @@ func (s *Store) Get(ctx context.Context, meta model.ModelMeta, pk any, dest any)
 		placeholder(s.dialect, 1),
 	)
 
-	row := s.db.QueryRowContext(ctx, query, pk)
+	row := s.conn().QueryRowContext(ctx, query, pk)
 	if err := scanFieldsInto(row, structValue, meta.Fields); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: %v", ErrNotFound, pk)
@@ -443,7 +503,7 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 		placeholder(s.dialect, len(assignments)+1),
 	)
 
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.conn().ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -470,33 +530,16 @@ func (s *Store) Delete(ctx context.Context, meta model.ModelMeta, pk any) error 
 	}
 
 	if s.models == nil {
-		return s.execDelete(ctx, s.db, meta, pkField, pk, true)
+		return s.execDelete(ctx, s.conn(), meta, pkField, pk, true)
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+	return s.withTx(ctx, func(tx execer) error {
+		visited := map[string]bool{cascadeKey(meta.Name, pk): true}
+		if err := s.cascadeDependents(ctx, tx, meta, pk, visited); err != nil {
+			return err
 		}
-	}()
-
-	visited := map[string]bool{cascadeKey(meta.Name, pk): true}
-	if err := s.cascadeDependents(ctx, tx, meta, pk, visited); err != nil {
-		return err
-	}
-	if err := s.execDelete(ctx, tx, meta, pkField, pk, true); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-
-	return nil
+		return s.execDelete(ctx, tx, meta, pkField, pk, true)
+	})
 }
 
 // cascadeDependents deletes, recursively, every row of every other
@@ -673,7 +716,7 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 		sqlQuery += fmt.Sprintf(" OFFSET %d", query.Offset)
 	}
 
-	rows, err := s.db.QueryContext(ctx, sqlQuery, args...)
+	rows, err := s.conn().QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return err
 	}
@@ -705,7 +748,7 @@ func (s *Store) Count(ctx context.Context, meta model.ModelMeta, query Query) (i
 	}
 	sqlQuery := "SELECT COUNT(*) FROM " + s.ident(meta.Name) + whereSQL
 	var count int
-	if err := s.db.QueryRowContext(ctx, sqlQuery, args...).Scan(&count); err != nil {
+	if err := s.conn().QueryRowContext(ctx, sqlQuery, args...).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -935,7 +978,7 @@ func (s *Store) QueryRow(ctx context.Context, dest any, sqlQuery string, args ..
 		return fmt.Errorf("tango db: QueryRow destination must be a non-nil pointer")
 	}
 
-	rows, err := s.db.QueryContext(ctx, sqlQuery, args...)
+	rows, err := s.conn().QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return err
 	}
@@ -971,7 +1014,7 @@ func (s *Store) Query(ctx context.Context, dest any, sqlQuery string, args ...an
 	sliceValue := value.Elem()
 	elementType := sliceValue.Type().Elem()
 
-	rows, err := s.db.QueryContext(ctx, sqlQuery, args...)
+	rows, err := s.conn().QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return err
 	}
