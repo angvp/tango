@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/angvp/tango v0.0.0
+	github.com/yuin/goldmark v1.8.6
 	modernc.org/sqlite v1.58.0
 )
 

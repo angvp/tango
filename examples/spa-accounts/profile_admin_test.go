@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -137,4 +138,112 @@ func TestProfileAdminEditsBioAsMarkdown(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT bio FROM profile WHERE id = $1`, id).Scan(&stored); err != nil || stored != bio {
 		t.Fatalf("stored %q (%v), want exactly %q", stored, err, bio)
 	}
+}
+
+// previewBioRequest sends source to the Bio preview route the way the
+// shared widget script does: a raw text/plain body and the session's CSRF
+// token in X-CSRF-Token.
+func previewBioRequest(s *site, source, csrf string) response {
+	req, _ := http.NewRequest(http.MethodPost, "/admin/profile/_preview/Bio/", strings.NewReader(source))
+	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	if csrf != "" {
+		req.Header.Set("X-CSRF-Token", csrf)
+	}
+	req.AddCookie(&http.Cookie{Name: "tango_admin_session", Value: adminSessionToken})
+	recorder := httptest.NewRecorder()
+	s.handler.ServeHTTP(recorder, req)
+	return response{recorder}
+}
+
+// adminCSRF is the token admin derives for adminSessionToken, as the
+// adminSite helper computes it.
+func adminCSRF() string {
+	sum := sha256.Sum256([]byte(adminSessionToken))
+	return hex.EncodeToString(sum[:])
+}
+
+func TestProfileBioEditPageOffersASandboxedPreview(t *testing.T) {
+	s := newSite(t)
+	request := adminSite(t, s)
+	_, id := profileID(t, s, "hedy")
+	page := request(http.MethodGet, "/admin/profile/"+strconv.FormatInt(id, 10)+"/", nil).Body.String()
+
+	for _, want := range []string{
+		`data-preview-url="../_preview/Bio/"`,
+		`<iframe id="field-Bio-preview" title="Preview of Bio" sandbox="" referrerpolicy="no-referrer"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("Bio preview missing %q", want)
+		}
+	}
+}
+
+func TestProfileBioPreviewRendersMarkdownInTheSandboxDocument(t *testing.T) {
+	s := newSite(t)
+	adminSite(t, s)
+	profileID(t, s, "ivy")
+
+	r := previewBioRequest(s, "# Hello\n\nSome *Markdown*.", adminCSRF())
+	if r.Code != http.StatusOK {
+		t.Fatalf("preview status = %d\n%s", r.Code, r.Body.String())
+	}
+	html := previewHTML(t, r)
+	for _, want := range []string{"<h1>Hello</h1>", "<em>Markdown</em>", `default-src 'none'; base-uri 'none'; form-action 'none'`} {
+		if !strings.Contains(html, want) {
+			t.Errorf("preview missing %q:\n%s", want, html)
+		}
+	}
+}
+
+func TestProfileBioPreviewEscapesRawHTMLAndUnsafeLinks(t *testing.T) {
+	s := newSite(t)
+	adminSite(t, s)
+	profileID(t, s, "jo")
+
+	source := "<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n[click](javascript:alert(1))"
+	r := previewBioRequest(s, source, adminCSRF())
+	if r.Code != http.StatusOK {
+		t.Fatalf("preview status = %d\n%s", r.Code, r.Body.String())
+	}
+	html := previewHTML(t, r)
+	for _, banned := range []string{"<script>alert", "onerror=", "javascript:"} {
+		if strings.Contains(html, banned) {
+			t.Errorf("preview passed %q through:\n%s", banned, html)
+		}
+	}
+}
+
+func TestProfileBioPreviewNeverSaves(t *testing.T) {
+	s := newSite(t)
+	adminSite(t, s)
+	_, id := profileID(t, s, "kit")
+
+	if r := previewBioRequest(s, "# Draft", adminCSRF()); r.Code != http.StatusOK {
+		t.Fatalf("preview status = %d", r.Code)
+	}
+	var stored string
+	if err := s.db.QueryRow(`SELECT bio FROM profile WHERE id = $1`, id).Scan(&stored); err != nil || stored != "" {
+		t.Fatalf("preview changed bio to %q (%v)", stored, err)
+	}
+}
+
+func TestProfileBioPreviewRefusesAWrongCSRFToken(t *testing.T) {
+	s := newSite(t)
+	adminSite(t, s)
+	profileID(t, s, "lee")
+	if r := previewBioRequest(s, "# x", "wrong"); r.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", r.Code)
+	}
+}
+
+// previewHTML decodes a preview response's html member.
+func previewHTML(t *testing.T, r response) string {
+	t.Helper()
+	var body struct {
+		HTML string `json:"html"`
+	}
+	if err := json.Unmarshal(r.Body.Bytes(), &body); err != nil || body.HTML == "" {
+		t.Fatalf("preview body has no html: %v\n%s", err, r.Body.String())
+	}
+	return body.HTML
 }

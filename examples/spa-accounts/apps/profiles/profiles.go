@@ -54,7 +54,7 @@ func New() tango.App {
 			ListDisplay: []string{"Username", "DisplayName"},
 			Search:      []string{"Username", "DisplayName"},
 			Widgets: map[string]admin.Widget{
-				"Bio":         admin.Markdown(),
+				"Bio":         admin.Markdown(admin.WithMarkdownPreview(previewBio)),
 				"Preferences": admin.JSON(),
 			},
 		})
