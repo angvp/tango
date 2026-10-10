@@ -83,7 +83,7 @@ echo "your-new-password" | ./yourapp -tango-admin-create=alice -tango-admin-no-s
 
 ## Authentication
 
-Admin routes require a valid session, established by logging in at `/admin/login/` — a real form, not a browser-native Basic Auth prompt. An unauthenticated request to any admin route redirects there with a `next` parameter, landing you back where you started after a successful login. `POST /admin/logout/` ends the session. Sessions have a fixed lifetime from creation (no idle timeout, no "remember me"); every form (including login) carries a CSRF token tied to the session, and repeated failed login attempts from the same source are rate-limited. See [limitations](../limitations.md) for the exact security boundary this implies.
+Admin routes require a valid session, established by logging in at `/admin/login/` — a real form, not a browser-native Basic Auth prompt. An unauthenticated request to any admin route redirects there with a `next` parameter, landing you back where you started after a successful login. `POST /admin/logout/` ends the session; the sidebar footer shows the signed-in username and a **Log out** button that posts to it. Sessions have a fixed lifetime from creation (no idle timeout, no "remember me"); every form (including login) carries a CSRF token tied to the session, and repeated failed login attempts from the same source are rate-limited. See [limitations](../limitations.md) for the exact security boundary this implies.
 
 ## Staff and superuser access
 
@@ -333,7 +333,7 @@ Automated tests pin the admin's structural markup: labels, `aria-invalid` and `a
 - **JSON Formatted tab.** On a JSON field, **Formatted** shows valid JSON indented and invalid text with a visible error, and never changes the textarea unless you choose **Use this formatting**. With JavaScript off, the field is a plain textarea and the server still refuses invalid JSON.
 - **Markdown Preview.** With a preview renderer set, **Preview** shows the rendered text in a frame that runs no script, loads nothing and cannot navigate the admin page. A renderer error shows in the Preview tab and never changes the text.
 
-Known limits: the widgets' messages ("Invalid JSON…", **Edit**, **Formatted**, **Write**, **Preview**, the character count) are English only, because a widget's `Render` and `Parse` have no request context. The sidebar toggle, skip link, `<main>` landmark and the footer text are separate follow-ups.
+Known limits: the widgets' messages ("Invalid JSON…", **Edit**, **Formatted**, **Write**, **Preview**, the character count) are English only, because a widget's `Render` and `Parse` have no request context. The sidebar toggle, skip link and `<main>` landmark are separate follow-ups.
 
 ## Stability
 

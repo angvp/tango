@@ -159,6 +159,14 @@ func requireSession(store *db.Store, next tango.View) tango.View {
 			return forbidden(ctx)
 		}
 
+		// The layout reads the account from the request context. The
+		// context's request is replaced in place because tango.Context has
+		// no setter and a handler owns its request.
+		*ctx.Request() = *ctx.Request().WithContext(withSignedIn(ctx.Context(), signedIn{
+			Username:  user.Username,
+			CSRFToken: csrfTokenFromRequest(ctx.Request()),
+		}))
+
 		return next(ctx)
 	}
 }

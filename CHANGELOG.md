@@ -18,6 +18,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Changed
 
+- The admin sidebar footer no longer says "Signed in over Basic Auth" (admin has used session logins since 0.3). It now shows "Signed in as <username>" with a **Log out** button that posts to `/admin/logout/` with the session's CSRF token. The translation key `admin.layout.signed_in` is replaced by `admin.layout.signed_in_as` and `admin.layout.logout`.
+
 - `/accounts/login/` now always spends one password comparison, even for an unknown or inactive account, so its timing no longer says whether an account exists. Nothing else about the HTML flow changes.
 
 ## [0.3.1] - 2026-10-09

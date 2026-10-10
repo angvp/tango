@@ -106,7 +106,8 @@ func TestAdminCRUDSurfacesTranslateWithI18nMiddleware(t *testing.T) {
 		"admin.delete.confirm_prefix":   "Seguro que quieres borrar",
 		"admin.delete.confirm_suffix":   "Esta acción no se puede deshacer.",
 		"admin.layout.models":           "Modelos",
-		"admin.layout.signed_in":        "Sesión iniciada",
+		"admin.layout.signed_in_as":     "Sesión iniciada como %s",
+		"admin.layout.logout":           "Cerrar sesión",
 		"admin.list.search_placeholder": "Buscar %s…",
 		"admin.pagination.label":        "Paginación",
 		"admin.pagination.previous":     "Página anterior",
@@ -114,7 +115,7 @@ func TestAdminCRUDSurfacesTranslateWithI18nMiddleware(t *testing.T) {
 	})
 
 	list := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
-	if !strings.Contains(list, "Crear crudProduct") || !strings.Contains(list, "Buscar") || !strings.Contains(list, "Modelos") || !strings.Contains(list, "Editar") {
+	if !strings.Contains(list, "Crear crudProduct") || !strings.Contains(list, "Buscar") || !strings.Contains(list, "Modelos") || !strings.Contains(list, "Editar") || !strings.Contains(list, "Sesión iniciada como admin") || !strings.Contains(list, "Cerrar sesión") {
 		t.Fatalf("list body missing translated text:\n%s", list)
 	}
 

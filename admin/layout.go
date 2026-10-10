@@ -33,6 +33,15 @@ func (c chrome) withContext(ctx context.Context) chrome {
 	return c
 }
 
+// SignedIn is the account shown in the sidebar footer, or nil when the page
+// was not served inside a session (the layout rendered on its own).
+func (c chrome) SignedIn() *signedIn {
+	if c.ctx == nil {
+		return nil
+	}
+	return signedInFrom(c.ctx)
+}
+
 func (c chrome) T(key, fallback string, args ...any) string {
 	return i18n.T(c.ctx, key, fallback, args...)
 }
@@ -77,6 +86,8 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
   .sidebar-link-dot { @apply h-1.5 w-1.5 shrink-0 rounded-full bg-slate-600 group-hover:bg-slate-400; }
   .sidebar-link-dot-active { @apply bg-indigo-400; }
   .sidebar-footer { @apply px-5 py-4 border-t border-white/10 text-xs text-slate-500 shrink-0; }
+  .sidebar-logout { @apply mt-2; }
+  .sidebar-logout-button { @apply text-slate-400 underline hover:text-white cursor-pointer; }
 
   .topbar { @apply sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/85 backdrop-blur px-4 py-3 sm:h-16 sm:px-6 sm:py-0 min-w-0; }
   .topbar-title { @apply text-lg font-semibold tracking-tight text-slate-900; }
@@ -159,7 +170,13 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
     </a>
     {{end}}
   </div>
-  <div class="sidebar-footer">{{.T "admin.layout.signed_in" "Signed in over Basic Auth"}}</div>
+  <div class="sidebar-footer">{{with .SignedIn}}
+    <div>{{$.T "admin.layout.signed_in_as" "Signed in as %s" .Username}}</div>
+    <form method="post" action="/admin/logout/" class="sidebar-logout">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit" class="sidebar-logout-button">{{$.T "admin.layout.logout" "Log out"}}</button>
+    </form>{{end}}
+  </div>
 </aside>
 <div class="content">
 {{block "content" .}}{{end}}
