@@ -60,6 +60,8 @@ func TestExamplesAreIndependentModulesThatCompile(t *testing.T) {
 			// examples/board (the tutorial app) refuses to start without its
 			// API token secret, which lives in an untracked .env locally.
 			"BOARD_JWT_SECRET="+strings.Repeat("s", 32),
+			// examples/spa-accounts signs its access tokens with this.
+			"SPA_JWT_SECRET="+strings.Repeat("s", 32),
 		)
 		var checkOut strings.Builder
 		checkCmd.Stdout = &checkOut
