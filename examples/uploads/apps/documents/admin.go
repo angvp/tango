@@ -17,6 +17,10 @@ func registerAdmin(registry *tango.Registry) error {
 		Search:      []string{"Name"},
 		Ordering:    []string{"-CreatedAt"},
 		Labels:      map[string]string{"Download": "File"},
+		// The key names the stored object and must never be shown or
+		// repointed; the metadata is written by the upload, not the form.
+		Widgets:  map[string]admin.Widget{"Key": storedKeyWidget{}},
+		ReadOnly: []string{"OwnerID", "ContentType", "Size", "SHA256", "CreatedAt"},
 		Display: map[string]admin.DisplayFunc{
 			"Size":     sizeCell,
 			"SHA256":   hashCell,
