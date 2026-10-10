@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,6 +36,17 @@ var ErrEmbeddedField = errors.New("tango: embedded fields are not supported")
 // registered.
 var ErrUnknownForeignKeyTarget = errors.New("tango: foreign key targets an unregistered model")
 
+// ErrInvalidFieldTag is returned by Registry.Register when a field's tango
+// tag declares a string length wrongly: varchar without a positive length, a
+// length beyond MaxVarcharLength, varchar together with text, a repeated
+// varchar or text, or either on a field that is not a string. The error
+// names the model and field.
+var ErrInvalidFieldTag = errors.New("tango: invalid field tag")
+
+// MaxVarcharLength is the largest length tango:"varchar=n" accepts: the
+// largest VARCHAR(n) PostgreSQL allows, so tanGO adds no ceiling of its own.
+const MaxVarcharLength = 10485760
+
 var timeType = reflect.TypeOf(time.Time{})
 
 // ModelMeta describes a registered Go struct model.
@@ -54,6 +66,9 @@ type FieldMeta struct {
 	Indexed    bool
 	Editable   bool
 	ForeignKey string // target model name from tango:"fk=<Name>"; "" if not a foreign key
+	// MaxLength is the most runes a bounded string may hold, from
+	// tango:"varchar=n"; 0 means unbounded (a bare string or tango:"text").
+	MaxLength int
 }
 
 // Registry stores model metadata by Go type name.
@@ -123,6 +138,11 @@ func (r *Registry) Register(value any) error {
 
 		fk, _ := tagValue(tag, "fk")
 
+		maxLength, err := lengthTag(tag, field.Type)
+		if err != nil {
+			return fmt.Errorf("%w: %s.%s: %v", ErrInvalidFieldTag, name, field.Name, err)
+		}
+
 		meta.Fields = append(meta.Fields, FieldMeta{
 			Name:       field.Name,
 			Type:       field.Type,
@@ -131,6 +151,7 @@ func (r *Registry) Register(value any) error {
 			Indexed:    hasTagOption(tag, "index"),
 			Editable:   !primaryKey,
 			ForeignKey: fk,
+			MaxLength:  maxLength,
 		})
 	}
 
@@ -180,6 +201,54 @@ func supportedFieldType(t reflect.Type) bool {
 	default:
 		return false
 	}
+}
+
+// lengthTag reads tango:"varchar=n" and tango:"text" from tag for a field of
+// type t: the declared maximum length, or 0 for a bare string or an explicit
+// text. It rejects every malformed declaration.
+func lengthTag(tag string, t reflect.Type) (int, error) {
+	var varchars, texts []string
+	for _, part := range strings.Split(tag, ",") {
+		part = strings.TrimSpace(part)
+		name, _, hasValue := strings.Cut(part, "=")
+		switch strings.TrimSpace(name) {
+		case "varchar":
+			varchars = append(varchars, part)
+		case "text":
+			if hasValue {
+				return 0, fmt.Errorf("text takes no value, got %q", part)
+			}
+			texts = append(texts, part)
+		}
+	}
+	if len(varchars) == 0 && len(texts) == 0 {
+		return 0, nil
+	}
+	if t.Kind() != reflect.String {
+		return 0, fmt.Errorf("varchar and text apply to string fields, not %s", t)
+	}
+	switch {
+	case len(varchars) > 1:
+		return 0, fmt.Errorf("varchar is declared more than once")
+	case len(texts) > 1:
+		return 0, fmt.Errorf("text is declared more than once")
+	case len(varchars) == 1 && len(texts) == 1:
+		return 0, fmt.Errorf("varchar and text cannot be combined")
+	case len(texts) == 1:
+		return 0, nil
+	}
+	value, ok := tagValue(tag, "varchar")
+	if !ok || value == "" {
+		return 0, fmt.Errorf("varchar needs a length, as varchar=200")
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("varchar needs a positive whole number, got %q", value)
+	}
+	if n > MaxVarcharLength {
+		return 0, fmt.Errorf("varchar=%d is above the largest length, %d", n, MaxVarcharLength)
+	}
+	return n, nil
 }
 
 func hasTagOption(tag string, option string) bool {
