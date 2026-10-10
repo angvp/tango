@@ -21,15 +21,24 @@ var listTemplate = cloneWithContent(`{{define "content"}}
 <div class="content-body">
   <div class="card">
     <div class="card-header">
-      <form method="get" class="flex items-center gap-2 flex-1 min-w-0 w-full sm:w-auto sm:min-w-[220px] sm:max-w-sm">
-        <input type="text" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .ModelName}}" class="input">
+      <form method="get" class="flex flex-wrap items-end gap-3 w-full">
+        <div class="flex flex-col gap-1 flex-1 min-w-[200px]">
+          <label for="list-search" class="text-xs font-medium text-slate-600">{{.T "admin.list.search_label" "Search"}}</label>
+          <input id="list-search" type="text" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .ModelName}}" class="input">
+        </div>
+        {{range .Filters}}<div class="flex flex-col gap-1">
+          <label for="{{.ID}}" class="text-xs font-medium text-slate-600">{{.Label}}</label>
+          {{if .Options}}<select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{end}}
+          {{if .Message}}<p class="text-xs text-slate-500">{{.Message}}</p>{{end}}
+        </div>{{end}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
       </form>
     </div>
     {{if .Rows}}
     <div class="table-wrap">
       <table class="table-admin">
-        <thead><tr>{{range .Columns}}<th>{{.}}</th>{{end}}<th class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
+        <caption class="sr-only">{{.ModelName}}</caption>
+        <thead><tr>{{range .Columns}}<th scope="col">{{.}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
           {{range .Cells}}<td>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
@@ -47,17 +56,17 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       <span>{{.TotalCount}} {{if eq .TotalCount 1}}{{.T "admin.list.result_singular" "result"}}{{else}}{{.T "admin.list.result_plural" "results"}}{{end}}{{if .SearchQuery}} {{.T "admin.list.for_query" "for"}} &ldquo;{{.SearchQuery}}&rdquo;{{end}}</span>
       {{if gt .TotalPages 1}}
       <nav class="pagination-pages" aria-label="{{.T "admin.pagination.label" "Pagination"}}">
-        {{if .HasPrev}}<a href="?page={{.PrevPage}}&q={{.SearchQuery}}" class="page-link" aria-label="{{.T "admin.pagination.previous" "Previous page"}}">&larr;</a>{{end}}
-        {{range .PageLinks}}{{if .Ellipsis}}<span class="page-ellipsis">&hellip;</span>{{else if .Current}}<span class="page-link page-link-current" aria-current="page">{{.Number}}</span>{{else}}<a href="?page={{.Number}}&q={{$.SearchQuery}}" class="page-link">{{.Number}}</a>{{end}}{{end}}
-        {{if .HasNext}}<a href="?page={{.NextPage}}&q={{.SearchQuery}}" class="page-link" aria-label="{{.T "admin.pagination.next" "Next page"}}">&rarr;</a>{{end}}
+        {{if .HasPrev}}<a href="{{.PrevHref}}" class="page-link" aria-label="{{.T "admin.pagination.previous" "Previous page"}}">&larr;</a>{{end}}
+        {{range .PageLinks}}{{if .Ellipsis}}<span class="page-ellipsis">&hellip;</span>{{else if .Current}}<span class="page-link page-link-current" aria-current="page">{{.Number}}</span>{{else}}<a href="{{.Href}}" class="page-link">{{.Number}}</a>{{end}}{{end}}
+        {{if .HasNext}}<a href="{{.NextHref}}" class="page-link" aria-label="{{.T "admin.pagination.next" "Next page"}}">&rarr;</a>{{end}}
       </nav>
       {{end}}
     </div>
     {{else}}
     <div class="empty-state">
       <p class="empty-state-title">{{.T "admin.list.empty_title" "No %s rows yet" .ModelName}}</p>
-      <p class="empty-state-body">{{if .SearchQuery}}{{.T "admin.list.empty_search" "Nothing matches “%s”." .SearchQuery}}{{else}}{{.T "admin.list.empty_body" "Get started by adding the first one."}}{{end}}</p>
-      {{if not .SearchQuery}}<a href="{{.BasePath}}new/" class="btn-primary mt-3">{{.T "admin.button.add_model" "+ Add %s" .ModelName}}</a>{{end}}
+      <p class="empty-state-body">{{if .SearchQuery}}{{.T "admin.list.empty_search" "Nothing matches “%s”." .SearchQuery}}{{else if .Criteria}}{{.T "admin.list.empty_filtered" "No rows match the selected filters."}}{{else}}{{.T "admin.list.empty_body" "Get started by adding the first one."}}{{end}}</p>
+      {{if not .Criteria}}<a href="{{.BasePath}}new/" class="btn-primary mt-3">{{.T "admin.button.add_model" "+ Add %s" .ModelName}}</a>{{end}}
     </div>
     {{end}}
   </div>
@@ -123,14 +132,16 @@ type listPageData struct {
 	Columns     []string
 	Rows        []listRow
 	SearchQuery string
+	Filters     []filterControl
+	Criteria    bool
 	Page        int
 	TotalPages  int
 	TotalCount  int
 	PageLinks   []pageLink
 	HasPrev     bool
 	HasNext     bool
-	PrevPage    int
-	NextPage    int
+	PrevHref    string
+	NextHref    string
 }
 
 type formField struct {

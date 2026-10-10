@@ -75,13 +75,17 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 		pkValue := elem.FieldByName(relatedPKField.Name).Interface()
 		value := fmt.Sprint(pkValue)
 
-		text := value
-		if labelField != "" {
-			text = formatFieldValue(elem.FieldByName(labelField))
-		}
-
-		options[i] = SelectOption{Value: value, Text: text, Selected: value == currentValue}
+		options[i] = SelectOption{Value: value, Text: relatedChoiceText(elem, labelField, value), Selected: value == currentValue}
 	}
 
 	return options, true
+}
+
+// relatedChoiceText is the text shown for one related row: its labelField
+// when one is configured, otherwise its primary key value.
+func relatedChoiceText(row reflect.Value, labelField, value string) string {
+	if labelField == "" {
+		return value
+	}
+	return formatFieldValue(row.FieldByName(labelField))
 }

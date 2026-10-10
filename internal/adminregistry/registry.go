@@ -40,6 +40,9 @@ type Options struct {
 	// forms, keyed by Go field name. See Widget — best-effort, not a
 	// stable contract.
 	Widgets map[string]Widget
+	// Filters lists boolean and foreign key fields the changelist can be
+	// filtered by, in the order they appear above the list.
+	Filters []string
 }
 
 // ModelRegistration is the admin metadata for a registered model.
@@ -111,6 +114,9 @@ func (r *Registry) Register(value any, opts Options) error {
 		return err
 	}
 	if err := validateFieldMapKeys(meta, opts.Widgets, "Widgets"); err != nil {
+		return err
+	}
+	if err := validateFilters(meta, opts.Filters); err != nil {
 		return err
 	}
 

@@ -33,6 +33,11 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				query.Any = append(query.Any, db.Condition{Field: field, Op: db.OpLike, Value: "%" + q + "%"})
 			}
 		}
+		filters, err := resolveListFilters(ctx.Context(), store, models, adminReg, meta, registration.Options, ctx.Query)
+		if err != nil {
+			return err
+		}
+		query.Where = filters.Where
 
 		sliceType := reflect.SliceOf(meta.Type)
 		destPtr := reflect.New(sliceType)
@@ -62,6 +67,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 		if page > totalPages {
 			page = totalPages
 		}
+		params := listParams(q, filters.Params)
 
 		columns := make([]string, len(registration.Options.ListDisplay))
 		for i, name := range registration.Options.ListDisplay {
@@ -75,14 +81,16 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			Columns:     columns,
 			Rows:        rows,
 			SearchQuery: q,
+			Filters:     filters.Controls,
+			Criteria:    hasCriteria(q, filters),
 			Page:        page,
 			TotalPages:  totalPages,
 			TotalCount:  total,
-			PageLinks:   paginationLinks(page, totalPages),
+			PageLinks:   withPageHrefs(paginationLinks(page, totalPages), params),
 			HasPrev:     page > 1,
-			PrevPage:    page - 1,
+			PrevHref:    pageHref(params, page-1),
 			HasNext:     hasNext,
-			NextPage:    page + 1,
+			NextHref:    pageHref(params, page+1),
 		}
 
 		return render(ctx, http.StatusOK, listTemplate, data)
@@ -126,6 +134,7 @@ type pageLink struct {
 	Number   int
 	Current  bool
 	Ellipsis bool
+	Href     string
 }
 
 // Django admin's own pagination truncation constants (see
