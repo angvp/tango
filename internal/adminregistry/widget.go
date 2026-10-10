@@ -113,8 +113,8 @@ type Widget interface {
 // can show a preview of the submitted text. Only the Markdown widget uses it
 // today. Admin owns the preview route: it calls Preview for the one derived,
 // staff-only endpoint of a preview field and wraps the result, so a widget
-// cannot register a route. Preview gets no request context and must not
-// persist anything; the caller applies the deadline and output limits.
+// cannot register a route. Preview receives a context derived from the
+// request's and must not persist anything; the caller applies the deadline and output limits.
 type PreviewWidget interface {
 	Preview(ctx context.Context, source string) (template.HTML, error)
 }

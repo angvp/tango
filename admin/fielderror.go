@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 
 	"github.com/angvp/tango/i18n"
@@ -70,6 +71,7 @@ func (e *formFieldErrors) Error() string {
 	for name, message := range e.messages {
 		parts = append(parts, name+": "+message)
 	}
+	sort.Strings(parts)
 	return strings.Join(parts, "; ")
 }
 

@@ -54,7 +54,8 @@ func New() tango.App {
 			ListDisplay: []string{"Username", "DisplayName"},
 			Search:      []string{"Username", "DisplayName"},
 			// The account link is set when the profile is created at
-			// registration; the admin shows it but never edits it.
+			// registration; the admin shows it but never edits it. (A profile
+			// created by hand in the admin therefore has no account.)
 			ReadOnly: []string{"AccountID"},
 			Widgets: map[string]admin.Widget{
 				"Bio":         admin.Markdown(admin.WithMarkdownPreview(previewBio)),
