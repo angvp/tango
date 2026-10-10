@@ -55,3 +55,5 @@ New records take the next free number here. This directory is the single, public
 | [0047](0047-multi-instance-state-is-not-built-yet.md) | Shared state for more than one instance is not built yet; the guide documents workarounds and four triggers reopen it | Accepted |
 | [0048](0048-tango-shell-is-the-projects-own-program-on-a-pinned-yaegi.md) | `tango shell` is the project's own program on a pinned Yaegi; app composition moves into the scaffold's `project` package | Accepted |
 | [0049](0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md) | Bounded strings are declared by tag, validated by rune count in Go, and enforced neither by SQLite nor by a `CHECK` | Accepted |
+| [0050](0050-json-accounts-are-bearer-only-and-the-host-issues-the-token.md) | JSON accounts are bearer-only, and the host issues the token | Accepted |
+| [0051](0051-the-transaction-seam-is-a-store-bound-to-one-transaction.md) | The transaction seam is a Store bound to one transaction, with flat nesting | Accepted |

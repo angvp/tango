@@ -91,6 +91,23 @@ err := store.QueryRow(ctx, &result, "SELECT COUNT(*) AS count FROM post WHERE ti
 
 `sql` must already use the placeholder syntax matching the `Store`'s configured `Dialect` (`?` for SQLite, `$1`/`$2`/... for Postgres) — neither method translates or validates placeholder syntax between dialects. See the [SQLite/PostgreSQL setup guide](sqlite-and-postgresql-setup.md) for where that dialect is selected.
 
+## Transactions with `InTx`
+
+`Store.InTx(ctx, fn)` runs `fn` with a `*db.Store` bound to one transaction. Every method on it (`Create`, `Update`, `Get`, `List`, `Delete`, `Query`, `Exec`) uses that transaction and applies the same validation, including [bounded-string](models-and-tags.md#bounded-strings) and foreign-key checks.
+
+```go
+err := store.InTx(ctx, func(tx *db.Store) error {
+	if err := tx.Create(ctx, accountMeta, &account); err != nil {
+		return err
+	}
+	return tx.Create(ctx, profileMeta, &Profile{AccountID: account.ID})
+})
+```
+
+It commits when `fn` returns nil and rolls back when `fn` returns an error, which `InTx` returns unchanged. A panic rolls back and is re-raised with the same value, so a programmer error is never turned into a returned error. Use `tx`, not the outer store, inside `fn`: the outer store is a different connection and does not see the transaction's writes.
+
+Nesting is flat. `InTx` on a store that is already in a transaction joins it, with no savepoints, so an inner error rolls the work back only if it propagates out of the outermost `fn`. An operation that opens its own transaction when called directly, such as a PostgreSQL insert with an explicit ID or a cascading `Delete`, runs on the enclosing one. See [ADR 0051](../adr/0051-the-transaction-seam-is-a-store-bound-to-one-transaction.md).
+
 ## Errors
 
 `db.ErrNotFound` is the sentinel for "no matching row" on `Get`/`Update`/`Delete`; check it with `errors.Is`.

@@ -36,6 +36,8 @@ Everything below is covered unless it is named under [what is not covered](#what
   - a rejected or missing CSRF token on a `POST` answers `403` with a JSON object carrying an `"error"` string;
   - rate limiting answers `429` with the same JSON shape and a `Retry-After` header.
 
+  With `accounts.WithJSON`, six more endpoints are covered: `POST /accounts/api/register/`, `login/`, `password-reset/`, `password-reset/confirm/`, `verify/` and `verify/resend/`. Their status codes, the members of their success bodies and the `code` values of their errors (`{"error", "code", "fields"?}`) are covered; the `error` text is not. Responses are additive-only: a minor release may add a member, so a client ignores members it does not know. Requests are strict: unknown or duplicate members are rejected with `400 invalid_body`, so a new request member is never silently accepted. Every JSON response carries `Cache-Control: no-store`. The covered Go API is `WithJSON`, `JSONConfig`, `JSONAuth`, `AuthGrant`, `Registration` and `FieldError`, and `db.Store.InTx`.
+
   Everything else `accounts` answers is an HTML page and not covered beyond its status: closed registration, for example, is a `403` HTML page, not JSON. A request with a method an endpoint doesn't register gets the router's bare `405`, which isn't part of `accounts`' contract.
 - **`mail`'s wire format**: a message with attachments is `multipart/mixed`, with the text part first and each attachment base64-encoded; the text is quoted-printable UTF-8. Exact MIME boundaries and header order are not covered.
 - **Observability names**, as listed in the [observability guide](guides/observability.md#stable-events-and-metrics):
