@@ -116,3 +116,25 @@ func merge(a, b url.Values) url.Values {
 func htmlUnescape(s string) string {
 	return strings.NewReplacer("&#34;", `"`, "&#39;", "'", "&lt;", "<", "&gt;", ">", "&amp;", "&").Replace(s)
 }
+
+func TestProfileAdminEditsBioAsMarkdown(t *testing.T) {
+	s := newSite(t)
+	request := adminSite(t, s)
+	accountID, id := profileID(t, s, "grace")
+	path := "/admin/profile/" + strconv.FormatInt(id, 10) + "/"
+
+	page := request(http.MethodGet, path, nil).Body.String()
+	if !strings.Contains(page, `data-tango-widget="markdown"`) || !strings.Contains(page, "0 characters") {
+		t.Fatalf("Bio is not the Markdown widget with its count:\n%s", page)
+	}
+
+	bio := "# Hello\r\n\r\nSome *Markdown*."
+	form := url.Values{"AccountID": {strconv.FormatInt(accountID, 10)}, "Username": {"grace"}, "DisplayName": {"grace"}, "Bio": {bio}, "Preferences": {""}}
+	if r := request(http.MethodPost, path, form); r.Code != http.StatusFound {
+		t.Fatalf("save: %d\n%s", r.Code, r.Body.String())
+	}
+	var stored string
+	if err := s.db.QueryRow(`SELECT bio FROM profile WHERE id = $1`, id).Scan(&stored); err != nil || stored != bio {
+		t.Fatalf("stored %q (%v), want exactly %q", stored, err, bio)
+	}
+}

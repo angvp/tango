@@ -44,7 +44,7 @@ var meta = func() model.ModelMeta {
 }()
 
 // New is the profiles app: it registers the Profile model, and its admin
-// page, where an operator edits Preferences as JSON.
+// page, where an operator edits Bio as Markdown and Preferences as JSON.
 func New() tango.App {
 	return tango.NewApp("profiles", func(registry *tango.Registry) error {
 		if err := registry.Models().Register(Profile{}); err != nil {
@@ -53,7 +53,10 @@ func New() tango.App {
 		return registry.Admin().Register(Profile{}, admin.Options{
 			ListDisplay: []string{"Username", "DisplayName"},
 			Search:      []string{"Username", "DisplayName"},
-			Widgets:     map[string]admin.Widget{"Preferences": admin.JSON()},
+			Widgets: map[string]admin.Widget{
+				"Bio":         admin.Markdown(),
+				"Preferences": admin.JSON(),
+			},
 		})
 	})
 }
