@@ -257,7 +257,7 @@ registry.Admin().Register(Profile{}, admin.Options{
 
 ### The shared widget script
 
-`admin.JSON()` emits no inline script. Its markup includes one `<script src="/admin/_assets/widgets.<hash>.js" defer>` tag, and the admin serves that file from its own embedded assets. The URL is content-hashed from the file's exact bytes and served with `Cache-Control: public, max-age=31536000, immutable`. The route, the file name and the script's contents are presentation details, not part of tanGO's compatibility promise. Repeated tags are harmless: the script guards itself, so a second copy does nothing. The source is `admin/assets/widgets.js`, which the admin's own built-in widgets use. It is not a public extension point: a third-party widget that needs behaviour should ship its own script, as described above. The admin sets no site-wide Content-Security-Policy, so a host that adds one must allow that script.
+`admin.JSON()` emits no inline script. Every form page includes one `<script src="/admin/_assets/widgets.<hash>.js" defer>` tag, and an `admin.JSON()` field adds its own copy of the same tag. The admin serves that file from its own embedded assets. The URL is content-hashed from the file's exact bytes and served with `Cache-Control: public, max-age=31536000, immutable`. The route, the file name and the script's contents are presentation details, not part of tanGO's compatibility promise. Repeated tags are harmless: the script guards itself, so a second copy does nothing. The source is `admin/assets/widgets.js`, which the admin's own built-in widgets use. It is not a public extension point: a third-party widget that needs behaviour should ship its own script, as described above. The admin sets no site-wide Content-Security-Policy, so a host that adds one must allow that script.
 
 ## Markdown fields
 
@@ -271,7 +271,42 @@ registry.Admin().Register(Profile{}, admin.Options{
 
 **The host owns rendering and sanitization.** tanGO ships no Markdown parser, sanitizer or rich-text dependency, and the admin never renders the stored text. Any public page that shows the Markdown must render and sanitize it under the application's own policy; an operator's text is not safe to output as HTML just because it was entered in the admin. `examples/spa-accounts` edits a profile's `Bio` this way and renders nothing.
 
-`admin.WithMarkdownPreview(fn)` records a host renderer of type `admin.MarkdownPreview` (`func(context.Context, string) (template.HTML, error)`) on the widget. The preview UI that uses it is not yet part of the admin: until it ships, the option is accepted but the form is unchanged, and the callback is never called on save.
+`admin.WithMarkdownPreview(fn)` gives the widget a host renderer of type `admin.MarkdownPreview`, `func(context.Context, string) (template.HTML, error)`. With a renderer the form offers a **Preview** button beside the count. Without one the field is exactly the plain editor above, and the callback is never called on save.
+
+```go
+md := goldmark.New() // defaults: raw HTML is not passed through; see below
+preview := func(ctx context.Context, source string) (template.HTML, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	var out bytes.Buffer
+	if err := md.Convert([]byte(source), &out); err != nil {
+		return "", err
+	}
+	return template.HTML(out.String()), nil
+}
+
+registry.Admin().Register(Profile{}, admin.Options{
+	Widgets: map[string]admin.Widget{
+		"Bio": admin.Markdown(admin.WithMarkdownPreview(preview)),
+	},
+})
+```
+
+The preview contract:
+
+- **Route.** Admin derives one route per model that has a preview field: `POST <model>/_preview/<Field>/`. A widget cannot register its own route. The route needs a staff session, like every admin route, and a CSRF token; the browser sends the token in an `X-CSRF-Token` header, which the shared script takes from the form. A field that is unknown, read-only, a primary key or without a preview is a 404. A wrong or missing token is 403.
+- **Input.** The raw source is the request body, at most 256 KiB (413 beyond that, and the text is not kept). It must be UTF-8.
+- **Deadline.** The renderer's context carries a five-second deadline. The deadline is cooperative: a renderer that ignores `ctx.Done()` keeps running, and admin does not start a goroutine to answer early. A renderer that finishes after the deadline counts as timed out.
+- **Output.** At most 1 MiB of HTML. Larger output is refused with 422 before it is encoded.
+- **Responses.** JSON only: `{"html": ...}` on success, `{"error": "..."}` otherwise. A renderer error is 422 with a generic message, and its detail is logged server-side through the request logger, not sent to the browser. A timeout is 504. Every response is `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`.
+- **Persistence.** The route never reads or writes a row. Saving is still the normal form submit, and the textarea's value is never changed by a preview or by an error.
+
+**The sandbox.** Admin wraps the HTML in a minimal document that carries the Content-Security-Policy meta `default-src 'none'; base-uri 'none'; form-action 'none'`. The browser assigns that document to `srcdoc` of a bare iframe with `sandbox=""` and `referrerpolicy="no-referrer"`: no scripts, no forms, no popups, no top-level navigation and an opaque origin. The policy also blocks images, styles and frames in the preview, so a preview shows the text's structure and not its outbound resources.
+
+**The host decides sanitization.** The admin trusts the renderer's output only for the preview, which staff see inside that sandbox. A public page that shows the same text is a different trust context: the host must render it and sanitize it under its own policy. The Goldmark example above renders with defaults that do not pass raw HTML through, which is safe for the preview, but it is not a sanitization policy for public pages. [ADR 0058](../adr/0058-markdown-rendering-and-sanitization-belong-to-the-host-and-previews-are-sandboxed.md) records why.
+
+Without JavaScript the field is a plain textarea and the preview is absent. `examples/spa-accounts` edits a profile's `Bio` this way and renders nothing on its public pages.
 
 ## Branding
 
