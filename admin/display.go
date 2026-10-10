@@ -52,6 +52,9 @@ func displayCell(ctx context.Context, fn DisplayFunc, row reflect.Value) listCel
 	return cell
 }
 
+// emptyCellText is shown in the changelist for an unset foreign key.
+const emptyCellText = "—"
+
 // listRenderer builds the cells of one changelist page's rows.
 type listRenderer struct {
 	ctx      context.Context
@@ -72,6 +75,9 @@ func (r listRenderer) cell(row reflect.Value, column string) listCell {
 	fieldValue := row.FieldByName(column)
 	for _, field := range r.meta.Fields {
 		if field.Name == column && field.ForeignKey != "" {
+			if fieldValue.IsZero() {
+				return plainCell(emptyCellText)
+			}
 			return plainCell(relatedLabel(r.ctx, r.store, r.models, r.adminReg, field.ForeignKey, fieldValue.Interface()))
 		}
 	}

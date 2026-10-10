@@ -132,6 +132,8 @@ Both `Post` and `Author` now show up in the sidebar, and `/admin/` redirects to 
 
 For a field tagged as a foreign key, the admin renders a `<select>` populated from the related model. If that related model is also registered with the admin, tanGO shows a small `+` link next to the select. Clicking it opens the related model's create page, then returns to the original form after save with the newly-created object already selected.
 
+The select starts with a "— None —" choice, because a foreign key at its zero value is unset (stored as NULL). A row whose foreign key is unset shows the choice selected on edit, and an em dash in the changelist rather than `0`. The built-in select has no required-foreign-key mode: tanGO has no required/optional distinction for foreign keys, so every one offers "None".
+
 For example, if `Book.AuthorID` is tagged `tango:"fk=Author"` and both `Book` and `Author` are admin-registered, the `Book` form gets a `+` beside the `Author` select. This is intentionally create-only: there is no edit link for the selected related object, no delete/remove action, no autocomplete, no many-to-many editing, and no inline formset support.
 
 This is a full-page navigation, not a popup. Any unsaved changes in the parent form are lost when you click `+`; save the parent object first if you need to preserve those values. That trade-off is deliberate so the feature stays small and predictable.

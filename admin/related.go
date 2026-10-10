@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/adminregistry"
 	"github.com/angvp/tango/model"
 )
@@ -69,13 +70,20 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 	labelField := labelFieldFor(adminReg, targetName)
 
 	sliceValue := destPtr.Elem()
-	options := make([]SelectOption, sliceValue.Len())
+	// A foreign key at its zero value is unset (stored as NULL), so every
+	// foreign key select offers an explicit way to leave it that way.
+	options := make([]SelectOption, 1+sliceValue.Len())
+	options[0] = SelectOption{
+		Value:    "",
+		Text:     i18n.T(ctx, "admin.fk.none", "— None —"),
+		Selected: currentValue == "" || currentValue == "0",
+	}
 	for i := 0; i < sliceValue.Len(); i++ {
 		elem := sliceValue.Index(i)
 		pkValue := elem.FieldByName(relatedPKField.Name).Interface()
 		value := fmt.Sprint(pkValue)
 
-		options[i] = SelectOption{Value: value, Text: relatedChoiceText(elem, labelField, value), Selected: value == currentValue}
+		options[i+1] = SelectOption{Value: value, Text: relatedChoiceText(elem, labelField, value), Selected: value == currentValue}
 	}
 
 	return options, true

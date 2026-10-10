@@ -282,3 +282,72 @@ func TestListViewFallsBackToRawIDWithoutLabelConfigured(t *testing.T) {
 func itoa(v int64) string {
 	return strconv.FormatInt(v, 10)
 }
+
+const (
+	noneOption = `<option value="" selected>— None —</option>`
+	emptyCell  = ">—<"
+)
+
+func TestCreateViewForeignKeyOffersASelectedNoneChoiceFirst(t *testing.T) {
+	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+	seedAuthor(t, sqlDB, "Jane Doe")
+
+	body := doRequest(t, handler, http.MethodGet, "/admin/fk_post/new/", nil).Body.String()
+	none := strings.Index(body, noneOption)
+	jane := strings.Index(body, "Jane Doe")
+	if none < 0 || jane < 0 || none > jane {
+		t.Fatalf("want the selected None choice before the authors:\n%s", body)
+	}
+}
+
+func TestCreateViewSavingTheNoneChoiceStoresAnUnsetForeignKey(t *testing.T) {
+	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+	seedAuthor(t, sqlDB, "Jane Doe")
+
+	response := doRequest(t, handler, http.MethodPost, "/admin/fk_post/new/", url.Values{"Title": {"Loose"}, "AuthorID": {""}})
+	if response.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302:\n%s", response.Code, response.Body.String())
+	}
+	var stored sql.NullInt64
+	if err := sqlDB.QueryRow(`SELECT author_id FROM fk_post WHERE title = $1`, "Loose").Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored.Int64 != 0 {
+		t.Fatalf("author_id = %v, want unset", stored)
+	}
+}
+
+func TestEditViewUnsetForeignKeySelectsNoneAndCanBeSetAndCleared(t *testing.T) {
+	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+	author := seedAuthor(t, sqlDB, "Jane Doe")
+	post := insertReturningID(t, sqlDB, `INSERT INTO fk_post (title, author_id) VALUES ($1, NULL) RETURNING id`, "Loose")
+	path := "/admin/fk_post/" + itoa(post) + "/"
+
+	if body := doRequest(t, handler, http.MethodGet, path, nil).Body.String(); !strings.Contains(body, noneOption) {
+		t.Fatalf("unset FK should select None:\n%s", body)
+	}
+
+	doRequest(t, handler, http.MethodPost, path, url.Values{"Title": {"Loose"}, "AuthorID": {itoa(author)}})
+	body := doRequest(t, handler, http.MethodGet, path, nil).Body.String()
+	if strings.Contains(body, noneOption) || !strings.Contains(body, `value="`+itoa(author)+`" selected`) {
+		t.Fatalf("set FK should select the author, not None:\n%s", body)
+	}
+
+	doRequest(t, handler, http.MethodPost, path, url.Values{"Title": {"Loose"}, "AuthorID": {""}})
+	if body := doRequest(t, handler, http.MethodGet, path, nil).Body.String(); !strings.Contains(body, noneOption) {
+		t.Fatalf("cleared FK should select None again:\n%s", body)
+	}
+}
+
+func TestListViewShowsAnExplicitEmptyStateForAnUnsetForeignKey(t *testing.T) {
+	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+	insertReturningID(t, sqlDB, `INSERT INTO fk_post (title, author_id) VALUES ($1, NULL) RETURNING id`, "Loose")
+
+	body := doRequest(t, handler, http.MethodGet, "/admin/fk_post/", nil).Body.String()
+	if !strings.Contains(body, emptyCell) {
+		t.Fatalf("unset FK should show an em dash:\n%s", body)
+	}
+	if strings.Contains(body, ">0<") {
+		t.Fatalf("unset FK shows numeric 0:\n%s", body)
+	}
+}
