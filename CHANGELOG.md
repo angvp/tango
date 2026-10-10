@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-10
+
 ### Added
 
 - **JSON fields.** `tango:"json"` on a `string` field declares it holds JSON text (`model.FieldMeta.JSON`). `Store.Create` and `Store.Update` refuse text that is not valid JSON with a `*db.InvalidJSONError` that matches `db.ErrInvalidJSON` and never contains the submitted text; the empty string is unset, `null` is valid, and the stored text is exactly what was given. It is ordinary `TEXT` on SQLite and PostgreSQL, so adding the tag to an existing field generates no migration and does not scan existing rows; reads are not checked. `json` cannot be combined with `varchar=n`, `text`, `pk`, `fk`, `unique` or `index`. See [ADR 0059](docs/adr/0059-json-fields-are-declared-by-tag-stored-as-exact-text-and-validated-when-the-model-is-written.md).
@@ -180,7 +182,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/angvp/tango/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/angvp/tango/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/angvp/tango/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/angvp/tango/compare/v0.1.0...v0.2.0
