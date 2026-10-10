@@ -11,10 +11,34 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/angvp/tango/internal/sqlident"
 	"github.com/angvp/tango/model"
 )
+
+// ErrValueTooLong is matched (with errors.Is) by the error Create and Update
+// return when a bounded string field, tagged tango:"varchar=n", holds more
+// than n runes. Use errors.As with *ValueTooLongError for the details.
+var ErrValueTooLong = errors.New("tango db: value too long")
+
+// ValueTooLongError says which bounded string field was too long, and by how
+// much. Length is counted in runes (utf8.RuneCountInString): each byte of
+// invalid UTF-8 counts as one rune, and a letter with a combining accent is
+// two. It is the same rule on every dialect; raw SQL is outside it.
+type ValueTooLongError struct {
+	Model string
+	Field string
+	Max   int // the most runes the field may hold
+	Got   int // the runes the value holds
+}
+
+func (e *ValueTooLongError) Error() string {
+	return fmt.Sprintf("%v: %s.%s has %d characters, at most %d are allowed", ErrValueTooLong, e.Model, e.Field, e.Got, e.Max)
+}
+
+// Is reports whether target is ErrValueTooLong.
+func (e *ValueTooLongError) Is(target error) bool { return target == ErrValueTooLong }
 
 // ErrNotFound is returned by Get, Update, and Delete when no row matches
 // the given primary key.
@@ -106,6 +130,26 @@ func (s *Store) ident(name string) string {
 	return sqlident.Quote(style, ColumnName(name))
 }
 
+// validateLengths checks every bounded string field of structValue against its
+// declared maximum, returning a *ValueTooLongError for the first one, in
+// declaration order, that holds too many runes. It runs before any SQL, so it
+// is the guarantee on dialects that do not enforce the length themselves.
+func validateLengths(meta model.ModelMeta, structValue reflect.Value) error {
+	for _, field := range meta.Fields {
+		if field.MaxLength == 0 {
+			continue
+		}
+		fieldValue := structValue.FieldByName(field.Name)
+		if !fieldValue.IsValid() || fieldValue.Kind() != reflect.String {
+			continue
+		}
+		if got := utf8.RuneCountInString(fieldValue.String()); got > field.MaxLength {
+			return &ValueTooLongError{Model: meta.Name, Field: field.Name, Max: field.MaxLength, Got: got}
+		}
+	}
+	return nil
+}
+
 // validateForeignKeys checks that every set (non-zero) foreign key field on
 // structValue references an existing row of its related model, returning
 // ErrInvalidForeignKey for the first one that doesn't. A no-op unless
@@ -166,6 +210,9 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 
 	structValue := value.Elem()
 
+	if err := validateLengths(meta, structValue); err != nil {
+		return err
+	}
 	if err := s.validateForeignKeys(ctx, meta, structValue); err != nil {
 		return err
 	}
@@ -360,6 +407,9 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 	}
 	structValue := value.Elem()
 
+	if err := validateLengths(meta, structValue); err != nil {
+		return err
+	}
 	if err := s.validateForeignKeys(ctx, meta, structValue); err != nil {
 		return err
 	}
