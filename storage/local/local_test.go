@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +209,9 @@ func TestNewRefusesAnEmptyRoot(t *testing.T) {
 }
 
 func TestNewRefusesExistingDirectoriesOpenToGroupOrOthers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not meaningful on Windows, where local.New skips the check")
+	}
 	for _, tt := range []struct {
 		name string
 		make func(t *testing.T, root string)
@@ -240,6 +244,9 @@ func TestNewRefusesExistingDirectoriesOpenToGroupOrOthers(t *testing.T) {
 }
 
 func TestNewLeavesAPermissiveDirectoryAsItFoundIt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not meaningful on Windows, where local.New skips the check")
+	}
 	root := filepath.Join(t.TempDir(), "uploads")
 	mkdir(t, root, 0o755)
 	if s, err := local.New(root); err == nil {
