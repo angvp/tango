@@ -56,9 +56,9 @@ type JSONConfig struct {
 	// host's own rows (a profile, say) and the account succeed or fail
 	// together. tx is a Store bound to that transaction. An error rolls
 	// everything back and sends no email. FieldError (several can be joined
-	// with errors.Join) and *db.ValueTooLongError from tx.Create answer 422
-	// invalid_field; any other error is logged and answered with a generic
-	// 500, and a panic rolls back and propagates.
+	// with errors.Join), *db.ValueTooLongError and *db.InvalidJSONError from
+	// tx.Create answer 422 invalid_field; any other error is logged and
+	// answered with a generic 500, and a panic rolls back and propagates.
 	OnRegister func(ctx context.Context, tx *db.Store, reg Registration) error
 	// ResolveIdentifier, when set, lets login take something other than an
 	// email, such as a username the host stores. It receives an identifier
@@ -165,8 +165,8 @@ func accountSummary(account Account) map[string]any {
 }
 
 // fieldErrorsIn collects the client-fixable errors in err (a FieldError, a
-// *db.ValueTooLongError, or several joined) as field to message, and reports
-// whether err held nothing else.
+// *db.ValueTooLongError, a *db.InvalidJSONError, or several joined) as field
+// to message, and reports whether err held nothing else.
 func fieldErrorsIn(err error) (map[string]string, bool) {
 	fields := map[string]string{}
 	if !collectFieldErrors(err, fields) || len(fields) == 0 {
@@ -190,6 +190,9 @@ func collectFieldErrors(err error, fields map[string]string) bool {
 		return true
 	case *db.ValueTooLongError:
 		fields[e.Field] = fmt.Sprintf("must be at most %d characters (got %d)", e.Max, e.Got)
+		return true
+	case *db.InvalidJSONError:
+		fields[e.Field] = "must be valid JSON"
 		return true
 	case interface{ Unwrap() []error }:
 		all := true
