@@ -25,12 +25,14 @@ func New(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.App {
 			Search:      []string{"Title"},
 			Ordering:    []string{"CreatedAt"},
 			Label:       "Title",
+			Filters:     []string{"AccountID"},
 		}); err != nil {
 			return err
 		}
 		if err := registry.Admin().Register(Comment{}, admin.Options{
 			ListDisplay: []string{"PostID", "Author", "CreatedAt"},
 			Search:      []string{"Author", "Body"},
+			Filters:     []string{"PostID"},
 		}); err != nil {
 			return err
 		}

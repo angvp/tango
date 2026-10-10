@@ -4,6 +4,10 @@ The bulletin board built in the [tutorial](../../docs/tutorial/01-bootstrap-rout
 
 The code follows the tutorial text; when one changes, change the other.
 
+## Admin changelist filters
+
+The HTML admin shows the boolean and foreign key filters from the admin guide's [changelist filters](../../docs/guides/admin-registration.md#changelist-filters) section: Accounts filter by `Active`, Posts by their author, and Comments by their post. `TestAdminChangelistFilters` in `admin_filters_test.go` exercises them over HTTP on whichever database `TANGO_TEST_DSN` selects.
+
 ## Run locally
 
 ```sh

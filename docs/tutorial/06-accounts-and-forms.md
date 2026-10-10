@@ -441,12 +441,13 @@ if err := registry.Admin().Register(accounts.Account{}, admin.Options{
 	Search:      []string{"Email"},
 	ReadOnly:    []string{"PasswordHash", "CreatedAt"},
 	Label:       "Email",
+	Filters:     []string{"Active"},
 }); err != nil {
 	return err
 }
 ```
 
-`ReadOnly` keeps the password hash out of the edit form, and `Label: "Email"` is what the admin shows wherever an account is referenced — including the owner dropdown on the post form. Unticking `Active` on an account in the admin logs it out everywhere immediately: `accounts` checks it on every request, not just at login.
+`ReadOnly` keeps the password hash out of the edit form, and `Label: "Email"` is what the admin shows wherever an account is referenced — including the owner dropdown on the post form. `Filters: []string{"Active"}` adds a filter above the list, so you can show only inactive accounts. Unticking `Active` on an account in the admin logs it out everywhere immediately: `accounts` checks it on every request, not just at login.
 
 A few lines of CSS for the new header and forms, appended to `apps/web/static/board.css`:
 

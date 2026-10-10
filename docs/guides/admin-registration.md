@@ -25,6 +25,7 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 - **`Search`** — string fields a free-text search box filters against. Registration rejects non-string fields; search uses SQL `LIKE`, so `%` and `_` in the query retain wildcard meaning and case matching follows the database dialect.
 - **`Display`** — computed changelist cells, keyed by a `ListDisplay` name. See [Computed changelist cells](#computed-changelist-cells-with-display).
 - **`Ordering`** — the static default order the list page's rows are shown in (not interactive/click-to-sort). Prefix a field with `-` for descending, e.g. `"-CreatedAt"`.
+- **`Filters`** — boolean and foreign key fields shown as filter selects above the list. A boolean offers Any, Yes and No. A foreign key offers Any plus the related rows, labelled as the related model's `Label` and ordered by primary key, as in the foreign key select. A foreign key whose related model has more than 100 rows offers no choices and says why. Registration rejects any other kind of field. See [Changelist filters](#changelist-filters).
 
 ## Adding the admin app
 
@@ -167,6 +168,27 @@ admin.Options{
 - `admin.ByteSize(int64)` formats a byte count with binary units (`1.5 MiB`), and `admin.ShortHash(string)` keeps the first twelve characters of a digest.
 
 Admin never reads storage, builds URLs or exposes keys on its own. For files, the host's `Display` supplies the link, and that link must point at a route the host authorizes; the uploads example links to its owner-only download View (see [`examples/uploads`](../../examples/uploads/README.md)).
+
+## Changelist filters
+
+`Filters` names boolean and foreign key fields. Each one becomes a labelled `<select>` beside the search box, submitted with the search as a plain GET form, so it works without JavaScript:
+
+```go
+if err := registry.Admin().Register(Post{}, admin.Options{
+	ListDisplay: []string{"Title", "AuthorID", "Published"},
+	Ordering:    []string{"-CreatedAt"},
+	Filters:     []string{"AuthorID", "Published"},
+}); err != nil {
+	return err
+}
+```
+
+- A boolean filter applies `yes` or `no`; `any` (or no parameter) applies nothing.
+- A foreign key filter applies one related primary key. Its choices come from one query on the related model, in primary key order, capped at 100. Above the cap the filter shows an explanation and offers no choices, and its value in the URL is ignored.
+- Filters combine with search and ordering using AND. The row count, the pagination and the pagination links all use the filtered set, and each link carries the search and the applied filters, encoded.
+- Unknown field names, malformed values and foreign key IDs that the related model does not have are ignored. Only applied filters appear in the page state.
+
+Each filter is a query parameter named `filter_` followed by the column name: `filter_published=yes`, `filter_author_id=3`. Treat these names as presentation details that may change between releases, not as a stable interface.
 
 ## Customizing form fields
 

@@ -58,6 +58,7 @@ func New(store *db.Store, feed *live.Feed) tango.App {
 			Search:      []string{"Email"},
 			ReadOnly:    []string{"PasswordHash", "CreatedAt"},
 			Label:       "Email",
+			Filters:     []string{"Active"},
 		}); err != nil {
 			return err
 		}
