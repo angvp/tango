@@ -51,17 +51,12 @@ func (m *mailer) verifyLink() tokenLink {
 		purpose: PurposeEmailVerification,
 		form:    verifyTemplate,
 		act: func(ctx *tango.Context, row AccountToken, account Account) error {
-			if won, err := m.useToken(ctx.Context(), row); err != nil || !won {
-				if err != nil {
-					return err
-				}
-				return invalidLink(ctx)
+			won, err := m.completeVerification(ctx.Context(), row, account)
+			if err != nil {
+				return err
 			}
-			if account.EmailVerifiedAt.IsZero() {
-				account.EmailVerifiedAt = m.cfg.now().UTC()
-				if err := m.store.Update(ctx.Context(), accountMeta(), &account); err != nil {
-					return err
-				}
+			if !won {
+				return invalidLink(ctx)
 			}
 			return render(ctx, http.StatusOK, verifiedTemplate, nil)
 		},

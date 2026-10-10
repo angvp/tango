@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/angvp/tango"
-	"github.com/angvp/tango/auth"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/internal/security"
 )
@@ -64,11 +63,11 @@ func logIn(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *sec
 	email := normalizeEmail(ctx.Request().PostForm.Get("email"))
 	password := ctx.Request().PostForm.Get("password")
 	next := ctx.Request().PostForm.Get("next")
-	account, exists, err := findAccountByEmail(ctx.Context(), store, email)
+	account, ok, err := authenticate(ctx.Context(), store, email, password)
 	if err != nil {
 		return err
 	}
-	if !exists || !account.Active || !auth.VerifyPassword(account.PasswordHash, password) {
+	if !ok {
 		limiter.RecordFailure(key)
 		return render(ctx, http.StatusUnauthorized, loginTemplate, loginPageData{
 			Next:          next,

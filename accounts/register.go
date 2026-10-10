@@ -115,20 +115,17 @@ func register(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *
 			CSRFToken: submittedCSRFToken(ctx.Request()),
 		})
 	}
-	if email == "" || password == "" {
-		return rerender(http.StatusBadRequest, "Email and password are required.")
-	}
-	if problem := passwordProblem(password); problem != "" {
-		return rerender(http.StatusBadRequest, problem)
-	}
-
-	account, created, err := createAccount(ctx.Context(), store, email, password)
+	outcome, err := registerAccount(ctx.Context(), store, email, password)
 	if err != nil {
 		return err
 	}
-	if !created {
+	if outcome.Problem != "" {
+		return rerender(http.StatusBadRequest, outcome.Problem)
+	}
+	if outcome.Duplicate {
 		return rerender(http.StatusConflict, "This email is already registered.")
 	}
+	account := outcome.Account
 	if err := createAccountSession(ctx.Context(), store, cfg, ctx.ResponseWriter(), ctx.Request(), account.ID); err != nil {
 		return err
 	}

@@ -57,10 +57,7 @@ func (m *mailer) askForReset(ctx *tango.Context, limiter *security.RateLimiter) 
 		})
 	}
 	email := normalizeEmail(address.Address)
-	m.queue(ctx.Context(), email, outboxJob{
-		purpose: PurposePasswordReset,
-		prepare: func(jobCtx context.Context) (delivery, bool, error) { return m.prepareReset(jobCtx, email) },
-	})
+	m.requestPasswordReset(ctx.Context(), email)
 	return render(ctx, http.StatusOK, passwordResetSentTemplate, nil)
 }
 
@@ -90,20 +87,18 @@ func (m *mailer) resetLink() tokenLink {
 		form:    passwordResetConfirmTemplate,
 		act: func(ctx *tango.Context, row AccountToken, account Account) error {
 			password := ctx.Request().PostForm.Get("password")
-			if problem := passwordProblem(password); problem != "" {
+			outcome, err := m.completePasswordReset(ctx.Context(), row, account, password)
+			if err != nil {
+				return err
+			}
+			if outcome.Problem != "" {
 				return render(ctx, http.StatusBadRequest, passwordResetConfirmTemplate, tokenFormData{
 					CSRFToken: submittedCSRFToken(ctx.Request()),
-					Error:     problem,
+					Error:     outcome.Problem,
 				})
 			}
-			if won, err := m.useToken(ctx.Context(), row); err != nil || !won {
-				if err != nil {
-					return err
-				}
+			if outcome.Invalid {
 				return invalidLink(ctx)
-			}
-			if err := m.setPassword(ctx.Context(), account, password); err != nil {
-				return err
 			}
 			return ctx.Redirect("/accounts/login/")
 		},
