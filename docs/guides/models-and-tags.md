@@ -24,6 +24,7 @@ The `tango` struct tag takes a comma-separated list of options:
 | `index` | A database index, created via the `CreateIndex` migration step. |
 | `varchar=n` | A bounded string: at most `n` characters, `n` from 1 to 10,485,760. Only on a `string` field. See [bounded strings](#bounded-strings). |
 | `text` | An explicit unbounded string, the same as a bare `string` field. Only on a `string` field; it cannot be combined with `varchar=n`. |
+| `json` | A string that holds JSON text, checked whenever the model is written. Only on a `string` field; it cannot be combined with `varchar=n`, `text`, `pk`, `fk`, `unique` or `index`. See [JSON fields](#json-fields). |
 
 Combine them: `tango:"pk,unique"` is valid, though redundant (a primary key is already unique).
 
@@ -48,6 +49,48 @@ What the limit means:
 - **Enforcement**: `Store.Create` and `Store.Update` check every bounded field before any SQL runs and return a `*db.ValueTooLongError` (matching `db.ErrValueTooLong`) carrying the model, field, limit and length. An empty string and a string of exactly `n` runes are valid. The migration creates the column as `VARCHAR(n)` on both databases and adds no `CHECK` constraint: PostgreSQL enforces the length itself, SQLite does not, so on SQLite the Go check is the only guarantee. Raw SQL (`Store.Exec`, `Query`) is outside it.
 - **Why it works this way**: see [ADR 0049](../adr/0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md).
 - **Changing it later**: see [changing a field's type](migrations.md#changing-a-fields-type). Adding or lowering a limit checks the existing data first and never truncates it.
+
+## JSON fields
+
+Add `json` to a `string` field that holds a JSON document, such as a user's preferences:
+
+<!-- snippet: json-field -->
+```go
+type Settings struct {
+	ID    int64  `tango:"pk"`
+	Owner string `tango:"varchar=60"`
+	Prefs string `tango:"json"`
+}
+```
+
+What it means:
+
+- **Still text.** The column is ordinary `TEXT` on SQLite and PostgreSQL, and the field is a Go `string` you read and write yourself (`json.Unmarshal([]byte(s.Prefs), &v)`). The text is stored exactly as given: no reformatting, no key reordering, no duplicate-key collapsing. tanGO does not query inside it, index it or check it against a schema.
+- **Registration**: `tango:"json"` sets `FieldMeta.JSON`. `json` on a field that is not a `string`, repeated, given a value, or combined with `varchar=n`, `text`, `pk`, `fk`, `unique` or `index` fails `Register` with `model.ErrInvalidFieldTag`. A unique or indexed JSON field would compare text while looking like it compares JSON, so those are refused.
+- **Empty and `null`**: the empty string is the unset value, stored as `NULL` like every unset field, and is valid. Whitespace-only text is not valid JSON and is refused. The text `null` is valid JSON, is stored as those four characters and is different from unset. Any single JSON value is accepted: an object, array, string, number, `true`, `false` or `null`.
+- **Enforcement**: `Store.Create` and `Store.Update` check every JSON field before any SQL runs and return a `*db.InvalidJSONError` (matching `db.ErrInvalidJSON`) with the model, field and the position of the problem. The error never contains the submitted text, so it is safe to log and to show to a client. The admin, the shell and the JSON accounts API handle it for you.
+- **Reads are not checked.** `Get` and `List` return whatever is stored, so a row written by raw SQL, or before the tag existed, can still be opened and repaired. Raw SQL (`Store.Exec`, `Query`) is outside the guarantee.
+- **Adding the tag to an existing field** changes no column, so it generates no migration and does not look at the rows already stored. Invalid rows stay as they are, and saving one fails until it is fixed. To find them, list the table and check each value; this works the same on both databases:
+
+<!-- snippet: json-field-audit -->
+```go
+func invalidSettings(ctx context.Context, store *db.Store, meta model.ModelMeta) ([]int64, error) {
+	var rows []Settings
+	if err := store.List(ctx, meta, db.Query{OrderBy: []string{"ID"}}, &rows); err != nil {
+		return nil, err
+	}
+	var bad []int64
+	for _, row := range rows {
+		if row.Prefs != "" && !json.Valid([]byte(row.Prefs)) {
+			bad = append(bad, row.ID)
+		}
+	}
+	return bad, nil
+}
+```
+
+  For a large table, page through it with `Limit` and `Offset`. There is no SQL one-liner here because the two databases do not share a JSON-validity function.
+- **Why it works this way**: see [ADR 0059](../adr/0059-json-fields-are-declared-by-tag-stored-as-exact-text-and-validated-when-the-model-is-written.md). In the admin, a JSON field gets the [JSON editor](admin-registration.md#json-fields) by default.
 
 ## Supported field kinds
 
