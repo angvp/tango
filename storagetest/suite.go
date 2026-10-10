@@ -30,26 +30,48 @@ var png = append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00
 
 func opts() storage.PutOptions { return storage.PutOptions{MaxSize: 1 << 20} }
 
+// reporter is the part of *testing.T the checks use. The suite's own tests
+// give the checks a recording reporter and a deliberately broken Store, to
+// prove each check fails when it should.
+type reporter interface {
+	Helper()
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Run(name string, f func(reporter))
+}
+
+// realT is a *testing.T as a reporter.
+type realT struct{ *testing.T }
+
+func (r realT) Run(name string, f func(reporter)) {
+	r.T.Run(name, func(t *testing.T) { f(realT{t}) })
+}
+
 // Run runs the conformance suite against the Store f builds.
 func Run(t *testing.T, f Factory) {
 	t.Helper()
-	t.Run("PutThenStatAndOpen", func(t *testing.T) { putStatOpen(t, f.New(t)) })
-	t.Run("OpenRanges", func(t *testing.T) { openRanges(t, f.New(t)) })
-	t.Run("MissingObjects", func(t *testing.T) { missing(t, f.New(t)) })
-	t.Run("InvalidKeys", func(t *testing.T) { invalidKeys(t, f.New(t)) })
-	t.Run("InvalidOptions", func(t *testing.T) { invalidOptions(t, f.New(t)) })
-	t.Run("SizeCapIsExact", func(t *testing.T) { sizeCap(t, f.New(t)) })
-	t.Run("ContextIsHonoured", func(t *testing.T) { cancelled(t, f.New(t)) })
-	t.Run("ConcurrentPuts", func(t *testing.T) { concurrent(t, f.New(t)) })
-	t.Run("DeleteIsIdempotent", func(t *testing.T) { deleteTwice(t, f.New(t)) })
+	t.Run("PutThenStatAndOpen", func(t *testing.T) { putStatOpen(realT{t}, f.New(t)) })
+	t.Run("OpenRanges", func(t *testing.T) { openRanges(realT{t}, f.New(t)) })
+	t.Run("MissingObjects", func(t *testing.T) { missing(realT{t}, f.New(t)) })
+	t.Run("InvalidKeys", func(t *testing.T) { invalidKeys(realT{t}, f.New(t)) })
+	t.Run("InvalidOptions", func(t *testing.T) { invalidOptions(realT{t}, f.New(t)) })
+	t.Run("SizeCapIsExact", func(t *testing.T) { sizeCap(realT{t}, f.New(t)) })
+	t.Run("ContextIsHonoured", func(t *testing.T) { cancelled(realT{t}, f.New(t)) })
+	t.Run("ConcurrentPuts", func(t *testing.T) { concurrent(realT{t}, f.New(t)) })
+	t.Run("DeleteIsIdempotent", func(t *testing.T) { deleteTwice(realT{t}, f.New(t)) })
 	if f.NewWithKeys == nil {
 		return
 	}
-	t.Run("RefusedWritesStoreNothing", func(t *testing.T) { refusedStoreNothing(t, f.NewWithKeys) })
-	t.Run("CreateOnlyNeverOverwrites", func(t *testing.T) { createOnly(t, f.NewWithKeys) })
+	build := func(t reporter, next func() string) storage.Store {
+		return f.NewWithKeys(t.(realT).T, next)
+	}
+	t.Run("RefusedWritesStoreNothing", func(t *testing.T) { refusedStoreNothing(realT{t}, build) })
+	t.Run("CreateOnlyNeverOverwrites", func(t *testing.T) { createOnly(realT{t}, build) })
 }
 
-func mustPut(t *testing.T, s storage.Store, data []byte) storage.Object {
+func mustPut(t reporter, s storage.Store, data []byte) storage.Object {
 	t.Helper()
 	obj, err := s.Put(context.Background(), bytes.NewReader(data), opts())
 	if err != nil {
@@ -58,7 +80,7 @@ func mustPut(t *testing.T, s storage.Store, data []byte) storage.Object {
 	return obj
 }
 
-func readAll(t *testing.T, s storage.Store, key string, offset, length int64) ([]byte, error) {
+func readAll(t reporter, s storage.Store, key string, offset, length int64) ([]byte, error) {
 	t.Helper()
 	rc, err := s.Open(context.Background(), key, offset, length)
 	if err != nil {
@@ -68,7 +90,7 @@ func readAll(t *testing.T, s storage.Store, key string, offset, length int64) ([
 	return io.ReadAll(rc)
 }
 
-func putStatOpen(t *testing.T, s storage.Store) {
+func putStatOpen(t reporter, s storage.Store) {
 	obj := mustPut(t, s, png)
 	if !storage.ValidKey(obj.Key) || obj.Size != int64(len(png)) || obj.ContentType != "image/png" || len(obj.SHA256) != 64 {
 		t.Fatalf("Put returned %+v", obj)
@@ -90,7 +112,7 @@ func putStatOpen(t *testing.T, s storage.Store) {
 	}
 }
 
-func openRanges(t *testing.T, s storage.Store) {
+func openRanges(t reporter, s storage.Store) {
 	data := []byte("0123456789")
 	key := mustPut(t, s, data).Key
 	for _, tt := range []struct {
@@ -111,7 +133,7 @@ func openRanges(t *testing.T, s storage.Store) {
 		{"a length that exactly reaches the end", 4, 6, "456789"},
 		{"a length one past the end", 4, 7, "456789"},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(t reporter) {
 			got, err := readAll(t, s, key, tt.offset, tt.length)
 			if err != nil || string(got) != tt.want {
 				t.Fatalf("Open(%d, %d) = %q, %v; want %q", tt.offset, tt.length, got, err, tt.want)
@@ -125,7 +147,7 @@ func openRanges(t *testing.T, s storage.Store) {
 	}
 }
 
-func missing(t *testing.T, s storage.Store) {
+func missing(t reporter, s storage.Store) {
 	key := storage.NewKey()
 	if _, err := s.Stat(context.Background(), key); !errors.Is(err, storage.ErrNotFound) {
 		t.Errorf("Stat: %v, want ErrNotFound", err)
@@ -138,7 +160,7 @@ func missing(t *testing.T, s storage.Store) {
 	}
 }
 
-func invalidKeys(t *testing.T, s storage.Store) {
+func invalidKeys(t reporter, s storage.Store) {
 	good := storage.NewKey()
 	for _, key := range []string{"", "x", "../../etc/passwd", good + "a", strings.ToUpper(good), good[:16] + "/" + good[17:], good[:31] + ".", good[:31] + "\x00"} {
 		ctx := context.Background()
@@ -154,7 +176,7 @@ func invalidKeys(t *testing.T, s storage.Store) {
 	}
 }
 
-func invalidOptions(t *testing.T, s storage.Store) {
+func invalidOptions(t reporter, s storage.Store) {
 	for _, max := range []int64{0, -5} {
 		if _, err := s.Put(context.Background(), strings.NewReader("x"), storage.PutOptions{MaxSize: max}); !errors.Is(err, storage.ErrInvalidOptions) {
 			t.Errorf("MaxSize %d: %v, want ErrInvalidOptions", max, err)
@@ -162,7 +184,7 @@ func invalidOptions(t *testing.T, s storage.Store) {
 	}
 }
 
-func sizeCap(t *testing.T, s storage.Store) {
+func sizeCap(t reporter, s storage.Store) {
 	at := storage.PutOptions{MaxSize: 100}
 	if obj, err := s.Put(context.Background(), bytes.NewReader(bytes.Repeat([]byte("a"), 100)), at); err != nil || obj.Size != 100 {
 		t.Fatalf("exactly the cap: %+v, %v", obj, err)
@@ -174,7 +196,7 @@ func sizeCap(t *testing.T, s storage.Store) {
 	}
 }
 
-func cancelled(t *testing.T, s storage.Store) {
+func cancelled(t reporter, s storage.Store) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := s.Put(ctx, bytes.NewReader(png), opts()); !errors.Is(err, context.Canceled) {
@@ -186,7 +208,7 @@ func cancelled(t *testing.T, s storage.Store) {
 	}
 }
 
-func concurrent(t *testing.T, s storage.Store) {
+func concurrent(t reporter, s storage.Store) {
 	const n = 16
 	keys := make([]string, n)
 	var wg sync.WaitGroup
@@ -204,18 +226,20 @@ func concurrent(t *testing.T, s storage.Store) {
 	}
 	wg.Wait()
 	seen := map[string]bool{}
-	for i, key := range keys {
+	for _, key := range keys {
 		if seen[key] {
 			t.Fatalf("key %q issued twice", key)
 		}
 		seen[key] = true
+	}
+	for i, key := range keys {
 		if got, err := readAll(t, s, key, 0, 1); err != nil || len(got) != 1 || got[0] != byte(i) {
 			t.Fatalf("object %d: first byte %v, err %v", i, got, err)
 		}
 	}
 }
 
-func deleteTwice(t *testing.T, s storage.Store) {
+func deleteTwice(t reporter, s storage.Store) {
 	key := mustPut(t, s, png).Key
 	for i := 0; i < 2; i++ {
 		if err := s.Delete(context.Background(), key); err != nil {
@@ -227,7 +251,7 @@ func deleteTwice(t *testing.T, s storage.Store) {
 	}
 }
 
-func refusedStoreNothing(t *testing.T, build func(*testing.T, func() string) storage.Store) {
+func refusedStoreNothing(t reporter, build func(reporter, func() string) storage.Store) {
 	key := storage.NewKey()
 	s := build(t, func() string { return key })
 	notStored := func(name string) {
@@ -251,7 +275,7 @@ func refusedStoreNothing(t *testing.T, build func(*testing.T, func() string) sto
 	notStored("a failing reader")
 }
 
-func createOnly(t *testing.T, build func(*testing.T, func() string) storage.Store) {
+func createOnly(t reporter, build func(reporter, func() string) storage.Store) {
 	key := storage.NewKey()
 	s := build(t, func() string { return key })
 	first := mustPut(t, s, png)

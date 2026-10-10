@@ -25,7 +25,19 @@ type Factory struct {
 
 // expiryWait is how long the suite waits for a short TTL to take effect. It
 // is deliberately generous: correctness never depends on sub-second timing.
-const expiryWait = 8 * time.Second
+// It is a variable only so the suite's own tests can shorten it.
+var expiryWait = 8 * time.Second
+
+// reporter is the part of *testing.T the checks use. The suite's own tests
+// give the checks a recording reporter and a deliberately broken Store, to
+// prove each check fails when it should.
+type reporter interface {
+	Helper()
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+}
 
 // Run runs the conformance suite against the Store f builds.
 func Run(t *testing.T, f Factory) {
@@ -58,7 +70,7 @@ func randomSuffix() string {
 	return string(b)
 }
 
-func setGetDelete(t *testing.T, s cache.Store) {
+func setGetDelete(t reporter, s cache.Store) {
 	ctx, k := context.Background(), key("basic")
 	if err := s.Set(ctx, k, []byte("one"), time.Minute); err != nil {
 		t.Fatal(err)
@@ -83,14 +95,14 @@ func setGetDelete(t *testing.T, s cache.Store) {
 	}
 }
 
-func missIsNotAnError(t *testing.T, s cache.Store) {
+func missIsNotAnError(t reporter, s cache.Store) {
 	got, ok, err := s.Get(context.Background(), key("absent"))
 	if err != nil || ok || len(got) != 0 {
 		t.Fatalf("Get of an absent key = %q, %v, %v; want a miss with no error", got, ok, err)
 	}
 }
 
-func emptyValue(t *testing.T, s cache.Store) {
+func emptyValue(t reporter, s cache.Store) {
 	ctx, k := context.Background(), key("empty")
 	if err := s.Set(ctx, k, nil, time.Minute); err != nil {
 		t.Fatal(err)
@@ -101,7 +113,7 @@ func emptyValue(t *testing.T, s cache.Store) {
 	}
 }
 
-func ownership(t *testing.T, s cache.Store) {
+func ownership(t reporter, s cache.Store) {
 	ctx, k := context.Background(), key("owner")
 	in := []byte("original")
 	if err := s.Set(ctx, k, in, time.Minute); err != nil {
@@ -119,7 +131,7 @@ func ownership(t *testing.T, s cache.Store) {
 	}
 }
 
-func invalidKeys(t *testing.T, s cache.Store) {
+func invalidKeys(t reporter, s cache.Store) {
 	ctx := context.Background()
 	for _, k := range []string{"", strings.Repeat("k", cache.MaxKeyLength+1), "has space", "tab\there", "new\nline", "nul\x00", "café", "del\x7f"} {
 		if _, _, err := s.Get(ctx, k); !errors.Is(err, cache.ErrInvalidKey) {
@@ -137,7 +149,7 @@ func invalidKeys(t *testing.T, s cache.Store) {
 	}
 }
 
-func ttlRange(t *testing.T, s cache.Store) {
+func ttlRange(t reporter, s cache.Store) {
 	ctx, k := context.Background(), key("ttl")
 	for _, ttl := range []time.Duration{0, -time.Second, cache.MaxTTL + time.Nanosecond} {
 		if err := s.Set(ctx, k, []byte("v"), ttl); !errors.Is(err, cache.ErrInvalidTTL) {
@@ -152,7 +164,7 @@ func ttlRange(t *testing.T, s cache.Store) {
 	}
 }
 
-func ttlNotElapsedEarly(t *testing.T, s cache.Store) {
+func ttlNotElapsedEarly(t reporter, s cache.Store) {
 	ctx, k := context.Background(), key("early")
 	if err := s.Set(ctx, k, []byte("v"), time.Hour); err != nil {
 		t.Fatal(err)
@@ -164,7 +176,7 @@ func ttlNotElapsedEarly(t *testing.T, s cache.Store) {
 	}
 }
 
-func shortTTLExpires(t *testing.T, s cache.Store) {
+func shortTTLExpires(t reporter, s cache.Store) {
 	ctx, k := context.Background(), key("short")
 	// 1ms is below some backends' granularity (Memcached rounds up to a
 	// second); the TTL must be read as at least what was asked, and the value gone soon after.
@@ -183,7 +195,7 @@ func shortTTLExpires(t *testing.T, s cache.Store) {
 	t.Fatalf("a 1ms TTL was still readable after %v", expiryWait)
 }
 
-func cancelled(t *testing.T, s cache.Store) {
+func cancelled(t reporter, s cache.Store) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	k := key("cancelled")
@@ -201,7 +213,7 @@ func cancelled(t *testing.T, s cache.Store) {
 	}
 }
 
-func oversized(t *testing.T, s cache.Store) {
+func oversized(t reporter, s cache.Store) {
 	ctx, k := context.Background(), key("big")
 	big := bytes.Repeat([]byte("0123456789abcdef"), 2<<16) // 2 MiB
 	err := s.Set(ctx, k, big, time.Minute)
@@ -222,7 +234,7 @@ func oversized(t *testing.T, s cache.Store) {
 func raceStep(ctx context.Context, s cache.Store, k string, values [][]byte, step int) error {
 	switch step % 3 {
 	case 0:
-		return s.Set(ctx, k, values[step%len(values)], time.Minute)
+		return s.Set(ctx, k, values[(step/3)%len(values)], time.Minute)
 	case 1:
 		got, ok, err := s.Get(ctx, k)
 		if err != nil {
@@ -237,7 +249,7 @@ func raceStep(ctx context.Context, s cache.Store, k string, values [][]byte, ste
 	}
 }
 
-func concurrent(t *testing.T, s cache.Store) {
+func concurrent(t reporter, s cache.Store) {
 	ctx, k := context.Background(), key("race")
 	values := [][]byte{bytes.Repeat([]byte("a"), 4096), bytes.Repeat([]byte("b"), 4096), bytes.Repeat([]byte("c"), 4096)}
 	var wg sync.WaitGroup
