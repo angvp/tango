@@ -1,0 +1,70 @@
+package admin
+
+import (
+	"crypto/sha256"
+	"embed"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"path"
+	"strings"
+
+	"github.com/angvp/tango"
+)
+
+// assetRoutePrefix is where admin serves its own static files. Each file's
+// URL carries a hash of its exact embedded bytes, so a cached copy can
+// never be stale and the response can be cached immutably.
+const assetRoutePrefix = "/admin/_assets/"
+
+//go:embed assets/widgets.js
+var assetFiles embed.FS
+
+// staticAsset is one embedded admin file served at its content-hashed URL.
+type staticAsset struct {
+	// URL is the path the file is served at, e.g. /admin/_assets/widgets.<hash>.js.
+	URL         string
+	ContentType string
+	Body        []byte
+}
+
+// newStaticAsset embeds the file at source and names it name.<hash><ext>,
+// where hash is the first 16 hex digits of the SHA-256 of its bytes.
+func newStaticAsset(source, contentType string) staticAsset {
+	body, err := assetFiles.ReadFile(source)
+	if err != nil {
+		panic(fmt.Sprintf("admin: embedded asset %s: %v", source, err))
+	}
+	sum := sha256.Sum256(body)
+	ext := path.Ext(source)
+	name := strings.TrimSuffix(path.Base(source), ext)
+	return staticAsset{
+		URL:         assetRoutePrefix + name + "." + hex.EncodeToString(sum[:8]) + ext,
+		ContentType: contentType,
+		Body:        body,
+	}
+}
+
+// widgetsAsset is the one script every admin widget with behaviour shares.
+// Its markup references it by URL; its behaviour lives in assets/widgets.js.
+var widgetsAsset = newStaticAsset("assets/widgets.js", "text/javascript; charset=utf-8")
+
+// assetRoutes serves the admin's static files at their hashed URLs. They
+// are public, since they contain no data; the pages that use them still
+// require a session.
+func assetRoutes() tango.URLs {
+	return tango.URLs{
+		tango.Path(http.MethodGet, widgetsAsset.URL, serveStaticAsset(widgetsAsset)),
+	}
+}
+
+func serveStaticAsset(asset staticAsset) tango.View {
+	return func(ctx *tango.Context) error {
+		w := ctx.ResponseWriter()
+		w.Header().Set("Content-Type", asset.ContentType)
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, err := w.Write(asset.Body)
+		return err
+	}
+}

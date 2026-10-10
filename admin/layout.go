@@ -96,6 +96,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
   .btn-ghost { @apply btn text-slate-600 hover:bg-slate-100 hover:text-slate-900 px-2.5 py-1.5; }
 
   .input { @apply block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-indigo-500; }
+  .json-input { @apply font-mono text-xs; }
   .field-label { @apply block text-sm font-medium text-slate-700 mb-1.5; }
   .field-group { @apply mb-4 last:mb-0; }
   .checkbox-row { @apply flex items-center gap-2.5; }
