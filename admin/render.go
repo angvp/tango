@@ -27,8 +27,8 @@ var listTemplate = cloneWithContent(`{{define "content"}}
           <input id="list-search" type="text" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .ModelName}}" class="input">
         </div>
         {{range .Filters}}<div class="flex flex-col gap-1">
-          <label for="{{.ID}}" class="text-xs font-medium text-slate-600">{{.Label}}</label>
-          {{if .Options}}<select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{end}}
+          {{if .Options}}<label for="{{.ID}}" class="text-xs font-medium text-slate-600">{{.Label}}</label>
+          <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{else}}<span class="text-xs font-medium text-slate-600">{{.Label}}</span>{{end}}
           {{if .Message}}<p class="text-xs text-slate-500">{{.Message}}</p>{{end}}
         </div>{{end}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>

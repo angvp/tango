@@ -210,6 +210,9 @@ func TestForeignKeyFilterOverCapExplainsItselfAndOffersNoChoices(t *testing.T) {
 	if strings.Contains(body, `<select id="filter-author_id"`) {
 		t.Fatalf("over-cap filter should offer no select:\n%s", body)
 	}
+	if strings.Contains(body, `<label for="filter-author_id"`) {
+		t.Fatalf("over-cap filter has no control, so its label must not point at one:\n%s", body)
+	}
 
 	body = doRequest(t, handler, "GET", flBookPath+"?filter_author_id="+strconv.FormatInt(last, 10), nil).Body.String()
 	if !strings.Contains(body, "Orphan Notes") || strings.Contains(body, `filter_author_id=`+strconv.FormatInt(last, 10)) {
