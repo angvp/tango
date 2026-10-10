@@ -218,28 +218,35 @@ func validateJSON(meta model.ModelMeta, structValue reflect.Value) error {
 		if !fieldValue.IsValid() || fieldValue.Kind() != reflect.String {
 			continue
 		}
-		text := fieldValue.String()
-		if text == "" || json.Valid([]byte(text)) {
-			continue
+		if problem := jsonTextProblem(fieldValue.String()); problem != nil {
+			return &InvalidJSONError{Model: meta.Name, Field: field.Name, Err: problem}
 		}
-		return &InvalidJSONError{Model: meta.Name, Field: field.Name, Err: jsonSyntaxProblem(text)}
 	}
 	return nil
 }
 
-// jsonSyntaxProblem describes why text is not JSON using only a position. The
+// jsonTextProblem returns nil when text is empty (unset) or one valid JSON
+// document, and otherwise describes the problem using only a position. The
 // standard library's own messages quote the offending character, which would
-// copy a piece of the submitted text into the error.
-func jsonSyntaxProblem(text string) error {
+// copy a piece of the submitted text into the error. Invalid UTF-8 is refused
+// too: encoding/json accepts it inside a string, but PostgreSQL rejects it in
+// a TEXT column, so accepting it would make the dialects disagree.
+func jsonTextProblem(text string) error {
+	if text == "" {
+		return nil
+	}
+	if !utf8.ValidString(text) {
+		return errors.New("not valid UTF-8")
+	}
+	if json.Valid([]byte(text)) {
+		return nil
+	}
 	var raw json.RawMessage
 	var syntax *json.SyntaxError
-	if err := json.Unmarshal([]byte(text), &raw); errors.As(err, &syntax) {
-		if syntax.Offset >= int64(len(text)) {
-			return errors.New("unexpected end of input")
-		}
+	if err := json.Unmarshal([]byte(text), &raw); errors.As(err, &syntax) && syntax.Offset < int64(len(text)) {
 		return fmt.Errorf("syntax error at byte %d", syntax.Offset)
 	}
-	return errors.New("not a single JSON document")
+	return errors.New("unexpected end of input")
 }
 
 // validateLengths checks every bounded string field of structValue against its

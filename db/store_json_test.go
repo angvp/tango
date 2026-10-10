@@ -149,18 +149,45 @@ func TestJSONFieldIsCheckedInsideATransaction(t *testing.T) {
 	}
 }
 
-func TestJSONFieldEmptyIsStoredAsNull(t *testing.T) {
+func TestJSONFieldEmptyIsUnsetAndDifferentFromTheLiteralNull(t *testing.T) {
 	store, meta, exec := openJSONNotes(t)
-	if err := store.Create(context.Background(), meta, &JSONNote{Title: "unset"}); err != nil {
+	ctx := context.Background()
+	if err := store.Create(ctx, meta, &JSONNote{Title: "unset"}); err != nil {
 		t.Fatal(err)
 	}
 	exec(`INSERT INTO json_note (title, body) VALUES ('literal', 'null')`)
-	// The literal null and the unset value are different stored values.
+	exec(`INSERT INTO json_note (title, body) VALUES ('sqlnull', NULL)`)
+
 	var rows []JSONNote
-	if err := store.List(context.Background(), meta, db.Query{OrderBy: []string{"ID"}}, &rows); err != nil {
+	if err := store.List(ctx, meta, db.Query{OrderBy: []string{"ID"}}, &rows); err != nil {
 		t.Fatal(err)
 	}
-	if rows[0].Body != "" || rows[1].Body != "null" {
-		t.Fatalf("bodies = %q and %q, want \"\" and \"null\"", rows[0].Body, rows[1].Body)
+	if rows[0].Body != "" || rows[1].Body != "null" || rows[2].Body != "" {
+		t.Fatalf("bodies = %q, %q, %q; want \"\" (unset), \"null\" (JSON null), \"\" (SQL NULL)", rows[0].Body, rows[1].Body, rows[2].Body)
+	}
+	// A row holding SQL NULL stays savable: it reads as the unset value.
+	rows[2].Title = "renamed"
+	if err := store.Update(ctx, meta, &rows[2]); err != nil {
+		t.Fatalf("Update of a row read from SQL NULL: %v", err)
+	}
+}
+
+// encoding/json's Valid accepts invalid UTF-8 inside a string, but PostgreSQL
+// refuses it in a TEXT column, so the check refuses it on every dialect.
+func TestJSONFieldRefusesInvalidUTF8OnEveryDialect(t *testing.T) {
+	store, meta, _ := openJSONNotes(t)
+	for _, body := range []string{"{\"a\":\"\xff\"}", "\"\xc3\x28\""} {
+		err := store.Create(context.Background(), meta, &JSONNote{Body: body})
+		var invalid *db.InvalidJSONError
+		if !errors.Is(err, db.ErrInvalidJSON) || !errors.As(err, &invalid) {
+			t.Errorf("Create %q error = %v, want an InvalidJSONError", body, err)
+			continue
+		}
+		if strings.Contains(err.Error(), "\xff") {
+			t.Errorf("message leaks submitted bytes: %q", err)
+		}
+	}
+	if n, _ := store.Count(context.Background(), meta, db.Query{}); n != 0 {
+		t.Errorf("rows = %d, want 0", n)
 	}
 }

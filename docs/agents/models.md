@@ -24,7 +24,7 @@ type Book struct {
 ## Don't
 
 - Do not expect SQLite or raw SQL to enforce `varchar=n`; `Store.Create` and `Store.Update` do, and return `db.ErrValueTooLong`.
-- A `tango:"json"` field is plain text that `Store.Create` and `Store.Update` check with `db.ErrInvalidJSON`; reads are not checked, `""` is unset, and adding the tag to an existing field generates no migration. Do not combine `json` with `varchar`, `text`, `pk`, `fk`, `unique` or `index`, and do not expect to query inside it.
+- A `tango:"json"` field is plain text that `Store.Create` and `Store.Update` check with `db.ErrInvalidJSON`; reads are not checked, `""` is unset, and adding the tag to an existing field generates no migration. Do not combine `json` with `varchar`, `text`, `pk`, `fk`, `unique` or `index`, and do not expect to query inside it. The [models guide](../guides/models-and-tags.md#json-fields) has the model and the audit loop for existing rows; both run as tests in `json_field_guide_test.go`.
 
 - Do not create YAML/JSON schemas for models.
 - Do not rely on filesystem scanning.
