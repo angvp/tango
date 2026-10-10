@@ -56,9 +56,20 @@ func (a *fakeAuth) setIssueError(err error) {
 // newJSONSite is the mail site with JSON mode on.
 func newJSONSite(t *testing.T, auth *fakeAuth, opts ...accounts.Option) *mailSite {
 	t.Helper()
-	opts = append([]accounts.Option{accounts.WithJSON(accounts.JSONConfig{
-		Auth: auth, VerifyURL: testVerifyURL, ResetURL: testResetURL,
-	})}, opts...)
+	return newJSONSiteWith(t, accounts.JSONConfig{Auth: auth}, opts...)
+}
+
+// newJSONSiteWith is newJSONSite with the rest of the JSON configuration
+// (hooks, a resolver) supplied by the test; the link templates default.
+func newJSONSiteWith(t *testing.T, config accounts.JSONConfig, opts ...accounts.Option) *mailSite {
+	t.Helper()
+	if config.VerifyURL == "" {
+		config.VerifyURL = testVerifyURL
+	}
+	if config.ResetURL == "" {
+		config.ResetURL = testResetURL
+	}
+	opts = append([]accounts.Option{accounts.WithJSON(config)}, opts...)
 	return newMailSite(t, &mailtest.Sender{}, true, opts...)
 }
 
