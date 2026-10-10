@@ -205,6 +205,9 @@ func buildFormFields(ctx context.Context, store *db.Store, models *model.Registr
 	for _, field := range orderedEditableFields(meta, opts.FieldOrder) {
 		fc, fkResolved := buildFieldContext(ctx, store, models, adminReg, field, opts, instance, formOpts)
 		widget := widgetForField(field, opts, fc, fkResolved)
+		if _, ok := widget.(PreviewWidget); ok {
+			fc.PreviewURL = previewPath(meta.Name, field.Name)
+		}
 		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(fc), HelpText: fc.HelpText, Error: fc.Error})
 	}
 

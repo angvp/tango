@@ -336,7 +336,7 @@ func TestPreviewWidgetRendersHiddenControlsAndASandboxedFrame(t *testing.T) {
 	widget := previewWidgetMarkup(t, page)
 
 	for _, want := range []string{
-		`data-preview-url="../_preview/Body/"`,
+		`data-preview-url="/admin/admin_note/_preview/Body/"`,
 		`<div class="widget-tabs" role="tablist" aria-label="Body view" data-widget-tabs hidden>`,
 		`<button type="button" role="tab" id="field-Body-tab-write" class="widget-tab" aria-selected="true" aria-controls="field-Body-panel-write" data-tab="write">Write</button>`,
 		`<button type="button" role="tab" id="field-Body-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-Body-panel-preview" tabindex="-1" data-tab="preview">Preview</button>`,

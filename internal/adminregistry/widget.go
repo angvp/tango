@@ -57,6 +57,9 @@ type FieldContext struct {
 	// foreign-key fields whose related model is also admin-registered.
 	// Empty means no quick-create affordance should render.
 	RelatedCreateURL string
+	// PreviewURL is the absolute admin URL a preview widget posts its text
+	// to; empty for a widget that is not a PreviewWidget.
+	PreviewURL string
 	// RelatedCreateLabel is the accessible label for RelatedCreateURL.
 	// Empty means widgets may fall back to their own default.
 	RelatedCreateLabel string

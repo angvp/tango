@@ -71,7 +71,7 @@ var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
   <button type="button" role="tab" id="field-{{.Name}}-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-preview" tabindex="-1" data-tab="preview">Preview</button>
 </div>
 <div id="field-{{.Name}}-panel-write" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-write" class="widget-panel">{{end}}
-<textarea id="field-{{.Name}}" name="{{.Name}}" class="input font-mono resize-y" rows="12" data-tango-widget="markdown"{{if .Preview}} data-preview-url="../_preview/{{.Name}}/"{{end}}{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}}` + ariaAttrs + `>
+<textarea id="field-{{.Name}}" name="{{.Name}}" class="input font-mono resize-y" rows="12" data-tango-widget="markdown"{{if .Preview}} data-preview-url="{{.PreviewURL}}"{{end}}{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}}` + ariaAttrs + `>
 {{.Value}}</textarea>
 <p id="field-{{.Name}}-count" class="text-xs text-slate-500 mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
 </div>

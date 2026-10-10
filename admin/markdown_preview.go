@@ -61,6 +61,17 @@ type previewFailure struct {
 // modelPath + "_preview/{field}/". It is registered only when a field of the
 // model has a PreviewWidget. The field is looked up after the session check,
 // so an anonymous request learns nothing about which fields have previews.
+// modelAdminPath is the admin base path of a model, with a trailing slash.
+func modelAdminPath(modelName string) string {
+	return "/admin/" + db.ColumnName(modelName) + "/"
+}
+
+// previewPath is the canonical URL of a model field's preview route. The
+// form hands it to the widget, and previewRoutes registers exactly it.
+func previewPath(modelName, field string) string {
+	return modelAdminPath(modelName) + "_preview/" + field + "/"
+}
+
 func previewRoutes(modelPath string, store *db.Store, registration ModelRegistration) tango.URLs {
 	if !hasPreviewWidget(registration.Options) {
 		return nil

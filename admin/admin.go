@@ -74,7 +74,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 		}
 		routes = append(routes, assetRoutes()...)
 		for _, registration := range registrations {
-			modelPath := "/admin/" + db.ColumnName(registration.Model.Name) + "/"
+			modelPath := modelAdminPath(registration.Model.Name)
 			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding)...)
 		}
 
