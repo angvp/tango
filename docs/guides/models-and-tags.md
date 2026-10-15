@@ -21,7 +21,8 @@ The `tango` struct tag takes a comma-separated list of options:
 |---|---|
 | `pk` | This field is the primary key. Exactly one field must be tagged `pk` — zero or more than one fails `Register` with a clear error. There is no `ID`-name auto-detection: tanGO never guesses. |
 | `unique` | A unique constraint. Enforced at the database level once a migration adds it (see the [migrations guide](migrations.md)'s `AlterColumnUnique` step). |
-| `index` | A database index, created via the `CreateIndex` migration step. |
+| `index` | A database index, created via the `CreateIndex` migration step. A foreign key (`fk=Model`) is indexed by default; see `noindex`. |
+| `noindex` | On a foreign key only: skip the index tanGO creates for it by default. A foreign key that is also `unique` gets no second index. It cannot be combined with `index`. |
 | `varchar=n` | A bounded string: at most `n` characters, `n` from 1 to 10,485,760. Only on a `string` field. See [bounded strings](#bounded-strings). |
 | `text` | An explicit unbounded string, the same as a bare `string` field. Only on a `string` field; it cannot be combined with `varchar=n`. |
 | `json` | A string that holds JSON text, checked whenever the model is written. Only on a `string` field; it cannot be combined with `varchar=n`, `text`, `pk`, `fk`, `unique` or `index`. See [JSON fields](#json-fields). |

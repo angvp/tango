@@ -233,3 +233,34 @@ func TestDiffSpansMultipleAppsIndependently(t *testing.T) {
 		t.Fatalf("apps present = %+v, want both users and posts", apps)
 	}
 }
+
+type diffComment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=diffUser"`
+}
+
+func TestDiffAddsAnIndexToAnExistingForeignKeyColumn(t *testing.T) {
+	state, _ := Replay([]Migration{
+		{Name: "0001", App: "posts", Up: []Step{
+			CreateTable{Table: "diff_comment", Columns: []Column{
+				{Name: "id", Type: "integer", PrimaryKey: true},
+				{Name: "post_id", Type: "integer", References: "diff_user"},
+			}},
+		}},
+	})
+
+	meta := registerDiffModel(t, "posts", diffComment{})
+	migrations := mustDiff(t, []model.ModelMeta{meta}, state)
+	if len(migrations) != 1 {
+		t.Fatalf("got %d migrations, want 1: a foreign key created before it was indexed by default gets its index", len(migrations))
+	}
+	var created []CreateIndex
+	for _, step := range migrations[0].Up {
+		if index, ok := step.(CreateIndex); ok {
+			created = append(created, index)
+		}
+	}
+	if len(created) != 1 || created[0].Column != "post_id" {
+		t.Fatalf("CreateIndex steps = %+v, want one on post_id", created)
+	}
+}
