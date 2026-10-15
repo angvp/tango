@@ -8,7 +8,7 @@ Canonical files: `config.go`, `serve.go`, `examples/board/main.go` and `examples
 
 - Build `Config` with `tango.LoadConfigFromEnv(tango.WithPortFromEnv())`: the address is `TANGO_ADDR`, else the `PORT` a hosting platform sets, else `:8000`.
 - Open the database from `TANGO_DB_DSN` with `tango.LoadDBConfigFromEnv()`; `tango.LoadEnvFile(".env")` loads local development values without overriding the real environment.
-- Serve with `tango.ServeContext` under `signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)` so Ctrl-C and `docker stop` shut down gracefully. `ServeContext` bounds slow request headers at 10 seconds; change it only with `tango.WithReadHeaderTimeout`.
+- Serve with `tango.ServeContext` under `signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)` so Ctrl-C and `docker stop` shut down gracefully. `ServeContext` bounds slow request headers at 10 seconds; change it only with `tango.WithReadHeaderTimeout`. It also keeps up to 32 idle database connections; set `tango.WithDBPool` to change the pool limits.
 - Keep the scaffold's production defaults: `RequestID`, `Recoverer`, `AccessLogger`, `MaxBodySize(1 << 20)` and `MiddlewareScopeAll`.
 - Before deploying, run the binary with `-check`, then `-migrate`.
 

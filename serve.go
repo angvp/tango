@@ -35,6 +35,8 @@ type serveConfig struct {
 	recorder          observability.Recorder
 	recorderEnabled   bool
 	readHeaderTimeout time.Duration
+	dbPool            DBPool
+	dbPoolSet         bool
 }
 
 // ServeOption configures ServeContext.
@@ -128,6 +130,10 @@ func ServeContext(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.
 	if sc.logger == nil {
 		return fmt.Errorf("tango: logger must not be nil")
 	}
+	if err := sc.dbPool.validate(); err != nil {
+		return err
+	}
+	applyDBPool(sqlDB, sc)
 
 	registry, err := BuildRegistry(config)
 	if err != nil {

@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Changed
+
+- **Database connections are reused under load.** `database/sql` keeps only 2 idle connections, so a server handling more than 2 requests at once closed and reopened a database connection on almost every request (measured: about 10,900 PostgreSQL sessions opened in one 15-second run of single-pet reads). `ServeContext` now raises the idle limit to 32 unless your app bounded the pool with `SetMaxOpenConns`. `tango.WithDBPool(tango.DBPool{...})` sets the limits explicitly; `tango.WithDBPool(tango.DBPool{})` restores the previous behavior. The number of open connections is unchanged (unlimited).
+
 ### Fixed
 
 - **The admin no longer comes up silently empty.** The admin builds its pages when it is installed, so a model registered by an app listed after `admin.New` never appeared in it. `tango check` (and `-check`) now fails and names those models, the `tango newproject` scaffold says to add apps above `admin.New`, and `tango newapp` repeats it when the project installs the admin. Move `admin.New` after your apps.
