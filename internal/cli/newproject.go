@@ -174,6 +174,7 @@ func renderProjectGo(includeAdmin bool) string {
 	if includeAdmin {
 		tangoImports = append(tangoImports, "github.com/angvp/tango/admin")
 		installedApps = `config.InstalledApps = []tango.App{
+		// Add your apps above admin.New: the admin lists only the models of apps installed before it.
 		admin.New(store),
 	}`
 	}

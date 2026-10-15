@@ -1,8 +1,10 @@
 package admin
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
@@ -35,7 +37,9 @@ func New(store *db.Store, opts ...Option) tango.App {
 		opt(&cfg)
 	}
 
-	return tango.NewApp("admin", func(registry *tango.Registry) error {
+	state := &installState{}
+	inner := tango.NewApp("admin", func(registry *tango.Registry) error {
+		state.registry = registry
 		registry.SetStore(store)
 
 		if err := registry.Models().Register(AdminUser{}); err != nil {
@@ -49,6 +53,10 @@ func New(store *db.Store, opts ...Option) tango.App {
 		sort.Slice(registrations, func(i, j int) bool {
 			return registrations[i].Model.Name < registrations[j].Model.Name
 		})
+		state.installed = make(map[string]struct{}, len(registrations))
+		for _, registration := range registrations {
+			state.installed[registration.Model.Name] = struct{}{}
+		}
 
 		nav := make([]navItem, len(registrations))
 		for i, registration := range registrations {
@@ -80,6 +88,43 @@ func New(store *db.Store, opts ...Option) tango.App {
 
 		return registry.Routes().Include("/", routes, tango.WithMiddleware(cfg.middleware...))
 	})
+	return checkedApp{App: inner, state: state}
+}
+
+// installState remembers what the admin saw when it was installed, so Checks
+// can tell whether models were registered with it afterwards.
+type installState struct {
+	registry  *tango.Registry
+	installed map[string]struct{}
+}
+
+// checkedApp is the admin app plus the install-order check.
+type checkedApp struct {
+	tango.App
+	state *installState
+}
+
+// Checks reports models registered with the admin after the admin was
+// installed. The admin builds its routes and navigation when installed, so
+// those models would be missing from it without any error.
+func (a checkedApp) Checks() []tango.AppCheck {
+	const description = "admin lists every model registered with it"
+	if a.state.registry == nil {
+		return nil
+	}
+	var late []string
+	for _, registration := range a.state.registry.Admin().Registrations() {
+		if _, ok := a.state.installed[registration.Model.Name]; !ok {
+			late = append(late, registration.Model.Name)
+		}
+	}
+	if len(late) == 0 {
+		return []tango.AppCheck{{Description: description}}
+	}
+	sort.Strings(late)
+	return []tango.AppCheck{{Description: description, Err: fmt.Errorf(
+		"%s registered after admin.New was installed and will not appear in the admin; list admin.New last in InstalledApps",
+		strings.Join(late, ", "))}}
 }
 
 func modelRoutes(modelPath string, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.URLs {

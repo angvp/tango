@@ -230,3 +230,22 @@ func TestNewAppSaysHowToInstallTheApp(t *testing.T) {
 		})
 	}
 }
+
+func TestNewAppTellsWhereToInstallAheadOfTheAdmin(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "project"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := "package project\n\nfunc init() { _ = admin.New(store) }\n"
+	if err := os.WriteFile(filepath.Join(dir, "project", "project.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr strings.Builder
+	if code := Run(context.Background(), []string{"newapp", "greetings"}, dir, &stdout, &stderr, nil); code != 0 {
+		t.Fatalf("exit code = %d: %s", code, stderr.String())
+	}
+	want := "Put it before admin.New(store): the admin lists only the models of apps installed ahead of it."
+	if !strings.Contains(stdout.String(), want) {
+		t.Fatalf("stdout = %q, want it to contain %q", stdout.String(), want)
+	}
+}

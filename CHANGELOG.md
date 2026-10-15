@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+
+- **The admin no longer comes up silently empty.** The admin builds its pages when it is installed, so a model registered by an app listed after `admin.New` never appeared in it. `tango check` (and `-check`) now fails and names those models, the `tango newproject` scaffold says to add apps above `admin.New`, and `tango newapp` repeats it when the project installs the admin. Move `admin.New` after your apps.
+
 ## [0.4.0] - 2026-10-10
 
 ### Added

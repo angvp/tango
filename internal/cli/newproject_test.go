@@ -93,6 +93,7 @@ func TestNewProjectCreatesRunnableSQLiteWiredProjectWithAdmin(t *testing.T) {
 		`func Config(store *db.Store) tango.Config {`,
 		`config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())`,
 		`admin.New(store)`,
+		`// Add your apps above admin.New: the admin lists only the models of apps installed before it.`,
 		`tango.MaxBodySize(1 << 20)`,
 		`config.MiddlewareScope = tango.MiddlewareScopeAll`,
 		`tango.RequestID()`,

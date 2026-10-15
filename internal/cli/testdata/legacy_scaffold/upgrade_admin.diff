@@ -43,7 +43,7 @@ new file mode 100644
 index 0000000..b2dc89a
 --- /dev/null
 +++ b/project/project.go
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,37 @@
 +package project
 +
 +import (
@@ -63,6 +63,7 @@ index 0000000..b2dc89a
 +	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
 +	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
 +	config.InstalledApps = []tango.App{
++		// Add your apps above admin.New: the admin lists only the models of apps installed before it.
 +		admin.New(store),
 +	}
 +	config.Middleware = []tango.Middleware{

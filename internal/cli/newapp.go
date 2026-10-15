@@ -61,7 +61,12 @@ func installHint(dir, name string) string {
 	if _, err := os.Stat(filepath.Join(dir, "project", "project.go")); err == nil {
 		file = "project/project.go"
 	}
-	return fmt.Sprintf("Install it in %s: %s and add %s.App{} to config.InstalledApps.", file, importPart, appPackageName(name))
+	hint := fmt.Sprintf("Install it in %s: %s and add %s.App{} to config.InstalledApps.", file, importPart, appPackageName(name))
+	// The admin lists only the models of apps installed before it.
+	if source, err := os.ReadFile(filepath.Join(dir, file)); err == nil && strings.Contains(string(source), "admin.New(") {
+		hint += " Put it before admin.New(store): the admin lists only the models of apps installed ahead of it."
+	}
+	return hint
 }
 
 // modulePath returns the module path dir's go.mod declares, or "" when
