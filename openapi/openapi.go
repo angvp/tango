@@ -43,13 +43,32 @@ func (o Options) withDefaults() Options {
 // route with your own middleware if the document should not be public.
 func New(opts Options) tango.App {
 	opts = opts.withDefaults()
-	return tango.NewApp("openapi", func(registry *tango.Registry) error {
-		docs := &served{registry: registry, opts: opts}
+	docs := &served{opts: opts}
+	app := tango.NewApp("openapi", func(registry *tango.Registry) error {
+		docs.registry = registry
 		return registry.Routes().Include("", []tango.Route{
 			tango.Path(http.MethodGet, opts.Path, docs.serveJSON,
 				tango.Name("openapi.json"), tango.Doc(tango.RouteDoc{Hidden: true})),
 		})
 	})
+	return checkedApp{App: app, docs: docs}
+}
+
+// checkedApp adds the document check to the app, so `tango check` reports a
+// route whose documented types cannot be described.
+type checkedApp struct {
+	tango.App
+	docs *served
+}
+
+// Checks builds the document the way a request would and reports why it
+// cannot be built.
+func (a checkedApp) Checks() []tango.AppCheck {
+	if a.docs.registry == nil {
+		return nil
+	}
+	_, err := Document(a.docs.registry.Routes().Described(), a.docs.opts)
+	return []tango.AppCheck{{Description: "every documented route can be described in the OpenAPI document", Err: err}}
 }
 
 // served builds the document on first use: routes are fixed once the server

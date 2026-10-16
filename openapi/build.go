@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/angvp/tango"
@@ -29,6 +30,7 @@ func Document(routes []tango.DescribedRoute, opts Options) (map[string]any, erro
 	opts = opts.withDefaults()
 	paths := map[string]map[string]any{}
 	usedIDs := map[string]bool{}
+	known := newSchemas()
 	tags := map[string]bool{}
 	for _, route := range routes {
 		if skip(route, opts) {
@@ -42,7 +44,10 @@ func Document(routes []tango.DescribedRoute, opts Options) (map[string]any, erro
 		if err != nil {
 			return nil, fmt.Errorf("openapi: %s %s: %w", route.Method, route.Pattern, err)
 		}
-		operation := newOperation(route, params, usedIDs)
+		operation, err := newOperation(route, params, usedIDs, known)
+		if err != nil {
+			return nil, fmt.Errorf("openapi: %s %s: %w", route.Method, route.Pattern, err)
+		}
 		for _, tag := range operation["tags"].([]string) {
 			tags[tag] = true
 		}
@@ -71,6 +76,9 @@ func Document(routes []tango.DescribedRoute, opts Options) (map[string]any, erro
 		}
 		doc["tags"] = list
 	}
+	if len(known.components) > 0 {
+		doc["components"] = map[string]any{"schemas": known.components}
+	}
 	if len(opts.Servers) > 0 {
 		servers := make([]map[string]any, len(opts.Servers))
 		for i, url := range opts.Servers {
@@ -93,7 +101,7 @@ func skip(route tango.DescribedRoute, opts Options) bool {
 	return false
 }
 
-func newOperation(route tango.DescribedRoute, params []pathParam, usedIDs map[string]bool) map[string]any {
+func newOperation(route tango.DescribedRoute, params []pathParam, usedIDs map[string]bool, known *schemas) (map[string]any, error) {
 	op := map[string]any{
 		"operationId": operationID(route, usedIDs),
 		"responses":   map[string]any{"default": map[string]any{"description": "Response"}},
@@ -116,18 +124,73 @@ func newOperation(route tango.DescribedRoute, params []pathParam, usedIDs map[st
 		tags = append(tags, route.Prefix)
 	}
 	op["tags"] = tags
-	if len(params) > 0 {
-		list := make([]map[string]any, len(params))
-		for i, p := range params {
-			param := map[string]any{"name": p.name, "in": "path", "required": true, "schema": map[string]any{"type": "string"}}
-			if p.wildcard {
-				param["description"] = "The rest of the path."
-			}
-			list[i] = param
+	parameters := make([]map[string]any, 0, len(params))
+	for _, p := range params {
+		param := map[string]any{"name": p.name, "in": "path", "required": true, "schema": map[string]any{"type": "string"}}
+		if p.wildcard {
+			param["description"] = "The rest of the path."
 		}
-		op["parameters"] = list
+		parameters = append(parameters, param)
 	}
-	return op
+	if route.Doc != nil {
+		if err := describeBodies(op, route, &parameters, known); err != nil {
+			return nil, err
+		}
+	}
+	if len(parameters) > 0 {
+		op["parameters"] = parameters
+	}
+	return op, nil
+}
+
+// describeBodies adds what a RouteDoc says about query parameters, the request
+// body and the responses.
+func describeBodies(op map[string]any, route tango.DescribedRoute, parameters *[]map[string]any, known *schemas) error {
+	doc := route.Doc
+	if doc.Query != nil {
+		query, err := queryParameters(doc.Query, known)
+		if err != nil {
+			return fmt.Errorf("Query: %w", err)
+		}
+		*parameters = append(*parameters, query...)
+	}
+	if doc.Body != nil {
+		switch strings.ToUpper(route.Method) {
+		case http.MethodGet, http.MethodHead, http.MethodTrace:
+			return fmt.Errorf("Body: a %s request has no body", route.Method)
+		}
+		schema, err := known.of(doc.Body)
+		if err != nil {
+			return fmt.Errorf("Body: %w", err)
+		}
+		op["requestBody"] = map[string]any{
+			"required": true,
+			"content":  map[string]any{"application/json": map[string]any{"schema": schema}},
+		}
+	}
+	if len(doc.Responses) == 0 {
+		return nil
+	}
+	responses := map[string]any{}
+	for status, sample := range doc.Responses {
+		if status < 100 || status > 599 {
+			return fmt.Errorf("Responses: %d is not an HTTP status", status)
+		}
+		response := map[string]any{"description": http.StatusText(status)}
+		if response["description"] == "" {
+			response["description"] = "Response"
+		}
+		if sample != nil {
+			schema, err := known.of(sample)
+			if err != nil {
+				return fmt.Errorf("Responses[%d]: %w", status, err)
+			}
+			response["content"] = map[string]any{"application/json": map[string]any{"schema": schema}}
+		}
+		responses[strconv.Itoa(status)] = response
+	}
+	op["responses"] = responses
+	return nil
 }
 
 // operationID is the route's name when it has one, otherwise the method and
