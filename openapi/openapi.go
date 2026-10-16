@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -59,6 +60,19 @@ func New(opts Options) tango.App {
 type checkedApp struct {
 	tango.App
 	docs *served
+}
+
+// OpenAPI returns the document as JSON, for `tango openapi`. The registry must
+// have run registration.
+func (a checkedApp) OpenAPI() ([]byte, error) {
+	if a.docs.registry == nil {
+		return nil, fmt.Errorf("openapi: the app has not been registered")
+	}
+	body, err := a.docs.document()
+	if err != nil {
+		return nil, err
+	}
+	return append(append([]byte(nil), body...), '\n'), nil
 }
 
 // Checks builds the document the way a request would and reports why it

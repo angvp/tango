@@ -74,6 +74,8 @@ func Run(ctx context.Context, args []string, dir string, stdout io.Writer, stder
 			return runGo(ctx, runner, dir, stdout, stderr, append([]string{"run", ".", "-migrate", "-down"}, args[2:]...))
 		}
 		return runGo(ctx, runner, dir, stdout, stderr, append([]string{"run", ".", "-migrate"}, args[1:]...))
+	case "openapi":
+		return openAPICommand(ctx, runner, dir, args[1:], stdout, stderr)
 	case "admin":
 		return adminCommand(ctx, runner, dir, args[1:], stdout, stderr)
 	default:
@@ -105,6 +107,9 @@ func printUsage(w io.Writer) {
                            Generate a migration from current model metadata;
                            --rename keeps a renamed field's or model's data,
                            and each model or field it drops needs its own --allow-drop
+  tango openapi [-o <file>]
+                           Print the app's OpenAPI document (needs openapi.New in
+                           InstalledApps); -o writes it to a file
   tango migrate            Apply pending migrations (go run . -migrate)
   tango migrate down       Roll back the last applied migration
   tango newproject [--dialect=sqlite|postgres] [--no-admin] <name>

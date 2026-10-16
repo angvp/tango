@@ -198,6 +198,7 @@ func DispatchFlags(config Config, sqlDB *sql.DB, dialect db.Dialect, migrations 
 	check := flags.Bool("check", false, "validate app registration and exit")
 	dumpModels := flags.Bool("tango-dump-models", false, "print registered models as JSON and exit")
 	status := flags.Bool("tango-status", false, "print project status as JSON and exit")
+	openAPI := flags.Bool("tango-openapi", false, "print the OpenAPI document of the installed openapi app and exit")
 	migrateFlag := flags.Bool("migrate", false, "apply pending migrations and exit")
 	down := flags.Bool("down", false, "roll back the last applied migration (with -migrate)")
 	if err := flags.Parse(os.Args[1:]); err != nil {
@@ -211,6 +212,13 @@ func DispatchFlags(config Config, sqlDB *sql.DB, dialect db.Dialect, migrations 
 			return true, err
 		}
 		return true, json.NewEncoder(os.Stdout).Encode(models)
+	case *openAPI:
+		document, err := DumpOpenAPI(config)
+		if err != nil {
+			return true, err
+		}
+		_, err = os.Stdout.Write(document)
+		return true, err
 	case *check:
 		if err := Check(config); err != nil {
 			return true, fmt.Errorf("check failed: %w", err)
@@ -307,6 +315,36 @@ func DumpModels(config Config) ([]migration.Model, error) {
 	}
 
 	return migration.ModelsFromMeta(registry.Models().All()), nil
+}
+
+// OpenAPIProvider is implemented by an installed app that can produce the
+// project's OpenAPI document; the openapi package's app does. It is the
+// capability behind `tango openapi`.
+type OpenAPIProvider interface {
+	OpenAPI() ([]byte, error)
+}
+
+// ErrNoOpenAPI is returned by DumpOpenAPI when no installed app provides an
+// OpenAPI document.
+var ErrNoOpenAPI = errors.New("tango: no installed app provides an OpenAPI document; add openapi.New to InstalledApps")
+
+// DumpOpenAPI boots config's registry and returns the OpenAPI document of the
+// first installed app that implements OpenAPIProvider. It is the convention
+// behind the "-tango-openapi" flag.
+func DumpOpenAPI(config Config) ([]byte, error) {
+	registry, err := BuildRegistry(config)
+	if err != nil {
+		return nil, err
+	}
+	if err := registry.RunRegistration(); err != nil {
+		return nil, err
+	}
+	for _, app := range config.InstalledApps {
+		if provider, ok := app.(OpenAPIProvider); ok {
+			return provider.OpenAPI()
+		}
+	}
+	return nil, ErrNoOpenAPI
 }
 
 // ProjectStatus is a snapshot of a project's registration, database, and
