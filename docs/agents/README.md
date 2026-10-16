@@ -21,6 +21,7 @@ Read in this order:
 - Relationships: `relationships.md`.
 - Reusable package: `reusable-apps.md`.
 - Request cross-cutting concern: `middleware.md`; use `ratelimit.md` for quotas and `observability.md` for logs/metrics.
+- Publishing or exporting an OpenAPI document or Swagger UI for the routes: `openapi.md`.
 - Locale-aware text: `i18n.md`.
 - Live rooms/WebSockets: `realtime.md`; pair with `application-lifecycle.md` for graceful shutdown.
 - Recurring work: `jobs.md`; pair with `application-lifecycle.md` because Jobs run only through `ServeContext`.

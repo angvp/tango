@@ -43,7 +43,7 @@ new file mode 100644
 index 0000000..b2dc89a
 --- /dev/null
 +++ b/project/project.go
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,38 @@
 +package project
 +
 +import (
@@ -64,6 +64,7 @@ index 0000000..b2dc89a
 +	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
 +	config.InstalledApps = []tango.App{
 +		// Add your apps above admin.New: the admin lists only the models of apps installed before it.
++		// To publish an OpenAPI document, add openapi.New(openapi.Options{Title: "..."}) above it too (docs/guides/openapi.md).
 +		admin.New(store),
 +	}
 +	config.Middleware = []tango.Middleware{

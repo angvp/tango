@@ -27,6 +27,7 @@
   - `-check` — validate app registration and route compilation, then exit (see [app checks](app-checks.md)).
   - `-tango-dump-models` — print registered models as JSON, then exit. Used internally by `tango makemigrations`.
   - `-tango-status` — print registration/database/migration status as JSON, then exit. Used by `tango tui`.
+  - `-tango-openapi` — print the OpenAPI document of the installed `openapi` app, then exit. Used by `tango openapi`.
   - `-migrate` / `-migrate -down` — apply or roll back migrations, then exit.
   - `-tango-admin-create` / `-resetpassword` / `-deactivate` — manage Admin accounts (behind `tango admin create/resetpassword/deactivate`), then exit.
   - No flag — start the HTTP server.

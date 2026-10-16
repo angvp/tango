@@ -4,6 +4,12 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- **OpenAPI documents.** `openapi.New(openapi.Options{...})` in `InstalledApps` serves an OpenAPI 3.1 document of every included route at `/openapi.json` (opt-in: nothing is served otherwise). Each route is listed with its method, path, path parameters, name and a tag from its prefix. `tango.Doc(tango.RouteDoc{...})` adds a summary, a request body, query parameters, responses and a bearer requirement, with schemas reflected from Go types (`encoding/json` tags, nested and recursive types, `varchar=n` as `maxLength`); a type can name its schema with `SchemaName()`. `tango check` fails and names a route whose documented types cannot be described. The `accounts` JSON endpoints document themselves; the admin's pages and the cookie-flow pages are hidden from the document. `RouteRegistry.Described` and `tango.DescribedRoute` expose the route table to tools. `tango newproject` now leaves a comment in `project/project.go` saying where to add it. See [OpenAPI documentation](docs/guides/openapi.md).
+- **`tango openapi [-o file]`** prints or writes the document (the new `-tango-openapi` app-side flag, handled by `DispatchFlags`; `DumpOpenAPI`, `OpenAPIProvider` and `ErrNoOpenAPI`). The output is the same bytes on every run, and a failed run leaves an existing file untouched.
+- **Swagger UI.** `openapi.Options{UI: swaggerui.New()}` adds a browsable page at `/docs/` from Swagger UI 5.17.14 embedded in the binary (Apache-2.0; no network request). It is the separate package `openapi/swaggerui` and adds about 1.7 MB to a binary that imports it.
+
 ### Changed
 
 - **Database connections are reused under load.** `database/sql` keeps only 2 idle connections, so a server handling more than 2 requests at once closed and reopened a database connection on almost every request (measured: about 10,900 PostgreSQL sessions opened in one 15-second run of single-pet reads). `ServeContext` now raises the idle limit to 32 unless your app bounded the pool with `SetMaxOpenConns`. `tango.WithDBPool(tango.DBPool{...})` sets the limits explicitly; `tango.WithDBPool(tango.DBPool{})` restores the previous behavior. The number of open connections is unchanged (unlimited).

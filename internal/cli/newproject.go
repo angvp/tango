@@ -170,11 +170,14 @@ func adminURL(addr string) string {
 // database, so each process keeps control of its own lifecycle.
 func renderProjectGo(includeAdmin bool) string {
 	tangoImports := []string{"github.com/angvp/tango", "github.com/angvp/tango/db"}
-	installedApps := "config.InstalledApps = []tango.App{}"
+	installedApps := `config.InstalledApps = []tango.App{
+		// To publish an OpenAPI document, add openapi.New(openapi.Options{Title: "..."}) here (docs/guides/openapi.md).
+	}`
 	if includeAdmin {
 		tangoImports = append(tangoImports, "github.com/angvp/tango/admin")
 		installedApps = `config.InstalledApps = []tango.App{
 		// Add your apps above admin.New: the admin lists only the models of apps installed before it.
+		// To publish an OpenAPI document, add openapi.New(openapi.Options{Title: "..."}) above it too (docs/guides/openapi.md).
 		admin.New(store),
 	}`
 	}

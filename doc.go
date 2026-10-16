@@ -7,7 +7,7 @@
 // components to a [Registry] when the project starts. A project's main
 // function opens the database (see [LoadDBConfigFromEnv]), lets
 // [DispatchFlags] handle the app-side flags the tango CLI relies on
-// (-check, -migrate, -tango-dump-models, -tango-status and the admin
+// (-check, -migrate, -tango-dump-models, -tango-status, -tango-openapi and the admin
 // account flags), and otherwise serves HTTP with [ServeContext]. Views are
 // plain functions of a [Context].
 //

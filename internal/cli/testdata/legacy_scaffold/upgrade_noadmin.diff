@@ -45,7 +45,7 @@ new file mode 100644
 index 0000000..d6b02b9
 --- /dev/null
 +++ b/project/project.go
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,35 @@
 +package project
 +
 +import (
@@ -63,7 +63,9 @@ index 0000000..d6b02b9
 +func Config(store *db.Store) tango.Config {
 +	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
 +	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
-+	config.InstalledApps = []tango.App{}
++	config.InstalledApps = []tango.App{
++		// To publish an OpenAPI document, add openapi.New(openapi.Options{Title: "..."}) here (docs/guides/openapi.md).
++	}
 +	config.Middleware = []tango.Middleware{
 +		tango.RequestID(),
 +		tango.Recoverer(),
