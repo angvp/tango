@@ -108,7 +108,7 @@ func printUsage(w io.Writer) {
                            --rename keeps a renamed field's or model's data,
                            and each model or field it drops needs its own --allow-drop
   tango openapi [-o <file>]
-                           Print the app's OpenAPI document (needs openapi.New in
+                           Print the app's OpenAPI document (needs openapi.New or Dev in
                            InstalledApps); -o writes it to a file
   tango migrate            Apply pending migrations (go run . -migrate)
   tango migrate down       Roll back the last applied migration

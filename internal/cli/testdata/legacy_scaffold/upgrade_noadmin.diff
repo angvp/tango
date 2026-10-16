@@ -64,7 +64,7 @@ index 0000000..d6b02b9
 +	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
 +	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
 +	config.InstalledApps = []tango.App{
-+		// To publish an OpenAPI document, add openapi.New(openapi.Options{Title: "..."}) here (docs/guides/openapi.md).
++		// To publish an OpenAPI document, add openapi.Dev(openapi.Options{Title: "..."}) here, served when TANGO_OPENAPI=1 (docs/guides/openapi.md).
 +	}
 +	config.Middleware = []tango.Middleware{
 +		tango.RequestID(),

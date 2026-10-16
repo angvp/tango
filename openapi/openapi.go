@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 
 	"github.com/angvp/tango"
@@ -58,10 +60,30 @@ func (o Options) withDefaults() Options {
 // registry at Options.Path. Nothing is served unless it is installed; wrap the
 // route with your own middleware if the document should not be public.
 func New(opts Options) tango.App {
+	return build(opts, true)
+}
+
+// EnvVar is the environment variable Dev reads. Set it to a true value
+// ("1", "true") to serve the document and the UI.
+const EnvVar = "TANGO_OPENAPI"
+
+// Dev is New for development: it serves the document and the UI only when the
+// TANGO_OPENAPI environment variable is true, so a production process that
+// does not set it exposes neither. `tango openapi` and `tango check` work
+// either way, because they read the route table and serve nothing.
+func Dev(opts Options) tango.App {
+	on, _ := strconv.ParseBool(os.Getenv(EnvVar))
+	return build(opts, on)
+}
+
+func build(opts Options, serve bool) tango.App {
 	opts = opts.withDefaults()
 	docs := &served{opts: opts}
 	app := tango.NewApp("openapi", func(registry *tango.Registry) error {
 		docs.registry = registry
+		if !serve {
+			return nil
+		}
 		routes := []tango.Route{
 			tango.Path(http.MethodGet, opts.Path, docs.serveJSON,
 				tango.Name("openapi.json"), tango.Doc(tango.RouteDoc{Hidden: true})),

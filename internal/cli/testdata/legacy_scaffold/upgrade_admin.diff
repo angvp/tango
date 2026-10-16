@@ -64,7 +64,7 @@ index 0000000..b2dc89a
 +	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
 +	config.InstalledApps = []tango.App{
 +		// Add your apps above admin.New: the admin lists only the models of apps installed before it.
-+		// To publish an OpenAPI document, add openapi.New(openapi.Options{Title: "..."}) above it too (docs/guides/openapi.md).
++		// To publish an OpenAPI document, add openapi.Dev(openapi.Options{Title: "..."}) above it too, served when TANGO_OPENAPI=1 (docs/guides/openapi.md).
 +		admin.New(store),
 +	}
 +	config.Middleware = []tango.Middleware{

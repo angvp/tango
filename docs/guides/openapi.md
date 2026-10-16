@@ -27,7 +27,17 @@ config.InstalledApps = []tango.App{
 
 `/openapi.json` now answers with the document, and `/docs/` with Swagger UI. `Options` also has `Description`, `Servers`, `Path` (default `/openapi.json`), `UIPath` (default `/docs/`) and `ExcludePrefixes`.
 
-The two routes are ordinary routes, so global `Config.Middleware` applies to them like any other. There is no way to put different middleware on just these routes. If the document should not be public, leave `openapi.New` out of the production `InstalledApps` and publish the output of `tango openapi` instead.
+### Only in development
+
+`openapi.Dev` takes the same `Options` but serves the document and the UI only when the `TANGO_OPENAPI` environment variable is true (`1`, `true`). Unset, or any other value, and both paths answer 404, so a production process that does not set it exposes nothing.
+
+```sh
+TANGO_OPENAPI=1 go run . runserver
+```
+
+`tango openapi` and `tango check` work whether or not the variable is set, because they read the route table and serve nothing. `swaggerui` is still linked into the binary (about 1.7 MB) when you import it.
+
+The two routes are ordinary routes, so global `Config.Middleware` applies to them like any other. There is no way to put different middleware on just these routes. If the document should not be public, use `openapi.Dev` (above), or leave the app out of the production `InstalledApps`, and publish the output of `tango openapi` instead.
 
 ## What is listed without any work
 
@@ -78,7 +88,7 @@ tango openapi                 # print it
 tango openapi -o openapi.json # write it; a failed run leaves an existing file alone
 ```
 
-The project's own binary produces it (`go run . -tango-openapi`), and the output is the same bytes on every run, so it can be committed and diffed in CI, or fed to a client generator. It needs `openapi.New` in `InstalledApps`; without it the command says so.
+The project's own binary produces it (`go run . -tango-openapi`), and the output is the same bytes on every run, so it can be committed and diffed in CI, or fed to a client generator. It needs `openapi.New` or `openapi.Dev` in `InstalledApps`; without it the command says so.
 
 ## Swagger UI
 

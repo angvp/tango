@@ -52,7 +52,7 @@ See [structured logging and observability](guides/observability.md).
 
 | Symbol | What it's for |
 |---|---|
-| `func New(Options) tango.App`, `type Options` | An opt-in app that serves the OpenAPI 3.1 document of every included route at `Options.Path` (default `/openapi.json`), and an optional UI at `Options.UIPath` (default `/docs/`). Its `Checks` fail `tango check` for a route that cannot be described. |
+| `func New(Options) tango.App`, `func Dev(Options) tango.App`, `const EnvVar`, `type Options` | An opt-in app that serves the OpenAPI 3.1 document of every included route at `Options.Path` (default `/openapi.json`), and an optional UI at `Options.UIPath` (default `/docs/`). `Dev` serves them only when `TANGO_OPENAPI` is true. Its `Checks` fail `tango check` for a route that cannot be described. |
 | `func Document([]tango.DescribedRoute, Options) (map[string]any, error)`, `const Version` | The document as a value; deterministic. |
 | `type UI interface{ Routes(base, specPath string) []tango.Route }` | A page that renders the document. |
 | `swaggerui.New()` (`github.com/angvp/tango/openapi/swaggerui`) | Swagger UI 5.17.14 embedded in the binary; no network request. About 1.7 MB. |
