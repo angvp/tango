@@ -76,8 +76,15 @@ func Document(routes []tango.DescribedRoute, opts Options) (map[string]any, erro
 		}
 		doc["tags"] = list
 	}
+	components := map[string]any{}
 	if len(known.components) > 0 {
-		doc["components"] = map[string]any{"schemas": known.components}
+		components["schemas"] = known.components
+	}
+	if usesBearer(routes, opts) {
+		components["securitySchemes"] = map[string]any{"bearerAuth": map[string]any{"type": "http", "scheme": "bearer"}}
+	}
+	if len(components) > 0 {
+		doc["components"] = components
 	}
 	if len(opts.Servers) > 0 {
 		servers := make([]map[string]any, len(opts.Servers))
@@ -114,6 +121,9 @@ func newOperation(route tango.DescribedRoute, params []pathParam, usedIDs map[st
 		}
 		if doc.Description != "" {
 			op["description"] = doc.Description
+		}
+		if doc.Bearer {
+			op["security"] = []map[string][]string{{"bearerAuth": {}}}
 		}
 		if doc.Deprecated {
 			op["deprecated"] = true
@@ -223,4 +233,13 @@ func identifier(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "_")
+}
+
+func usesBearer(routes []tango.DescribedRoute, opts Options) bool {
+	for _, route := range routes {
+		if route.Doc != nil && route.Doc.Bearer && !skip(route, opts) {
+			return true
+		}
+	}
+	return false
 }

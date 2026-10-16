@@ -128,13 +128,13 @@ func (m *mailer) routes() tango.URLs {
 	verify := m.tokenLinkView(m.verifyLink())
 	resend := resendVerificationView(m, m.resendLimiter)
 	return tango.URLs{
-		tango.Path(http.MethodGet, "/accounts/password-reset/", reset),
-		tango.Path(http.MethodPost, "/accounts/password-reset/", reset),
-		tango.Path(http.MethodGet, "/accounts/password-reset/confirm/", confirm),
-		tango.Path(http.MethodPost, "/accounts/password-reset/confirm/", confirm),
-		tango.Path(http.MethodGet, "/accounts/verify/", verify),
-		tango.Path(http.MethodPost, "/accounts/verify/", verify),
-		tango.Path(http.MethodPost, "/accounts/verify/resend/", resend),
+		tango.Path(http.MethodGet, "/accounts/password-reset/", reset, hiddenPage),
+		tango.Path(http.MethodPost, "/accounts/password-reset/", reset, hiddenPage),
+		tango.Path(http.MethodGet, "/accounts/password-reset/confirm/", confirm, hiddenPage),
+		tango.Path(http.MethodPost, "/accounts/password-reset/confirm/", confirm, hiddenPage),
+		tango.Path(http.MethodGet, "/accounts/verify/", verify, hiddenPage),
+		tango.Path(http.MethodPost, "/accounts/verify/", verify, hiddenPage),
+		tango.Path(http.MethodPost, "/accounts/verify/resend/", resend, hiddenPage),
 	}
 }
 

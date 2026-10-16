@@ -70,15 +70,15 @@ func New(store *db.Store, opts ...Option) tango.App {
 		clientKey := security.ClientKey(cfg.trustedProxies)
 		index := requireSession(store, indexView(nav, cfg.branding))
 		routes := tango.URLs{
-			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index")),
+			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index"), hiddenPage),
 			// Also match "/admin" (no trailing slash) directly, rather than
 			// relying on a redirect: chi treats the two as distinct routes,
 			// and Include's own slash-normalization only applies to prefixes
 			// passed to Include, not to a literal pattern like this one.
-			tango.Path(http.MethodGet, "/admin", index),
-			tango.Path(http.MethodGet, "/admin/login/", loginView(store, limiter, clientKey), tango.Name("login")),
-			tango.Path(http.MethodPost, "/admin/login/", loginView(store, limiter, clientKey)),
-			tango.Path(http.MethodPost, "/admin/logout/", logoutView(store), tango.Name("logout")),
+			tango.Path(http.MethodGet, "/admin", index, hiddenPage),
+			tango.Path(http.MethodGet, "/admin/login/", loginView(store, limiter, clientKey), tango.Name("login"), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/login/", loginView(store, limiter, clientKey), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/logout/", logoutView(store), tango.Name("logout"), hiddenPage),
 		}
 		routes = append(routes, assetRoutes()...)
 		for _, registration := range registrations {
@@ -134,13 +134,13 @@ func modelRoutes(modelPath string, store *db.Store, models *model.Registry, admi
 	del := requireSession(store, deleteView(store, registration, nav, brand))
 
 	urls := tango.URLs{
-		tango.Path(http.MethodGet, modelPath, list),
-		tango.Path(http.MethodGet, modelPath+"new/", create),
-		tango.Path(http.MethodPost, modelPath+"new/", create),
-		tango.Path(http.MethodGet, modelPath+"{pk}/", edit),
-		tango.Path(http.MethodPost, modelPath+"{pk}/", edit),
-		tango.Path(http.MethodGet, modelPath+"{pk}/delete/", del),
-		tango.Path(http.MethodPost, modelPath+"{pk}/delete/", del),
+		tango.Path(http.MethodGet, modelPath, list, hiddenPage),
+		tango.Path(http.MethodGet, modelPath+"new/", create, hiddenPage),
+		tango.Path(http.MethodPost, modelPath+"new/", create, hiddenPage),
+		tango.Path(http.MethodGet, modelPath+"{pk}/", edit, hiddenPage),
+		tango.Path(http.MethodPost, modelPath+"{pk}/", edit, hiddenPage),
+		tango.Path(http.MethodGet, modelPath+"{pk}/delete/", del, hiddenPage),
+		tango.Path(http.MethodPost, modelPath+"{pk}/delete/", del, hiddenPage),
 	}
 	return append(urls, previewRoutes(modelPath, store, registration)...)
 }

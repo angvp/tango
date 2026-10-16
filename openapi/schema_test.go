@@ -186,3 +186,20 @@ func TestUnsupportedDocsFailCheckNamingTheRoute(t *testing.T) {
 		})
 	}
 }
+
+type namedBody struct {
+	N int `json:"n"`
+}
+
+func (namedBody) SchemaName() string { return "Named body" }
+
+func TestSchemaNameAndBearerSecurity(t *testing.T) {
+	doc := documentOf(t, tango.Path("POST", "/", view, tango.Doc(tango.RouteDoc{
+		Bearer: true, Body: namedBody{}, Responses: map[int]any{200: &namedBody{}},
+	})))
+	equal(t, at(t, doc, "paths", "/pets/", "post", "requestBody", "content", "application/json", "schema"),
+		map[string]any{"$ref": "#/components/schemas/Named_body"})
+	equal(t, at(t, doc, "paths", "/pets/", "post", "security"), []any{map[string]any{"bearerAuth": []any{}}})
+	equal(t, at(t, doc, "components", "securitySchemes"),
+		map[string]any{"bearerAuth": map[string]any{"type": "http", "scheme": "bearer"}})
+}

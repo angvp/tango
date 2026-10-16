@@ -147,6 +147,9 @@ func (s *schemas) structRef(t reflect.Type) (map[string]any, error) {
 // already took that name.
 func (s *schemas) componentName(t reflect.Type) string {
 	name := t.Name()
+	if named, ok := reflect.Zero(t).Interface().(interface{ SchemaName() string }); ok && named.SchemaName() != "" {
+		name = identifier(named.SchemaName())
+	}
 	if _, taken := s.components[name]; !taken {
 		return name
 	}

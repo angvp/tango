@@ -32,11 +32,13 @@ func (j *jsonAPI) routes() tango.URLs {
 		"verify/":                 j.verify,
 		"verify/resend/":          j.resend,
 	}
+	docs := jsonDocs()
 	var routes tango.URLs
 	for path, endpoint := range endpoints {
-		routes = append(routes, tango.Path(http.MethodPost, jsonAPIPrefix+path, j.view(endpoint)))
+		routes = append(routes, tango.Path(http.MethodPost, jsonAPIPrefix+path, j.view(endpoint), tango.Doc(docs[path])))
 		for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodPatch, http.MethodDelete} {
-			routes = append(routes, tango.Path(method, jsonAPIPrefix+path, j.view(methodNotAllowedJSON)))
+			routes = append(routes, tango.Path(method, jsonAPIPrefix+path, j.view(methodNotAllowedJSON),
+				tango.Doc(tango.RouteDoc{Hidden: true})))
 		}
 	}
 	return routes

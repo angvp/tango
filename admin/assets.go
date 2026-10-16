@@ -54,7 +54,7 @@ var widgetsAsset = newStaticAsset("assets/widgets.js", "text/javascript; charset
 // require a session.
 func assetRoutes() tango.URLs {
 	return tango.URLs{
-		tango.Path(http.MethodGet, widgetsAsset.URL, serveStaticAsset(widgetsAsset)),
+		tango.Path(http.MethodGet, widgetsAsset.URL, serveStaticAsset(widgetsAsset), hiddenPage),
 	}
 }
 

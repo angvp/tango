@@ -24,6 +24,8 @@ type RouteDoc struct {
 	Query any
 	// Responses maps an HTTP status to the response body's type.
 	Responses map[int]any
+	// Bearer marks the route as needing an `Authorization: Bearer` token.
+	Bearer bool
 	// Deprecated marks the route as deprecated.
 	Deprecated bool
 	// Hidden leaves the route out of generated documentation.
