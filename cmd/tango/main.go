@@ -7,6 +7,9 @@ import (
 	"github.com/angvp/tango/internal/cli"
 )
 
+// exit is os.Exit, a variable so a test can observe the exit code.
+var exit = os.Exit
+
 func main() {
-	os.Exit(cli.Run(context.Background(), os.Args[1:], ".", os.Stdout, os.Stderr, cli.ExecRunner{}))
+	exit(cli.Run(context.Background(), os.Args[1:], ".", os.Stdout, os.Stderr, cli.ExecRunner{}))
 }

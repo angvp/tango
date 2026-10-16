@@ -694,6 +694,15 @@ func TestDispatchFlagsReportsFailures(t *testing.T) {
 			},
 		},
 		{
+			name: "openapi reports a project without the openapi app",
+			args: []string{"tango", "-tango-openapi"},
+			check: func(t *testing.T, err error) {
+				if !errors.Is(err, tango.ErrNoOpenAPI) {
+					t.Fatalf("err = %v, want ErrNoOpenAPI", err)
+				}
+			},
+		},
+		{
 			name: "migrate down reports no applied migrations",
 			args: []string{"tango", "-migrate", "-down"},
 			db: func(t *testing.T) *sql.DB {

@@ -163,3 +163,12 @@ func TestServersDoNotLinkTheInterpreter(t *testing.T) {
 		}
 	}
 }
+
+func TestRunUsesTheProcessStreams(t *testing.T) {
+	// --help ends the session before any evaluation, so it needs no input and
+	// writes only to the process's standard output.
+	code := Run(context.Background(), tango.Config{}, testdb.Store(t), []string{"--help"}, Options{})
+	if code != 0 {
+		t.Fatalf("Run --help returned %d, want 0", code)
+	}
+}

@@ -253,3 +253,29 @@ func TestDispatchFlagsMigrateNamesEveryAppliedMigration(t *testing.T) {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }
+
+type openAPIApp struct {
+	App
+	document string
+}
+
+func (a openAPIApp) OpenAPI() ([]byte, error) { return []byte(a.document), nil }
+
+func TestDispatchFlagsOpenAPIPrintsTheProvidersDocument(t *testing.T) {
+	withArgs(t, "-tango-openapi")
+	config := Config{InstalledApps: []App{openAPIApp{App: NewApp("docs", func(*Registry) error { return nil }), document: "{\"openapi\":\"3.1.0\"}\n"}}}
+
+	output, err := captureStdout(t, func() error {
+		handled, err := DispatchFlags(config, nil, db.SQLite, nil)
+		if !handled {
+			t.Fatal("handled = false, want true")
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatalf("DispatchFlags returned error: %v", err)
+	}
+	if output != "{\"openapi\":\"3.1.0\"}\n" {
+		t.Fatalf("stdout = %q", output)
+	}
+}

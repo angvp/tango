@@ -153,3 +153,26 @@ func TestWithDBPoolRejectsNegativeValues(t *testing.T) {
 		}
 	}
 }
+
+func TestWithDBPoolAppliesLifetimeAndIdleTime(t *testing.T) {
+	sqlDB, _ := openCounted(t)
+	applyDBPool(sqlDB, serveConfig{
+		dbPool:    DBPool{MaxLifetime: 30 * time.Millisecond, MaxIdleTime: 30 * time.Millisecond},
+		dbPoolSet: true,
+	})
+	if err := sqlDB.Ping(); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+		if err := sqlDB.Ping(); err != nil {
+			t.Fatal(err)
+		}
+		stats := sqlDB.Stats()
+		if stats.MaxLifetimeClosed > 0 || stats.MaxIdleTimeClosed > 0 {
+			return
+		}
+	}
+	t.Fatalf("no connection was closed for age or idleness: %+v", sqlDB.Stats())
+}
