@@ -21,12 +21,27 @@ type Options struct {
 	Servers []string
 	// Path is where the JSON document is served. Default "/openapi.json".
 	Path string
+	// UI serves a browsable page for the document, such as swaggerui.New().
+	// Nil serves none.
+	UI UI
+	// UIPath is where the UI is served. Default "/docs/".
+	UIPath string
 	// ExcludePrefixes leaves out every route whose path starts with one of
 	// them, such as "/admin/" for pages that are not part of the API.
 	ExcludePrefixes []string
 }
 
+// UI is a page that renders the document. The swaggerui package provides one.
+// Routes returns the routes serving it under base (a path ending in "/") for
+// the document at specPath.
+type UI interface {
+	Routes(base, specPath string) []tango.Route
+}
+
 func (o Options) withDefaults() Options {
+	if o.UIPath == "" {
+		o.UIPath = "/docs/"
+	}
 	if o.Title == "" {
 		o.Title = "API"
 	}
@@ -47,10 +62,14 @@ func New(opts Options) tango.App {
 	docs := &served{opts: opts}
 	app := tango.NewApp("openapi", func(registry *tango.Registry) error {
 		docs.registry = registry
-		return registry.Routes().Include("", []tango.Route{
+		routes := []tango.Route{
 			tango.Path(http.MethodGet, opts.Path, docs.serveJSON,
 				tango.Name("openapi.json"), tango.Doc(tango.RouteDoc{Hidden: true})),
-		})
+		}
+		if opts.UI != nil {
+			routes = append(routes, opts.UI.Routes(opts.UIPath, opts.Path)...)
+		}
+		return registry.Routes().Include("", routes)
 	})
 	return checkedApp{App: app, docs: docs}
 }
