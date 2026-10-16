@@ -8,7 +8,7 @@ Canonical examples: `examples/api-with-admin/apps/posts/models.go` and `examples
 
 - Define models as plain Go structs.
 - Use exactly one primary key field tagged `tango:"pk"`.
-- Use tags only for model metadata tanGO understands: `pk`, `unique`, `index`, `fk=ModelName` (indexed by default; `noindex` opts out), and on a `string` field `varchar=n` (at most `n` characters, counted as runes) `text` (unbounded, the same as a bare `string`) or `json` (JSON text, validated when the model is written). Reach for `varchar=n` only when the field has a real maximum; a bare `string` stays unbounded.
+- Use tags only for model metadata tanGO understands: `pk`, `unique`, `index`, `fk=ModelName`, and on a `string` field `varchar=n` (at most `n` characters, counted as runes) `text` (unbounded, the same as a bare `string`) or `json` (JSON text, validated when the model is written). Reach for `varchar=n` only when the field has a real maximum; a bare `string` stays unbounded.
 - Register each model explicitly from the app's `Register(*tango.Registry)` path with `registry.Models().Register(Model{})`.
 - Keep app-specific methods, validation, and services in ordinary Go code around the model.
 

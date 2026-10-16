@@ -152,17 +152,12 @@ func (r *Registry) Register(value any) error {
 			return fmt.Errorf("%w: %s.%s: %v", ErrInvalidFieldTag, name, field.Name, err)
 		}
 
-		indexed, err := indexedTag(tag, fk, hasTagOption(tag, "unique"))
-		if err != nil {
-			return fmt.Errorf("%w: %s.%s: %v", ErrInvalidFieldTag, name, field.Name, err)
-		}
-
 		meta.Fields = append(meta.Fields, FieldMeta{
 			Name:       field.Name,
 			Type:       field.Type,
 			PrimaryKey: primaryKey,
 			Unique:     hasTagOption(tag, "unique"),
-			Indexed:    indexed,
+			Indexed:    hasTagOption(tag, "index"),
 			Editable:   !primaryKey,
 			ForeignKey: fk,
 			MaxLength:  maxLength,
@@ -309,24 +304,6 @@ func hasTagOption(tag string, option string) bool {
 		}
 	}
 	return false
-}
-
-// indexedTag reports whether a field's column is indexed: with the "index"
-// tag, or, for a foreign key, by default (as Django does), unless the field
-// says "noindex" or is "unique" (a unique constraint already indexes it).
-func indexedTag(tag, foreignKey string, unique bool) (bool, error) {
-	index, noindex := hasTagOption(tag, "index"), hasTagOption(tag, "noindex")
-	switch {
-	case index && noindex:
-		return false, fmt.Errorf("index and noindex cannot be combined")
-	case noindex && foreignKey == "":
-		return false, fmt.Errorf("noindex applies only to a foreign key (fk=Model), which is indexed by default")
-	case noindex:
-		return false, nil
-	case index:
-		return true, nil
-	}
-	return foreignKey != "" && !unique, nil
 }
 
 // tagValue returns the value of a "key=value" pair in a comma-separated

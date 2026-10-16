@@ -8,7 +8,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **Database connections are reused under load.** `database/sql` keeps only 2 idle connections, so a server handling more than 2 requests at once closed and reopened a database connection on almost every request (measured: about 10,900 PostgreSQL sessions opened in one 15-second run of single-pet reads). `ServeContext` now raises the idle limit to 32 unless your app bounded the pool with `SetMaxOpenConns`. `tango.WithDBPool(tango.DBPool{...})` sets the limits explicitly; `tango.WithDBPool(tango.DBPool{})` restores the previous behavior. The number of open connections is unchanged (unlimited).
 
-- **Foreign keys are indexed by default.** A `tango:"fk=Model"` field now gets a database index, as in Django, unless it is `unique` (already indexed) or tagged `noindex`; `index` together with `noindex` is refused. Filtering or joining on an unindexed foreign key scanned the whole table (measured: a filtered list at 1,300 req/s became 3,200 with the index). **Upgrade:** the next `tango makemigrations` proposes a `CreateIndex` for each existing foreign key that has none; review it and apply it with `tango migrate`. To keep a column unindexed, add `noindex`.
+- **Foreign keys are not indexed unless you say so (guidance).** A `fk=` column is not indexed by itself, so filtering or joining on it scans the table (measured: `list` on a 10,000-row table ran at about 1,300 requests a second without the index and about 3,200 with it). Write `tango:"fk=Category,index"` on foreign keys you filter or join on. Indexing foreign keys by default, as Django does, is planned for a later minor release; this entry is the notice.
 
 ### Fixed
 
