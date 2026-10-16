@@ -33,6 +33,8 @@ type includedRoute struct {
 	view          View
 	qualifiedName string
 	middleware    []Middleware
+	prefix        string
+	doc           *RouteDoc
 }
 
 // RouteRegistry is the sub-registry apps contribute routes to, mirroring
@@ -120,6 +122,8 @@ func (rr *RouteRegistry) Include(prefix string, routes []Route, opts ...IncludeO
 			view:          route.View(),
 			qualifiedName: qualifiedName,
 			middleware:    append(append([]Middleware(nil), config.middleware...), route.Middleware()...),
+			prefix:        firstSegment(namespace),
+			doc:           route.doc,
 		})
 	}
 
@@ -451,4 +455,10 @@ func validatePattern(pattern string) error {
 		return fmt.Errorf("%w: %q", ErrMalformedPattern, pattern)
 	}
 	return nil
+}
+
+// firstSegment returns the part of a path before its first slash.
+func firstSegment(path string) string {
+	segment, _, _ := strings.Cut(path, "/")
+	return segment
 }

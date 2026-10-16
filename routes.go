@@ -10,6 +10,7 @@ type Route struct {
 	view       View
 	name       string
 	middleware []Middleware
+	doc        *RouteDoc
 }
 
 // RouteOption customizes a Route during construction.
