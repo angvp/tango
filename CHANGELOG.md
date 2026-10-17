@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-17
+
 ### Added
 
 - **OpenAPI documents.** `openapi.New(openapi.Options{...})` in `InstalledApps` serves an OpenAPI 3.1 document of every included route at `/openapi.json` (opt-in: nothing is served otherwise). `openapi.Dev` is the same app served only when `TANGO_OPENAPI=1`, so a deployed process exposes nothing unless it sets the variable. Each route is listed with its method, path, path parameters, name and a tag from its prefix. `tango.Doc(tango.RouteDoc{...})` adds a summary, a request body, query parameters, responses and a bearer requirement, with schemas reflected from Go types (`encoding/json` tags, nested and recursive types, `varchar=n` as `maxLength`); a type can name its schema with `SchemaName()`. `tango check` fails and names a route whose documented types cannot be described. The `accounts` JSON endpoints document themselves; the admin's pages and the cookie-flow pages are hidden from the document. `RouteRegistry.Described` and `tango.DescribedRoute` expose the route table to tools. `tango newproject` now leaves a comment in `project/project.go` saying where to add it. See [OpenAPI documentation](docs/guides/openapi.md).
@@ -198,7 +200,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/angvp/tango/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/angvp/tango/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/angvp/tango/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/angvp/tango/compare/v0.2.0...v0.3.0

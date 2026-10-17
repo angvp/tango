@@ -12,6 +12,7 @@ import (
 	v030 "github.com/angvp/tango/internal/migrationcompat/v0_3_0/migrations"
 	v031 "github.com/angvp/tango/internal/migrationcompat/v0_3_1/migrations"
 	v040 "github.com/angvp/tango/internal/migrationcompat/v0_4_0/migrations"
+	v050 "github.com/angvp/tango/internal/migrationcompat/v0_5_0/migrations"
 	"github.com/angvp/tango/migration"
 )
 
@@ -31,5 +32,6 @@ var Generators = []Generator{
 	{Dir: "v0_3_0", Migrations: v030.Migrations},
 	{Dir: "v0_3_1", Migrations: v031.Migrations},
 	{Dir: "v0_4_0", Migrations: v040.Migrations},
+	{Dir: "v0_5_0", Migrations: v050.Migrations},
 	{Dir: "unreleased", Migrations: migrations.Migrations},
 }
