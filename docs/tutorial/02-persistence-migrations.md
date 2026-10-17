@@ -121,7 +121,7 @@ tango migrate
 
 Running it again prints `no pending migrations`.
 
-This records one row per applied migration in a `tango_migrations` table (`app`, `name`, `applied_at`), Django-inspired like `django_migrations`. Run `tango check` again to confirm registration still passes, then exercise the new routes:
+This records one row per applied migration in a `tango_migrations` table (`app`, `name`, `applied_at`). Run `tango check` again to confirm registration still passes, then exercise the new routes:
 
 ```sh
 go run .

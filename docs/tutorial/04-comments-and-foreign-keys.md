@@ -227,7 +227,7 @@ func deletePost(store *db.Store, meta model.ModelMeta) tango.View {
 }
 ```
 
-`store.Delete` finds every row that references the post through a foreign key, deletes those first, then deletes the post — all in one transaction. This is the same behavior as Django's `on_delete=CASCADE`, and like Django it happens in the framework, not the database: the database constraint stays `RESTRICT`, so a raw `DELETE FROM post` that bypasses `store.Delete` is refused instead of leaving orphaned comments behind (on SQLite, by any connection that has foreign keys switched on). Deleting a post in the admin cascades the same way.
+`store.Delete` finds every row that references the post through a foreign key, deletes those first, then deletes the post — all in one transaction. This cascade happens in the framework, not the database: the database constraint stays `RESTRICT`, so a raw `DELETE FROM post` that bypasses `store.Delete` is refused instead of leaving orphaned comments behind (on SQLite, by any connection that has foreign keys switched on). Deleting a post in the admin cascades the same way.
 
 ## When `db.Store` isn't enough: raw SQL
 

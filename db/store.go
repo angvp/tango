@@ -175,7 +175,7 @@ func NewStore(sqlDB *sql.DB, dialect Dialect) *Store {
 // UseModels attaches the model registry Delete needs to cascade: when set,
 // deleting a row also deletes, recursively, every row of every other
 // registered model that references it through a foreign key field (a
-// tango:"fk=X" tag), matching Django's ORM-level cascade. This is
+// tango:"fk=X" tag). This is
 // application-level cascade, not a database ON DELETE CASCADE constraint.
 // Without calling UseModels, Delete only removes the target row, exactly as
 // before this method existed. tango.Registry.SetStore calls this

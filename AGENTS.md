@@ -22,6 +22,10 @@ Start with this file, then read `docs/agents/README.md` to choose the smallest t
 - Do not generate YAML/JSON sidecar schemas for models; write Go structs.
 - Do not duplicate large blocks from examples into docs or prompts; reference canonical examples instead.
 
+## Writing rule
+
+Docs, guides, comments and changelog entries describe tanGO on its own terms. They do not compare it to other frameworks or say a behavior is "like" or "as" another framework does it. The one "inspired by" tagline in `README.md` and `doc.go` is the only place influences are named, and benchmark pages are the exception, because there the comparison is the subject. Add a comparison only when the maintainer asks for one.
+
 ## Recipes
 
 The recipe index is `docs/agents/README.md`: choose the smallest task-specific recipe there. It lists every recipe, including storage and cache, and is the only index.

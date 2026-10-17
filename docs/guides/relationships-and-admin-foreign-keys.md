@@ -50,7 +50,7 @@ A foreign key may point at a model in another app. You don't order anything for 
 
 ## Cascade delete
 
-Deleting a row that other rows reference through a foreign key field **cascades**: `Store.Delete` finds every row across every registered model that points at the one being deleted, deletes them first (recursively — a chain of references is fully unwound), then deletes the target — all inside one transaction, with a cycle guard for circular or self-referential foreign keys. This is Django-inspired — Django's ORM implements `on_delete=CASCADE` the same way, in the ORM's own delete collector, not via the database — and is likewise not a database feature here: the generated DB constraint stays plain `RESTRICT`, and only ever matters as a backstop against raw SQL or another tool deleting a referenced row directly, bypassing `Store.Delete`.
+Deleting a row that other rows reference through a foreign key field **cascades**: `Store.Delete` finds every row across every registered model that points at the one being deleted, deletes them first (recursively — a chain of references is fully unwound), then deletes the target — all inside one transaction, with a cycle guard for circular or self-referential foreign keys. This is application-level cascade, not a database feature: the generated DB constraint stays plain `RESTRICT`, and only ever matters as a backstop against raw SQL or another tool deleting a referenced row directly, bypassing `Store.Delete`.
 
 This is automatic for any app using the standard `Registry`/`Serve` flow — `Registry.SetStore` wires the model registry into the store for you. A `*db.Store` constructed and used entirely on its own (outside a `tango.Registry`) needs one explicit call to opt in:
 

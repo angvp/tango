@@ -23,8 +23,8 @@ func SQLiteForeignKeysDSN(dsn string) string {
 }
 
 // sqliteBusyTimeoutParam makes a connection that finds another
-// connection's write lock held wait up to 5 seconds for it (Django's SQLite
-// default) instead of failing at once with SQLITE_BUSY.
+// connection's write lock held wait up to 5 seconds for it
+// instead of failing at once with SQLITE_BUSY.
 const sqliteBusyTimeoutParam = "_pragma=busy_timeout(5000)"
 
 // withSQLiteBusyTimeout adds sqliteBusyTimeoutParam to dsn unless dsn

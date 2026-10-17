@@ -328,7 +328,7 @@ See [i18n and l10n](guides/i18n.md). Admin is converted to call `i18n.T`, but no
 | `func WithMiddleware(...tango.Middleware) Option` | Wraps only admin's internally contributed routes, inside global `Config.Middleware` and before admin Views. |
 | `type Registry`, `func NewRegistry(models *model.Registry) *Registry`, `func (*Registry) Register(value any, opts Options) error` | The admin sub-registry, reached via `tango.Registry.Admin()`. |
 
-The default admin theme (sidebar navigation across every registered model, humanized field labels, a Django-admin-style truncated paginator with a true total count) is applied automatically — there's nothing to opt into or configure beyond `Options` and `WithBranding`. Authentication is a real session-cookie login (not HTTP Basic Auth): every form carries a CSRF token, and failed login attempts are rate-limited — see [admin registration](guides/admin-registration.md) for the full model.
+The default admin theme (sidebar navigation across every registered model, humanized field labels, a truncated paginator with a true total count) is applied automatically — there's nothing to opt into or configure beyond `Options` and `WithBranding`. Authentication is a real session-cookie login (not HTTP Basic Auth): every form carries a CSRF token, and failed login attempts are rate-limited — see [admin registration](guides/admin-registration.md) for the full model.
 
 ## `migration` (`github.com/angvp/tango/migration`)
 

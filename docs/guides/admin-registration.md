@@ -140,7 +140,7 @@ This is a full-page navigation, not a popup. Any unsaved changes in the parent f
 
 ## List page display
 
-List and form field labels are humanized for display — `CreatedAt` renders as "Created At", `UserID` as "User ID" — without you naming anything twice; the underlying field name (used for sorting, search, and form submission) is untouched. The list page also reports a true total row count and a paginator with page-number links, using a Django-admin-inspired truncated-range presentation once there are many pages (`1 2 … 7 8 9 10 … 19 20`).
+List and form field labels are humanized for display — `CreatedAt` renders as "Created At", `UserID` as "User ID" — without you naming anything twice; the underlying field name (used for sorting, search, and form submission) is untouched. The list page also reports a true total row count and a paginator with page-number links, using a truncated-range presentation once there are many pages (`1 2 … 7 8 9 10 … 19 20`).
 
 ### Computed changelist cells with `Display`
 

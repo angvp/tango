@@ -119,7 +119,7 @@ That produces `0002_add_author_indexes.go`; the filename and the migration's `Na
 tango migrate
 ```
 
-Runs every not-yet-applied migration's `Up` steps in order, translating each dialect-agnostic step into real DDL for your configured `Dialect` (SQLite drops a column by rebuilding the table in one transaction, keeping its rows, indexes, constraints and incoming foreign keys, and leaving it untouched if the rebuild fails; Postgres steps map straight to `ALTER TABLE`/`CREATE INDEX`). Applied migrations are tracked in a `tango_migrations` table — `(app, name, applied_at)`, primary keyed on `(app, name)` — deliberately Django-inspired, like `django_migrations`.
+Runs every not-yet-applied migration's `Up` steps in order, translating each dialect-agnostic step into real DDL for your configured `Dialect` (SQLite drops a column by rebuilding the table in one transaction, keeping its rows, indexes, constraints and incoming foreign keys, and leaving it untouched if the rebuild fails; Postgres steps map straight to `ALTER TABLE`/`CREATE INDEX`). Applied migrations are tracked in a `tango_migrations` table — `(app, name, applied_at)`, primary keyed on `(app, name)`.
 
 ### Order across apps
 

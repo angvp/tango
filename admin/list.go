@@ -143,15 +143,15 @@ type pageLink struct {
 	Href     string
 }
 
-// Django admin's own pagination truncation constants (see
-// django.contrib.admin.views.main.ChangeList: ALL_VAR pagination), producing
-// the same "1 2 … 7 8 9 10 11 12 13 … 19 20" shape for long page ranges.
+// Pagination truncation constants: three page links on each side of the
+// current page and two at each end, producing a
+// "1 2 … 7 8 9 10 11 12 13 … 19 20" shape for long page ranges.
 const (
 	paginationOnEachSide = 3
 	paginationOnEnds     = 2
 )
 
-// paginationLinks builds the Django-admin-style truncated page list for a
+// paginationLinks builds the truncated page list for a
 // paginator with totalPages pages, currently on page current.
 func paginationLinks(current, totalPages int) []pageLink {
 	if totalPages <= 1 {
