@@ -1,5 +1,6 @@
 # tanGO
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/angvp/tango.svg)](https://pkg.go.dev/github.com/angvp/tango)
 [![codecov](https://codecov.io/gh/angvp/tango/branch/main/graph/badge.svg)](https://codecov.io/gh/angvp/tango)
 
 tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics but built from plain Go structs and interfaces. Scaffolding writes plain Go you own. Nothing is generated at runtime, and boot never scans your filesystem; there's no reflection-heavy magic beyond what's needed to read your model tags, and no hidden configuration.
