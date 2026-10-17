@@ -1,2 +1,4 @@
+github.com/angvp/tango v0.5.0 h1:BfKv0eraY9PYBjycYl18PM88FZkkrWRzYUlv9C0L/CY=
+github.com/angvp/tango v0.5.0/go.mod h1:05w8E4fRLNUj/OyUnM1BlwOiC9MG/LzDRKPzFHp00aM=
 github.com/bradfitz/gomemcache v0.0.0-20260422231931-4d751bb6e37c h1:6Gpm9YYUEQx2T9zMsYolQhr6sjwwGtFitSA0pQsa7a8=
 github.com/bradfitz/gomemcache v0.0.0-20260422231931-4d751bb6e37c/go.mod h1:r5xuitiExdLAJ09PR7vBVENGvp4ZuTBeWTGtxuX3K+c=
