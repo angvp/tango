@@ -1,7 +1,7 @@
 // Package websocket adapts realtime.Coordinator to an HTTP WebSocket
 // upgrade, wrapping github.com/coder/websocket. No coder/websocket type
-// appears in this package's own public API — see this milestone's ADR on
-// wrapping third-party dependencies behind a translated contract.
+// appears in this package's own public API: the third-party dependency
+// stays behind a translated contract.
 package websocket
 
 import (

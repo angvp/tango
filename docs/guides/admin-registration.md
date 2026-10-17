@@ -310,7 +310,7 @@ The preview contract:
 
 **The sandbox.** Admin wraps the HTML in a minimal document that carries the Content-Security-Policy meta `default-src 'none'; base-uri 'none'; form-action 'none'`. The browser assigns that document to `srcdoc` of a bare iframe with `sandbox=""` and `referrerpolicy="no-referrer"`: no scripts, no forms, no popups, no top-level navigation and an opaque origin. The policy also blocks images, styles and frames in the preview, so a preview shows the text's structure and not its outbound resources.
 
-**The host decides sanitization.** The admin trusts the renderer's output only for the preview, which staff see inside that sandbox. A public page that shows the same text is a different trust context: the host must render it and sanitize it under its own policy. The Goldmark example above renders with defaults that do not pass raw HTML through, which is safe for the preview, but it is not a sanitization policy for public pages. [ADR 0058](../adr/0058-markdown-rendering-and-sanitization-belong-to-the-host-and-previews-are-sandboxed.md) records why.
+**The host decides sanitization.** The admin trusts the renderer's output only for the preview, which staff see inside that sandbox. A public page that shows the same text is a different trust context: the host must render it and sanitize it under its own policy. The Goldmark example above renders with defaults that do not pass raw HTML through, which is safe for the preview, but it is not a sanitization policy for public pages.
 
 Without JavaScript the field is a plain textarea and the preview is absent. `examples/spa-accounts` edits a profile's `Bio` this way and renders nothing on its public pages.
 
@@ -334,7 +334,7 @@ Automated tests pin the admin's structural markup: labels, `aria-invalid` and `a
 - **Focus order.** Tab through a create or edit form, and through a changelist with filters. Focus moves in reading order, every control shows a visible focus ring, and nothing traps it.
 - **Keyboard.** Every control works without a mouse: filter selects, Search, and the **Edit**/**Formatted** and **Write**/**Preview** tabs (Left, Right, Home and End move between tabs). After a refused save, the error appears beside its field.
 - **Screen reader.** A field with help text or an error reads its label, then the help text and the error. The search box and each filter announce their labels. The table announces its caption and column headers. The Markdown character count and the preview status are announced as they change.
-- **Contrast.** Text, help text, errors and focus rings stay readable against their backgrounds. The admin loads Tailwind from a CDN (ADR 0003), so check the pages as you actually deploy them.
+- **Contrast.** Text, help text, errors and focus rings stay readable against their backgrounds. The admin loads Tailwind from a CDN, so check the pages as you actually deploy them.
 - **Responsive layout.** At a narrow width the filters wrap, the table scrolls rather than breaking the page, and the form controls stay usable.
 - **JSON Formatted tab.** On a JSON field, **Formatted** shows valid JSON indented and invalid text with a visible error, and never changes the textarea unless you choose **Use this formatting**. With JavaScript off, the field is a plain textarea and the server still refuses invalid JSON.
 - **Markdown Preview.** With a preview renderer set, **Preview** shows the rendered text in a frame that runs no script, loads nothing and cannot navigate the admin page. A renderer error shows in the Preview tab and never changes the text.

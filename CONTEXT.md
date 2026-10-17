@@ -14,7 +14,7 @@ Do not call decoded claims an Application session: sessions are persisted, revoc
 
 ## Room loop
 
-The single goroutine that is the sole owner of one active `realtime` room's membership, timers, and every call into host-supplied `Logic` — `Join`, `Leave`, `Dispatch`, `DispatchPeer`, and timer expiry all become events processed one at a time, in arrival order, by this loop alone. No other goroutine (a socket's read loop, its writer goroutine, a timer callback, a bot's scheduler) ever mutates room state directly — even a failed outbound `Send` is reported back to the room loop as an event, not handled where it happened. See [ADR 0028](docs/adr/0028-realtime-rooms-use-a-single-owner-event-loop-not-locks.md).
+The single goroutine that is the sole owner of one active `realtime` room's membership, timers, and every call into host-supplied `Logic` — `Join`, `Leave`, `Dispatch`, `DispatchPeer`, and timer expiry all become events processed one at a time, in arrival order, by this loop alone. No other goroutine (a socket's read loop, its writer goroutine, a timer callback, a bot's scheduler) ever mutates room state directly — even a failed outbound `Send` is reported back to the room loop as an event, not handled where it happened. 
 
 Do not call this just "the room": that's ambiguous between the owning goroutine itself and the domain state `Logic` maintains inside it — say Room loop when specifically meaning the owning goroutine.
 
@@ -50,13 +50,13 @@ Do not conflate an extractor error with a limited/rejected request: they go to d
 
 ## Lifecycle component
 
-One `tango.Lifecycle{Name, Start, Stop}` registered via `Registry.RegisterLifecycle`, explicitly, inside an `App`'s `Register` callback — never started implicitly by registering it. `Start`/`Stop` are each independently optional (nil means no-op for that phase), but at least one must be set and `Name` must be non-empty; `RegisterLifecycle` rejects violations rather than normalizing them. Distinct from Checker (an optional-interface, one-per-App, metadata-only pattern) — see [ADR 0030](docs/adr/0030-lifecycle-is-explicit-registry-registration-not-an-optional-app-interface.md) for why Lifecycle deliberately isn't shaped the same way.
+One `tango.Lifecycle{Name, Start, Stop}` registered via `Registry.RegisterLifecycle`, explicitly, inside an `App`'s `Register` callback — never started implicitly by registering it. `Start`/`Stop` are each independently optional (nil means no-op for that phase), but at least one must be set and `Name` must be non-empty; `RegisterLifecycle` rejects violations rather than normalizing them. Distinct from Checker (an optional-interface, one-per-App, metadata-only pattern).
 
 Do not conflate this with App: an App may register zero, one, or several Lifecycle components, they are not the same thing. Do not conflate it with Checker either: a different, narrower, implicit-interface mechanism.
 
 ## Application context
 
-The long-lived `context.Context` `tango.ServeContext` passes to every `Lifecycle.Start`, and that a component may retain for its own background goroutines. Deliberately not a direct child of the caller's context passed to `ServeContext` — built via `context.WithoutCancel` plus `ServeContext`'s own cancellation. Once every component has started, component work isn't torn down the instant the caller triggers shutdown, only once HTTP draining has actually finished; during startup itself, this context *is* canceled promptly the moment the caller cancels, precisely so a `Start` cooperatively blocked on it can observe cancellation and return rather than hang. See [ADR 0031](docs/adr/0031-shutdown-uses-two-independent-phase-timeouts-and-a-decoupled-application-context.md).
+The long-lived `context.Context` `tango.ServeContext` passes to every `Lifecycle.Start`, and that a component may retain for its own background goroutines. Deliberately not a direct child of the caller's context passed to `ServeContext` — built via `context.WithoutCancel` plus `ServeContext`'s own cancellation. Once every component has started, component work isn't torn down the instant the caller triggers shutdown, only once HTTP draining has actually finished; during startup itself, this context *is* canceled promptly the moment the caller cancels, precisely so a `Start` cooperatively blocked on it can observe cancellation and return rather than hang. 
 
 Do not conflate this with Shutdown context: a different, second, phase-scoped context. Do not conflate it with the caller's own `ctx` either: a distinct value `ServeContext` deliberately decouples cancellation from (narrowly, only once startup has fully succeeded).
 

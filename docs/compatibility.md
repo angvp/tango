@@ -1,6 +1,6 @@
 # Versioning and compatibility
 
-This page says what a tanGO release promises not to break, and how a change that does break something is announced. It applies from v0.1.0 on. The reasoning is in [ADR 0042](adr/0042-v0-1-covers-every-exported-api-except-named-exclusions.md).
+This page says what a tanGO release promises not to break, and how a change that does break something is announced. It applies from v0.1.0 on.
 
 ## What a version number means
 
@@ -84,7 +84,7 @@ A minor release may add a field to any covered struct, which breaks an unkeyed l
 
 ## How defaults change
 
-A change to how an existing app behaves, such as a new default, ships as an opt-in first, and new projects from `tango newproject` opt in. An app that doesn't opt in keeps its behaviour. A default changes later only after a minor release of notice in the changelog. Where a setting's zero value means "the framework's default" (like `Config.MiddlewareScope`), setting it explicitly keeps your choice whatever the default becomes. The one exception is a security fix, which may change a default at once and is called out in the release notes. See [ADR 0043](adr/0043-global-middleware-can-wrap-the-whole-router-as-an-opt-in-scope.md).
+A change to how an existing app behaves, such as a new default, ships as an opt-in first, and new projects from `tango newproject` opt in. An app that doesn't opt in keeps its behaviour. A default changes later only after a minor release of notice in the changelog. Where a setting's zero value means "the framework's default" (like `Config.MiddlewareScope`), setting it explicitly keeps your choice whatever the default becomes. The one exception is a security fix, which may change a default at once and is called out in the release notes. 
 
 ## Deprecation
 

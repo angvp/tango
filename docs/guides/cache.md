@@ -1,6 +1,6 @@
 # Guide: caching
 
-`github.com/angvp/tango/cache` is a small, explicit cache for reads that are expensive and safe to compute again. A `cache.Store` is passed to the code that uses it and called where caching is wanted; nothing about it is global, ambient or automatic. The runnable proof is [`examples/cache`](../../examples/cache). [ADR 0055](../adr/0055-the-cache-is-an-explicit-bytes-store-with-a-fail-open-fetchjson.md) records why it has this shape.
+`github.com/angvp/tango/cache` is a small, explicit cache for reads that are expensive and safe to compute again. A `cache.Store` is passed to the code that uses it and called where caching is wanted; nothing about it is global, ambient or automatic. The runnable proof is [`examples/cache`](../../examples/cache).
 
 ## When to use a cache, and when not
 

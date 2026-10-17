@@ -1,7 +1,6 @@
 package tango_test
 
-// This file is the tutorial snippet sync check described in ADR 0023's
-// amendment: every Go block in docs/tutorial whose first line names a file
+// This file is the tutorial snippet sync check: every Go block in docs/tutorial whose first line names a file
 // (`// apps/posts/app.go`) must appear in that file under examples/board,
 // ignoring whitespace differences. A block that shows an earlier state of
 // the file says so in its label (`// apps/posts/app.go (as of part 2)`) and

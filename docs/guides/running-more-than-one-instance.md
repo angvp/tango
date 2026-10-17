@@ -1,6 +1,6 @@
 # Running more than one instance
 
-tanGO is built for one server process per application. This guide is for the case where you run more than one anyway (a replica count above 1, a load balancer in front of two processes, a rolling deploy where the old and new process overlap) and want to know what still works, what quietly weakens, and what to do about it. Why tanGO does not build shared state for this yet, and what would change that, is in [ADR 0047](../adr/0047-multi-instance-state-is-not-built-yet.md).
+tanGO is built for one server process per application. This guide is for the case where you run more than one anyway (a replica count above 1, a load balancer in front of two processes, a rolling deploy where the old and new process overlap) and want to know what still works, what quietly weakens, and what to do about it. Why tanGO does not build shared state for this yet, and what would change that, is at the end of this guide.
 
 ## What is already safe
 
@@ -78,4 +78,4 @@ tanGO guarantees the single-process behaviour described above and nothing about 
 
 ## When this will change
 
-tanGO will revisit shared state when one of four things happens: a named deployment runs more than one instance in production; a second concrete limiter store proves the single atomic `Take` operation [ADR 0029](../adr/0029-ratelimit-is-a-concrete-token-bucket.md) describes; an incident shows the in-memory limiter bypassed through multiple instances; or a real application needs cross-instance realtime rooms or presence. If you are in one of those situations, open an issue describing the deployment.
+tanGO will revisit shared state when one of four things happens: a named deployment runs more than one instance in production; a second concrete limiter store makes a shared atomic `Take` operation worth building; an incident shows the in-memory limiter bypassed through multiple instances; or a real application needs cross-instance realtime rooms or presence. If you are in one of those situations, open an issue describing the deployment.

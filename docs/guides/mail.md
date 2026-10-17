@@ -26,7 +26,7 @@ A `mail.Sender` has one method, `Send(ctx, Message) error`. It's synchronous and
 - `mail.WriterSender(w)`: writes each message to `w` in the exact wire format SMTP would send. For development.
 - `mailtest.Sender` from `mail/mailtest`: records messages for your tests, and rejects invalid ones exactly as a real sender does.
 
-A provider with an HTTP API is a `Sender` you write yourself. See [ADR 0044](../adr/0044-mail-is-a-sender-interface-with-tls-required-smtp.md) for why `mail` is an interface.
+A provider with an HTTP API is a `Sender` you write yourself. 
 
 ## SMTP
 

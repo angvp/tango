@@ -18,7 +18,7 @@ import (
 // release tags.
 //
 // "cache adapters" runs the Redis, Valkey and Memcached conformance suites
-// against the exact server versions the documentation claims (ADR 0056), so a
+// against the exact server versions the documentation claims, so a
 // release whose adapters were never run against a server cannot be tagged.
 var RequiredJobs = []string{"lint", "test (sqlite)", "test (postgres)", "cache adapters"}
 

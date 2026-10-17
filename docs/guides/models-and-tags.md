@@ -47,7 +47,6 @@ What the limit means:
 - **Registration**: a malformed tag fails `Register` with `model.ErrInvalidFieldTag`, naming the model and field: `varchar` with no value, `varchar=0`, a negative or non-numeric value, a value above 10,485,760, `varchar` together with `text`, a repeated tag, or either tag on a field that is not a `string`. `FieldMeta.MaxLength` is the limit, or `0` for an unbounded field.
 - **Counting**: the limit counts characters as runes, the way PostgreSQL counts `VARCHAR(n)`. `é` is one rune, an emoji is one rune, a letter followed by a combining accent is two, and each byte of invalid UTF-8 counts as one. The `maxlength` attribute the admin renders counts UTF-16 units instead, so the server is the authority.
 - **Enforcement**: `Store.Create` and `Store.Update` check every bounded field before any SQL runs and return a `*db.ValueTooLongError` (matching `db.ErrValueTooLong`) carrying the model, field, limit and length. An empty string and a string of exactly `n` runes are valid. The migration creates the column as `VARCHAR(n)` on both databases and adds no `CHECK` constraint: PostgreSQL enforces the length itself, SQLite does not, so on SQLite the Go check is the only guarantee. Raw SQL (`Store.Exec`, `Query`) is outside it.
-- **Why it works this way**: see [ADR 0049](../adr/0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md).
 - **Changing it later**: see [changing a field's type](migrations.md#changing-a-fields-type). Adding or lowering a limit checks the existing data first and never truncates it.
 
 ## JSON fields
@@ -90,7 +89,7 @@ func invalidSettings(ctx context.Context, store *db.Store, meta model.ModelMeta)
 ```
 
   For a large table, page through it with `Limit` and `Offset`. There is no SQL one-liner here because the two databases do not share a JSON-validity function.
-- **Why it works this way**: see [ADR 0059](../adr/0059-json-fields-are-declared-by-tag-stored-as-exact-text-and-validated-when-the-model-is-written.md). In the admin, a JSON field gets the [JSON editor](admin-registration.md#json-fields) by default.
+- In the admin, a JSON field gets the [JSON editor](admin-registration.md#json-fields) by default.
 
 ## Supported field kinds
 

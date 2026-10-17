@@ -2,7 +2,7 @@
 
 Use this for a chat room, turn-based game, presence feature, or any other case where multiple connected actors need ordered, shared state.
 
-Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/realtime-websockets.md`. Architecture ADR: `docs/adr/0028-realtime-rooms-use-a-single-owner-event-loop-not-locks.md`.
+Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/realtime-websockets.md`.
 
 ## Build
 

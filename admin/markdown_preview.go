@@ -35,9 +35,8 @@ const previewCSRFHeader = "X-CSRF-Token"
 var previewTimeout = 5 * time.Second
 
 // previewDocumentStart and previewDocumentEnd wrap a successful render in a
-// complete document. The CSP meta is the only policy and is pinned by tests
-// (ADR 0058): the preview has no scripts, no styles, no forms and no
-// outbound loads, and a base URL cannot be set.
+// complete document. The CSP meta is the only policy and is pinned by tests: the preview has no scripts,
+// no styles, no forms and no outbound loads, and a base URL cannot be set.
 const previewDocumentStart = `<!doctype html>
 <html lang="en">
 <head>

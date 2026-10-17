@@ -125,7 +125,7 @@ A logged-out visitor is redirected to log in. A logged-in but unverified account
 
 `accounts` has no email-change flow. Whoever changes `Account.Email`, your own code or an operator in admin, must also clear `EmailVerifiedAt`, because the new address hasn't been proven. They should also delete the account's `AccountToken` rows. A link sent to the old address already stops working, because each link is tied to the address it was sent to.
 
-See [ADR 0045](../adr/0045-accounts-reset-and-verification-never-reveal-an-account.md) and the [mail guide](mail.md).
+See the [mail guide](mail.md).
 
 ## JSON mode for a single-page app
 
@@ -144,7 +144,7 @@ accounts.New(store,
 )
 ```
 
-JSON mode is **bearer-only**. It never reads or sets a cookie and needs no CSRF token, and it creates no `AccountSession`. `accounts` does not mint tokens: your `JSONAuth.Issue` returns an `AuthGrant` (access token, token type, lifetime) for an account that has just logged in or registered, and `Authenticate` names the account behind a request's bearer token for the one endpoint that needs it. That keeps `accounts` independent of any token package; [`auth/jwt`](jwt-auth.md) is the usual choice. Bearer tokens are stateless, so there is no logout endpoint, and a password reset cannot revoke an access token that was already issued: keep lifetimes short. [ADR 0050](../adr/0050-json-accounts-are-bearer-only-and-the-host-issues-the-token.md) records why.
+JSON mode is **bearer-only**. It never reads or sets a cookie and needs no CSRF token, and it creates no `AccountSession`. `accounts` does not mint tokens: your `JSONAuth.Issue` returns an `AuthGrant` (access token, token type, lifetime) for an account that has just logged in or registered, and `Authenticate` names the account behind a request's bearer token for the one endpoint that needs it. That keeps `accounts` independent of any token package; [`auth/jwt`](jwt-auth.md) is the usual choice. Bearer tokens are stateless, so there is no logout endpoint, and a password reset cannot revoke an access token that was already issued: keep lifetimes short.
 
 CORS is the host's: tanGO ships none. Allow your client's origin on `/accounts/api/` and the `Authorization` and `Content-Type` headers in a middleware of your own, as [`examples/spa-accounts`](../../examples/spa-accounts) does.
 
@@ -185,7 +185,7 @@ func createProfile(ctx context.Context, tx *db.Store, reg accounts.Registration)
 }
 ```
 
-Return a `FieldError` (several can be joined with `errors.Join`) to answer `422 invalid_field` with your public field names, or let `tx.Create` return a `*db.ValueTooLongError` from a [`varchar=n`](models-and-tags.md#bounded-strings) field ([ADR 0049](../adr/0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md)), or a `*db.InvalidJSONError` (matching `db.ErrInvalidJSON`) from a `tango:"json"` field holding text that is not valid JSON; both are also a `422`, keyed by the Go field name, with the message `must be valid JSON` for the latter. The error never carries the submitted document. Any other error is logged and answered with a generic `500`. A panic rolls back and propagates. `accounts` caps the `profile` object at 4 KiB of JSON, a guard on request size only; limits on a field's content are the model's own, counted in characters (runes), not bytes.
+Return a `FieldError` (several can be joined with `errors.Join`) to answer `422 invalid_field` with your public field names, or let `tx.Create` return a `*db.ValueTooLongError` from a [`varchar=n`](models-and-tags.md#bounded-strings) field, or a `*db.InvalidJSONError` (matching `db.ErrInvalidJSON`) from a `tango:"json"` field holding text that is not valid JSON; both are also a `422`, keyed by the Go field name, with the message `must be valid JSON` for the latter. The error never carries the submitted document. Any other error is logged and answered with a generic `500`. A panic rolls back and propagates. `accounts` caps the `profile` object at 4 KiB of JSON, a guard on request size only; limits on a field's content are the model's own, counted in characters (runes), not bytes.
 
 `ResolveIdentifier` lets login accept something other than an email, such as a username. An identifier containing `@` is always an email and never reaches it; the host guarantees its own identifiers never contain `@`. It returns the account id; `accounts` still loads the account, checks `Active` and compares the password, so an unknown username and a wrong password look the same.
 

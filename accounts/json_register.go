@@ -14,7 +14,7 @@ import (
 // creates the account through the same use case as the HTML form, queues the
 // verification email (with the JSON VerifyURL) once the account exists, and
 // answers 201 with the account and a grant. A duplicate email is the
-// deliberate 409 of ADR 0021, behind the failed-attempt limiter.
+// deliberate 409 (unlike login, registration names the duplicate), behind the failed-attempt limiter.
 func (j *jsonAPI) register(ctx *tango.Context) error {
 	if j.cfg.signupDisabled {
 		return &apiError{status: http.StatusForbidden, code: "registration_closed", message: "registration is closed"}

@@ -59,7 +59,7 @@ This API does not support nested boolean groups, automatic wildcard escaping, `I
 
 tanGO fields are plain Go values, never pointers or `sql.Null*` wrappers, so `NULL` and a field's zero value mean the same thing. Every read (`Get`, `List`, `Query`, `QueryRow`) turns a `NULL` column into the field's zero value: `""`, `0`, `false`, or the zero `time.Time`. That's what happens to existing rows when a migration adds a column: they read as the zero value until you write something else. A raw query's `LEFT JOIN` with no match reads the same way. Going the other way, a foreign key field left at `0` is written as `NULL` (see [relationships](relationships-and-admin-foreign-keys.md)); other fields are written as their value.
 
-A `Where` condition compares with `=`, and `NULL` never equals anything, so filtering on a zero value doesn't match `NULL` rows. Use raw SQL with `IS NULL` for that. A raw-SQL destination that needs to tell `NULL` from zero can use a pointer or `sql.Null*` field; those keep their usual meaning. See [ADR 0038](../adr/0038-null-reads-as-the-zero-value-and-unset-foreign-keys-write-null.md).
+A `Where` condition compares with `=`, and `NULL` never equals anything, so filtering on a zero value doesn't match `NULL` rows. Use raw SQL with `IS NULL` for that. A raw-SQL destination that needs to tell `NULL` from zero can use a pointer or `sql.Null*` field; those keep their usual meaning. 
 
 ## Raw SQL
 
@@ -106,7 +106,7 @@ err := store.InTx(ctx, func(tx *db.Store) error {
 
 It commits when `fn` returns nil and rolls back when `fn` returns an error, which `InTx` returns unchanged. A panic rolls back and is re-raised with the same value, so a programmer error is never turned into a returned error. Use `tx`, not the outer store, inside `fn`: the outer store is a different connection and does not see the transaction's writes.
 
-Nesting is flat. `InTx` on a store that is already in a transaction joins it, with no savepoints, so an inner error rolls the work back only if it propagates out of the outermost `fn`. An operation that opens its own transaction when called directly, such as a PostgreSQL insert with an explicit ID or a cascading `Delete`, runs on the enclosing one. See [ADR 0051](../adr/0051-the-transaction-seam-is-a-store-bound-to-one-transaction.md).
+Nesting is flat. `InTx` on a store that is already in a transaction joins it, with no savepoints, so an inner error rolls the work back only if it propagates out of the outermost `fn`. An operation that opens its own transaction when called directly, such as a PostgreSQL insert with an explicit ID or a cascading `Delete`, runs on the enclosing one. 
 
 ## Errors
 

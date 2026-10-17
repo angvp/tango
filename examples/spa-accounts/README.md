@@ -33,7 +33,7 @@ The six endpoints are `register/`, `login/`, `password-reset/`, `password-reset/
 
 ## What it shows about bounded strings
 
-A username longer than 30 characters, or a display name longer than 60, is refused by `Store.Create` before any SQL, counted in characters (`é` is one), on SQLite as well as PostgreSQL. The hook returns that error and `accounts` answers `422` with `"code": "invalid_field"`, keyed by the Go field name; the registration is rolled back, so no account, profile or email remains. When a client needs a public JSON field name, return an `accounts.FieldError` instead, as the `@` rule does. The generated migration gives the columns `VARCHAR(30)` and `VARCHAR(60)`. See [ADR 0049](../../docs/adr/0049-bounded-strings-are-declared-by-tag-and-validated-by-rune-count-in-go.md).
+A username longer than 30 characters, or a display name longer than 60, is refused by `Store.Create` before any SQL, counted in characters (`é` is one), on SQLite as well as PostgreSQL. The hook returns that error and `accounts` answers `422` with `"code": "invalid_field"`, keyed by the Go field name; the registration is rolled back, so no account, profile or email remains. When a client needs a public JSON field name, return an `accounts.FieldError` instead, as the `@` rule does. The generated migration gives the columns `VARCHAR(30)` and `VARCHAR(60)`. 
 
 ## Things to know
 

@@ -18,7 +18,7 @@ var milestoneReference = regexp.MustCompile(`Milestone [0-9]`)
 
 // TestNoInternalMilestoneReferences keeps the private roadmap's milestone
 // numbers out of everything published from this repository: code, tests,
-// examples, docs, and CLI output. Name the feature or cite the ADR instead.
+// examples, docs, and CLI output. Name the feature instead.
 func TestNoInternalMilestoneReferences(t *testing.T) {
 	var found []string
 	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
@@ -49,7 +49,7 @@ func TestNoInternalMilestoneReferences(t *testing.T) {
 		t.Fatalf("walk repository: %v", err)
 	}
 	if len(found) > 0 {
-		t.Fatalf("%d internal milestone reference(s); name the feature or cite the ADR instead:\n%s",
+		t.Fatalf("%d internal milestone reference(s); name the feature instead:\n%s",
 			len(found), strings.Join(found, "\n"))
 	}
 }

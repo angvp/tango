@@ -18,7 +18,7 @@ import (
 const notePreviewPath = "/admin/admin_note/_preview/Body/"
 
 // previewCSP is the exact Content-Security-Policy meta the preview document
-// carries (ADR 0058).
+// carries.
 const previewCSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'">`
 
 // previewRequest sends source to path as the Markdown preview's client does:

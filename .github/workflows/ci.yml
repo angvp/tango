@@ -30,7 +30,7 @@ jobs:
           lycheeVersion: v0.24.2
           args: --offline --include-fragments --no-progress './**/*.md'
 
-  # cache/redis and cache/memcache are their own Go modules (ADR 0056), so the
+  # cache/redis and cache/memcache are their own Go modules, so the
   # test job's ./... skips them. Each runs the cachetest conformance suite
   # against the pinned server versions it claims to support.
   cache-adapters:
@@ -126,7 +126,7 @@ jobs:
             --junitfile "junit-${{ matrix.dialect }}.xml" \
             --format testname \
             -- ./... -count=1 -coverprofile="coverage-${{ matrix.dialect }}.out" -covermode=atomic
-      # storage/s3 is its own Go module, so ./... above skips it (ADR 0054).
+      # storage/s3 is its own Go module, so ./... above skips it.
       - name: go test storage/s3
         if: ${{ matrix.dialect == 'sqlite' }}
         working-directory: storage/s3

@@ -70,7 +70,7 @@ Under `MiddlewareScopeAll`:
 - **No route rewriting:** middleware that rewrites the request's method or path so the router dispatches it to a different route is not supported. The route was already resolved from the original request.
 - **No route parameters in global middleware:** global middleware runs before the router dispatches, so route parameters such as `{id}` aren't available to it. Read them in group or route middleware, or in the View with `ctx.Param`.
 
-`tango newproject` sets `MiddlewareScopeAll`. The zero value, `MiddlewareScopeDefault`, means the framework's default, currently `MiddlewareScopeRoutes`. See [ADR 0043](../adr/0043-global-middleware-can-wrap-the-whole-router-as-an-opt-in-scope.md).
+`tango newproject` sets `MiddlewareScopeAll`. The zero value, `MiddlewareScopeDefault`, means the framework's default, currently `MiddlewareScopeRoutes`. 
 
 ### Custom 404 and 405 pages
 

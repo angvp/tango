@@ -2,7 +2,7 @@
 
 Use this when advising on, or documenting, an app that runs on more than one server process (replicas, a balancer, an overlapping rolling deploy).
 
-Canonical files: `internal/security/ratelimit.go`, `ratelimit/limiter.go`, `realtime/hub.go`, `accounts/outbox.go`, `accounts/mail.go`. Human guide: `docs/guides/running-more-than-one-instance.md`. Decision: `docs/adr/0047-multi-instance-state-is-not-built-yet.md`.
+Canonical files: `internal/security/ratelimit.go`, `ratelimit/limiter.go`, `realtime/hub.go`, `accounts/outbox.go`, `accounts/mail.go`. Human guide: `docs/guides/running-more-than-one-instance.md`.
 
 ## Rule
 
@@ -14,7 +14,7 @@ Canonical files: `internal/security/ratelimit.go`, `ratelimit/limiter.go`, `real
 
 ## Don't
 
-- Do not add a shared-state layer for the login limiter, `ratelimit`, realtime rooms or the `accounts` outbox (a database- or Redis-backed limiter, hub or queue): the ADR defers it until one of its four triggers is met.
+- Do not add a shared-state layer for the login limiter, `ratelimit`, realtime rooms or the `accounts` outbox (a database- or Redis-backed limiter, hub or queue): it is deferred until one of the four triggers in the human guide is met.
 - Do not present `cache/redis`, `cache/memcache` or `storage/s3` as the fix for rate limits, rooms or mail state.
 - Do not give vendor-specific proxy configuration as tested behaviour; tanGO does not test the edge layer.
 - Do not state that realtime rooms work across instances.

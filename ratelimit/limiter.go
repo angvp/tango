@@ -49,9 +49,8 @@ type Options struct {
 }
 
 // Limiter is a concrete, in-memory, per-process token-bucket rate limiter.
-// There is no storage interface in this package — see this milestone's ADR
-// on why: a correct distributed token bucket needs one atomic
-// check-and-consume operation, not a generic Get/Set store, and that seam
+// There is no storage interface in this package: a correct distributed token bucket needs
+// one atomic check-and-consume operation, not a generic Get/Set store, and that seam
 // is deferred until a real second backend exists to prove its shape.
 type Limiter struct {
 	limit  int

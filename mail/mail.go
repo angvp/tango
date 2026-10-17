@@ -3,7 +3,7 @@
 // it. [NewSMTPSender] delivers through an SMTP server that always encrypts
 // (except to a loopback host), and [WriterSender] writes the message out for
 // development. Every sender validates and encodes a message the same way, so
-// what WriterSender prints is what SMTP sends. See ADR 0044 and
+// what WriterSender prints is what SMTP sends. See
 // https://tangoframework.com/docs/guides/mail/.
 package mail
 

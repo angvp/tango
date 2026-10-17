@@ -55,7 +55,7 @@ func peerEqual(a, b Peer) bool {
 
 // room is the single-owner event loop for one room ID: every membership
 // change, delivery, and call into Logic happens on this goroutine alone.
-// See the package doc and this milestone's ADR for why.
+// The package doc says why.
 type room struct {
 	id    string
 	hub   *Hub

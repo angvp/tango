@@ -5,7 +5,7 @@
 
 tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics but built from plain Go structs and interfaces. Scaffolding writes plain Go you own. Nothing is generated at runtime, and boot never scans your filesystem; there's no reflection-heavy magic beyond what's needed to read your model tags, and no hidden configuration.
 
-**Status: early development.** The public API is still settling. Behavior described in this README and the linked docs reflects what's implemented today; anything explicitly marked "planned" or "future" is not yet built. See [Versioning and compatibility](docs/compatibility.md) for what each release promises not to break, and [Limitations](docs/limitations.md) before depending on tanGO for anything beyond experimentation.
+**Status: pre-1.0, released as v0.x.** The Covered API in [Versioning and compatibility](docs/compatibility.md) is what a release promises not to break; a minor release may still break it, only after the deprecation window, and says so in the [changelog](CHANGELOG.md). Anything marked "planned" or "future" in the docs is not built yet. Read [Limitations](docs/limitations.md) before depending on tanGO for anything beyond what it says it does.
 
 ## What you get
 
@@ -16,6 +16,8 @@ tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics
 - A minimal `db.Store` for CRUD and raw SQL against SQLite or PostgreSQL, with **minimal ORM foundations**: foreign key fields, two-layer validation, and cascade delete — see [relationships and admin foreign keys](docs/guides/relationships-and-admin-foreign-keys.md).
 - Generated, typed Go migrations (`tango makemigrations`/`migrate`/`migrate down`) — no separate schema DSL.
 - A server-rendered HTML admin (list/create/edit/delete, pagination, search, filters, the ordering you configure) behind a session-cookie login, with CSRF protection and rate-limited login attempts — accounts are managed via `tango admin create/resetpassword/deactivate`.
+- Accounts with password reset, email verification and a JSON mode for single-page apps; a `mail` package with SMTP; a `storage` package for uploads with a local-disk store and an S3 adapter; a `cache` package with in-process, Redis and Memcached stores; in-process WebSocket rooms; a token-bucket rate limiter.
+- OpenAPI 3.1 documentation generated from your routes, with Swagger UI (`openapi.New`, or `openapi.Dev` to serve it only while developing).
 - A CLI (`tango run`/`check`/`makemigrations`/`migrate`/`newproject`/`newapp`/`tui`/`shell`/`admin`) that wraps ordinary `go build`/`go run` rather than replacing them.
 
 ## Principles
@@ -28,8 +30,6 @@ tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics
 - The admin is a normal app, not a privileged subsystem.
 - No custom template language.
 - Third-party internals stay behind tanGO's abstractions.
-
-See [ADR 0001](docs/adr/0001-design-principles.md).
 
 ## Install
 
@@ -84,7 +84,7 @@ curl http://localhost:8000/greetings/World/
 ## Where to continue
 
 - **[Tutorial](docs/tutorial/01-bootstrap-routing-json.md)** — build one application, a bulletin board, from an empty directory to a deployed container in ten parts: routing and JSON views, persistence and migrations, the HTML admin, foreign keys, server-rendered pages, accounts and forms, API tokens and rate limits, a live WebSocket feed, background jobs and graceful shutdown, and testing and deployment.
-- **[Guides](docs/guides/)** — standalone, task-oriented references: project structure, application architecture, configuration, models and tags, routing, `Context`, persistence, migrations, admin, app checks, OpenAPI documentation, dialect setup, reusable apps, and relationships/admin foreign keys.
+- **[Guides](docs/guides/)** — standalone, task-oriented references: project structure, application architecture, configuration, models and tags, routing, `Context`, persistence, migrations, admin, app checks, OpenAPI documentation, accounts, mail, uploads, caching, rate limiting, realtime, dialect setup, reusable apps, and relationships/admin foreign keys.
 - **[API reference](docs/reference.md)** — the supported public surface, linked to runnable examples. Generated package docs are also available via `go doc` or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published.
 - **[Examples](examples/)**, each with a README giving its purpose and commands:
   - [`jsonapi`](examples/jsonapi): the smallest JSON application, one hand-written app;

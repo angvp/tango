@@ -1,8 +1,8 @@
 // Package realtime provides transport-neutral, single-process room
 // coordination. Each active room is owned by exactly one goroutine (its
 // room loop), which is the sole mutator of that room's membership, timers,
-// and every call into host-supplied Logic — see the package's design ADR
-// for why (no distributed pub/sub, no locking-based shared state).
+// and every call into host-supplied Logic. There is no distributed pub/sub and no
+// locking-based shared state.
 package realtime
 
 import (

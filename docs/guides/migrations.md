@@ -126,7 +126,7 @@ Runs every not-yet-applied migration's `Up` steps in order, translating each dia
 The order of the migrations slice you pass doesn't matter. Pending migrations run by `Name`, then `App`, with two rules on top:
 
 - Each app's own migrations always run in `Name` order (`0001_…` before `0002_…`).
-- A migration that adds a foreign key to another app's table (a `CreateTable` or `AddColumn` column with `References`) runs after that app's migration creating the table — whatever the two apps are called and wherever they sit in `InstalledApps`. PostgreSQL refuses a `REFERENCES` clause naming a table that doesn't exist yet, so this is what lets a cross-app foreign key migrate there at all. It matches how foreign keys already ignore `InstalledApps` order at registration ([ADR 0011](../adr/0011-fk-target-validated-after-registration-not-at-register-time.md)).
+- A migration that adds a foreign key to another app's table (a `CreateTable` or `AddColumn` column with `References`) runs after that app's migration creating the table — whatever the two apps are called and wherever they sit in `InstalledApps`. PostgreSQL refuses a `REFERENCES` clause naming a table that doesn't exist yet, so this is what lets a cross-app foreign key migrate there at all. It matches how foreign keys already ignore `InstalledApps` order at registration.
 
 If foreign keys between apps form a cycle (app A's initial migration references app B's table and B's references A's), no order works on PostgreSQL. `tango migrate` then fails before applying anything, naming every migration in the cycle. Break the cycle by moving one of the foreign key columns into a later migration of its app, as an `AddColumn`.
 

@@ -19,9 +19,8 @@ const (
 
 // genericLoginError is returned for any login failure — an unknown email,
 // a wrong password, or an inactive account are all indistinguishable, so
-// an attacker learns nothing about which emails are registered. See ADR
-// 0021; this is deliberately asymmetric with registration's specific
-// duplicate-email error.
+// an attacker learns nothing about which emails are registered. This is deliberately asymmetric with
+// registration's specific duplicate-email error.
 const genericLoginError = "Invalid email or password."
 
 // loginView handles GET (render the login form) and POST (verify

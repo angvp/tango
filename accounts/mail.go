@@ -58,7 +58,7 @@ type MailConfig struct {
 // config.Sender. Without it, their routes aren't mounted and accounts sends
 // no email. config is validated when the app registers, so RunRegistration
 // (and -check) fail on a missing Sender, a malformed From, or a BaseURL
-// that isn't an absolute https:// origin. See ADR 0045.
+// that isn't an absolute https:// origin.
 func WithMail(config MailConfig) Option {
 	return func(c *accountsConfig) { c.mail = &config }
 }

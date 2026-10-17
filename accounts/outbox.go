@@ -38,7 +38,7 @@ type outboxJob struct {
 // drops the email. Stop sends what's queued until its deadline, then
 // cancels the send in progress and waits for the worker to return, so no
 // email is sent after Stop returns. Nothing survives a crash and nothing
-// is retried (ADR 0033).
+// is retried.
 type outbox struct {
 	queue  chan outboxJob
 	sender tangomail.Sender

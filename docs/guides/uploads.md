@@ -2,7 +2,7 @@
 
 `github.com/angvp/tango/storage` keeps uploaded bytes outside your database. It is deliberately small: an object store you call from ordinary Views. There is no `FileField`, no model tag and no admin widget. You keep the metadata in your own model, you authorize every access in your own View, and tanGO's two helpers (`storage.Upload`, `storage.Serve`) do the parts that are easy to get wrong.
 
-The runnable proof is [`examples/uploads`](../../examples/uploads). [ADR 0052](../adr/0052-storage-is-an-explicit-object-store-with-generated-keys-and-no-model-field.md) records why it has this shape.
+The runnable proof is [`examples/uploads`](../../examples/uploads).
 
 ## The pieces
 
@@ -42,7 +42,7 @@ objects, err := s3.New(ctx, s3.Config{
 
 `storage/s3` is a separate module, `github.com/angvp/tango/storage/s3`, so a project that never imports it never sees the AWS SDK in its `go.mod`, `go.sum` or vulnerability scan. `Endpoint` and `PathStyle` select Cloudflare R2 or any other S3-compatible provider. Because S3 fixes an object's metadata when the upload starts and the SHA-256 is only known at the end, `Put` spools the bytes to a temporary file (`Config.TempDir`, default the system temp directory) before uploading them. Memory stays bounded, but you need disk space for one upload at a time.
 
-Native Google Cloud Storage is not part of v0.4.0. The `Store` interface is small enough for an adapter later, and a GCS bucket is reachable today through its S3-compatible interoperability API.
+Native Google Cloud Storage is not built. The `Store` interface is small enough for an adapter later, and a GCS bucket is reachable today through its S3-compatible interoperability API.
 
 ## The write contract
 

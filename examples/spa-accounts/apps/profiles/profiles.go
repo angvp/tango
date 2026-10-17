@@ -1,6 +1,6 @@
 // Package profiles is the host application's own data about an account: the
 // username and display name a single-page client shows. accounts keeps
-// Account free of them (ADR 0020); this app owns them, writes them in the
+// Account free of them; this app owns them, writes them in the
 // same transaction that creates the account, and lets the client log in
 // with the username.
 package profiles
