@@ -79,7 +79,7 @@ then calling `tango.ServeContext` (not `tango.Serve`) with a caller-cancelable c
 ## The WebSocket adapter
 
 ```go
-func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error)) tango.View
+func View(coordinator realtime.Coordinator, authenticate Authenticate, roomID func(*tango.Context) (string, error), opts ...ViewOption) tango.View
 ```
 
 Mount it as an ordinary route:
@@ -96,6 +96,17 @@ registry.Routes().Include("/", tango.URLs{
 `authenticate` (`func(*http.Request) (realtime.Principal, error)`) runs on the plain HTTP request before any upgrade is attempted — a failure responds with an ordinary JSON 401, no partially-established socket. It may call `auth/jwt.Service.Verify` directly (not `Service.Middleware`, which targets ordinary HTTP routes), extracting the token with `jwt.BearerToken` or, since a browser WebSocket handshake cannot set a custom header, `jwt.QueryToken`. It may just as easily use a cookie session or anything else — `realtime`/`realtime/websocket` never import `auth`, `auth/jwt`, or `accounts`.
 
 `View` calls `coordinator.Join` and blocks until it returns successfully before starting the read loop — a client message sent immediately after the socket opens can never race ahead of the room loop's own membership-apply, which is exactly why `Hub.Join` is synchronous in the first place. Every inbound message is then dispatched through `coordinator.DispatchPeer`, carrying the same `Peer` `View` registered at `Join` — never the unrestricted `Hub.Dispatch` — so a connection the Hub has already replaced or closed for a queue overflow can never keep dispatching as if it were still current. Inbound messages are capped at `DefaultMaxMessageSize` (32 KiB); an oversized frame closes the connection rather than being buffered.
+
+### Origins
+
+By default the upgrade accepts only a request whose `Origin` header matches the route's own host, and answers `403` to any other, even when `authenticate` would have accepted it. When the page that opens the socket is served from somewhere else (a frontend dev server on another port, another subdomain in production), say so:
+
+```go
+view := realtimews.View(hub, authenticate, roomID,
+    realtimews.WithOriginPatterns("app.example.com", "https://*.example.com"))
+```
+
+A pattern is a host, optionally with a scheme, and `*` may stand in for part of a segment. Never pass `*` on its own. `realtimews.WithInsecureSkipVerify()` turns the origin check off entirely; it exists for deployments with no real origin to check, such as native clients, or infrastructure that already enforces one. A browser page can open a WebSocket to any host, and the `Origin` check is what stops a hostile page from using a visitor's cookies against yours, so prefer patterns and treat the insecure option as a deliberate decision.
 
 `Leave` is called exactly once, with a fresh bounded background context, in both places the connection can end: after the read loop returns normally, and after a failed `Join`. The latter exists because `Join` has no rollback (see above) — an `EventJoin` handler error can leave membership installed even though `View` is about to close the socket, so `View` always calls `Leave` before closing it. If `Join` failed before membership existed (e.g. a `Snapshot` error), that `Leave` is simply a safe, idempotent no-op.
 

@@ -112,4 +112,6 @@ Nesting is flat. `InTx` on a store that is already in a transaction joins it, wi
 
 `db.ErrNotFound` is the sentinel for "no matching row" on `Get`/`Update`/`Delete`; check it with `errors.Is`.
 
+`db.IsUniqueConstraintViolation(err)` reports whether an error from `Create` or `Update` broke a unique constraint (a `tango:"unique"` field), on either dialect. Use it to let the database decide a duplicate: attempt the write and turn that error into your own answer (a `409`, a form error). A SELECT before the INSERT only narrows the race between two concurrent writers and never closes it, so keep it, if at all, as a friendlier path for the common case.
+
 `db.ErrValueTooLong` is the sentinel for a [bounded string](models-and-tags.md#bounded-strings) longer than its `varchar=n` limit on `Create`/`Update`. Use `errors.As` with `*db.ValueTooLongError` for the model, field, limit (`Max`) and length (`Got`, in runes). The check runs before any SQL, on SQLite and PostgreSQL alike. `Store.Query`, `QueryRow` and any hand-written SQL skip it; PostgreSQL still rejects an over-long value there, SQLite stores it.

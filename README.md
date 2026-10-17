@@ -84,7 +84,7 @@ curl http://localhost:8000/greetings/World/
 ## Where to continue
 
 - **[Tutorial](docs/tutorial/01-bootstrap-routing-json.md)** — build one application, a bulletin board, from an empty directory to a deployed container in ten parts: routing and JSON views, persistence and migrations, the HTML admin, foreign keys, server-rendered pages, accounts and forms, API tokens and rate limits, a live WebSocket feed, background jobs and graceful shutdown, and testing and deployment.
-- **[Guides](docs/guides/)** — standalone, task-oriented references: project structure, application architecture, configuration, models and tags, routing, `Context`, persistence, migrations, admin, app checks, OpenAPI documentation, accounts, mail, uploads, caching, rate limiting, realtime, dialect setup, reusable apps, and relationships/admin foreign keys.
+- **[Guides](docs/guides/)** — standalone, task-oriented references: project structure, application architecture, configuration, models and tags, routing, `Context`, persistence, migrations, admin, app checks, OpenAPI documentation, background jobs, accounts, mail, uploads, caching, rate limiting, realtime, dialect setup, reusable apps, and relationships/admin foreign keys.
 - **[API reference](docs/reference.md)** — the supported public surface, linked to runnable examples. Generated package docs are also available via `go doc` or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango) once published.
 - **[Examples](examples/)**, each with a README giving its purpose and commands:
   - [`jsonapi`](examples/jsonapi): the smallest JSON application, one hand-written app;
@@ -109,7 +109,7 @@ Documentation in this repository is checked, not just written: every checked-in 
 go test ./...
 ```
 
-`scripts/check.sh` runs everything CI runs: gofmt, vet, build, the tests and the offline link check (with `lychee`, or its pinned Docker image when `lychee` is not installed).
+`scripts/check.sh` runs everything CI runs (the Redis and Memcached adapter tests need a server and skip without `TANGO_TEST_REDIS_URL` and `TANGO_TEST_MEMCACHE_ADDR`): gofmt, vet, build, the tests and the offline link check (with `lychee`, or its pinned Docker image when `lychee` is not installed).
 
 `TestExamplesAreIndependentModulesThatCompile` (at the repository root) builds every `examples/*` module and runs its generated `-check` flag; the migration-generation tests in `internal/cli` similarly `go build` a real generated `migrations` package rather than only inspecting its source text.
 
