@@ -11,7 +11,7 @@ import (
 
 // Rebind returns query ready for a dialect whose placeholders are numbered
 // (numbered true: the query is returned unchanged) or positional ("?").
-// Outside single-quoted string literals each $N becomes "?", which is only
+// Outside quoted string literals and identifiers each $N becomes "?", which is only
 // meaningful when the placeholders appear once each, in order 1, 2, 3, …:
 // anything else panics, since silently rebinding would change which argument
 // goes where.
@@ -21,14 +21,20 @@ func Rebind(query string, numbered bool) string {
 	}
 	var out strings.Builder
 	next := 1
-	inLiteral := false
+	var quote byte // the quote character of the literal or identifier being read, or 0
 	for i := 0; i < len(query); i++ {
 		c := query[i]
 		switch {
-		case c == '\'':
-			inLiteral = !inLiteral // a doubled '' flips twice, staying in the literal
+		case c == '\'' || c == '"' || c == '`':
+			// A doubled quote closes and reopens, staying inside.
+			switch quote {
+			case 0:
+				quote = c
+			case c:
+				quote = 0
+			}
 			out.WriteByte(c)
-		case c == '$' && !inLiteral && i+1 < len(query) && isDigit(query[i+1]):
+		case c == '$' && quote == 0 && i+1 < len(query) && isDigit(query[i+1]):
 			j := i + 1
 			for j < len(query) && isDigit(query[j]) {
 				j++

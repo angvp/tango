@@ -57,10 +57,15 @@ const connectTimeout = 10 * time.Second
 // Open returns a fresh database for this test and the Dialect to use with it.
 func Open(t testing.TB) (*sql.DB, db.Dialect) {
 	t.Helper()
-	if parsed := parseRunDSN(t); parsed.Dialect == db.Postgres {
+	parsed := parseRunDSN(t)
+	switch parsed.Dialect {
+	case db.Postgres:
 		return openPostgres(t, parsed.Source), db.Postgres
+	case db.SQLite:
+		return openSQLite(t), db.SQLite
 	}
-	return openSQLite(t), db.SQLite
+	t.Fatalf("testdb: %s names a dialect testdb cannot open", envVar)
+	return nil, parsed.Dialect
 }
 
 // Store returns a db.Store over a fresh database for this test.

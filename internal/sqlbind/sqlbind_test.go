@@ -18,6 +18,7 @@ func TestRebind(t *testing.T) {
 		{"two digit index", "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", false, "VALUES (?,?,?,?,?,?,?,?,?,?)"},
 		{"string literal untouched", "SELECT '$1' FROM t WHERE x = $1", false, "SELECT '$1' FROM t WHERE x = ?"},
 		{"escaped quote in literal", "SELECT 'it''s $1' WHERE x = $1", false, "SELECT 'it''s $1' WHERE x = ?"},
+		{"quoted identifiers untouched", "SELECT `a$1`, \"b$1\" FROM t WHERE x = $1", false, "SELECT `a$1`, \"b$1\" FROM t WHERE x = ?"},
 		{"dollar without digits untouched", "SELECT $$ x", false, "SELECT $$ x"},
 	}
 	for _, tc := range cases {
