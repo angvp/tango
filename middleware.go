@@ -147,7 +147,8 @@ func WithAccessLogger(logger *slog.Logger) AccessLogOption {
 	return func(config *accessLogConfig) { config.logger = logger }
 }
 
-// AccessLogger logs one structured event for each request it wraps. As
+// AccessLogger logs one structured event for each request it wraps. When the
+// logger discards Info events it does no work for the request. As
 // global middleware, it sees Unmatched requests (the router's own 404 and
 // 405) only under MiddlewareScopeAll.
 func AccessLogger(opts ...AccessLogOption) Middleware {
@@ -160,6 +161,10 @@ func AccessLogger(opts ...AccessLogOption) Middleware {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !accessLogEnabled(config.logger, r.Context()) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			state := &responseStateWriter{ResponseWriter: w}
 			started := time.Now()
 			next.ServeHTTP(state, r)
@@ -173,6 +178,16 @@ func AccessLogger(opts ...AccessLogOption) Middleware {
 			})
 		})
 	}
+}
+
+// accessLogEnabled reports whether the logger would keep an access event, so
+// a request whose event would be discarded skips the work of building it. The
+// level is read on every request, as a slog.LevelVar may change it. A handler
+// that panics is treated as enabled: logging then fails inside the guarded call.
+func accessLogEnabled(logger *slog.Logger, ctx context.Context) bool {
+	enabled := true
+	observabilitysafe.Call(func() { enabled = logger.Enabled(ctx, slog.LevelInfo) })
+	return enabled
 }
 
 func instrumentHTTP(next http.Handler, recorder observability.Recorder) http.Handler {

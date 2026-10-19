@@ -4,6 +4,14 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Changed
+
+- **`AccessLogger` is free when its logger discards Info events.** It used to wrap the response and build the event's attributes for every request and only then let the logger drop it (3 allocations a request). It now asks the logger first and calls the next handler directly. A logger that logs Info behaves as before; the level is read on every request, so a `slog.LevelVar` still takes effect at once.
+
+### Documentation
+
+- **Choosing `MaxOpen`.** The configuration guide now explains how the size of the database pool shapes tail latency, with measured figures, and suggests starting near the database's CPU count.
+
 ## [0.5.0] - 2026-10-17
 
 ### Added

@@ -37,7 +37,7 @@ tango.RequestID(tango.WithTrustedHeader("X-Gateway-Request-ID"))
 
 The header name is validated when middleware is constructed. Invalid inbound values are ignored and replaced with a generated ID.
 
-`Recoverer` converts a panic into tanGO's generic JSON 500 response and emits `tango.EventPanic`. `AccessLogger` emits one `tango.EventAccessLog` after the downstream matched route completes. Each middleware can receive its own logger through `WithRequestIDLogger`, `WithRecoveryLogger`, or `WithAccessLogger`; otherwise it uses `slog.Default()`.
+`Recoverer` converts a panic into tanGO's generic JSON 500 response and emits `tango.EventPanic`. `AccessLogger` emits one `tango.EventAccessLog` after the downstream matched route completes. Each middleware can receive its own logger through `WithRequestIDLogger`, `WithRecoveryLogger`, or `WithAccessLogger`; otherwise it uses `slog.Default()`. `AccessLogger` does no work for a request when its logger discards Info events (for example a handler set to Warn), so you can keep it in the middleware list and raise the level to turn the access log off.
 
 Inside a View, `ctx.Logger()` returns the configured logger enriched with the route pattern, HTTP method, and request ID when present.
 
