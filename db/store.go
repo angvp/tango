@@ -167,8 +167,11 @@ func (s *Store) InTx(ctx context.Context, fn func(tx *Store) error) (err error) 
 	return tx.Commit()
 }
 
-// NewStore wraps sqlDB in a Store that generates SQL for dialect.
+// NewStore wraps sqlDB in a Store that generates SQL for dialect. It panics
+// on a Dialect value this release does not define, rather than generating
+// another dialect's SQL.
 func NewStore(sqlDB *sql.DB, dialect Dialect) *Store {
+	checkDialect(dialect)
 	return &Store{db: sqlDB, dialect: dialect}
 }
 
@@ -198,9 +201,14 @@ type execer interface {
 // word ("User", "Order", "Group") works. SQL passed to Query and QueryRow is
 // the caller's own and is not rewritten.
 func (s *Store) ident(name string) string {
-	style := sqlident.Backtick
-	if s.dialect == Postgres {
+	var style sqlident.Style
+	switch s.dialect {
+	case SQLite:
+		style = sqlident.Backtick
+	case Postgres:
 		style = sqlident.DoubleQuote
+	default:
+		panic(unsupportedDialect(s.dialect))
 	}
 	return sqlident.Quote(style, ColumnName(name))
 }
@@ -368,7 +376,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 
 	needsBackfill := primaryKeyField.Name != "" && primaryKeyValue.IsZero()
 
-	if s.dialect == Postgres && needsBackfill {
+	if s.dialect.returnsInsertedKey() && needsBackfill {
 		query := fmt.Sprintf(
 			"INSERT INTO %s (%s) VALUES (%s) RETURNING %s",
 			tableName,
@@ -392,7 +400,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 		strings.Join(placeholders, ", "),
 	)
 
-	if s.dialect == Postgres && primaryKeyField.Name != "" {
+	if s.dialect.returnsInsertedKey() && primaryKeyField.Name != "" {
 		if id, ok := explicitIntegerID(primaryKeyValue); ok {
 			return s.insertWithExplicitID(ctx, meta, primaryKeyField, id, query, args)
 		}
@@ -785,7 +793,7 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 
 	if query.Limit > 0 {
 		sqlQuery += fmt.Sprintf(" LIMIT %d", query.Limit)
-	} else if query.Offset > 0 && s.dialect == SQLite {
+	} else if query.Offset > 0 && s.dialect.offsetNeedsLimit() {
 		// SQLite refuses OFFSET without LIMIT; -1 means no limit.
 		sqlQuery += " LIMIT -1"
 	}

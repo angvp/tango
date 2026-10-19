@@ -57,6 +57,9 @@ func preflightNarrowing(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, 
 
 // primaryKeyColumn finds the table's own single primary-key column.
 func primaryKeyColumn(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, table string) (string, error) {
+	if err := checkDialect(dialect); err != nil {
+		return "", err
+	}
 	query := "SELECT name FROM pragma_table_info($1) WHERE pk > 0"
 	arg := table
 	if dialect == db.Postgres {

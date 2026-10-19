@@ -18,6 +18,9 @@ import (
 // application code should use tango migrate rather than calling ApplyStep
 // directly.
 func ApplyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step) error {
+	if err := checkDialect(dialect); err != nil {
+		return err
+	}
 	return applyStep(ctx, sqlDB, dialect, step, false)
 }
 
@@ -41,10 +44,13 @@ func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		}
 		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", quote(dialect, s.Table), addColumnDefSQL(dialect, s.Column)))
 	case DropColumn:
-		if dialect == db.Postgres {
+		switch dialect {
+		case db.Postgres:
 			return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", quote(dialect, s.Table), quote(dialect, s.Column)))
+		case db.SQLite:
+			return rebuildSQLiteTable(ctx, sqlDB, s.Table, dropSQLiteColumn(s.Table, s.Column), nil)
 		}
-		return rebuildSQLiteTable(ctx, sqlDB, s.Table, dropSQLiteColumn(s.Table, s.Column), nil)
+		return unsupportedDialect(dialect)
 	case AlterColumnUnique:
 		return applyUniqueIndex(ctx, sqlDB, dialect, s.Table, s.Column, s.Unique)
 	case CreateIndex:
@@ -87,10 +93,7 @@ func quote(dialect db.Dialect, name string) string {
 }
 
 func identStyle(dialect db.Dialect) sqlident.Style {
-	if dialect == db.Postgres {
-		return sqlident.DoubleQuote
-	}
-	return sqlident.Backtick
+	return pick(dialect, sqlident.Backtick, sqlident.DoubleQuote)
 }
 
 func indexName(table, column string) string {
@@ -150,10 +153,7 @@ func createTableSQL(dialect db.Dialect, s CreateTable) []string {
 func columnDefSQL(dialect db.Dialect, c Column) string {
 	name := quote(dialect, c.Name)
 	if c.PrimaryKey && c.Type == "integer" {
-		if dialect == db.Postgres {
-			return name + " BIGSERIAL PRIMARY KEY" + referencesSQL(dialect, c)
-		}
-		return name + " INTEGER PRIMARY KEY AUTOINCREMENT" + referencesSQL(dialect, c)
+		return name + " " + pick(dialect, "INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY") + referencesSQL(dialect, c)
 	}
 
 	typ := baseTypeSQL(dialect, c.Type, c.Length)
@@ -197,21 +197,40 @@ func baseTypeSQL(dialect db.Dialect, columnType string, length int) string {
 	case "boolean":
 		return "BOOLEAN"
 	case "real":
-		if dialect == db.Postgres {
-			return "DOUBLE PRECISION"
-		}
-		return "REAL"
+		return pick(dialect, "REAL", "DOUBLE PRECISION")
 	case "timestamp":
-		if dialect == db.Postgres {
-			return "TIMESTAMPTZ"
-		}
-		return "TIMESTAMP"
+		return pick(dialect, "TIMESTAMP", "TIMESTAMPTZ")
 	case "integer":
-		if dialect == db.Postgres {
-			return "BIGINT"
-		}
-		return "INTEGER"
+		return pick(dialect, "INTEGER", "BIGINT")
 	default:
 		return "TEXT"
 	}
+}
+
+// checkDialect refuses a Dialect this package has no SQL for, so a value from
+// a newer release can never be treated as SQLite.
+func checkDialect(dialect db.Dialect) error {
+	switch dialect {
+	case db.SQLite, db.Postgres:
+		return nil
+	}
+	return unsupportedDialect(dialect)
+}
+
+func unsupportedDialect(dialect db.Dialect) error {
+	return fmt.Errorf("tango migration: unsupported dialect %d", int(dialect))
+}
+
+// pick returns the value for dialect. It takes one argument per supported
+// dialect, so adding a dialect makes every call site fail to compile until
+// it says what the new dialect does; an unknown value panics rather than
+// quietly taking another dialect's branch. Both arguments are evaluated.
+func pick[T any](dialect db.Dialect, sqlite, postgres T) T {
+	switch dialect {
+	case db.SQLite:
+		return sqlite
+	case db.Postgres:
+		return postgres
+	}
+	panic(unsupportedDialect(dialect).Error())
 }

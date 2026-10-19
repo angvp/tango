@@ -13,11 +13,11 @@ import (
 // EnsureTrackingTable creates the tango_migrations table if it doesn't
 // already exist.
 func EnsureTrackingTable(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect) error {
-	pkClause := "PRIMARY KEY (app, name)"
-	timestampType := "TIMESTAMP"
-	if dialect == db.Postgres {
-		timestampType = "TIMESTAMPTZ"
+	if err := checkDialect(dialect); err != nil {
+		return err
 	}
+	pkClause := "PRIMARY KEY (app, name)"
+	timestampType := pick(dialect, "TIMESTAMP", "TIMESTAMPTZ")
 	query := fmt.Sprintf(
 		"CREATE TABLE IF NOT EXISTS tango_migrations (app TEXT NOT NULL, name TEXT NOT NULL, applied_at %s NOT NULL, %s)",
 		timestampType, pkClause,
@@ -137,8 +137,5 @@ func trackingInsertSQL(dialect db.Dialect) string {
 }
 
 func placeholderAt(dialect db.Dialect, n int) string {
-	if dialect == db.Postgres {
-		return fmt.Sprintf("$%d", n)
-	}
-	return "?"
+	return pick(dialect, "?", fmt.Sprintf("$%d", n))
 }

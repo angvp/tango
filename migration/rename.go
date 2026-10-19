@@ -38,6 +38,9 @@ func renameColumn(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s Rena
 // ALTER INDEX ... RENAME, so it drops the index and creates it again on
 // column.
 func renameIndex(ctx context.Context, tx *sql.Tx, dialect db.Dialect, table, column, from, to string, unique bool) error {
+	if checkDialect(dialect) != nil {
+		return unsupportedDialect(dialect)
+	}
 	if dialect == db.Postgres {
 		_, err := tx.ExecContext(ctx, fmt.Sprintf("ALTER INDEX IF EXISTS %s RENAME TO %s", quote(dialect, from), quote(dialect, to)))
 		return err
@@ -91,6 +94,9 @@ func renameTable(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s Renam
 // tableIndexNames lists the indexes created on table.
 func tableIndexNames(ctx context.Context, tx *sql.Tx, dialect db.Dialect, table string) ([]string, error) {
 	query := sqliteCreatedIndexesSQL
+	if checkDialect(dialect) != nil {
+		return nil, unsupportedDialect(dialect)
+	}
 	if dialect == db.Postgres {
 		query = "SELECT indexname, '' FROM pg_indexes WHERE schemaname = current_schema() AND tablename = $1"
 	}

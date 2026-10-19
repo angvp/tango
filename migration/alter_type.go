@@ -147,7 +147,13 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 			return err
 		}
 	}
+	if err := checkDialect(dialect); err != nil {
+		return err
+	}
 	convert := conversion.sql[dialect]
+	if convert == nil {
+		return unsupportedDialect(dialect)
+	}
 	if dialect == db.Postgres {
 		column := quote(dialect, s.Column)
 		actions := []string{fmt.Sprintf("ALTER COLUMN %s TYPE %s USING %s", column, baseTypeSQL(dialect, s.To, s.ToLength), convert(column))}
