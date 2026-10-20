@@ -134,3 +134,22 @@ func TestMySQLUnboundedUniqueTextBecomesVarchar255AndPlainTextIsLongtext(t *test
 		t.Errorf("body = %q, want text (LONGTEXT)", got)
 	}
 }
+
+func TestUniquenessAddedLaterKeepsTheColumnDefault(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
+	applySteps(t, sqlDB, dialect,
+		CreateTable{Table: "account", Columns: []Column{
+			{Name: "id", Type: "integer", PrimaryKey: true},
+		}},
+		AddColumn{Table: "account", Column: Column{Name: "role", Type: "text", Default: "'member'"}},
+		AlterColumnUnique{Table: "account", Column: "role", Unique: true},
+	)
+	mustExec(t, sqlDB, "INSERT INTO account (id) VALUES (1)")
+	var role string
+	if err := sqlDB.QueryRowContext(context.Background(), "SELECT role FROM account WHERE id = 1").Scan(&role); err != nil {
+		t.Fatal(err)
+	}
+	if role != "member" {
+		t.Fatalf("role = %q, want the default %q kept", role, "member")
+	}
+}

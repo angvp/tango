@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"strings"
 
 	"github.com/angvp/tango/db"
 )
@@ -153,17 +154,23 @@ func mysqlDropColumn(ctx context.Context, sqlDB *sql.DB, s DropColumn) error {
 type mysqlColumnInfo struct {
 	dataType string
 	nullable bool
+	// defaultText is the column's default as text; hasDefault is false when
+	// it has none.
+	defaultText string
+	hasDefault  bool
 }
 
 func mysqlColumn(ctx context.Context, sqlDB queryRower, table, column string) (mysqlColumnInfo, error) {
 	var info mysqlColumnInfo
 	var nullable string
-	err := sqlDB.QueryRowContext(ctx, `SELECT data_type, is_nullable FROM information_schema.columns
-		WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`, table, column).Scan(&info.dataType, &nullable)
+	var columnDefault sql.NullString
+	err := sqlDB.QueryRowContext(ctx, `SELECT data_type, is_nullable, column_default FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`, table, column).Scan(&info.dataType, &nullable, &columnDefault)
 	if errors.Is(err, sql.ErrNoRows) {
 		return info, fmt.Errorf("tango migration: column %q does not exist on table %q", column, table)
 	}
 	info.nullable = nullable == "YES"
+	info.defaultText, info.hasDefault = columnDefault.String, columnDefault.Valid
 	return info, err
 }
 
@@ -186,7 +193,13 @@ func ensureIndexable(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, tab
 	}
 	switch info.dataType {
 	case "text", "tinytext", "mediumtext", "longtext":
-		return exec(ctx, sqlDB, mysqlModifySQL(table, column, mysqlIndexableText, info.nullable, ""))
+		keep := ""
+		if info.hasDefault {
+			// A text column's default is always an expression; MySQL reports
+			// it escaped, so the quotes are unescaped to re-state it.
+			keep = "(" + strings.ReplaceAll(info.defaultText, `\'`, "'") + ")"
+		}
+		return exec(ctx, sqlDB, mysqlModifySQL(table, column, mysqlIndexableText, info.nullable, keep))
 	}
 	return nil
 }

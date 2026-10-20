@@ -279,14 +279,14 @@ func validateLengths(meta model.ModelMeta, structValue reflect.Value, dialect Di
 }
 
 // effectiveMaxLength is the most runes field may hold on dialect: its declared
-// bound, or, for an otherwise unbounded unique or indexed string on a dialect
+// bound, or, for an otherwise unbounded unique, indexed or primary-key string on a dialect
 // that cannot index unbounded text, that dialect's implicit bound. 0 means
 // unbounded.
 func effectiveMaxLength(field model.FieldMeta, dialect Dialect) int {
 	if field.MaxLength > 0 {
 		return field.MaxLength
 	}
-	if field.Type != nil && field.Type.Kind() == reflect.String && (field.Unique || field.Indexed) && !field.PrimaryKey && !field.JSON {
+	if field.Type != nil && field.Type.Kind() == reflect.String && (field.Unique || field.Indexed || field.PrimaryKey) && !field.JSON {
 		return dialect.implicitStringBound()
 	}
 	return 0

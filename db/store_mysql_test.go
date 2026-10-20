@@ -145,3 +145,19 @@ func TestLikeIsCaseSensitiveOnMySQLAndPostgreSQL(t *testing.T) {
 		t.Fatalf("LIKE 'al%%' matched %d rows of 'Alice'; case-insensitive match expected = %v", len(found), wantMatch)
 	}
 }
+
+type mysqlSlug struct {
+	Slug string `tango:"pk"`
+}
+
+func TestStringPrimaryKeyIsBoundedAt255RunesOnMySQL(t *testing.T) {
+	testdb.MySQLOnly(t, "the implicit bound exists only where unbounded text cannot be indexed")
+	sqlDB, dialect, registry := openTables(t, mysqlSlug{})
+	store := db.NewStore(sqlDB, dialect)
+	meta := metaFor(t, registry, mysqlSlug{})
+	err := store.Create(context.Background(), meta, &mysqlSlug{Slug: strings.Repeat("é", 256)})
+	var tooLong *db.ValueTooLongError
+	if !errors.As(err, &tooLong) || tooLong.Field != "Slug" || tooLong.Max != 255 {
+		t.Fatalf("Create with a 256-rune primary key = %v, want *ValueTooLongError{Slug, Max 255}", err)
+	}
+}
