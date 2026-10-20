@@ -55,7 +55,7 @@ A mapping that breaks any of these makes the run fail, naming what you asked for
 |---|---|---|
 | `integer` (Go `int`, `int64`, …) | `real` (`float64`) | the same number |
 | `integer` | `text` (`string`) | its decimal digits, `42` → `"42"` |
-| `real` | `text` | PostgreSQL's float text form on both databases: `1.0` → `"1"`, `1.5` → `"1.5"`, `1e20` → `"1e+20"` |
+| `real` | `text` | PostgreSQL's float text form on every database: `1.0` → `"1"`, `1.5` → `"1.5"`, `1e20` → `"1e+20"` |
 | `boolean` (`bool`) | `integer` | `true` → `1`, `false` → `0` |
 | `boolean` | `text` | `"true"` / `"false"` |
 

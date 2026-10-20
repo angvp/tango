@@ -18,7 +18,8 @@ const mysqlTableOptions = " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb
 
 // mysqlIndexableText is the type of a text column MySQL has to index: it
 // cannot index unbounded text, so a primary key, unique or indexed bare
-// string is VARCHAR(255), the bound db.Store enforces for it as well.
+// string is VARCHAR(255), the bound db.Store enforces for it as well (the
+// same 255 as db.Dialect.implicitStringBound; change them together).
 const mysqlIndexableText = "VARCHAR(255)"
 
 // mysqlUnboundedText reports whether a migration column type is unbounded
@@ -150,7 +151,7 @@ func mysqlDropColumn(ctx context.Context, sqlDB *sql.DB, s DropColumn) error {
 	return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", quote(db.MySQL, s.Table), quote(db.MySQL, s.Column)))
 }
 
-// columnInfo is what MySQL reports about one column.
+// mysqlColumnInfo is what MySQL reports about one column.
 type mysqlColumnInfo struct {
 	dataType string
 	nullable bool

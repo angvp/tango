@@ -281,7 +281,7 @@ Every setting the board needs is now an environment variable, with sensible loca
 | Variable | What it sets | Default |
 |---|---|---|
 | `TANGO_ADDR` | The address to listen on | `:8000` |
-| `TANGO_DB_DSN` | The database to connect to; its scheme picks SQLite or Postgres | `sqlite://app.db` |
+| `TANGO_DB_DSN` | The database to connect to; its scheme picks SQLite, Postgres or MySQL | `sqlite://app.db` |
 | `BOARD_JWT_SECRET` | The API token signing secret (part 7) | none — required |
 
 Locally, `.env` fills them in; in production, set them in the environment instead. Real environment variables always win over `.env`, and the app runs fine without a `.env` file at all.
@@ -401,7 +401,7 @@ Over ten parts, the board grew from an empty directory into a complete applicati
 - Server-rendered pages built from route names, with sign-up, login, and CSRF-safe forms (parts 5, 6)
 - A live front page over WebSockets (part 8)
 - A scheduled cleanup job, structured logs, and graceful shutdown (part 9)
-- Tests through the real app, and a 28 MB container image that runs on SQLite or Postgres (part 10)
+- Tests through the real app, and a 28 MB container image that runs on SQLite, Postgres or MySQL (part 10)
 
 Nothing happened by magic along the way. Every app is listed in `project/project.go`, every route is declared where its app registers, every table came from a migration you generated and read, and every setting comes from the environment. That explicitness is what tanGO is for.
 

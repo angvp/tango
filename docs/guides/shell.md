@@ -216,6 +216,8 @@ index 8e79dd6..b31def2 100644
          return err
 ```
 
+**Moving a shell project to MySQL.** A `shell/main.go` generated before MySQL support has a `databaseLabel` that treats every DSN that is not PostgreSQL as a SQLite path, so with a `mysql://` DSN it would print the user and password. Before pointing such a project at MySQL, copy the new `databaseLabel` and `mysqlDatabaseLabel` functions from a freshly scaffolded project (or from [`examples/board/shell/main.go`](../../examples/board/shell/main.go)); they print only `host:port/db`.
+
 The upgrade is tested against the scaffold as it was before the shell: [`internal/cli/testdata/legacy_scaffold`](../../internal/cli/testdata/legacy_scaffold) holds that scaffold and the full diff for both variants, and a test applies them and runs the result. A project that does not upgrade keeps running as a server; only `tango shell` needs the new files, and without them it says which file is missing and links here. Once `project/project.go` exists, `tango newapp` tells you to add new apps there.
 
 ## What is covered
