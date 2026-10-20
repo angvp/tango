@@ -372,6 +372,10 @@ func TestStoreDeleteCascadeExecDeleteFailureSurfacesAndRollsBack(t *testing.T) {
 			CREATE TRIGGER block_post_delete BEFORE DELETE ON cascade_post
 			FOR EACH ROW EXECUTE FUNCTION block_post_delete()`,
 		},
+		db.MySQL: {`
+			CREATE TRIGGER block_post_delete BEFORE DELETE ON cascade_post
+			FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'delete blocked for test'`,
+		},
 	}[dialect]
 	for _, stmt := range trigger {
 		if _, err := sqlDB.ExecContext(ctx, stmt); err != nil {

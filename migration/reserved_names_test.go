@@ -82,11 +82,15 @@ func TestQuotedStepsOperateOnTablesCreatedUnquoted(t *testing.T) {
 	ctx := context.Background()
 	sqlDB, dialect := testdb.Open(t)
 	idType := "INTEGER PRIMARY KEY AUTOINCREMENT"
-	if dialect == db.Postgres {
+	slugType := "TEXT"
+	switch dialect {
+	case db.Postgres:
 		idType = "BIGSERIAL PRIMARY KEY"
+	case db.MySQL:
+		idType, slugType = "BIGINT AUTO_INCREMENT PRIMARY KEY", "VARCHAR(255)"
 	}
 	for _, statement := range []string{
-		"CREATE TABLE legacy_widget (id " + idType + ", name TEXT, slug TEXT)",
+		"CREATE TABLE legacy_widget (id " + idType + ", name VARCHAR(255), slug " + slugType + ")",
 		"CREATE INDEX idx_legacy_widget_name ON legacy_widget (name)",
 		"CREATE UNIQUE INDEX uniq_legacy_widget_slug ON legacy_widget (slug)",
 	} {

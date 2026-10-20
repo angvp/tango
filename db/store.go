@@ -203,7 +203,7 @@ type execer interface {
 func (s *Store) ident(name string) string {
 	var style sqlident.Style
 	switch s.dialect {
-	case SQLite:
+	case SQLite, MySQL:
 		style = sqlident.Backtick
 	case Postgres:
 		style = sqlident.DoubleQuote
@@ -261,20 +261,35 @@ func jsonTextProblem(text string) error {
 // declared maximum, returning a *ValueTooLongError for the first one, in
 // declaration order, that holds too many runes. It runs before any SQL, so it
 // is the guarantee on dialects that do not enforce the length themselves.
-func validateLengths(meta model.ModelMeta, structValue reflect.Value) error {
+func validateLengths(meta model.ModelMeta, structValue reflect.Value, dialect Dialect) error {
 	for _, field := range meta.Fields {
-		if field.MaxLength == 0 {
+		maxLength := effectiveMaxLength(field, dialect)
+		if maxLength == 0 {
 			continue
 		}
 		fieldValue := structValue.FieldByName(field.Name)
 		if !fieldValue.IsValid() || fieldValue.Kind() != reflect.String {
 			continue
 		}
-		if got := utf8.RuneCountInString(fieldValue.String()); got > field.MaxLength {
-			return &ValueTooLongError{Model: meta.Name, Field: field.Name, Max: field.MaxLength, Got: got}
+		if got := utf8.RuneCountInString(fieldValue.String()); got > maxLength {
+			return &ValueTooLongError{Model: meta.Name, Field: field.Name, Max: maxLength, Got: got}
 		}
 	}
 	return nil
+}
+
+// effectiveMaxLength is the most runes field may hold on dialect: its declared
+// bound, or, for an otherwise unbounded unique or indexed string on a dialect
+// that cannot index unbounded text, that dialect's implicit bound. 0 means
+// unbounded.
+func effectiveMaxLength(field model.FieldMeta, dialect Dialect) int {
+	if field.MaxLength > 0 {
+		return field.MaxLength
+	}
+	if field.Type != nil && field.Type.Kind() == reflect.String && (field.Unique || field.Indexed) && !field.PrimaryKey && !field.JSON {
+		return dialect.implicitStringBound()
+	}
+	return 0
 }
 
 // validateForeignKeys checks that every set (non-zero) foreign key field on
@@ -337,7 +352,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 
 	structValue := value.Elem()
 
-	if err := validateLengths(meta, structValue); err != nil {
+	if err := validateLengths(meta, structValue, s.dialect); err != nil {
 		return err
 	}
 	if err := validateJSON(meta, structValue); err != nil {
@@ -371,7 +386,7 @@ func (s *Store) Create(ctx context.Context, meta model.ModelMeta, dest any) erro
 
 		columns = append(columns, s.ident(field.Name))
 		placeholders = append(placeholders, placeholder(s.dialect, len(placeholders)+1))
-		args = append(args, columnValue(field, fieldValue))
+		args = append(args, columnValue(field, fieldValue, s.dialect))
 	}
 
 	needsBackfill := primaryKeyField.Name != "" && primaryKeyValue.IsZero()
@@ -549,7 +564,7 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 	}
 	structValue := value.Elem()
 
-	if err := validateLengths(meta, structValue); err != nil {
+	if err := validateLengths(meta, structValue, s.dialect); err != nil {
 		return err
 	}
 	if err := validateJSON(meta, structValue); err != nil {
@@ -576,7 +591,7 @@ func (s *Store) Update(ctx context.Context, meta model.ModelMeta, dest any) erro
 			return fmt.Errorf("tango db: field %q not found on %s", field.Name, meta.Name)
 		}
 		assignments = append(assignments, s.ident(field.Name)+" = "+placeholder(s.dialect, len(assignments)+1))
-		args = append(args, columnValue(field, fieldValue))
+		args = append(args, columnValue(field, fieldValue, s.dialect))
 	}
 	args = append(args, primaryKeyValue)
 
@@ -794,8 +809,8 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 	if query.Limit > 0 {
 		sqlQuery += fmt.Sprintf(" LIMIT %d", query.Limit)
 	} else if query.Offset > 0 && s.dialect.offsetNeedsLimit() {
-		// SQLite refuses OFFSET without LIMIT; -1 means no limit.
-		sqlQuery += " LIMIT -1"
+		// SQLite and MySQL refuse OFFSET without LIMIT.
+		sqlQuery += " LIMIT " + s.dialect.noLimit()
 	}
 	if query.Offset > 0 {
 		sqlQuery += fmt.Sprintf(" OFFSET %d", query.Offset)
@@ -857,7 +872,7 @@ func (s *Store) whereClause(meta model.ModelMeta, query Query) (string, []any, e
 		clauses := make([]string, len(conditions.items))
 		for i, condition := range conditions.items {
 			clauses[i] = s.ident(condition.Field) + " " + string(condition.Op) + " " + placeholder(s.dialect, len(args)+1)
-			args = append(args, condition.Value)
+			args = append(args, argumentValue(s.dialect, condition.Value))
 		}
 		groups = append(groups, "("+strings.Join(clauses, conditions.join)+")")
 	}
@@ -935,11 +950,22 @@ func scanFieldsInto(scanner rowScanner, structValue reflect.Value, fields []mode
 // its zero value is unset, so it is written as NULL: the database's
 // REFERENCES constraint accepts NULL but would reject a reference to a
 // nonexistent row 0.
-func columnValue(field model.FieldMeta, fieldValue reflect.Value) any {
+func columnValue(field model.FieldMeta, fieldValue reflect.Value, dialect Dialect) any {
 	if field.ForeignKey != "" && fieldValue.IsZero() {
 		return nil
 	}
-	return fieldValue.Interface()
+	return argumentValue(dialect, fieldValue.Interface())
+}
+
+// argumentValue is value as the dialect's driver should receive it. MySQL has
+// no year 0 (its zero date, 0000-00-00, is refused in strict mode), so an
+// unset time.Time is written as NULL, which reads back as the zero time like
+// any other NULL.
+func argumentValue(dialect Dialect, value any) any {
+	if t, ok := value.(time.Time); ok && t.IsZero() && dialect == MySQL {
+		return nil
+	}
+	return value
 }
 
 // scanNullAsZero scans one row into fields, reading SQL NULL as the field's

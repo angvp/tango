@@ -3,6 +3,7 @@ package admin_test
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,6 +54,17 @@ func seedAdminAccountAndSession(t *testing.T, sqlDB *sql.DB, store *db.Store) {
 func insertReturningID(t *testing.T, sqlDB *sql.DB, query string, args ...any) int64 {
 	t.Helper()
 	var id int64
+	if testdb.Dialect() == db.MySQL {
+		// MySQL has no RETURNING: run the insert and read the generated key.
+		result, err := sqlDB.Exec(strings.TrimSuffix(strings.TrimSpace(query), " RETURNING id"), args...)
+		if err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+		if id, err = result.LastInsertId(); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+		return id
+	}
 	if err := sqlDB.QueryRow(query, args...).Scan(&id); err != nil {
 		t.Fatalf("insert: %v", err)
 	}

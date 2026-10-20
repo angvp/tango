@@ -59,7 +59,7 @@ func buildGadgetAdmin(t *testing.T) (http.Handler, *sql.DB) {
 func readGadget(t *testing.T, sqlDB *sql.DB, id int64) widgetGadget {
 	t.Helper()
 	var g widgetGadget
-	var startsAt string
+	var startsAt sql.NullString // an unset time is NULL on MySQL
 	if err := sqlDB.QueryRow(`SELECT id, active, count, score, starts_at FROM widget_gadget WHERE id = $1`, id).
 		Scan(&g.ID, &g.Active, &g.Count, &g.Score, &startsAt); err != nil {
 		t.Fatalf("read gadget: %v", err)

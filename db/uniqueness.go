@@ -4,11 +4,16 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// mysqlDuplicateEntry is MySQL's error number for a unique-key violation
+// (ER_DUP_ENTRY).
+const mysqlDuplicateEntry = 1062
+
 // IsUniqueConstraintViolation reports whether err is a unique-constraint
-// violation returned by Create or Update, on either supported dialect.
+// violation returned by Create or Update, on any supported dialect.
 //
 // This exists so a caller can attempt a write directly and treat the
 // database's own unique constraint as the actual correctness boundary for
@@ -25,6 +30,11 @@ func IsUniqueConstraintViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		return pgErr.Code == "23505"
+	}
+
+	var myErr *mysql.MySQLError
+	if errors.As(err, &myErr) {
+		return myErr.Number == mysqlDuplicateEntry
 	}
 
 	// modernc.org/sqlite does not expose a typed error for this; its error

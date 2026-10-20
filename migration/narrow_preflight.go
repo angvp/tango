@@ -67,6 +67,9 @@ func primaryKeyColumn(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, ta
 			WHERE i.indisprimary AND i.indrelid = $1::regclass`
 		arg = quote(dialect, table)
 	}
+	if dialect == db.MySQL {
+		return mysqlPrimaryKey(ctx, sqlDB, table)
+	}
 	rows, err := sqlDB.QueryContext(ctx, query, arg)
 	if err != nil {
 		return "", err

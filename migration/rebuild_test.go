@@ -16,8 +16,13 @@ import (
 func indexNames(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table string) []string {
 	t.Helper()
 	query := "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = $1 AND sql IS NOT NULL"
-	if dialect == db.Postgres {
+	switch dialect {
+	case db.Postgres:
 		query = "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = $1 AND indexname NOT LIKE '%_pkey'"
+	case db.MySQL:
+		// PRIMARY is the key itself, and a foreign key's own index carries the
+		// constraint's name; neither is an index the migrations created.
+		query = "SELECT DISTINCT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = $1 AND index_name <> 'PRIMARY' AND index_name NOT LIKE 'fk\\_%'"
 	}
 	rows, err := sqlDB.Query(query, table)
 	if err != nil {

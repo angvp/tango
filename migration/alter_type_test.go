@@ -17,8 +17,11 @@ import (
 func columnType(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table, column string) string {
 	t.Helper()
 	query := "SELECT type FROM pragma_table_info($1) WHERE name = $2"
-	if dialect == db.Postgres {
+	switch dialect {
+	case db.Postgres:
 		query = "SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2"
+	case db.MySQL:
+		query = "SELECT data_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = $1 AND column_name = $2"
 	}
 	var typ string
 	if err := sqlDB.QueryRow(query, table, column).Scan(&typ); err != nil {
@@ -132,6 +135,7 @@ func TestAlterColumnTypeConvertsEveryRowOnBothDialects(t *testing.T) {
 }
 
 func TestFailedAlterColumnTypeChangesNothing(t *testing.T) {
+	testdb.NotMySQL(t, "MySQL changes a column's type with one atomic MODIFY and has no dependency, such as a view, that makes it fail")
 	for _, w := range widenings {
 		t.Run(w.from+"_to_"+w.to, func(t *testing.T) {
 			sqlDB, dialect := wideningFixture(t, w)

@@ -1,5 +1,5 @@
 // Package testdb gives each test a fresh database for the run's Test
-// dialect, so one test suite runs unchanged against SQLite or PostgreSQL.
+// dialect, so one test suite runs unchanged against SQLite, PostgreSQL or MySQL.
 //
 // The run's dialect comes from one variable, TANGO_TEST_DSN, read by its
 // scheme through db.ParseDSN, the same grammar an app's TANGO_DB_DSN uses:
@@ -7,6 +7,7 @@
 //	unset or sqlite://:memory:   SQLite, in memory
 //	sqlite://<any path>          SQLite, a new file per test under t.TempDir()
 //	postgres://… postgresql://…  PostgreSQL, a new schema per test
+//	mysql://…                    MySQL, a new database per test
 //
 // One scheme-qualified variable, rather than a dialect variable beside a
 // DSN, means the two can never disagree, and anyone who can configure an
@@ -14,18 +15,24 @@
 // only selects file-backed mode; it is never opened, because a file shared
 // between tests would leak rows from one into the next.
 //
+// A MySQL run creates a database for each Open and drops it when the test
+// ends, so the account in the DSN needs the CREATE and DROP privileges; raw
+// SQL written with numbered placeholders is rewritten to "?" for it.
+//
 // A PostgreSQL run gets a schema created for each Open, set as every
 // connection's search_path and dropped with CASCADE when the test ends, so
 // tests may commit, run DDL and run in parallel without seeing each other.
-// An unreachable server or a malformed DSN fails the test: a PostgreSQL run
-// never passes by skipping. Tests that cannot run on one dialect say so with
-// SQLiteOnly or PostgresOnly and a reason, so every exemption is greppable.
+// An unreachable server or a malformed DSN fails the test: a PostgreSQL or
+// MySQL run never passes by skipping. Tests that cannot run on one dialect
+// say so with SQLiteOnly, PostgresOnly or MySQLOnly and a reason, so every
+// exemption is greppable.
 //
-// testdb imports the modernc.org/sqlite and pgx drivers itself, so tests
+// testdb imports the modernc.org/sqlite, pgx and MySQL drivers itself, so tests
 // need no driver imports of their own.
 //
 // Raw SQL in a test can use PostgreSQL's numbered placeholders ($1, $2, …)
-// and TRUE/FALSE on either dialect: modernc.org/sqlite binds $N by number.
+// and TRUE/FALSE on every dialect: modernc.org/sqlite binds $N by number, and
+// a MySQL run rewrites them to "?".
 package testdb
 
 import (
@@ -63,6 +70,8 @@ func Open(t testing.TB) (*sql.DB, db.Dialect) {
 		return openPostgres(t, parsed.Source), db.Postgres
 	case db.SQLite:
 		return openSQLite(t), db.SQLite
+	case db.MySQL:
+		return openMySQL(t, parsed.Source), db.MySQL
 	}
 	t.Fatalf("testdb: %s names a dialect testdb cannot open", envVar)
 	return nil, parsed.Dialect
@@ -160,7 +169,7 @@ func Dialect() db.Dialect {
 }
 
 // SQLiteOnly skips the test unless the run's Test dialect is SQLite. The
-// reason says what the test needs that PostgreSQL cannot give it.
+// reason says what the test needs that the other dialects cannot give it.
 func SQLiteOnly(t testing.TB, reason string) {
 	t.Helper()
 	if parseRunDSN(t).Dialect != db.SQLite {
@@ -169,7 +178,7 @@ func SQLiteOnly(t testing.TB, reason string) {
 }
 
 // PostgresOnly skips the test unless the run's Test dialect is PostgreSQL.
-// The reason says what the test needs that SQLite cannot give it.
+// The reason says what the test needs that the other dialects cannot give it.
 func PostgresOnly(t testing.TB, reason string) {
 	t.Helper()
 	if parseRunDSN(t).Dialect != db.Postgres {

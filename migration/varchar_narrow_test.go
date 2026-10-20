@@ -64,7 +64,7 @@ func applyAll(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, migrations ...Mig
 
 func titles(t *testing.T, sqlDB *sql.DB) []string {
 	t.Helper()
-	rows, err := sqlDB.Query("SELECT CAST(title AS TEXT) FROM headline ORDER BY id")
+	rows, err := sqlDB.Query(castTitleToText + " FROM headline ORDER BY id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,3 +366,12 @@ func TestNarrowingPreflightSeesPhysicalNamesBeforeARenameInTheSameMigration(t *t
 		})
 	}
 }
+
+// castTitleToText selects the title as text on every dialect (MySQL calls the
+// target type CHAR).
+var castTitleToText = func() string {
+	if testdb.Dialect() == db.MySQL {
+		return "SELECT CAST(title AS CHAR)"
+	}
+	return "SELECT CAST(title AS TEXT)"
+}()

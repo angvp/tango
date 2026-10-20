@@ -273,6 +273,10 @@ func TestTheMigrationGivesTheBoundedColumnsTheirLengths(t *testing.T) {
 			query = "SELECT character_maximum_length::text FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'profile' AND column_name = $1"
 			want = strings.Trim(want, "()")
 		}
+		if s.dialect == db.MySQL {
+			query = "SELECT CAST(character_maximum_length AS CHAR) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'profile' AND column_name = ?"
+			want = strings.Trim(want, "()")
+		}
 		if err := s.db.QueryRow(query, column).Scan(&declared); err != nil {
 			t.Fatal(err)
 		}

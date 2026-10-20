@@ -143,7 +143,7 @@ func TestCreateWithATakenExplicitIDFailsAndLaterCreatesStillWork(t *testing.T) {
 		t.Fatal("Create with a taken explicit ID succeeded")
 	}
 	var count int
-	if err := sqlDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM Ticket").Scan(&count); err != nil || count != 1 {
+	if err := sqlDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM ticket").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("rows after the failed Create = %d (%v), want 1", count, err)
 	}
 	auto := Ticket{Title: "auto"}
@@ -166,7 +166,7 @@ func TestCreateWithAnExplicitIDHonoursACancelledContext(t *testing.T) {
 		t.Fatal("Create on a cancelled context succeeded")
 	}
 	var count int
-	if err := sqlDB.QueryRow("SELECT COUNT(*) FROM Ticket").Scan(&count); err != nil || count != 0 {
+	if err := sqlDB.QueryRow("SELECT COUNT(*) FROM ticket").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("rows = %d (%v), want 0", count, err)
 	}
 }

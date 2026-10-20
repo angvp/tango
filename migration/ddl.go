@@ -35,6 +35,9 @@ func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 				return err
 			}
 		}
+		if dialect == db.MySQL {
+			return mysqlCreateTable(ctx, sqlDB, s)
+		}
 		return execAll(ctx, sqlDB, createTableSQL(dialect, s))
 	case DropTable:
 		return exec(ctx, sqlDB, fmt.Sprintf("DROP TABLE %s", quote(dialect, s.Table)))
@@ -42,9 +45,14 @@ func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		if err := validateColumn(s.Table, s.Column); err != nil {
 			return err
 		}
+		if dialect == db.MySQL {
+			return mysqlAddColumn(ctx, sqlDB, s)
+		}
 		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", quote(dialect, s.Table), addColumnDefSQL(dialect, s.Column)))
 	case DropColumn:
 		switch dialect {
+		case db.MySQL:
+			return mysqlDropColumn(ctx, sqlDB, s)
 		case db.Postgres:
 			return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", quote(dialect, s.Table), quote(dialect, s.Column)))
 		case db.SQLite:
@@ -54,9 +62,12 @@ func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 	case AlterColumnUnique:
 		return applyUniqueIndex(ctx, sqlDB, dialect, s.Table, s.Column, s.Unique)
 	case CreateIndex:
+		if err := ensureIndexable(ctx, sqlDB, dialect, s.Table, s.Column); err != nil {
+			return err
+		}
 		return exec(ctx, sqlDB, createIndexSQL(dialect, false, indexName(s.Table, s.Column), s.Table, s.Column))
 	case DropIndex:
-		return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", quote(dialect, indexName(s.Table, s.Column))))
+		return exec(ctx, sqlDB, dropIndexSQL(dialect, indexName(s.Table, s.Column), s.Table))
 	case RenameColumn:
 		return renameColumn(ctx, sqlDB, dialect, s)
 	case AlterColumnType:
@@ -93,7 +104,7 @@ func quote(dialect db.Dialect, name string) string {
 }
 
 func identStyle(dialect db.Dialect) sqlident.Style {
-	return pick(dialect, sqlident.Backtick, sqlident.DoubleQuote)
+	return pick(dialect, sqlident.Backtick, sqlident.DoubleQuote, sqlident.Backtick)
 }
 
 func indexName(table, column string) string {
@@ -120,13 +131,32 @@ func createIndexSQL(dialect db.Dialect, unique bool, name, table, column string)
 func applyUniqueIndex(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, table, column string, unique bool) error {
 	name := uniqueIndexName(table, column)
 	if unique {
+		if err := ensureIndexable(ctx, sqlDB, dialect, table, column); err != nil {
+			return err
+		}
 		return exec(ctx, sqlDB, createIndexSQL(dialect, true, name, table, column))
 	}
-	return exec(ctx, sqlDB, fmt.Sprintf("DROP INDEX %s", quote(dialect, name)))
+	return exec(ctx, sqlDB, dropIndexSQL(dialect, name, table))
+}
+
+// dropIndexSQL drops the named index. MySQL scopes an index to its table, so
+// it needs ON table.
+func dropIndexSQL(dialect db.Dialect, name, table string) string {
+	drop := fmt.Sprintf("DROP INDEX %s", quote(dialect, name))
+	if dialect == db.MySQL {
+		drop += " ON " + quote(dialect, table)
+	}
+	return drop
 }
 
 func createTableSQL(dialect db.Dialect, s CreateTable) []string {
-	defs := make([]string, len(s.Columns))
+	return createTableWith(dialect, s, nil)
+}
+
+// createTableWith is createTableSQL with extra table-level definitions (MySQL's
+// FOREIGN KEY clauses) after the columns.
+func createTableWith(dialect db.Dialect, s CreateTable, extraDefs []string) []string {
+	defs := make([]string, len(s.Columns), len(s.Columns)+len(extraDefs))
 	var uniqueIndexes []string
 	for i, c := range s.Columns {
 		defs[i] = columnDefSQL(dialect, c)
@@ -138,7 +168,8 @@ func createTableSQL(dialect db.Dialect, s CreateTable) []string {
 		}
 	}
 
-	statements := []string{fmt.Sprintf("CREATE TABLE %s (%s)", quote(dialect, s.Table), strings.Join(defs, ", "))}
+	defs = append(defs, extraDefs...)
+	statements := []string{fmt.Sprintf("CREATE TABLE %s (%s)%s", quote(dialect, s.Table), strings.Join(defs, ", "), pick(dialect, "", "", mysqlTableOptions))}
 	return append(statements, uniqueIndexes...)
 }
 
@@ -153,10 +184,10 @@ func createTableSQL(dialect db.Dialect, s CreateTable) []string {
 func columnDefSQL(dialect db.Dialect, c Column) string {
 	name := quote(dialect, c.Name)
 	if c.PrimaryKey && c.Type == "integer" {
-		return name + " " + pick(dialect, "INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY") + referencesSQL(dialect, c)
+		return name + " " + pick(dialect, "INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY", "BIGINT AUTO_INCREMENT PRIMARY KEY") + referencesSQL(dialect, c)
 	}
 
-	typ := baseTypeSQL(dialect, c.Type, c.Length)
+	typ := columnTypeSQL(dialect, c)
 	if c.PrimaryKey {
 		typ += " PRIMARY KEY"
 	}
@@ -173,7 +204,17 @@ func addColumnDefSQL(dialect db.Dialect, c Column) string {
 	if c.Default == "" {
 		return def
 	}
-	return def + " NOT NULL DEFAULT " + c.Default
+	return def + " NOT NULL DEFAULT " + defaultLiteralSQL(dialect, columnTypeSQL(dialect, c), c.Default)
+}
+
+// defaultLiteralSQL is a column default as the dialect accepts it for a column
+// of columnType. MySQL gives a TEXT column a default only as an expression,
+// which needs its own parentheses.
+func defaultLiteralSQL(dialect db.Dialect, columnType, literal string) string {
+	if dialect == db.MySQL && strings.HasSuffix(columnType, "TEXT") {
+		return "(" + literal + ")"
+	}
+	return literal
 }
 
 // referencesSQL returns the inline "REFERENCES table" clause for a foreign
@@ -182,28 +223,40 @@ func addColumnDefSQL(dialect db.Dialect, c Column) string {
 // delete is implemented in application code by Store.Delete, never by the
 // database.
 func referencesSQL(dialect db.Dialect, c Column) string {
-	if c.References == "" {
+	if c.References == "" || dialect == db.MySQL {
+		// MySQL parses an inline REFERENCES and ignores it, so its foreign
+		// keys are separate FOREIGN KEY clauses (see mysqlForeignKeySQL).
 		return ""
 	}
 	return " REFERENCES " + quote(dialect, c.References)
 }
 
+// columnTypeSQL is the type of c as a column definition. It is baseTypeSQL,
+// except that MySQL cannot index unbounded text: a text column that is a
+// primary key, unique or indexed is VARCHAR(255) there.
+func columnTypeSQL(dialect db.Dialect, c Column) string {
+	if dialect == db.MySQL && mysqlUnboundedText(c.Type) && (c.PrimaryKey || c.Unique || c.Indexed) {
+		return mysqlIndexableText
+	}
+	return baseTypeSQL(dialect, c.Type, c.Length)
+}
+
 func baseTypeSQL(dialect db.Dialect, columnType string, length int) string {
 	switch columnType {
 	case "text":
-		return "TEXT"
+		return pick(dialect, "TEXT", "TEXT", "LONGTEXT")
 	case "varchar":
 		return fmt.Sprintf("VARCHAR(%d)", length)
 	case "boolean":
 		return "BOOLEAN"
 	case "real":
-		return pick(dialect, "REAL", "DOUBLE PRECISION")
+		return pick(dialect, "REAL", "DOUBLE PRECISION", "DOUBLE")
 	case "timestamp":
-		return pick(dialect, "TIMESTAMP", "TIMESTAMPTZ")
+		return pick(dialect, "TIMESTAMP", "TIMESTAMPTZ", "DATETIME(6)")
 	case "integer":
-		return pick(dialect, "INTEGER", "BIGINT")
+		return pick(dialect, "INTEGER", "BIGINT", "BIGINT")
 	default:
-		return "TEXT"
+		return pick(dialect, "TEXT", "TEXT", "LONGTEXT")
 	}
 }
 
@@ -211,7 +264,7 @@ func baseTypeSQL(dialect db.Dialect, columnType string, length int) string {
 // a newer release can never be treated as SQLite.
 func checkDialect(dialect db.Dialect) error {
 	switch dialect {
-	case db.SQLite, db.Postgres:
+	case db.SQLite, db.Postgres, db.MySQL:
 		return nil
 	}
 	return unsupportedDialect(dialect)
@@ -225,12 +278,14 @@ func unsupportedDialect(dialect db.Dialect) error {
 // dialect, so adding a dialect makes every call site fail to compile until
 // it says what the new dialect does; an unknown value panics rather than
 // quietly taking another dialect's branch. Both arguments are evaluated.
-func pick[T any](dialect db.Dialect, sqlite, postgres T) T {
+func pick[T any](dialect db.Dialect, sqlite, postgres, mysql T) T {
 	switch dialect {
 	case db.SQLite:
 		return sqlite
 	case db.Postgres:
 		return postgres
+	case db.MySQL:
+		return mysql
 	}
 	panic(unsupportedDialect(dialect).Error())
 }

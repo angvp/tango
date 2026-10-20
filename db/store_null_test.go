@@ -111,7 +111,15 @@ func TestStoreReadsNullColumnsAsZeroValues(t *testing.T) {
 	// A row as it looks after `tango migrate` added columns to a table that
 	// already had data: every column but the key is NULL.
 	var id int64
-	if err := sqlDB.QueryRow(`INSERT INTO null_post DEFAULT VALUES RETURNING id`).Scan(&id); err != nil {
+	if testdb.Dialect() == db.MySQL {
+		result, err := sqlDB.Exec(`INSERT INTO null_post () VALUES ()`)
+		if err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+		if id, err = result.LastInsertId(); err != nil {
+			t.Fatalf("insert id: %v", err)
+		}
+	} else if err := sqlDB.QueryRow(`INSERT INTO null_post DEFAULT VALUES RETURNING id`).Scan(&id); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 

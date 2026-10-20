@@ -16,8 +16,11 @@ import (
 func tableExists(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table string) bool {
 	t.Helper()
 	query := "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
-	if dialect == db.Postgres {
+	switch dialect {
+	case db.Postgres:
 		query = "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = $1"
+	case db.MySQL:
+		query = "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = $1"
 	}
 	var name string
 	err := sqlDB.QueryRow(query, table).Scan(&name)
@@ -35,8 +38,11 @@ func tableExists(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table string) 
 func columnNames(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table string) []string {
 	t.Helper()
 	query := "SELECT name FROM pragma_table_info(?) ORDER BY cid"
-	if dialect == db.Postgres {
+	switch dialect {
+	case db.Postgres:
 		query = "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position"
+	case db.MySQL:
+		query = "SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = $1 ORDER BY ordinal_position"
 	}
 	rows, err := sqlDB.Query(query, table)
 	if err != nil {

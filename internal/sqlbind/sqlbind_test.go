@@ -1,6 +1,7 @@
 package sqlbind
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -53,5 +54,25 @@ func TestRebindRefusesWhatPositionalCannotExpress(t *testing.T) {
 	// Numbered dialects take any of these unchanged.
 	if got := Rebind("SELECT 1 WHERE a = $1 OR b = $1", true); got != "SELECT 1 WHERE a = $1 OR b = $1" {
 		t.Fatalf("numbered rewrite changed the query: %q", got)
+	}
+}
+
+func TestRebindArgsReportsWhichArgumentEachPlaceholderTakes(t *testing.T) {
+	cases := []struct {
+		query     string
+		wantQuery string
+		wantOrder []int
+	}{
+		{"SELECT 1", "SELECT 1", nil},
+		{"a = $1 AND b = $2", "a = ? AND b = ?", []int{1, 2}},
+		{"a = $2 AND b = $1", "a = ? AND b = ?", []int{2, 1}},
+		{"a = $1 OR b = $1", "a = ? OR b = ?", []int{1, 1}},
+		{"'$1' = $3", "'$1' = ?", []int{3}},
+	}
+	for _, tc := range cases {
+		gotQuery, gotOrder := RebindArgs(tc.query)
+		if gotQuery != tc.wantQuery || !reflect.DeepEqual(gotOrder, tc.wantOrder) {
+			t.Errorf("RebindArgs(%q) = %q, %v; want %q, %v", tc.query, gotQuery, gotOrder, tc.wantQuery, tc.wantOrder)
+		}
 	}
 }

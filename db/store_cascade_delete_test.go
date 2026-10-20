@@ -197,12 +197,16 @@ func TestStoreDeleteCascadeFailureRollsBackCleanly(t *testing.T) {
 	// roll back — the author row must survive untouched. PostgreSQL refuses
 	// to drop a table another table's foreign key points at without CASCADE
 	// (which drops only cascade_comment's constraint); SQLite has no CASCADE.
-	drop := map[db.Dialect]string{
-		db.SQLite:   "DROP TABLE cascade_post",
-		db.Postgres: "DROP TABLE cascade_post CASCADE",
+	// MySQL refuses it too, so the comment table's constraint goes first.
+	drop := map[db.Dialect][]string{
+		db.SQLite:   {"DROP TABLE cascade_post"},
+		db.Postgres: {"DROP TABLE cascade_post CASCADE"},
+		db.MySQL:    {"ALTER TABLE cascade_comment DROP FOREIGN KEY fk_cascade_comment_post_id", "DROP TABLE cascade_post"},
 	}[dialect]
-	if _, err := sqlDB.ExecContext(context.Background(), drop); err != nil {
-		t.Fatalf("drop table: %v", err)
+	for _, statement := range drop {
+		if _, err := sqlDB.ExecContext(context.Background(), statement); err != nil {
+			t.Fatalf("drop table: %v", err)
+		}
 	}
 
 	if err := store.Delete(context.Background(), authorMeta, author.ID); err == nil {

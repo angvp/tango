@@ -53,9 +53,15 @@ func TestDiffTurnsSafeWideningsOfABoundedColumnIntoAlterColumnType(t *testing.T)
 func declaredType(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table, column string) string {
 	t.Helper()
 	query := "SELECT lower(type) FROM pragma_table_info($1) WHERE name = $2"
-	if dialect == db.Postgres {
+	switch dialect {
+	case db.Postgres:
 		query = `SELECT data_type || coalesce('(' || character_maximum_length || ')', '') FROM information_schema.columns
 			WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`
+	case db.MySQL:
+		// MySQL reports TEXT-like columns with a byte length, so only a
+		// varchar shows its bound.
+		query = `SELECT CASE WHEN data_type = 'varchar' THEN concat('varchar(', character_maximum_length, ')') WHEN data_type = 'longtext' THEN 'text' ELSE data_type END
+			FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = $1 AND column_name = $2`
 	}
 	var got string
 	if err := sqlDB.QueryRow(query, table, column).Scan(&got); err != nil {
@@ -67,8 +73,11 @@ func declaredType(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table, column
 func indexExists(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, name string) bool {
 	t.Helper()
 	query := "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = $1"
-	if dialect == db.Postgres {
+	switch dialect {
+	case db.Postgres:
 		query = "SELECT count(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = $1"
+	case db.MySQL:
+		query = "SELECT count(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema = DATABASE() AND index_name = $1"
 	}
 	var n int
 	if err := sqlDB.QueryRow(query, name).Scan(&n); err != nil {

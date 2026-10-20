@@ -27,9 +27,13 @@ func TestEnsureTrackingTableCreatesTimestampedTable(t *testing.T) {
 	}
 
 	query, want := "SELECT type FROM pragma_table_info('tango_migrations') WHERE name = 'applied_at'", "TIMESTAMP"
-	if dialect == db.Postgres {
+	switch dialect {
+	case db.Postgres:
 		query = "SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'tango_migrations' AND column_name = 'applied_at'"
 		want = "timestamp with time zone"
+	case db.MySQL:
+		query = "SELECT data_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'tango_migrations' AND column_name = 'applied_at'"
+		want = "datetime"
 	}
 	var got string
 	if err := sqlDB.QueryRowContext(ctx, query).Scan(&got); err != nil {
@@ -168,6 +172,12 @@ func blockTrackingTable(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, operati
 		"CREATE TRIGGER %s BEFORE %s ON tango_migrations BEGIN SELECT RAISE(ABORT, '%s blocked for test'); END",
 		name, operation, operation,
 	)}
+	if dialect == db.MySQL {
+		statements = []string{fmt.Sprintf(
+			"CREATE TRIGGER %s BEFORE %s ON tango_migrations FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '%s blocked for test'",
+			name, operation, operation,
+		)}
+	}
 	if dialect == db.Postgres {
 		statements = []string{
 			fmt.Sprintf(

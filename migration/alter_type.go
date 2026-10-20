@@ -150,6 +150,9 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 	if err := checkDialect(dialect); err != nil {
 		return err
 	}
+	if dialect == db.MySQL {
+		return mysqlAlterColumnType(ctx, sqlDB, s)
+	}
 	convert := conversion.sql[dialect]
 	if convert == nil {
 		return unsupportedDialect(dialect)

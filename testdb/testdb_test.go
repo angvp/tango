@@ -65,15 +65,15 @@ func run(t *testing.T, fn func(tb testing.TB)) *fakeTB {
 }
 
 func TestOpenRejectsAnUnsupportedScheme(t *testing.T) {
-	t.Setenv("TANGO_TEST_DSN", "mysql://root:secret@localhost/tango")
+	t.Setenv("TANGO_TEST_DSN", "oracle://root:secret@localhost/tango")
 
 	fake := run(t, func(tb testing.TB) { testdb.Open(tb) })
 
 	if !fake.failed {
-		t.Fatal("Open with a mysql:// DSN did not fail the test")
+		t.Fatal("Open with an oracle:// DSN did not fail the test")
 	}
 	message := strings.Join(fake.messages, "\n")
-	for _, want := range []string{"TANGO_TEST_DSN", "sqlite://", "postgres://"} {
+	for _, want := range []string{"TANGO_TEST_DSN", "sqlite://", "postgres://", "mysql://"} {
 		if !strings.Contains(message, want) {
 			t.Errorf("failure message %q does not mention %q", message, want)
 		}
@@ -119,17 +119,17 @@ func TestDialectFollowsTheDSNScheme(t *testing.T) {
 }
 
 func TestDialectPanicsOnAnUnsupportedScheme(t *testing.T) {
-	t.Setenv("TANGO_TEST_DSN", "mysql://root:secret@localhost/tango")
+	t.Setenv("TANGO_TEST_DSN", "oracle://root:secret@localhost/tango")
 
 	var recovered any
 	func() {
 		defer func() { recovered = recover() }()
 		got := testdb.Dialect()
-		t.Errorf("Dialect() with a mysql:// DSN returned %v instead of panicking", got)
+		t.Errorf("Dialect() with an oracle:// DSN returned %v instead of panicking", got)
 	}()
 
 	message := fmt.Sprint(recovered)
-	for _, want := range []string{"TANGO_TEST_DSN", "sqlite://", "postgres://"} {
+	for _, want := range []string{"TANGO_TEST_DSN", "sqlite://", "postgres://", "mysql://"} {
 		if !strings.Contains(message, want) {
 			t.Errorf("panic message %q does not mention %q", message, want)
 		}
@@ -150,6 +150,11 @@ func TestExemptionsSkipOnlyTheOtherDialect(t *testing.T) {
 		{"SQLiteOnly on Postgres", "postgres://tango@localhost/tango_test", testdb.SQLiteOnly, true},
 		{"PostgresOnly on SQLite", "", testdb.PostgresOnly, true},
 		{"PostgresOnly on Postgres", "postgres://tango@localhost/tango_test", testdb.PostgresOnly, false},
+		{"MySQLOnly on SQLite", "", testdb.MySQLOnly, true},
+		{"MySQLOnly on MySQL", "mysql://root@localhost/mysql", testdb.MySQLOnly, false},
+		{"NotMySQL on SQLite", "", testdb.NotMySQL, false},
+		{"NotMySQL on MySQL", "mysql://root@localhost/mysql", testdb.NotMySQL, true},
+		{"SQLiteOnly on MySQL", "mysql://root@localhost/mysql", testdb.SQLiteOnly, true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -168,8 +173,8 @@ func TestExemptionsSkipOnlyTheOtherDialect(t *testing.T) {
 }
 
 func TestExemptionsFailOnAnUnsupportedScheme(t *testing.T) {
-	t.Setenv("TANGO_TEST_DSN", "mysql://localhost/tango")
-	for _, exempt := range []func(testing.TB, string){testdb.SQLiteOnly, testdb.PostgresOnly} {
+	t.Setenv("TANGO_TEST_DSN", "oracle://localhost/tango")
+	for _, exempt := range []func(testing.TB, string){testdb.SQLiteOnly, testdb.PostgresOnly, testdb.MySQLOnly, testdb.NotMySQL} {
 		if fake := run(t, func(tb testing.TB) { exempt(tb, "reason") }); !fake.failed {
 			t.Fatalf("exemption with an unsupported scheme did not fail: skipped=%v", fake.skipped)
 		}
@@ -254,5 +259,19 @@ func TestOpenGivesParallelPostgresTestsTheirOwnSchemaAndDropsIt(t *testing.T) {
 		if exists {
 			t.Errorf("schema %s still exists after its test ended", schema)
 		}
+	}
+}
+
+func TestOpenFailsWhenMySQLIsUnreachable(t *testing.T) {
+	// Port 1 on loopback refuses connections, so this fails fast.
+	t.Setenv("TANGO_TEST_DSN", "mysql://root:secret@127.0.0.1:1/mysql")
+
+	fake := run(t, func(tb testing.TB) { testdb.Open(tb) })
+
+	if !fake.failed || fake.skipped {
+		t.Fatalf("failed = %v, skipped = %v; an unreachable MySQL must fail the test, never skip it", fake.failed, fake.skipped)
+	}
+	if strings.Contains(strings.Join(fake.messages, "\n"), "secret") {
+		t.Errorf("failure message echoes the DSN's password: %q", fake.messages)
 	}
 }

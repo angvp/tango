@@ -45,6 +45,9 @@ func renameIndex(ctx context.Context, tx *sql.Tx, dialect db.Dialect, table, col
 		_, err := tx.ExecContext(ctx, fmt.Sprintf("ALTER INDEX IF EXISTS %s RENAME TO %s", quote(dialect, from), quote(dialect, to)))
 		return err
 	}
+	if dialect == db.MySQL {
+		return mysqlRenameIndex(ctx, tx, table, from, to)
+	}
 	var name string
 	err := tx.QueryRowContext(ctx, "SELECT name FROM sqlite_master WHERE type = 'index' AND name = $1", from).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -99,6 +102,9 @@ func tableIndexNames(ctx context.Context, tx *sql.Tx, dialect db.Dialect, table 
 	}
 	if dialect == db.Postgres {
 		query = "SELECT indexname, '' FROM pg_indexes WHERE schemaname = current_schema() AND tablename = $1"
+	}
+	if dialect == db.MySQL {
+		query = "SELECT DISTINCT index_name, '' FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ?"
 	}
 	rows, err := tx.QueryContext(ctx, query, table)
 	if err != nil {
