@@ -68,7 +68,7 @@ Do not conflate this with Application context: the long-lived Start-time context
 
 ## Test dialect
 
-The single SQL dialect one `go test` run targets — SQLite or PostgreSQL — chosen by the environment, never by an individual test. One variable, `TANGO_TEST_DSN`, selects it by scheme, using the same grammar as the runtime `TANGO_DB_DSN`: unset or `sqlite://:memory:` is an in-memory SQLite run, any other `sqlite://` path is a file-backed SQLite run (a fresh file per test; the path itself is not used), and `postgres://…`/`postgresql://…` is a PostgreSQL run. Any other scheme is an error. A test that cannot run on one dialect says so explicitly (`testdb.SQLiteOnly` / `testdb.PostgresOnly`) with a reason. In a Postgres run, an unreachable database is a failure, not a skip.
+The single SQL dialect one `go test` run targets — SQLite, PostgreSQL or MySQL — chosen by the environment, never by an individual test. One variable, `TANGO_TEST_DSN`, selects it by scheme, using the same grammar as the runtime `TANGO_DB_DSN`: unset or `sqlite://:memory:` is an in-memory SQLite run, any other `sqlite://` path is a file-backed SQLite run (a fresh file per test; the path itself is not used), `postgres://…`/`postgresql://…` is a PostgreSQL run (a fresh schema per test), and `mysql://…` is a MySQL run (a fresh database per test). Any other scheme is an error. A test that cannot run on one dialect says so explicitly (`testdb.SQLiteOnly` / `testdb.PostgresOnly` / `testdb.MySQLOnly` / `testdb.NotMySQL`) with a reason. In a PostgreSQL or MySQL run, an unreachable database is a failure, not a skip.
 
 Do not confuse this with `db.Dialect`, the value a `Store` uses to generate SQL: the Test dialect decides which `db.Dialect` every test in the run receives.
 

@@ -36,7 +36,7 @@ Guides without a recipe, read directly when needed:
 - App checks for `-check`: `docs/guides/app-checks.md`.
 - Views, binding and HTML responses: `docs/guides/context-and-binding.md`.
 - Persistence beyond models (`db.Store` CRUD, raw SQL): `docs/guides/persistence-crud-and-raw-sql.md`.
-- SQLite and PostgreSQL setup: `docs/guides/sqlite-and-postgresql-setup.md`.
+- SQLite, PostgreSQL and MySQL setup: `docs/guides/sqlite-and-postgresql-setup.md`.
 
 ## Escalate deliberately
 

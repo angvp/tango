@@ -30,7 +30,7 @@ tango makemigrations --rename shop.Widget.Stock=Quantity   # a field
 tango makemigrations --rename shop.Widget=Gizmo            # a model
 ```
 
-A field rename renames the column in place (`ALTER TABLE … RENAME COLUMN`), and a model rename renames its table (`ALTER TABLE … RENAME TO`), on both SQLite and PostgreSQL, so every row is kept. A column's indexes, uniqueness and foreign key come with it; a table's indexes are renamed with it, and every other table's foreign keys point at it under the new name, including other apps' (their migrations that reference the new name run after the rename). Both are reversible: `tango migrate down` renames them back. A renamed field or model needs no `--allow-drop`. Renaming a model also changes its admin URL, which comes from the model's name.
+A field rename renames the column in place (`ALTER TABLE … RENAME COLUMN`), and a model rename renames its table (`ALTER TABLE … RENAME TO`), on SQLite, PostgreSQL and MySQL, so every row is kept. A column's indexes, uniqueness and foreign key come with it; a table's indexes are renamed with it, and every other table's foreign keys point at it under the new name, including other apps' (their migrations that reference the new name run after the rename). Both are reversible: `tango migrate down` renames them back. A renamed field or model needs no `--allow-drop`. Renaming a model also changes its admin URL, which comes from the model's name.
 
 To rename a model and one of its fields in the same run, name the field by the model's **old** name:
 
@@ -70,7 +70,7 @@ A bounded string (`tango:"varchar=n"`) has two more widening changes, and its va
 
 ### Narrowing a string
 
-Adding `varchar=n` to a bare string, or lowering `n`, is a **narrowing**: it can only work if every value already fits. `makemigrations` generates it as an `AlterColumnType`, and applying it first checks the data in Go, before any DDL. It reads each row's primary key and value, counts runes exactly as `Store.Create` does (never the database's own `length()`, so SQLite and PostgreSQL agree), and, if any value is too long, fails the migration with the number of rows and one offending key:
+Adding `varchar=n` to a bare string, or lowering `n`, is a **narrowing**: it can only work if every value already fits. `makemigrations` generates it as an `AlterColumnType`, and applying it first checks the data in Go, before any DDL. It reads each row's primary key and value, counts runes exactly as `Store.Create` does (never the database's own `length()`, so every dialect agrees), and, if any value is too long, fails the migration with the number of rows and one offending key:
 
 ```text
 tango migration: headline.title: cannot narrow text to varchar(5): 2 rows hold a longer value (lengths count characters), for example the row with id = 2; shorten or clean that data first, then run the migration again
@@ -78,7 +78,7 @@ tango migration: headline.title: cannot narrow text to varchar(5): 2 rows hold a
 
 Every narrowing in a migration is checked before the migration's first step runs (a rename in the same migration is checked under the names the database holds now), so nothing is truncated or rewritten, the schema and the data stay as they were, and the migration is not recorded as applied. Shorten or clean the data, then run `tango migrate` again. The check finds the table's own primary-key column, whatever it is called and whatever its type. It needs exactly one primary-key column to name the offending row: a table with a composite primary key (possible only through hand-written migrations, since models have a single `pk` field) cannot be narrowed by a migration, and the step fails with an error saying so rather than checking without a key. Narrow such a table by hand in a migration you control.
 
-The conversion is explicit SQL for each database, never an implicit cast. If the column has a default (from an `AddColumn` with `Default`), the default is converted the same way (`TRUE` becomes `1` for `boolean` to `integer`) and the column keeps it and its `NOT NULL`; a default that isn't a plain literal of the old type makes `makemigrations` refuse, naming the column and the default. A type change never stops halfway: PostgreSQL changes the type and default in one `ALTER TABLE` statement, and SQLite rebuilds the table in one transaction, so on any failure the column, its values and its default are left as they were.
+The conversion is explicit SQL for each database, never an implicit cast. If the column has a default (from an `AddColumn` with `Default`), the default is converted the same way (`TRUE` becomes `1` for `boolean` to `integer`) and the column keeps it and its `NOT NULL`; a default that isn't a plain literal of the old type makes `makemigrations` refuse, naming the column and the default. A type change never stops halfway: PostgreSQL changes the type and default in one `ALTER TABLE` statement, MySQL cannot roll DDL back so it checks the data first and converts through a staging step, and SQLite rebuilds the table in one transaction, so on any failure the column, its values and its default are left as they were.
 
 A migration with a widening type change is **irreversible**, even if it also renames fields: going back would be a narrowing change. (A migration made only of string narrowings is the exception, below.) Renaming and widening the same field in one run is fine — the rename comes first, then the type change under the new name.
 
@@ -119,16 +119,16 @@ That produces `0002_add_author_indexes.go`; the filename and the migration's `Na
 tango migrate
 ```
 
-Runs every not-yet-applied migration's `Up` steps in order, translating each dialect-agnostic step into real DDL for your configured `Dialect` (SQLite drops a column by rebuilding the table in one transaction, keeping its rows, indexes, constraints and incoming foreign keys, and leaving it untouched if the rebuild fails; Postgres steps map straight to `ALTER TABLE`/`CREATE INDEX`). Applied migrations are tracked in a `tango_migrations` table — `(app, name, applied_at)`, primary keyed on `(app, name)`.
+Runs every not-yet-applied migration's `Up` steps in order, translating each dialect-agnostic step into real DDL for your configured `Dialect` (SQLite drops a column by rebuilding the table in one transaction, keeping its rows, indexes, constraints and incoming foreign keys, and leaving it untouched if the rebuild fails; Postgres and MySQL steps map straight to `ALTER TABLE`/`CREATE INDEX`). On MySQL each DDL statement commits as it runs, so a migration that fails part-way cannot roll back: the error names the failed step and every step already applied, no tracking row is written, and the migration never resumes by itself. Repair the schema by hand, then run it again. Applied migrations are tracked in a `tango_migrations` table — `(app, name, applied_at)`, primary keyed on `(app, name)`.
 
 ### Order across apps
 
 The order of the migrations slice you pass doesn't matter. Pending migrations run by `Name`, then `App`, with two rules on top:
 
 - Each app's own migrations always run in `Name` order (`0001_…` before `0002_…`).
-- A migration that adds a foreign key to another app's table (a `CreateTable` or `AddColumn` column with `References`) runs after that app's migration creating the table — whatever the two apps are called and wherever they sit in `InstalledApps`. PostgreSQL refuses a `REFERENCES` clause naming a table that doesn't exist yet, so this is what lets a cross-app foreign key migrate there at all. It matches how foreign keys already ignore `InstalledApps` order at registration.
+- A migration that adds a foreign key to another app's table (a `CreateTable` or `AddColumn` column with `References`) runs after that app's migration creating the table — whatever the two apps are called and wherever they sit in `InstalledApps`. PostgreSQL and MySQL refuse a `REFERENCES` clause naming a table that doesn't exist yet, so this is what lets a cross-app foreign key migrate there at all. It matches how foreign keys already ignore `InstalledApps` order at registration.
 
-If foreign keys between apps form a cycle (app A's initial migration references app B's table and B's references A's), no order works on PostgreSQL. `tango migrate` then fails before applying anything, naming every migration in the cycle. Break the cycle by moving one of the foreign key columns into a later migration of its app, as an `AddColumn`.
+If foreign keys between apps form a cycle (app A's initial migration references app B's table and B's references A's), no order works on PostgreSQL or MySQL. `tango migrate` then fails before applying anything, naming every migration in the cycle. Break the cycle by moving one of the foreign key columns into a later migration of its app, as an `AddColumn`.
 
 ## Rolling back
 

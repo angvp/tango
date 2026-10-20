@@ -39,6 +39,7 @@
 Useful scaffold options:
 
 - `tango newproject --dialect=postgres <name>` generates a Postgres-wired project using the `pgx` stdlib driver; its `main.go` (and `shell/main.go`) sets a local-dev `TANGO_DB_DSN` (`postgres://postgres:postgres@localhost:5432/<name>`) when the variable is unset.
+- `tango newproject --dialect=mysql <name>` generates a MySQL-wired project using the `go-sql-driver/mysql` driver; its `main.go` (and `shell/main.go`) sets a local-dev `TANGO_DB_DSN` (`mysql://root:mysql@localhost:3306/<name>`) when the variable is unset. Create the database first, with `utf8mb4_bin` as its collation.
 - `tango newproject --dialect=sqlite <name>` is the default SQLite shape.
 - `tango newproject --no-admin <name>` skips admin wiring entirely.
 

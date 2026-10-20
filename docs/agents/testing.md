@@ -6,11 +6,11 @@ Canonical files: `testdb/testdb.go`, `examples/board/main_test.go` and `examples
 
 ## Rule
 
-- Get a fresh, isolated database per test with `testdb.Open(t)` (or `testdb.Store(t)`); `TANGO_TEST_DSN` picks SQLite or PostgreSQL, so one suite runs on both.
+- Get a fresh, isolated database per test with `testdb.Open(t)` (or `testdb.Store(t)`); `TANGO_TEST_DSN` picks SQLite, PostgreSQL or MySQL, so one suite runs on all three.
 - Apply the app's real migrations with `migration.ApplyPending`, then build the app from the same config function `main` uses, and exercise it through `registry.Routes().Handler()` with `httptest`.
 - Test email with `mailtest.Sender`, passed through that config function; no test-only flags.
 - Start `registry.Lifecycles()` when the behaviour needs them (the accounts outbox, realtime hubs), and stop them in `t.Cleanup`.
-- Mark a test that can run on only one dialect with `testdb.SQLiteOnly` or `testdb.PostgresOnly` and a reason.
+- Mark a test that can run on only one dialect with `testdb.SQLiteOnly`, `testdb.PostgresOnly`, `testdb.MySQLOnly` or `testdb.NotMySQL` and a reason.
 
 Tiny shape:
 
@@ -26,9 +26,9 @@ registry, err := tango.BuildRegistry(appConfig(db.NewStore(sqlDB, dialect)))
 
 - Do not share one database between tests, or open a hardcoded SQLite file.
 - Do not test through a side channel (querying tables) when the HTTP behaviour shows the same thing.
-- Do not skip a PostgreSQL run silently; an unreachable server fails the test by design.
+- Do not skip a PostgreSQL or MySQL run silently; an unreachable server fails the test by design.
 
 ## Check
 
-- Run the suite on both dialects: once with `TANGO_TEST_DSN` unset, once with a `postgres://` DSN.
+- Run the suite on every dialect: once with `TANGO_TEST_DSN` unset, once with a `postgres://` DSN, once with a `mysql://` DSN.
 - Run `docs/agents/checklist.md`.

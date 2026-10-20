@@ -44,7 +44,7 @@ Like every model name in tanGO, `fk=Author` refers to a bare, unnamespaced model
 sqlDB, err := sql.Open("sqlite", db.SQLiteForeignKeysDSN(path))
 ```
 
-Postgres enforces the constraint natively with no extra step.
+Postgres and MySQL enforce the constraint natively with no extra step (on MySQL it is a table-level `FOREIGN KEY` clause, since InnoDB ignores a column-level `REFERENCES`).
 
 A foreign key may point at a model in another app. You don't order anything for it: `tango migrate` creates the referenced app's table first and `tango migrate down` drops it last, regardless of app names or `InstalledApps` order — see [migrations](migrations.md#order-across-apps).
 

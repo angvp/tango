@@ -77,7 +77,7 @@ See [models and tags](guides/models-and-tags.md) for the full tag/field-kind ref
 
 | Symbol | What it's for |
 |---|---|
-| `type Dialect`, `SQLite`, `Postgres` | Which SQL dialect a `Store` generates for. |
+| `type Dialect`, `SQLite`, `Postgres`, `MySQL` | Which SQL dialect a `Store` generates for. |
 | `func NewStore(sqlDB *sql.DB, dialect Dialect) *Store` | Construct a `Store`. |
 | `func (*Store) Create/Update(ctx, meta, dest) error`, `func (*Store) Get(ctx, meta, ...) error`, `func (*Store) List(ctx, meta, Query, dest) error` | Metadata-driven CRUD. When `UseModels` has been called, `Create`/`Update` also validate every set foreign key field against an existing related row (referential-integrity validation), failing with `ErrInvalidForeignKey`. See [relationships and admin foreign keys](guides/relationships-and-admin-foreign-keys.md). |
 | `func (*Store) Delete(ctx, meta, pk) error`, `func (*Store) UseModels(models *model.Registry)` | Deletes the matching row; when `UseModels` has been called (`tango.Registry.SetStore` does this automatically), also cascades — deleting every row of every other registered model that references it via a foreign key field first, recursively, in one transaction. See [relationships and admin foreign keys](guides/relationships-and-admin-foreign-keys.md). |
@@ -88,7 +88,7 @@ See [models and tags](guides/models-and-tags.md) for the full tag/field-kind ref
 | `func (*Store) Query/QueryRow(ctx, dest, sql string, args ...any) error` | Raw-SQL escape hatches, reusing CRUD's scan-into-`dest` machinery — where `Store` stops and hand-written SQL begins for joins, aggregates, or cross-model filtering. |
 | `func ColumnName(name string) string` | The snake_case table/column name derivation, exposed for anything that needs to match it (e.g. building raw SQL by hand). |
 | `type DSN struct { Dialect Dialect; Driver, Source string }` | A parsed DSN: the dialect for `NewStore`, and the driver name and data source name for `sql.Open`. |
-| `func ParseDSN(dsn string) (DSN, error)` | Turns a scheme-qualified DSN (`sqlite://app.db`, `sqlite:///abs/path.db`, `sqlite://:memory:`, `postgres://…`) into a `DSN`; any other form is an error. Applies `SQLiteForeignKeysDSN` for SQLite and a 5-second busy timeout unless the DSN sets one. Never registers a driver. See [configuration](guides/configuration.md#database-env-helpers). |
+| `func ParseDSN(dsn string) (DSN, error)` | Turns a scheme-qualified DSN (`sqlite://app.db`, `sqlite:///abs/path.db`, `sqlite://:memory:`, `postgres://…`, `mysql://user:pass@host:3306/db`) into a `DSN`; any other form is an error. Applies `SQLiteForeignKeysDSN` for SQLite and a 5-second busy timeout unless the DSN sets one; for MySQL it sets UTC times, matched-row counts, `utf8mb4_bin`, a strict SQL mode and `READ COMMITTED` unless the DSN's own options say otherwise. Never registers a driver. See [configuration](guides/configuration.md#database-env-helpers). |
 | `func SQLiteForeignKeysDSN(dsn string) string` | Appends the SQLite driver's `_foreign_keys=on` DSN parameter, so foreign key constraints are actually enforced on connections opened with the result. |
 | `ErrNotFound` | Sentinel for a missing row on `Get`/`Update`/`Delete`. |
 | `ErrValueTooLong`, `type ValueTooLongError struct{ Model, Field string; Max, Got int }` | `Create`/`Update` refuse a bounded string longer than its `varchar=n` limit, before any SQL. The error matches `ErrValueTooLong`; `Max` is the limit and `Got` the length, both in runes. Raw SQL is not checked. |
@@ -381,11 +381,12 @@ Inside a session the helpers are `Models`, `Describe`, `Get`, `List`, `Count`, `
 
 ## `testdb` (`github.com/angvp/tango/testdb`)
 
-For tests only. The run's Test dialect comes from `TANGO_TEST_DSN`, with the same grammar as `TANGO_DB_DSN`: unset or `sqlite://:memory:` is in-memory SQLite, any other `sqlite://` path is a fresh SQLite file per test (the path itself is not used), and `postgres://…`/`postgresql://…` is a fresh schema per test, dropped when the test ends. 
+For tests only. The run's Test dialect comes from `TANGO_TEST_DSN`, with the same grammar as `TANGO_DB_DSN`: unset or `sqlite://:memory:` is in-memory SQLite, any other `sqlite://` path is a fresh SQLite file per test (the path itself is not used), `postgres://…`/`postgresql://…` is a fresh schema per test, and `mysql://…` is a fresh database per test (the account needs the `CREATE` and `DROP` privileges), each dropped when the test ends. On MySQL, raw SQL written with `$1, $2, …` placeholders is rewritten to `?`. 
 
 | Symbol | What it's for |
 |---|---|
-| `func Open(t testing.TB) (*sql.DB, db.Dialect)` | A fresh database for this test, closed by `t.Cleanup`. An unsupported scheme or an unreachable Postgres fails the test; it never skips. |
+| `func Open(t testing.TB) (*sql.DB, db.Dialect)` | A fresh database for this test, closed by `t.Cleanup`. An unsupported scheme or an unreachable PostgreSQL or MySQL server fails the test; it never skips. |
 | `func Store(t testing.TB) *db.Store` | `db.NewStore` over `Open(t)`. |
 | `func Dialect() db.Dialect` | The run's Test dialect, for per-dialect raw SQL inside a test. Panics on an unsupported `TANGO_TEST_DSN`, with the message `Open` fails the test with. |
-| `func SQLiteOnly(t testing.TB, reason string)`, `func PostgresOnly(t testing.TB, reason string)` | Skip the test on the other dialect, with a reason, so every exemption is explicit and greppable. |
+| `func SQLiteOnly(t testing.TB, reason string)`, `func PostgresOnly(t testing.TB, reason string)`, `func MySQLOnly(t testing.TB, reason string)` | Skip the test on the other dialects, with a reason, so every exemption is explicit and greppable. |
+| `func NotMySQL(t testing.TB, reason string)` | Skip the test on MySQL, with a reason. |

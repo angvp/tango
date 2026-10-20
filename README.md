@@ -13,7 +13,7 @@ tanGO is a small, explicit web framework for Go, inspired by Django's ergonomics
 - A URL dispatcher with named routes and reverse lookup, built on [chi](https://github.com/go-chi/chi) internally (chi itself is never part of your imports).
 - `Context` helpers for JSON responses, request binding, redirects, and raw request/response escape hatches.
 - A model metadata engine that reads plain Go structs and a handful of tags (`tango:"pk"`, `tango:"unique"`, `tango:"index"`, `tango:"fk=Other"`).
-- A minimal `db.Store` for CRUD and raw SQL against SQLite or PostgreSQL, with **minimal ORM foundations**: foreign key fields, two-layer validation, and cascade delete — see [relationships and admin foreign keys](docs/guides/relationships-and-admin-foreign-keys.md).
+- A minimal `db.Store` for CRUD and raw SQL against SQLite, PostgreSQL or MySQL, with **minimal ORM foundations**: foreign key fields, two-layer validation, and cascade delete — see [relationships and admin foreign keys](docs/guides/relationships-and-admin-foreign-keys.md).
 - Generated, typed Go migrations (`tango makemigrations`/`migrate`/`migrate down`) — no separate schema DSL.
 - A server-rendered HTML admin (list/create/edit/delete, pagination, search, filters, the ordering you configure) behind a session-cookie login, with CSRF protection and rate-limited login attempts — accounts are managed via `tango admin create/resetpassword/deactivate`.
 - Accounts with password reset, email verification and a JSON mode for single-page apps; a `mail` package with SMTP; a `storage` package for uploads with a local-disk store and an S3 adapter; a `cache` package with in-process, Redis and Memcached stores; in-process WebSocket rooms; a token-bucket rate limiter.

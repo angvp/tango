@@ -36,7 +36,7 @@ Run `Models()` first to see the names, and `Describe("app.Model")` for a model's
 
 ## Test it
 
-- Helper behaviour: `internal/shellcore/verbs_test.go`, on SQLite and, with `TANGO_TEST_DSN`, PostgreSQL.
+- Helper behaviour: `internal/shellcore/verbs_test.go`, on SQLite and, with `TANGO_TEST_DSN`, PostgreSQL or MySQL.
 - The real thing: `internal/cli/newproject_shell_test.go` scaffolds a project, runs `tango shell -c` and piped input against it and checks the database label against DSNs that carry passwords; `internal/cli/shell_pty_unix_test.go` drives it on a pseudo-terminal (prompt, Ctrl-C, Ctrl-D, history, exit status `130`); `internal/cli/newproject_upgrade_test.go` upgrades a pre-shell project.
 - The guide, the tutorial and this recipe quote one session: `internal/cli/testdata/shell_session.txt`. `TestShellDocsQuoteTheTestedSession` fails when a quoted line or its output stops matching. Change the script and the docs together.
 - A Yaegi upgrade needs a changelog entry, a rerun of `TestEveryDocumentedLimitationStillFails` and the scaffold tests, and a docs change if what runs has changed.

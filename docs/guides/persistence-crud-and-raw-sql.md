@@ -3,7 +3,7 @@
 `db.Store` is tanGO's persistence boundary — metadata-driven CRUD for the common case, with raw SQL always available as an escape hatch. It is not a full ORM: no lazy loading and no query builder DSL; relationship-aware behavior is deliberately limited to foreign-key integrity, cascade delete, and admin support.
 
 ```go
-store := db.NewStore(sqlDB, db.SQLite) // or db.Postgres
+store := db.NewStore(sqlDB, db.SQLite) // or db.Postgres, db.MySQL
 ```
 
 ## CRUD
@@ -89,7 +89,7 @@ var result struct {
 err := store.QueryRow(ctx, &result, "SELECT COUNT(*) AS count FROM post WHERE title LIKE ?", "%tango%")
 ```
 
-`sql` must already use the placeholder syntax matching the `Store`'s configured `Dialect` (`?` for SQLite, `$1`/`$2`/... for Postgres) — neither method translates or validates placeholder syntax between dialects. See the [SQLite/PostgreSQL setup guide](sqlite-and-postgresql-setup.md) for where that dialect is selected.
+`sql` must already use the placeholder syntax matching the `Store`'s configured `Dialect` (`?` for SQLite and MySQL, `$1`/`$2`/... for Postgres) — neither method translates or validates placeholder syntax between dialects. See the [SQLite, PostgreSQL and MySQL setup guide](sqlite-and-postgresql-setup.md) for where that dialect is selected.
 
 ## Transactions with `InTx`
 
