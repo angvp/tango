@@ -133,7 +133,7 @@ func ServeContext(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.
 	if err := sc.dbPool.validate(); err != nil {
 		return err
 	}
-	applyDBPool(sqlDB, sc)
+	applyDBPool(sqlDB, sc, dialect)
 
 	registry, err := BuildRegistry(config)
 	if err != nil {

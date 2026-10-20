@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/angvp/tango/db"
 )
 
 // defaultDBMaxIdle is how many idle connections ServeContext keeps by
@@ -46,9 +48,24 @@ func WithDBPool(pool DBPool) ServeOption {
 	return func(c *serveConfig) { c.dbPool, c.dbPoolSet = pool, true }
 }
 
+// maxMySQLConnLifetime is how long a MySQL pool reuses a connection. A MySQL
+// server (wait_timeout) or a proxy in front of it closes connections that sit
+// idle, and a pool that keeps one longer hands out a dead connection.
+const maxMySQLConnLifetime = 5 * time.Minute
+
+// defaultDBPool is the pool ServeContext gives a database the application has
+// not bounded itself.
+func defaultDBPool(dialect db.Dialect) DBPool {
+	pool := DBPool{MaxIdle: defaultDBMaxIdle}
+	if dialect == db.MySQL {
+		pool.MaxLifetime = maxMySQLConnLifetime
+	}
+	return pool
+}
+
 // applyDBPool configures sqlDB's pool from sc: the explicit WithDBPool value,
 // else the default for a pool the application has not bounded.
-func applyDBPool(sqlDB *sql.DB, sc serveConfig) {
+func applyDBPool(sqlDB *sql.DB, sc serveConfig, dialect db.Dialect) {
 	if sqlDB == nil {
 		return
 	}
@@ -57,7 +74,7 @@ func applyDBPool(sqlDB *sql.DB, sc serveConfig) {
 		if sqlDB.Stats().MaxOpenConnections != 0 {
 			return
 		}
-		pool = DBPool{MaxIdle: defaultDBMaxIdle}
+		pool = defaultDBPool(dialect)
 	}
 	if pool.MaxOpen > 0 {
 		sqlDB.SetMaxOpenConns(pool.MaxOpen)

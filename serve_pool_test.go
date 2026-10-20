@@ -159,7 +159,7 @@ func TestWithDBPoolAppliesLifetimeAndIdleTime(t *testing.T) {
 	applyDBPool(sqlDB, serveConfig{
 		dbPool:    DBPool{MaxLifetime: 30 * time.Millisecond, MaxIdleTime: 30 * time.Millisecond},
 		dbPoolSet: true,
-	})
+	}, db.SQLite)
 	if err := sqlDB.Ping(); err != nil {
 		t.Fatal(err)
 	}
@@ -175,4 +175,22 @@ func TestWithDBPoolAppliesLifetimeAndIdleTime(t *testing.T) {
 		}
 	}
 	t.Fatalf("no connection was closed for age or idleness: %+v", sqlDB.Stats())
+}
+
+func TestDefaultPoolLimitsConnectionLifetimeOnlyForMySQL(t *testing.T) {
+	tests := []struct {
+		dialect db.Dialect
+		want    DBPool
+	}{
+		{db.SQLite, DBPool{MaxIdle: defaultDBMaxIdle}},
+		{db.Postgres, DBPool{MaxIdle: defaultDBMaxIdle}},
+		// MySQL servers and proxies close idle connections on their own
+		// timeout, so a MySQL pool never reuses one for more than 5 minutes.
+		{db.MySQL, DBPool{MaxIdle: defaultDBMaxIdle, MaxLifetime: 5 * time.Minute}},
+	}
+	for _, tt := range tests {
+		if got := defaultDBPool(tt.dialect); got != tt.want {
+			t.Errorf("defaultDBPool(%v) = %+v, want %+v", tt.dialect, got, tt.want)
+		}
+	}
 }
