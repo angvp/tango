@@ -94,11 +94,18 @@ jobs:
           # An empty TANGO_TEST_DSN selects SQLite, in-memory.
           - dialect: sqlite
             postgres-image: ""
+            mysql-image: ""
             dsn: ""
           - dialect: postgres
             postgres-image: postgres:17-alpine
+            mysql-image: ""
             dsn: postgres://tango:tango@localhost:5432/tango_test?sslmode=disable
-    # An empty image skips the service, so only the postgres leg starts it.
+          # The account creates and drops a database per test.
+          - dialect: mysql
+            postgres-image: ""
+            mysql-image: mysql:8.4
+            dsn: mysql://root:tango@127.0.0.1:3306/mysql
+    # An empty image skips the service, so each leg starts only its own.
     services:
       postgres:
         image: ${{ matrix.postgres-image }}
@@ -113,6 +120,17 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mysql:
+        image: ${{ matrix.mysql-image }}
+        env:
+          MYSQL_ROOT_PASSWORD: tango
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -ptango"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       TANGO_TEST_DSN: ${{ matrix.dsn }}
     steps:

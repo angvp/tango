@@ -58,6 +58,7 @@ func greenRun() CIRun {
 		{Name: "lint", Status: "completed", Conclusion: "success"},
 		{Name: "test (sqlite)", Status: "completed", Conclusion: "success"},
 		{Name: "test (postgres)", Status: "completed", Conclusion: "success"},
+		{Name: "test (mysql)", Status: "completed", Conclusion: "success"},
 		{Name: "cache adapters", Status: "completed", Conclusion: "success"},
 	}}
 }
