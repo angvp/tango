@@ -259,6 +259,47 @@ func TestNewProjectPostgresDialect(t *testing.T) {
 	}
 }
 
+func TestNewProjectMySQLDialect(t *testing.T) {
+	dir := t.TempDir()
+	runner := &multiRecordingRunner{}
+
+	var stdout, stderr strings.Builder
+	code := Run(context.Background(), []string{"newproject", "--dialect=mysql", "myapp"}, dir, &stdout, &stderr, runner)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+
+	mainGo, err := os.ReadFile(filepath.Join(dir, "myapp", "main.go"))
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(mainGo)
+	for _, want := range []string{
+		`_ "github.com/go-sql-driver/mysql"`,
+		`os.Setenv("TANGO_DB_DSN", "mysql://root:mysql@localhost:3306/myapp")`,
+		`dsn, err := tango.LoadDBConfigFromEnv()`,
+		`sql.Open(dsn.Driver, dsn.Source)`,
+		`tango.DispatchFlags(config, sqlDB, dsn.Dialect, migrations.Migrations)`,
+		`tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("main.go does not contain %q:\n%s", want, source)
+		}
+	}
+	shellGo, err := os.ReadFile(filepath.Join(dir, "myapp", "shell", "main.go"))
+	if err != nil {
+		t.Fatalf("read shell/main.go: %v", err)
+	}
+	for _, want := range []string{
+		`_ "github.com/go-sql-driver/mysql"`,
+		`os.Setenv("TANGO_DB_DSN", "mysql://root:mysql@localhost:3306/myapp")`,
+	} {
+		if !strings.Contains(string(shellGo), want) {
+			t.Fatalf("shell/main.go does not contain %q:\n%s", want, shellGo)
+		}
+	}
+}
+
 func TestNewProjectRejectsUnknownDialect(t *testing.T) {
 	dir := t.TempDir()
 	runner := &multiRecordingRunner{}

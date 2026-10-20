@@ -112,7 +112,7 @@ func printUsage(w io.Writer) {
                            InstalledApps); -o writes it to a file
   tango migrate            Apply pending migrations (go run . -migrate)
   tango migrate down       Roll back the last applied migration
-  tango newproject [--dialect=sqlite|postgres] [--no-admin] <name>
+  tango newproject [--dialect=sqlite|postgres|mysql] [--no-admin] <name>
                            Scaffold a new runnable project
   tango newapp <name>      Scaffold a new app stub in the current project
   tango tui                Open a status dashboard (falls back to plain text)

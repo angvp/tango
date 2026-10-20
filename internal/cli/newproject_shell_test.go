@@ -318,6 +318,8 @@ func TestShellDatabaseLabelNeverShowsCredentials(t *testing.T) {
 	sqliteShell := buildShell(t, sqliteProject)
 	postgresProject, _ := scaffoldWithPosts(t, "shop", "--dialect=postgres")
 	postgresShell := buildShell(t, postgresProject)
+	mysqlProject, _ := scaffoldWithPosts(t, "shop", "--dialect=mysql")
+	mysqlShell := buildShell(t, mysqlProject)
 	tests := []struct {
 		name, dsn, want string
 		secrets         []string
@@ -338,12 +340,19 @@ func TestShellDatabaseLabelNeverShowsCredentials(t *testing.T) {
 		{"at sign after a hash", "postgres://admin:#x@db.example.com/shop", "database: postgres: (address hidden)\n", []string{"admin", "#x"}},
 		{"malformed port", "postgres://admin:s3cret@db.example.com:port/shop", "database: postgres: (address hidden)\n", []string{"admin", "s3cret"}},
 		{"no host", "postgres://admin:s3cret@/shop", "database: postgres: (address hidden)\n", []string{"admin", "s3cret"}},
+		{"mysql with userinfo", "mysql://admin:s3cret@db.example.com:3307/shop", "database: mysql: db.example.com:3307/shop\n", []string{"admin", "s3cret"}},
+		{"mysql default port", "mysql://admin:s3cret@db.example.com/shop", "database: mysql: db.example.com:3306/shop\n", []string{"admin", "s3cret"}},
+		{"mysql escaped password", "mysql://admin:p%40ss%2Fword@db.example.com/shop", "database: mysql: db.example.com:3306/shop\n", []string{"admin", "p%40ss", "p@ss"}},
+		{"mysql options hold no secret in the label", "mysql://admin@db.example.com/shop?timeout=3s&tls=skip-verify", "database: mysql: db.example.com:3306/shop\n", []string{"admin", "skip-verify"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			binary, project := postgresShell, postgresProject
-			if strings.HasPrefix(tt.dsn, "sqlite") {
+			switch {
+			case strings.HasPrefix(tt.dsn, "sqlite"):
 				binary, project = sqliteShell, sqliteProject
+			case strings.HasPrefix(tt.dsn, "mysql"):
+				binary, project = mysqlShell, mysqlProject
 			}
 			cmd := exec.Command(binary, "-c", "1")
 			cmd.Dir = project

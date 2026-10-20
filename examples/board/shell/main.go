@@ -56,9 +56,15 @@ func run() int {
 // only the host and database name. Anything it cannot read with confidence
 // is hidden rather than shown.
 func databaseLabel(dsn db.DSN) string {
-	if dsn.Dialect != db.Postgres {
+	switch dsn.Dialect {
+	case db.SQLite:
 		path, _, _ := strings.Cut(dsn.Source, "?")
 		return "sqlite: " + strings.TrimPrefix(path, "file:")
+	case db.MySQL:
+		return mysqlDatabaseLabel(dsn.Source)
+	case db.Postgres:
+	default:
+		return "database: (address hidden)"
 	}
 	const hidden = "postgres: (address hidden)"
 	_, rest, ok := strings.Cut(dsn.Source, "://")
@@ -80,4 +86,22 @@ func databaseLabel(dsn db.DSN) string {
 		return hidden
 	}
 	return "postgres: " + u.Host + "/" + strings.TrimPrefix(u.Path, "/")
+}
+
+// mysqlDatabaseLabel labels a MySQL DSN, which the driver writes as
+// user:password@tcp(host:port)/database?options, with only host:port and the
+// database. The address starts after the last "@tcp(", since the password
+// may hold anything.
+func mysqlDatabaseLabel(source string) string {
+	const hidden = "mysql: (address hidden)"
+	start := strings.LastIndex(source, "@tcp(")
+	if start < 0 {
+		return hidden
+	}
+	address, rest, ok := strings.Cut(source[start+len("@tcp("):], ")/")
+	if !ok || address == "" {
+		return hidden
+	}
+	database, _, _ := strings.Cut(rest, "?")
+	return "mysql: " + address + "/" + database
 }

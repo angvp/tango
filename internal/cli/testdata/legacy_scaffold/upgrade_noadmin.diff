@@ -83,10 +83,10 @@ index 0000000..d6b02b9
 +}
 diff --git a/shell/main.go b/shell/main.go
 new file mode 100644
-index 0000000..f3a8bbf
+index 0000000..525c0d4
 --- /dev/null
 +++ b/shell/main.go
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,106 @@
 +// Command shell is this project's "tango shell": an interactive Go console
 +// with the project's apps, models and database loaded and nothing served.
 +// Run it with "tango shell". It executes local code with this project's
@@ -144,9 +144,15 @@ index 0000000..f3a8bbf
 +// only the host and database name. Anything it cannot read with confidence
 +// is hidden rather than shown.
 +func databaseLabel(dsn db.DSN) string {
-+	if dsn.Dialect != db.Postgres {
++	switch dsn.Dialect {
++	case db.SQLite:
 +		path, _, _ := strings.Cut(dsn.Source, "?")
 +		return "sqlite: " + strings.TrimPrefix(path, "file:")
++	case db.MySQL:
++		return mysqlDatabaseLabel(dsn.Source)
++	case db.Postgres:
++	default:
++		return "database: (address hidden)"
 +	}
 +	const hidden = "postgres: (address hidden)"
 +	_, rest, ok := strings.Cut(dsn.Source, "://")
@@ -168,4 +174,22 @@ index 0000000..f3a8bbf
 +		return hidden
 +	}
 +	return "postgres: " + u.Host + "/" + strings.TrimPrefix(u.Path, "/")
++}
++
++// mysqlDatabaseLabel labels a MySQL DSN, which the driver writes as
++// user:password@tcp(host:port)/database?options, with only host:port and the
++// database. The address starts after the last "@tcp(", since the password
++// may hold anything.
++func mysqlDatabaseLabel(source string) string {
++	const hidden = "mysql: (address hidden)"
++	start := strings.LastIndex(source, "@tcp(")
++	if start < 0 {
++		return hidden
++	}
++	address, rest, ok := strings.Cut(source[start+len("@tcp("):], ")/")
++	if !ok || address == "" {
++		return hidden
++	}
++	database, _, _ := strings.Cut(rest, "?")
++	return "mysql: " + address + "/" + database
 +}
