@@ -16,6 +16,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **`AccessLogger` is free when its logger discards Info events.** It used to wrap the response and build the event's attributes for every request and only then let the logger drop it (3 allocations a request). It now asks the logger first and calls the next handler directly. A logger that logs Info behaves as before; the level is read on every request, so a `slog.LevelVar` still takes effect at once.
 
+- **Dependencies.** `go.mod` now requires chi 5.5.0 (was 5.3.2), `golang.org/x/crypto` 0.58.0, `x/sys` 0.49.0, `x/term` 0.47.0 and `modernc.org/sqlite` 1.60.1, and adds `github.com/go-sql-driver/mysql` 1.10.1 for the MySQL dialect. A project that depends on tanGO is raised to at least these versions the next time it updates; run `go mod tidy`.
+
 ### Documentation
 
 - **Choosing `MaxOpen`.** The configuration guide now explains how the size of the database pool shapes tail latency, with measured figures, and suggests starting near the database's CPU count.
