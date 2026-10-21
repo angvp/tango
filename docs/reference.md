@@ -332,6 +332,8 @@ See [i18n and l10n](guides/i18n.md). Admin is converted to call `i18n.T`, but no
 | `func WithMiddleware(...tango.Middleware) Option` | Wraps only admin's internally contributed routes, inside global `Config.Middleware` and before admin Views. |
 | `type Registry`, `func NewRegistry(models *model.Registry) *Registry`, `func (*Registry) Register(value any, opts Options) error` | The admin sub-registry, reached via `tango.Registry.Admin()`. |
 
+| `POST /admin/theme/` | The Light, Dark and System switch. Staff session and CSRF token required; form fields `theme` (`light`, `dark` or `system`; anything else is a 400) and `next` (a path under `/admin/`; any other value redirects to `/admin/`). `light` and `dark` set the `tango_admin_theme` cookie (path `/admin/`, HttpOnly, SameSite Lax, one year, `Secure` when the request arrived over HTTPS); `system` deletes it. Best-effort, like the rest of admin's presentation. See [admin registration](guides/admin-registration.md#light-and-dark-theme) for the token classes widgets should use. |
+
 The default admin theme (sidebar navigation across every registered model, humanized field labels, a truncated paginator with a true total count) is applied automatically — there's nothing to opt into or configure beyond `Options` and `WithBranding`. Authentication is a real session-cookie login (not HTTP Basic Auth): every form carries a CSRF token, and failed login attempts are rate-limited — see [admin registration](guides/admin-registration.md) for the full model.
 
 ## `migration` (`github.com/angvp/tango/migration`)

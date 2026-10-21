@@ -17,6 +17,7 @@ Canonical example: `examples/api-with-admin/apps/posts/app.go`. Human guide: `do
 - A `tango:"json"` field gets `admin.JSON()` by default; set `Widgets` only to replace it. Use `admin.JSON()` explicitly for a plain string field holding JSON and `admin.Markdown(...)` for authored text; pass `admin.WithMarkdownPreview(fn)` only with a renderer whose sanitization you have decided. Never assume admin sanitizes it.
 - Use `Filters` for boolean and foreign-key fields operators filter by, and `Display` with `admin.DisplayFunc` for computed list cells; a `Display` column that is not a model field needs a `Labels` entry. Build a download link in your own authorized View and pass it as `Href`; admin must never learn storage keys.
 - Behind a reverse proxy, pass `admin.WithTrustedProxies(networks...)` (and `accounts.WithTrustedProxies` if `accounts` is installed) or every user shares one login-limiter bucket. Never trust `X-Forwarded-For` without it.
+- Use the admin theme tokens (`bg-surface`, `text-ink`, `border-line`, the status family) in widget HTML, not raw palette colours, so a widget follows light and dark; see the theme table in `docs/guides/admin-registration.md`. The admin has no theming hook.
 - Use `admin.WithBranding` or `admin.WithMiddleware` on `admin.New(store, ...)` for admin-wide branding or `/admin/`-scoped HTTP behavior.
 
 Tiny shape:

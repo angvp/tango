@@ -327,6 +327,24 @@ admin.New(store, admin.WithBranding(admin.Branding{
 
 Omit it — `admin.New(store)` with no options — and the sidebar shows tanGO's generic default, unchanged.
 
+## Light and dark theme
+
+Every admin page follows the browser's light or dark preference, with no setup. Signed-in staff can also choose **Light**, **Dark** or **System** from the sidebar footer. Light and Dark are remembered in a cookie named `tango_admin_theme`, scoped to `/admin/`, set only after the staff session and CSRF token check out; System removes it again. The login page uses the cookie when there is one and the browser's preference otherwise; it has no switch. The switch is a plain form post, so it works without JavaScript.
+
+The admin's colours are semantic tokens, not fixed palette colours, and one table in the `admin` package defines each token's light and dark value. Widgets you write should use the same token classes in the HTML they return, so they follow the theme:
+
+| Use | Classes |
+| --- | --- |
+| Text | `text-ink`, `text-ink-muted`, `text-ink-faint` |
+| Surfaces | `bg-surface`, `bg-surface-sunken`, `bg-surface-hover` |
+| Lines | `border-line`, `border-line-subtle`, `border-control-line` (the edge of an input) |
+| Accent | `bg-accent` with `text-accent-fg`, `text-accent-ui`, `ring-ring` |
+| Status | `bg-success-bg text-success-fg border-success-border`, and the same for `danger`, `warning` and `neutral` |
+
+A widget that hard-codes light colours stays light inside a dark admin; fixing it is the widget's job, as there is no theming hook. Branding's `LogoURL` is shown as is, so use a logo that reads on the dark sidebar, which looks the same in both themes apart from a slightly deeper shade in dark.
+
+The Markdown field's preview is deliberately a white canvas in both themes. It is an isolated, sandboxed page, so it shows what your renderer produced and is not a promise that the text matches your public site, whose styling and dark-mode behaviour are yours to own.
+
 ## Operator checklist
 
 Automated tests pin the admin's structural markup: labels, `aria-invalid` and `aria-describedby`, table captions and column scopes, the preview iframe's sandbox. They cannot see how a page behaves in a browser. Before you rely on a workflow, or after you upgrade, walk through this list in a real browser.
