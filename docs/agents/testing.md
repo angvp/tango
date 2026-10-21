@@ -30,5 +30,5 @@ registry, err := tango.BuildRegistry(appConfig(db.NewStore(sqlDB, dialect)))
 
 ## Check
 
-- Run the suite on every dialect: once with `TANGO_TEST_DSN` unset, once with a `postgres://` DSN, once with a `mysql://` DSN.
+- SQLite CI runs the complete suite. Pull-request PostgreSQL and MySQL CI run the checked-in dialect-sensitive package manifest; the scheduled full matrix and release workflow run every package on all three dialects. When your change touches SQL, run the affected tests locally with both a `postgres://` and a `mysql://` `TANGO_TEST_DSN`.
 - Run `docs/agents/checklist.md`.
