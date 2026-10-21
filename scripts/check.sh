@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs what CI runs (.github/workflows/ci.yml): gofmt, vet, build, the tests
 # and the offline Markdown link check. Tests use SQLite unless TANGO_TEST_DSN
-# names a PostgreSQL database; the link check runs lychee, or the pinned lychee
+# names a PostgreSQL or MySQL database; the link check runs lychee, or the pinned lychee
 # Docker image, and is skipped, loudly, when neither is available.
 set -eu
 cd "$(dirname "$0")/.."
