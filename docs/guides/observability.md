@@ -54,3 +54,5 @@ Host-supplied log handlers and recorders are best-effort dependencies: a panic f
 ## Known boundary
 
 Under the default [middleware scope](routing-and-reverse-lookup.md#middleware-scope), HTTP instrumentation wraps compiled, matched routes: router-generated 404 and 405 responses do not pass through `AccessLogger` and do not produce automatic HTTP metrics. With `Config.MiddlewareScope: tango.MiddlewareScopeAll`, which `tango newproject` sets, they do, reported with the route `"(unmatched)"`. That value is part of the stable observability names, like the event and metric names above.
+
+For a quick, in-memory view of recent activity inside the admin, see the [admin dashboard guide](admin-dashboard.md).
