@@ -24,6 +24,10 @@ curl 'http://localhost:8000/posts/?author_id=1'
 
 `go test .` runs the same flow against a fresh database.
 
+## The operator dashboard
+
+Logging in to `/admin/` lands on a dashboard: the database's reachability, dialect and migration state, and the last hour of request and job activity. Both come from sources `main.go` hands to `admin.WithDashboard`: a status function built from `tango.Status` (see `dashboard.go`), and an `observability.Window` that `tango.WithRecorder` feeds on every request. The activity is labelled "this instance only" and starts again from zero when the process restarts; use an external monitoring system for history or several instances. See the [admin dashboard guide](../../docs/guides/admin-dashboard.md).
+
 ## Configuration
 
 - `TANGO_DB_DSN` picks the database and defaults to `sqlite://app.db`.

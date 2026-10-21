@@ -16,6 +16,7 @@ import (
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/observability"
 	"github.com/angvp/tango/testdb"
 
 	"api-with-admin/apps/authors"
@@ -26,12 +27,17 @@ import (
 // main, on a fresh, fully migrated database.
 func newTestServer(t *testing.T) (http.Handler, *db.Store, *tango.Registry) {
 	t.Helper()
+	return newTestServerWith(t, observability.NewWindow())
+}
+
+func newTestServerWith(t *testing.T, window *observability.Window) (http.Handler, *db.Store, *tango.Registry) {
+	t.Helper()
 	sqlDB, dialect := testdb.Open(t)
 	if err := migration.ApplyPending(t.Context(), sqlDB, dialect, migrations.Migrations); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	store := db.NewStore(sqlDB, dialect)
-	registry, err := tango.BuildRegistry(appConfig(store))
+	registry, err := tango.BuildRegistry(appConfig(store, sqlDB, dialect, window))
 	if err != nil {
 		t.Fatal(err)
 	}

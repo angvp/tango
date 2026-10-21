@@ -14,6 +14,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/observability"
 
 	"api-with-admin/apps/authors"
 	"api-with-admin/apps/posts"
@@ -41,7 +42,10 @@ func run() error {
 	defer sqlDB.Close()
 
 	store := db.NewStore(sqlDB, dsn.Dialect)
-	config := appConfig(store)
+	// The dashboard's activity numbers come from this Window, which also
+	// receives every framework metric; Multi would fan out to an exporter too.
+	window := observability.NewWindow()
+	config := appConfig(store, sqlDB, dsn.Dialect, window)
 
 	if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 		return err
@@ -54,17 +58,26 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	fmt.Println("listening on", config.Addr)
-	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect)
+	return tango.ServeContext(ctx, config, sqlDB, dsn.Dialect,
+		tango.WithRecorder(observability.Multi(window)))
 }
 
 // appConfig is the whole application; the tests build the same one.
-func appConfig(store *db.Store) tango.Config {
+func appConfig(store *db.Store, sqlDB *sql.DB, dialect db.Dialect, window *observability.Window) tango.Config {
 	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
 	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	// The status provider needs the finished config (tango.Status checks
+	// registration), so it reads it through this closure.
+	var finished tango.Config
+	dashboard := admin.DashboardConfig{
+		Status:   dashboardStatus(func() tango.Config { return finished }, sqlDB, dialect),
+		Activity: window,
+	}
 	config.InstalledApps = []tango.App{
 		posts.New(store),
 		authors.New(),
-		admin.New(store),
+		admin.New(store, admin.WithDashboard(dashboard)),
 	}
+	finished = config
 	return config
 }
