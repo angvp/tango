@@ -9,7 +9,9 @@ cd "$(dirname "$0")/.."
 test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: format these files" >&2; exit 1; }
 go vet ./...
 go build ./...
-go test -count=1 ./...
+# ./... on SQLite; only the dialect-sensitive packages when TANGO_TEST_DSN names
+# PostgreSQL or MySQL (see scripts/dialect-manifest.txt).
+go test -count=1 $(scripts/dialect-packages.sh)
 
 # These are their own Go modules, so ./... above skips
 # them. The cache adapters' conformance tests need a server and skip without

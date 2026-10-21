@@ -1,0 +1,61 @@
+# Dialect manifest: the source of truth for which packages run on PostgreSQL and MySQL.
+#
+#   sensitive   runs every test on SQLite, PostgreSQL and MySQL. Use it when a
+#               test's outcome can depend on the SQL dialect.
+#   sqlite-only runs on SQLite only (and in the weekly full run).
+#
+# Every package from `go list ./...` must appear exactly once;
+# scripts/dialect-packages.sh fails on a missing or stale entry. Classify a
+# package, not a test: inside a sensitive package, a test that does not depend
+# on the dialect calls testdb.SQLiteOnly(t, reason).
+
+sqlite-only .  # uses testdb only to hand the dialect to ServeContext; nothing it asserts depends on SQL
+sensitive ./accounts
+sensitive ./admin
+sensitive ./auth
+sqlite-only ./auth/jwt
+sqlite-only ./cache
+sqlite-only ./cache/local
+sqlite-only ./cachetest
+sqlite-only ./cmd/tango
+sensitive ./db
+sqlite-only ./i18n
+sqlite-only ./internal/adminregistry
+sqlite-only ./internal/cli  # one schema test uses testdb; the package is mostly command parsing, and the weekly full run covers it
+sqlite-only ./internal/clientip
+sqlite-only ./internal/clientip/clientiptest
+sensitive ./internal/migrationcompat
+sensitive ./internal/migrationcompat/unreleased/migrations
+sensitive ./internal/migrationcompat/v0_0_1/migrations
+sensitive ./internal/migrationcompat/v0_0_2/migrations
+sensitive ./internal/migrationcompat/v0_1_0/migrations
+sensitive ./internal/migrationcompat/v0_2_0/migrations
+sensitive ./internal/migrationcompat/v0_3_0/migrations
+sensitive ./internal/migrationcompat/v0_3_1/migrations
+sensitive ./internal/migrationcompat/v0_4_0/migrations
+sensitive ./internal/migrationcompat/v0_5_0/migrations
+sensitive ./internal/migrationtest
+sqlite-only ./internal/observabilitysafe
+sqlite-only ./internal/releasecheck
+sqlite-only ./internal/releasecheck/cmd/releasecheck
+sqlite-only ./internal/releasescripts
+sqlite-only ./internal/security
+sensitive ./internal/shellcore
+sensitive ./internal/sqlbind
+sensitive ./internal/sqlident
+sqlite-only ./internal/storagekit
+sqlite-only ./mail
+sqlite-only ./mail/mailtest
+sensitive ./migration
+sqlite-only ./model
+sqlite-only ./observability
+sqlite-only ./openapi
+sqlite-only ./openapi/swaggerui
+sqlite-only ./ratelimit
+sqlite-only ./realtime
+sqlite-only ./realtime/websocket
+sensitive ./shell
+sqlite-only ./storage
+sqlite-only ./storage/local
+sqlite-only ./storagetest
+sensitive ./testdb
