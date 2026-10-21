@@ -58,6 +58,8 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.T "admin.layout.title" "tanGO Admin"}}</title>
 ` + tailwindScriptTag + `
+<script>` + tailwindThemeConfig() + `</script>
+<style>` + themeCSS() + `</style>
 <style type="text/tailwindcss">
 @layer base {
   html, body { @apply overflow-x-hidden; }
