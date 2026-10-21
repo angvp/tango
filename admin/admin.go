@@ -83,6 +83,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 			tango.Path(http.MethodGet, "/admin/login/", loginView(store, limiter, clientKey), tango.Name("login"), hiddenPage),
 			tango.Path(http.MethodPost, "/admin/login/", loginView(store, limiter, clientKey), hiddenPage),
 			tango.Path(http.MethodPost, "/admin/logout/", logoutView(store), tango.Name("logout"), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/theme/", requireSession(store, themeView()), hiddenPage),
 		}
 		routes = append(routes, assetRoutes()...)
 		for _, registration := range registrations {
@@ -90,7 +91,8 @@ func New(store *db.Store, opts ...Option) tango.App {
 			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding)...)
 		}
 
-		return registry.Routes().Include("/", routes, tango.WithMiddleware(cfg.middleware...))
+		middleware := append([]tango.Middleware{withThemeState}, cfg.middleware...)
+		return registry.Routes().Include("/", routes, tango.WithMiddleware(middleware...))
 	})
 	return checkedApp{App: inner, state: state}
 }

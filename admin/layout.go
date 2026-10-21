@@ -52,7 +52,7 @@ func (c chrome) T(key, fallback string, args ...any) string {
 // "content" block falls back to empty output so the layout stays valid,
 // renderable HTML in isolation.
 var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
-<html lang="en">
+<html lang="en"{{with .Theme}} data-theme="{{.}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -174,6 +174,13 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
   </div>
   <div class="sidebar-footer">{{with .SignedIn}}
     <div>{{$.T "admin.layout.signed_in_as" "Signed in as %s" .Username}}</div>
+    <form method="post" action="/admin/theme/" role="group" aria-label="{{$.T "admin.theme.label" "Theme"}}" class="mt-2 flex flex-wrap gap-1">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <input type="hidden" name="next" value="{{$.ThemeNext}}">
+      <button type="submit" name="theme" value="light" aria-pressed="{{if eq $.Theme "light"}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium text-sidebar-muted hover:text-sidebar-strong{{if eq $.Theme "light"}} bg-sidebar-accent text-sidebar-accent-fg{{end}}">{{$.T "admin.theme.light" "Light"}}</button>
+      <button type="submit" name="theme" value="dark" aria-pressed="{{if eq $.Theme "dark"}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium text-sidebar-muted hover:text-sidebar-strong{{if eq $.Theme "dark"}} bg-sidebar-accent text-sidebar-accent-fg{{end}}">{{$.T "admin.theme.dark" "Dark"}}</button>
+      <button type="submit" name="theme" value="system" aria-pressed="{{if eq $.Theme ""}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium text-sidebar-muted hover:text-sidebar-strong{{if eq $.Theme ""}} bg-sidebar-accent text-sidebar-accent-fg{{end}}">{{$.T "admin.theme.system" "System"}}</button>
+    </form>
     <form method="post" action="/admin/logout/" class="sidebar-logout">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <button type="submit" class="sidebar-logout-button">{{$.T "admin.layout.logout" "Log out"}}</button>
