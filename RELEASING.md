@@ -43,6 +43,17 @@ Then rebase `develop` onto `main` if they differ:
 git checkout develop && git rebase main && git push --force-with-lease origin develop
 ```
 
+## Which tests run on which database
+
+CI runs the suite on SQLite, PostgreSQL 17 and MySQL 8.4, but not the same suite on each. SQLite runs every package. PostgreSQL and MySQL run only the packages `scripts/dialect-manifest.txt` marks `sensitive`: those whose results can depend on the SQL dialect (`db`, `migration`, `testdb`, the migration test helpers, `admin`, `accounts`, `auth`, the shell packages). The list for a leg comes from `scripts/dialect-packages.sh`, which `scripts/check.sh` uses too, so `TANGO_TEST_DSN=postgres://… scripts/check.sh` reproduces a PostgreSQL leg locally.
+
+- **A new package** must be added to the manifest as `sensitive` or `sqlite-only`; `scripts/dialect-packages.sh` fails, and so does the root package's test, until it is. A removed package must come out as well.
+- **`sqlite-only` with `testdb`**: a package that imports `testdb` in its tests but stays `sqlite-only` needs a reason after `#` on its manifest line. The check does not treat `db.Store` use or helper functions as a signal; whether such a package is dialect-sensitive is a decision recorded in the manifest.
+- **A dialect-independent test inside a sensitive package** calls `testdb.SQLiteOnly(t, reason)`.
+- **Coverage**: only the `sqlite` upload gates the Codecov targets. The `postgres` and `mysql` uploads cover only the sensitive packages and are informational, with no carryforward.
+
+The **Full matrix** workflow (`.github/workflows/full-matrix.yml`) runs every package on all three databases. It runs on Mondays, can be started by hand, and the Release workflow runs it before it creates a release, so a package classified wrongly cannot reach a release. It is not a pull request check, uploads no coverage, and writes each leg's wall time to its run summary.
+
 ## Admin theme check
 
 Before a release that changes anything under `admin/`, look at the admin in both themes. The tests prove the declared colour pairs and that no page names a raw palette colour; they cannot show that a page reads well. Run `examples/api-with-admin`, then capture each of these in light and dark (emulate the system preference, and once pick Light or Dark from the sidebar switch to check the override), at desktop and phone width:
