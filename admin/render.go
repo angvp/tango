@@ -23,14 +23,14 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     <div class="card-header">
       <form method="get" class="flex flex-wrap items-end gap-3 w-full">
         <div class="flex flex-col gap-1 flex-1 min-w-[200px]">
-          <label for="list-search" class="text-xs font-medium text-slate-600">{{.T "admin.list.search_label" "Search"}}</label>
+          <label for="list-search" class="text-xs font-medium text-ink-muted">{{.T "admin.list.search_label" "Search"}}</label>
           <input id="list-search" type="text" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .ModelName}}" class="input">
         </div>
         {{range .Filters}}<div class="flex flex-col gap-1">
-          {{if .Options}}<label for="{{.ID}}" class="text-xs font-medium text-slate-600">{{.Label}}</label>
-          <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{else}}<span class="text-xs font-medium text-slate-600">{{.Label}}</span>{{end}}
-          {{if .Applied}}<input type="hidden" name="{{.Key}}" value="{{.AppliedValue}}"><p class="text-xs text-slate-700">{{.Applied}}</p>{{end}}
-          {{if .Message}}<p class="text-xs text-slate-500">{{.Message}}</p>{{end}}
+          {{if .Options}}<label for="{{.ID}}" class="text-xs font-medium text-ink-muted">{{.Label}}</label>
+          <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{else}}<span class="text-xs font-medium text-ink-muted">{{.Label}}</span>{{end}}
+          {{if .Applied}}<input type="hidden" name="{{.Key}}" value="{{.AppliedValue}}"><p class="text-xs text-ink-muted">{{.Applied}}</p>{{end}}
+          {{if .Message}}<p class="text-xs text-ink-faint">{{.Message}}</p>{{end}}
         </div>{{end}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
       </form>
@@ -46,7 +46,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
           <td class="text-right">
             <div class="table-actions">
               <a href="{{$.BasePath}}{{.PK}}/" class="btn-ghost">{{$.T "admin.button.edit" "Edit"}}</a>
-              <a href="{{$.BasePath}}{{.PK}}/delete/" class="btn-ghost text-red-600 hover:text-red-700 hover:bg-red-50">{{$.T "admin.button.delete" "Delete"}}</a>
+              <a href="{{$.BasePath}}{{.PK}}/delete/" class="btn-ghost text-danger-fg hover:bg-danger-bg">{{$.T "admin.button.delete" "Delete"}}</a>
             </div>
           </td>
         </tr>{{end}}
@@ -116,7 +116,7 @@ var deleteTemplate = cloneWithContent(`{{define "content"}}
   <div class="card max-w-lg">
     <div class="card-body">
       {{if .Error}}<div class="alert-error">{{.Error}}</div>{{end}}
-      <p class="text-sm text-slate-700 mb-5">{{.T "admin.delete.confirm_prefix" "Are you sure you want to delete"}} <span class="font-medium text-slate-900">{{.ModelName}} {{.PK}}</span>? {{.T "admin.delete.confirm_suffix" "This action cannot be undone."}}</p>
+      <p class="text-sm text-ink-muted mb-5">{{.T "admin.delete.confirm_prefix" "Are you sure you want to delete"}} <span class="font-medium text-ink">{{.ModelName}} {{.PK}}</span>? {{.T "admin.delete.confirm_suffix" "This action cannot be undone."}}</p>
       <form method="post" class="flex items-center gap-2">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button type="submit" class="btn-danger">{{.T "admin.button.confirm_delete" "Confirm delete"}}</button>
