@@ -2,6 +2,7 @@ package admin
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 
@@ -15,11 +16,11 @@ type activityCardData struct {
 	Snapshot observability.Snapshot
 }
 
-func loadActivityCard(source observability.Snapshotter) activityCardData {
+func loadActivityCard(logger *slog.Logger, source observability.Snapshotter) activityCardData {
 	if source == nil {
 		return activityCardData{State: cardNotConfigured}
 	}
-	snapshot, state := runCard("activity", source.Snapshot)
+	snapshot, state := runCard(logger, "activity", source.Snapshot)
 	return activityCardData{State: state, Snapshot: snapshot}
 }
 

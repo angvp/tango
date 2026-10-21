@@ -80,20 +80,20 @@ const (
 )
 
 // runCard calls a host-provided callback for one card. An error or a panic is
-// logged on the server and becomes the card's generic unavailable state; the
+// logged on the server (through the request's logger) and becomes the card's generic unavailable state; the
 // text of either never reaches the page.
-func runCard[T any](card string, fn func() (T, error)) (value T, state cardState) {
+func runCard[T any](logger *slog.Logger, card string, fn func() (T, error)) (value T, state cardState) {
 	defer func() {
 		if r := recover(); r != nil {
 			var zero T
-			slog.Error("admin dashboard: card panicked", "card", card, "panic", fmt.Sprint(r))
+			logger.Error("admin dashboard: card panicked", "card", card, "panic", fmt.Sprint(r))
 			value, state = zero, cardUnavailable
 		}
 	}()
 	value, err := fn()
 	if err != nil {
 		var zero T
-		slog.Error("admin dashboard: card failed", "card", card, "err", err)
+		logger.Error("admin dashboard: card failed", "card", card, "err", err)
 		return zero, cardUnavailable
 	}
 	return value, cardReady
@@ -112,8 +112,8 @@ func dashboardView(nav []navItem, brand Branding, cfg DashboardConfig) tango.Vie
 		}
 		return render(ctx, http.StatusOK, dashboardTemplate, dashboardPageData{
 			chrome:   chrome{Nav: nav, Brand: brand}.withContext(ctx.Context()),
-			Activity: loadActivityCard(cfg.Activity),
-			Status:   loadStatusCard(ctx.Context(), cfg.Status),
+			Activity: loadActivityCard(ctx.Logger(), cfg.Activity),
+			Status:   loadStatusCard(ctx.Logger(), ctx.Context(), cfg.Status),
 		})
 	}
 }

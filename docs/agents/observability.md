@@ -12,3 +12,7 @@
 10. A body rejected by `tango.MaxBodySize` gets `413` and is not logged as a View error: it is the client's error, not an application failure.
 
 Canonical explanation and examples: `docs/guides/observability.md`. Runnable proof: `examples/board/main.go` (`slog` logger, `RequestID`/`Recoverer`/`AccessLogger`). Public symbols: `docs/reference.md`.
+
+## Recent activity in the admin
+
+To show recent request and job activity inside the admin, pass an `observability.NewWindow()` to `tango.WithRecorder` (through `observability.Multi` if another recorder is also in use) and to `admin.WithDashboard`; see `admin-dashboard.md`.

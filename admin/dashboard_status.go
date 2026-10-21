@@ -1,6 +1,9 @@
 package admin
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 // statusCardData backs the status cards: database, migrations and release
 // from the host's status provider.
@@ -9,11 +12,11 @@ type statusCardData struct {
 	Status DashboardStatus
 }
 
-func loadStatusCard(ctx context.Context, provider func(context.Context) (DashboardStatus, error)) statusCardData {
+func loadStatusCard(logger *slog.Logger, ctx context.Context, provider func(context.Context) (DashboardStatus, error)) statusCardData {
 	if provider == nil {
 		return statusCardData{State: cardNotConfigured}
 	}
-	status, state := runCard("status", func() (DashboardStatus, error) { return provider(ctx) })
+	status, state := runCard(logger, "status", func() (DashboardStatus, error) { return provider(ctx) })
 	return statusCardData{State: state, Status: status}
 }
 
