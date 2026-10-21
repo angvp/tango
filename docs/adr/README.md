@@ -65,3 +65,4 @@ New records take the next free number here. This directory is the single, public
 | [0057](0057-admin-widgets-extend-through-optional-interfaces-and-one-derived-preview-route.md) | Admin widgets extend through optional interfaces, and admin owns one derived preview route | Accepted |
 | [0058](0058-markdown-rendering-and-sanitization-belong-to-the-host-and-previews-are-sandboxed.md) | Markdown rendering and sanitization belong to the host, and the admin preview is a sandboxed document | Accepted |
 | [0059](0059-json-fields-are-declared-by-tag-stored-as-exact-text-and-validated-when-the-model-is-written.md) | JSON fields are declared by tag, stored as exact text and validated when the model is written | Accepted |
+| [0061](0061-activity-numbers-have-a-read-side-separate-from-recorder-and-an-opt-in-bounded-window.md) | Activity numbers have a read side separate from Recorder, and an opt-in bounded in-memory Window | Accepted |
