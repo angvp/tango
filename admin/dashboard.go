@@ -127,7 +127,7 @@ const dashboardSource = `{{define "content"}}
     <h1 class="topbar-title">{{.T "admin.dashboard.title" "Dashboard"}}</h1>
   </div>
 </header>
-<div class="content-body" data-dashboard="page">
+<div class="content-body space-y-6" data-dashboard="page">
   {{template "statusCard" .}}
   {{template "activityCard" .}}
 </div>
