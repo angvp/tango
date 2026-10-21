@@ -138,12 +138,15 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
+      # SQLite runs every package; PostgreSQL and MySQL run only the packages
+      # scripts/dialect-manifest.txt marks sensitive. The weekly workflow
+      # (full-matrix.yml) runs everything on all three.
       - name: go test
         run: |
           go run gotest.tools/gotestsum@v1.13.0 \
             --junitfile "junit-${{ matrix.dialect }}.xml" \
             --format testname \
-            -- ./... -count=1 -coverprofile="coverage-${{ matrix.dialect }}.out" -covermode=atomic
+            -- $(scripts/dialect-packages.sh) -count=1 -coverprofile="coverage-${{ matrix.dialect }}.out" -covermode=atomic
       # storage/s3 is its own Go module, so ./... above skips it.
       - name: go test storage/s3
         if: ${{ matrix.dialect == 'sqlite' }}

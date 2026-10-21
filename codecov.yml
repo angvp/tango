@@ -1,16 +1,45 @@
 # NOTE for repo admin: these checks post to PRs but do not block merges on
-# their own. To actually enforce this floor, mark both checks (codecov/project,
-# codecov/patch) as required status checks in GitHub branch protection settings
-# for `main` — that step can only be done from the GitHub UI/API, not from here.
+# their own. To actually enforce this floor, mark the sqlite checks
+# (codecov/project/sqlite, codecov/patch/sqlite) as required status checks in
+# GitHub branch protection settings for `main` — that step can only be done
+# from the GitHub UI/API, not from here.
+#
+# Only the SQLite upload gates: SQLite runs every package, so its number is
+# the project's coverage. The PostgreSQL and MySQL uploads cover only the
+# dialect-sensitive packages (scripts/dialect-manifest.txt); they are posted
+# for information and never gate. There is no carryforward: a missing or
+# smaller dialect upload shows as it is.
 coverage:
   status:
     project:
-      default:
+      sqlite:
+        flags: [sqlite]
         target: 90%
         threshold: 1%
         informational: false
+      postgres:
+        flags: [postgres]
+        informational: true
+      mysql:
+        flags: [mysql]
+        informational: true
     patch:
-      default:
+      sqlite:
+        flags: [sqlite]
         target: 90%
         threshold: 1%
         informational: false
+      postgres:
+        flags: [postgres]
+        informational: true
+      mysql:
+        flags: [mysql]
+        informational: true
+
+flags:
+  sqlite:
+    carryforward: false
+  postgres:
+    carryforward: false
+  mysql:
+    carryforward: false
