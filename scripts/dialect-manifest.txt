@@ -9,7 +9,7 @@
 # package, not a test: inside a sensitive package, a test that does not depend
 # on the dialect calls testdb.SQLiteOnly(t, reason).
 
-sqlite-only .  # uses testdb only to hand the dialect to ServeContext; nothing it asserts depends on SQL
+sqlite-only .  # serve, scheduler and registry tests hand the dialect through; Store and migration behaviour per dialect is tested in db and migration
 sensitive ./accounts
 sensitive ./admin
 sensitive ./auth
@@ -21,7 +21,7 @@ sqlite-only ./cmd/tango
 sensitive ./db
 sqlite-only ./i18n
 sqlite-only ./internal/adminregistry
-sqlite-only ./internal/cli  # one schema test uses testdb; the package is mostly command parsing, and the weekly full run covers it
+sqlite-only ./internal/cli  # mostly command parsing; its accounts-schema test applies the shipped migrations, which migrationcompat runs on every dialect
 sqlite-only ./internal/clientip
 sqlite-only ./internal/clientip/clientiptest
 sensitive ./internal/migrationcompat

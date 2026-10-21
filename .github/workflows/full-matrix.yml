@@ -4,7 +4,8 @@
 # before it ships. It runs weekly, by hand, and before every release (the
 # Release workflow calls it); it is not a required check on pull requests and
 # uploads no coverage, so the dialect flags keep meaning "the PR legs".
-# Each leg writes its wall time to the run summary.
+# Each leg writes the time its `go test` took to the run summary; the run
+# page shows the whole job.
 name: Full matrix
 
 on:
