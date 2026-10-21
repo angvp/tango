@@ -25,12 +25,12 @@ var palette = []themeToken{
 	// Text.
 	{Name: "ink", Light: rgb{15, 23, 42}, Dark: rgb{241, 245, 249}},
 	{Name: "ink-muted", Light: rgb{71, 85, 105}, Dark: rgb{148, 163, 184}},
-	{Name: "ink-faint", Light: rgb{100, 116, 139}, Dark: rgb{130, 145, 166}},
+	{Name: "ink-faint", Light: rgb{91, 105, 128}, Dark: rgb{143, 158, 180}},
 
 	// Surfaces.
 	{Name: "surface", Light: rgb{255, 255, 255}, Dark: rgb{30, 41, 59}},
 	{Name: "surface-sunken", Light: rgb{248, 250, 252}, Dark: rgb{15, 23, 42}},
-	{Name: "surface-hover", Light: rgb{241, 245, 249}, Dark: rgb{51, 65, 85}},
+	{Name: "surface-hover", Light: rgb{241, 245, 249}, Dark: rgb{40, 52, 71}},
 
 	// Lines: line and line-subtle are decorative dividers; control-line is
 	// the boundary of an input, which must stay visible.

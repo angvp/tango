@@ -40,13 +40,14 @@ func themedColourViolations(body string) []string {
 	return found
 }
 
+// withoutExceptions removes each documented exception, and only from the
+// element it is documented for: a raw class on any other element still fails.
 func withoutExceptions(body string) string {
-	for class := range rawColourExceptions {
-		body = strings.ReplaceAll(body, " "+class+`"`, `"`)
-		body = strings.ReplaceAll(body, " "+class+" ", " ")
-	}
-	return body
+	return previewCanvas.ReplaceAllString(body, "$1")
 }
+
+// previewCanvas matches the Markdown preview iframe's white canvas class.
+var previewCanvas = regexp.MustCompile(`(<iframe[^>]*?) bg-white`)
 
 func TestRawColourGuardCatchesAClassAndACSSRule(t *testing.T) {
 	page := `<div class="card bg-slate-50 p-2"></div><style type="text/tailwindcss">.x { @apply text-red-600 p-2; }</style>`
@@ -56,6 +57,9 @@ func TestRawColourGuardCatchesAClassAndACSSRule(t *testing.T) {
 	}
 	if ok := themedColourViolations(`<iframe class="border-line-strong bg-white"></iframe>`); len(ok) != 0 {
 		t.Errorf("documented exception flagged: %q", ok)
+	}
+	if bad := themedColourViolations(`<div class="card bg-white"></div>`); len(bad) != 1 {
+		t.Errorf("bg-white outside the preview iframe must fail, got %q", bad)
 	}
 }
 
