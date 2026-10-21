@@ -68,7 +68,11 @@ func New(store *db.Store, opts ...Option) tango.App {
 
 		limiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 		clientKey := security.ClientKey(cfg.trustedProxies)
-		index := requireSession(store, indexView(nav, cfg.branding))
+		landing := indexView(nav, cfg.branding)
+		if cfg.dashboard.enabled() {
+			landing = dashboardView(nav, cfg.branding, cfg.dashboard)
+		}
+		index := requireSession(store, landing)
 		routes := tango.URLs{
 			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index"), hiddenPage),
 			// Also match "/admin" (no trailing slash) directly, rather than

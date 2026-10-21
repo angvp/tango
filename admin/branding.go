@@ -27,6 +27,7 @@ type adminConfig struct {
 	branding       Branding
 	middleware     []tango.Middleware
 	trustedProxies []*net.IPNet
+	dashboard      DashboardConfig
 }
 
 // WithBranding sets the admin's brand name and logo. Omitting it — calling
