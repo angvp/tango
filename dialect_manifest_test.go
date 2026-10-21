@@ -14,8 +14,11 @@ func packagesFor(t *testing.T, dsn, manifest string) (string, error) {
 	t.Helper()
 	cmd := exec.Command("sh", "scripts/dialect-packages.sh")
 	cmd.Env = append(os.Environ(), "TANGO_TEST_DSN="+dsn, "DIALECT_MANIFEST="+manifest)
-	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+	var stdout, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	// A failure explains itself on stderr; a success is judged on stdout alone.
+	return strings.TrimSpace(stdout.String() + stderr.String()), err
 }
 
 func TestSQLiteRunsEveryPackage(t *testing.T) {

@@ -16,7 +16,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 # Manifest entries: "<class> <path>", ignoring comments and blank lines.
 sed -e 's/#.*//' "$manifest" | awk 'NF { print $2 }' | sort >"$tmp/classified"
-go list ./... | sed -e 's|^github.com/angvp/tango$|.|' -e 's|^github.com/angvp/tango/|./|' | sort >"$tmp/actual"
+go list ./... >"$tmp/listed" || exit 1
+sed -e 's|^github.com/angvp/tango$|.|' -e 's|^github.com/angvp/tango/|./|' "$tmp/listed" | sort >"$tmp/actual"
 
 missing=$(comm -13 "$tmp/classified" "$tmp/actual")
 stale=$(comm -23 "$tmp/classified" "$tmp/actual")

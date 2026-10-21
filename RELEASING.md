@@ -52,7 +52,7 @@ CI runs the suite on SQLite, PostgreSQL 17 and MySQL 8.4, but not the same suite
 - **A dialect-independent test inside a sensitive package** calls `testdb.SQLiteOnly(t, reason)`.
 - **Coverage**: only the `sqlite` upload gates the Codecov targets. The `postgres` and `mysql` uploads cover only the sensitive packages and are informational, with no carryforward.
 
-The **Full matrix** workflow (`.github/workflows/full-matrix.yml`) runs every package on all three databases. It runs on Mondays, can be started by hand, and the Release workflow runs it before it creates a release, so a package classified wrongly cannot reach a release. It is not a pull request check, uploads no coverage, and writes each leg's wall time to its run summary.
+The **Full matrix** workflow (`.github/workflows/full-matrix.yml`) runs every package of the main module on all three databases (the separate storage and cache adapter modules keep their own jobs). It runs on Mondays, can be started by hand, and the Release workflow runs it before it creates a release, so a package classified wrongly cannot reach a release. It is not a pull request check, uploads no coverage, and writes each leg's wall time to its run summary.
 
 ## Admin theme check
 

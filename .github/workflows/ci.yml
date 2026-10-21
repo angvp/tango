@@ -143,10 +143,11 @@ jobs:
       # (full-matrix.yml) runs everything on all three.
       - name: go test
         run: |
+          packages=$(scripts/dialect-packages.sh) || exit 1
           go run gotest.tools/gotestsum@v1.13.0 \
             --junitfile "junit-${{ matrix.dialect }}.xml" \
             --format testname \
-            -- $(scripts/dialect-packages.sh) -count=1 -coverprofile="coverage-${{ matrix.dialect }}.out" -covermode=atomic
+            -- $packages -count=1 -coverprofile="coverage-${{ matrix.dialect }}.out" -covermode=atomic
       # storage/s3 is its own Go module, so ./... above skips it.
       - name: go test storage/s3
         if: ${{ matrix.dialect == 'sqlite' }}

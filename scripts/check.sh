@@ -11,7 +11,8 @@ go vet ./...
 go build ./...
 # ./... on SQLite; only the dialect-sensitive packages when TANGO_TEST_DSN names
 # PostgreSQL or MySQL (see scripts/dialect-manifest.txt).
-go test -count=1 $(scripts/dialect-packages.sh)
+packages=$(scripts/dialect-packages.sh) || exit 1
+go test -count=1 $packages
 
 # These are their own Go modules, so ./... above skips
 # them. The cache adapters' conformance tests need a server and skip without
