@@ -8,13 +8,16 @@
 #     the comparison links follow;
 #   - the version's migration-compat corpus is generated from this checkout
 #     (internal/migrationcompat/generate.sh vX.Y.Z local) and listed in
-#     Generators in internal/migrationcompat/versions.go.
+#     Generators in internal/migrationcompat/versions.go;
+#   - the corpus package is classified "sensitive" in
+#     scripts/dialect-manifest.txt, which every package of the module needs.
 #
 # It never commits, tags or pushes. Running it again changes nothing: a
 # version whose section is already dated is left alone, and an existing corpus
 # is never regenerated, because a corpus stands for what that release's users
-# have. It refuses a tree with changes outside CHANGELOG.md and
-# internal/migrationcompat/, so the diff you review is only its own.
+# have. It refuses a tree with changes outside CHANGELOG.md,
+# internal/migrationcompat/ and scripts/dialect-manifest.txt, so the diff you
+# review is only its own.
 set -eu
 usage() { echo "usage: scripts/prepare-release.sh vMAJOR.MINOR.PATCH [--date YYYY-MM-DD]" >&2; exit 2; }
 
@@ -36,9 +39,9 @@ case "$date" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) usage ;; esac
 cd "$(dirname "$0")/.."
 
 # Only this script's own files may be changed.
-unrelated="$(git status --porcelain | sed 's/^...//' | grep -v -e '^CHANGELOG.md$' -e '^internal/migrationcompat/' || true)"
+unrelated="$(git status --porcelain | sed 's/^...//' | grep -v -e '^CHANGELOG.md$' -e '^internal/migrationcompat/' -e '^scripts/dialect-manifest.txt$' || true)"
 if [ -n "$unrelated" ]; then
-	echo "prepare-release: changes outside CHANGELOG.md and internal/migrationcompat/; commit or stash them first:" >&2
+	echo "prepare-release: changes outside CHANGELOG.md, internal/migrationcompat/ and scripts/dialect-manifest.txt; commit or stash them first:" >&2
 	echo "$unrelated" >&2
 	exit 1
 fi
@@ -104,4 +107,31 @@ else
 	rm -f "$tmp"
 	gofmt -w "$mc/versions.go"
 	echo "$mc/versions.go: $dir listed"
+fi
+
+# --- the corpus package's dialect classification
+manifest=scripts/dialect-manifest.txt
+entry="./$mc/$dir/migrations"
+if [ ! -f "$manifest" ]; then
+	echo "prepare-release: $manifest is missing" >&2
+	exit 1
+fi
+if grep -q "^[a-z-]* $entry\([ #]\|\$\)" "$manifest"; then
+	echo "$manifest: $dir already classified"
+else
+	tmp="$(mktemp)"
+	awk -v entry="$entry" '
+		/^sensitive \.\/internal\/migrationcompat\/v[0-9_]+\/migrations/ { last = NR }
+		{ lines[NR] = $0 }
+		END {
+			if (!last) exit 1
+			for (i = 1; i <= NR; i++) {
+				print lines[i]
+				if (i == last) print "sensitive " entry
+			}
+		}
+	' "$manifest" > "$tmp" || { rm -f "$tmp"; echo "prepare-release: no migrationcompat corpus line in $manifest to follow" >&2; exit 1; }
+	cat "$tmp" > "$manifest"
+	rm -f "$tmp"
+	echo "$manifest: $dir classified sensitive"
 fi

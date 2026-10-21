@@ -12,7 +12,7 @@ For version `vX.Y.Z`, with `develop` holding the work and green CI on its latest
    scripts/prepare-release.sh vX.Y.Z            # --date YYYY-MM-DD to override today's UTC date
    ```
 
-   It dates the changelog section, adds a fresh `[Unreleased]`, updates the comparison links, and generates and registers the version's migration-compat corpus. It only edits files: it never commits, tags or pushes, and running it again changes nothing.
+   It dates the changelog section, adds a fresh `[Unreleased]`, updates the comparison links, generates and registers the version's migration-compat corpus, and classifies that corpus package as `sensitive` in `scripts/dialect-manifest.txt`. It only edits files: it never commits, tags or pushes, and running it again changes nothing.
 2. **Review the diff** and finish what a script cannot: every breaking entry in the changelog needs an upgrade note, and so does every model change, with its "run `tango makemigrations`, then apply" instruction. Commit to `develop` and push.
 3. **Wait for CI on that commit**, then rehearse:
 

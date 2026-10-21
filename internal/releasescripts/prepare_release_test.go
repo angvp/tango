@@ -46,6 +46,14 @@ var Generators = []Generator{
 }
 `
 
+const fixtureManifest = `# Which packages run on PostgreSQL and MySQL pull-request legs.
+sensitive ./db
+sensitive ./internal/migrationcompat
+sensitive ./internal/migrationcompat/unreleased/migrations
+sensitive ./internal/migrationcompat/v0_2_0/migrations
+sqlite-only ./internal/releasescripts
+`
+
 // prepareRepo is a repository with a changelog, versions.go and a stand-in
 // generate.sh that records its arguments in generate.log and writes a corpus.
 func prepareRepo(t *testing.T, changelog string) (repo, bin string) {
@@ -62,6 +70,10 @@ func prepareRepo(t *testing.T, changelog string) (repo, bin string) {
 	}
 	write(filepath.Join(repo, "CHANGELOG.md"), changelog, 0o644)
 	write(filepath.Join(mc, "versions.go"), fixtureVersions, 0o644)
+	if err := os.MkdirAll(filepath.Join(repo, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(filepath.Join(repo, "scripts", "dialect-manifest.txt"), fixtureManifest, 0o644)
 	write(filepath.Join(mc, "v0_2_0", "models.json"), "{}", 0o644)
 	write(filepath.Join(mc, "generate.sh"), `#!/bin/sh
 echo "generate.sh $*" >> "$LOG"
@@ -123,6 +135,12 @@ func TestPrepareReleaseDatesTheChangelogAndRegistersTheCorpus(t *testing.T) {
 	if strings.Index(versions, `Dir: "v0_3_0"`) > strings.Index(versions, `Dir: "unreleased"`) {
 		t.Fatalf("the new generator should come before the unreleased one:\n%s", versions)
 	}
+	// The new corpus package must be classified, or CI's package lists fail.
+	manifest := read(t, filepath.Join(repo, "scripts", "dialect-manifest.txt"))
+	want := "sensitive ./internal/migrationcompat/v0_2_0/migrations\nsensitive ./internal/migrationcompat/v0_3_0/migrations\n"
+	if !strings.Contains(manifest, want) {
+		t.Fatalf("the manifest should list the v0_3_0 corpus after v0_2_0:\n%s", manifest)
+	}
 	if fmt := exec.Command("gofmt", "-l", filepath.Join(repo, "internal", "migrationcompat", "versions.go")); true {
 		if b, _ := fmt.Output(); len(b) != 0 {
 			t.Fatalf("versions.go is not gofmt-clean:\n%s", versions)
@@ -135,14 +153,14 @@ func TestPrepareReleaseIsSafeToRunTwice(t *testing.T) {
 	if _, exit, _ := runIn(t, repo, bin, "prepare-release.sh", nil, "v0.3.0", "--date", "2026-11-02"); exit != 0 {
 		t.Fatal("first run failed")
 	}
-	before := read(t, filepath.Join(repo, "CHANGELOG.md")) + read(t, filepath.Join(repo, "internal", "migrationcompat", "versions.go"))
+	before := read(t, filepath.Join(repo, "CHANGELOG.md")) + read(t, filepath.Join(repo, "internal", "migrationcompat", "versions.go")) + read(t, filepath.Join(repo, "scripts", "dialect-manifest.txt"))
 
 	// The first run's own edits are still uncommitted: they must not stop a rerun.
 	out, exit, log := runIn(t, repo, bin, "prepare-release.sh", nil, "v0.3.0", "--date", "2030-01-01")
 	if exit != 0 {
 		t.Fatalf("rerun exit = %d:\n%s", exit, out)
 	}
-	after := read(t, filepath.Join(repo, "CHANGELOG.md")) + read(t, filepath.Join(repo, "internal", "migrationcompat", "versions.go"))
+	after := read(t, filepath.Join(repo, "CHANGELOG.md")) + read(t, filepath.Join(repo, "internal", "migrationcompat", "versions.go")) + read(t, filepath.Join(repo, "scripts", "dialect-manifest.txt"))
 	if before != after {
 		t.Fatalf("the rerun changed files:\n--- before\n%s\n--- after\n%s", before, after)
 	}
