@@ -149,3 +149,9 @@ The absolute origin, such as `https://example.com`, that links sent outside a re
 A text field a model declares as holding JSON. tanGO checks that the text is valid JSON whenever the model is written, and stores exactly the text it was given: the same bytes come back, with no reformatting and no key reordering, on every database. It is still an ordinary text column that the application reads and writes as a string.
 
 Do not call this a JSON type or a `jsonb` column. tanGO does not query inside it, index it or check it against a schema, and a field that merely holds JSON text without being declared this way is not checked.
+
+## Activity scope
+
+The label every dashboard activity number carries to say what it counts: for the built-in `observability.Window`, "this instance only, since <start>". It is data supplied by the source of the numbers, never inferred by the dashboard, so a shared source may declare a wider scope and a single-process one cannot claim it.
+
+Do not confuse the Activity scope's `Since` (when the activity window began) with the process `Started` time the status provider reports: they are different moments with different owners. Do not read an in-memory `Window` as a fleet-wide or durable metric history: it resets on restart and covers one process.
