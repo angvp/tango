@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"strings"
 	"testing"
@@ -113,5 +114,18 @@ func TestActivityCardNotConfiguredWithoutASnapshotter(t *testing.T) {
 	}
 	if !strings.Contains(body, "Not configured") {
 		t.Fatal("activity card does not say it is not configured")
+	}
+}
+
+func TestActivityCardNamesALatencyBeyondTheLastBucketInsteadOfPrintingInfinity(t *testing.T) {
+	snapshot := activitySnapshot()
+	snapshot.Requests.LatencyP99 = math.Inf(1)
+	body := activityBody(t, stubSource{snapshot: snapshot})
+
+	if strings.Contains(body, "Inf") {
+		t.Fatal("an overflowing percentile printed as infinity")
+	}
+	if !strings.Contains(body, "over 60 s") {
+		t.Fatal("an overflowing percentile did not read 'over 60 s'")
 	}
 }

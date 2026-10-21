@@ -2,6 +2,7 @@ package admin
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/angvp/tango/observability"
@@ -55,6 +56,10 @@ func (a activityCardData) P99() string { return millis(a.Snapshot.Requests.Laten
 
 // millis formats a latency given in seconds as milliseconds.
 func millis(seconds float64) string {
+	if math.IsInf(seconds, 1) {
+		// Beyond the collector's last histogram bucket there is no number.
+		return "over 60 s"
+	}
 	return fmt.Sprintf("%.1f ms", seconds*1000)
 }
 
