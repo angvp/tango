@@ -177,9 +177,9 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
     <form method="post" action="/admin/theme/" role="group" aria-label="{{$.T "admin.theme.label" "Theme"}}" class="mt-2 flex flex-wrap gap-1">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <input type="hidden" name="next" value="{{$.ThemeNext}}">
-      <button type="submit" name="theme" value="light" aria-pressed="{{if eq $.Theme "light"}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium text-sidebar-muted hover:text-sidebar-strong{{if eq $.Theme "light"}} bg-sidebar-accent text-sidebar-accent-fg{{end}}">{{$.T "admin.theme.light" "Light"}}</button>
-      <button type="submit" name="theme" value="dark" aria-pressed="{{if eq $.Theme "dark"}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium text-sidebar-muted hover:text-sidebar-strong{{if eq $.Theme "dark"}} bg-sidebar-accent text-sidebar-accent-fg{{end}}">{{$.T "admin.theme.dark" "Dark"}}</button>
-      <button type="submit" name="theme" value="system" aria-pressed="{{if eq $.Theme ""}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium text-sidebar-muted hover:text-sidebar-strong{{if eq $.Theme ""}} bg-sidebar-accent text-sidebar-accent-fg{{end}}">{{$.T "admin.theme.system" "System"}}</button>
+      <button type="submit" name="theme" value="light" aria-pressed="{{if eq $.Theme "light"}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium {{if eq $.Theme "light"}}bg-sidebar-accent text-sidebar-accent-fg{{else}}text-sidebar-muted hover:text-sidebar-strong{{end}}">{{$.T "admin.theme.light" "Light"}}</button>
+      <button type="submit" name="theme" value="dark" aria-pressed="{{if eq $.Theme "dark"}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium {{if eq $.Theme "dark"}}bg-sidebar-accent text-sidebar-accent-fg{{else}}text-sidebar-muted hover:text-sidebar-strong{{end}}">{{$.T "admin.theme.dark" "Dark"}}</button>
+      <button type="submit" name="theme" value="system" aria-pressed="{{if eq $.Theme ""}}true{{else}}false{{end}}" class="rounded-md px-2 py-1 text-xs font-medium {{if eq $.Theme ""}}bg-sidebar-accent text-sidebar-accent-fg{{else}}text-sidebar-muted hover:text-sidebar-strong{{end}}">{{$.T "admin.theme.system" "System"}}</button>
     </form>
     <form method="post" action="/admin/logout/" class="sidebar-logout">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">

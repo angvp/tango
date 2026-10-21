@@ -43,6 +43,18 @@ Then rebase `develop` onto `main` if they differ:
 git checkout develop && git rebase main && git push --force-with-lease origin develop
 ```
 
+## Admin theme check
+
+Before a release that changes anything under `admin/`, look at the admin in both themes. The tests prove the declared colour pairs and that no page names a raw palette colour; they cannot show that a page reads well. Run `examples/api-with-admin`, then capture each of these in light and dark (emulate the system preference, and once pick Light or Dark from the sidebar switch to check the override), at desktop and phone width:
+
+- the changelist with rows, and an empty one;
+- a create or edit form, including a validation error;
+- the dashboard;
+- the login page;
+- a Markdown field with its preview, which stays a white canvas in both themes.
+
+Check that text stays legible on every surface, the focus ring is visible, the sidebar reads as part of the page, and nothing is clipped on the phone.
+
 ## After the tag
 
 The Release job refuses the tag, creating nothing, unless the tagged commit is on `main`, CI passed on that exact commit, the changelog has a dated section for the version, the version's migration-compat corpus is committed and listed, a patch release has no incompatible change, and the module proxy doesn't already serve the tag from another commit. It then creates the GitHub release and moves the website. Its outcomes:
