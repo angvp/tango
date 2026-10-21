@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-21
+
 ### Added
 
 - **Admin operational dashboard (opt-in).** `admin.WithDashboard(admin.DashboardConfig{Status, Activity})` turns `/admin/` into a page with database and migration status and recent request and job activity; without it, or with neither source set, the landing page is unchanged. The status comes from a function you supply (build it from `tango.Status`), and the activity from any `observability.Snapshotter`. A failing or panicking source marks only its own card "unavailable" and logs the cause; the error text never reaches the page. New in `observability`: `Snapshotter` and `Snapshot` (a read side that is separate from `Recorder`), `NewWindow` (an opt-in in-memory collector: the last 60 minutes in one-minute buckets, HTTP requests by status class and latency, job runs by outcome, nothing per route or job, reset on restart, labelled "this instance only"), and `Multi` (feed several recorders at once). It is a starting point for "is this instance healthy right now", not a metrics store; keep an external monitoring system for history, alerts and several instances.
@@ -218,7 +220,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/angvp/tango/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/angvp/tango/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/angvp/tango/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/angvp/tango/compare/v0.3.0...v0.3.1
