@@ -76,7 +76,7 @@ func (inputWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) e
 var checkboxWidgetTemplate = template.Must(template.New("checkboxWidget").Parse(
 	`<div class="checkbox-row">
   <input type="checkbox" id="field-{{.Name}}" name="{{.Name}}" {{if .Checked}}checked{{end}} class="checkbox"` + ariaAttrs + `>
-  <label for="field-{{.Name}}" class="text-sm font-medium text-slate-700">{{.Label}}</label>
+  <label for="field-{{.Name}}" class="text-sm font-medium text-ink-muted">{{.Label}}</label>
 </div>`))
 
 // checkboxWidget is the built-in bool field: a single checkbox.
@@ -157,7 +157,7 @@ func Textarea() Widget { return textareaWidget{} }
 
 var readOnlyWidgetTemplate = template.Must(template.New("readOnlyWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
-<input id="field-{{.Name}}" type="text" value="{{.Value}}" readonly class="input bg-slate-50 text-slate-500"` + ariaAttrs + `>`))
+<input id="field-{{.Name}}" type="text" value="{{.Value}}" readonly class="input bg-surface-sunken text-ink-faint"` + ariaAttrs + `>`))
 
 // readOnlyWidget renders any read-only field as a readonly text input, so
 // its value can be focused, selected and copied. The input has no name, so

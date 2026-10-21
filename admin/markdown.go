@@ -64,6 +64,12 @@ func (w markdownPreviewWidget) Preview(ctx context.Context, source string) (temp
 // panel; a widget without one is exactly the plain textarea and count. The
 // tab list and the Preview panel start hidden and the shared widget script
 // reveals them, so without JavaScript the field is an ordinary textarea.
+//
+// The preview iframe is the one deliberate exception to the token rule. Its
+// canvas is a fixed white (bg-white) in both themes, inside a themed frame
+// (border-line-strong). The preview is an isolated, sandboxed, light surface:
+// the host's rendered HTML is not styled by the admin, so it is not promised
+// to match any public site, and the host owns its own dark-mode behaviour.
 var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>{{if .Preview}}
 <div class="widget-tabs" role="tablist" aria-label="{{.Label}} view" data-widget-tabs hidden>
@@ -73,11 +79,11 @@ var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
 <div id="field-{{.Name}}-panel-write" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-write" class="widget-panel">{{end}}
 <textarea id="field-{{.Name}}" name="{{.Name}}" class="input font-mono resize-y" rows="12" data-tango-widget="markdown"{{if .Preview}} data-preview-url="{{.PreviewURL}}"{{end}}{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}}` + ariaAttrs + `>
 {{.Value}}</textarea>
-<p id="field-{{.Name}}-count" class="text-xs text-slate-500 mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
+<p id="field-{{.Name}}-count" class="text-xs text-ink-faint mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
 </div>
 <div id="field-{{.Name}}-panel-preview" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-preview" class="widget-panel" hidden>
-  <p id="field-{{.Name}}-preview-status" role="status" class="text-xs text-slate-500" data-markdown-status></p>
-  <iframe id="field-{{.Name}}-preview" title="Preview of {{.Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-slate-300 bg-white"></iframe>
+  <p id="field-{{.Name}}-preview-status" role="status" class="text-xs text-ink-faint" data-markdown-status></p>
+  <iframe id="field-{{.Name}}-preview" title="Preview of {{.Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-line-strong bg-white"></iframe>
 </div>{{end}}`))
 
 // markdownWidgetData is what markdownWidgetTemplate renders: the field plus

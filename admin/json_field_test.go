@@ -101,7 +101,7 @@ func TestReadOnlyJSONFieldStaysAReadonlyInput(t *testing.T) {
 	if strings.Contains(body, `data-tango-widget="json"`) {
 		t.Errorf("a read-only JSON field rendered the JSON widget:\n%s", body)
 	}
-	want := `<input id="field-Doc" type="text" value="{&#34;a&#34;:1}" readonly class="input bg-slate-50 text-slate-500">`
+	want := `<input id="field-Doc" type="text" value="{&#34;a&#34;:1}" readonly class="input bg-surface-sunken text-ink-faint">`
 	if !strings.Contains(body, want) {
 		t.Errorf("read-only JSON field lacks %s in:\n%s", want, body)
 	}
