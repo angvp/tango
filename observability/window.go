@@ -119,7 +119,7 @@ func (w *Window) Snapshot() (Snapshot, error) {
 
 	return Snapshot{
 		Scope:    windowScope,
-		Since:    w.started,
+		Since:    w.since(now),
 		Window:   windowLength,
 		Requests: totals.requestSummary(),
 		Jobs:     totals.jobSummary(),
@@ -155,4 +155,14 @@ func intAttr(attrs []slog.Attr, key string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// since is when the numbers in a snapshot taken at now begin: the Window's
+// creation until it has run for a full window, then the start of the
+// trailing window.
+func (w *Window) since(now time.Time) time.Time {
+	if trailing := now.Add(-windowLength); trailing.After(w.started) {
+		return trailing
+	}
+	return w.started
 }

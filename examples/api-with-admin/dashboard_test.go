@@ -21,7 +21,9 @@ import (
 func TestTheDashboardShowsTheRealDatabaseAndTheRecentActivity(t *testing.T) {
 	window := observability.NewWindow()
 	handler, store, _ := newTestServerWith(t, window)
-	// ServeContext feeds the Window these observations for every request.
+	// These observations stand in for what tango.ServeContext records for every
+	// request it serves: the test builds the handler without ServeContext, so
+	// the recording path itself is covered by the root package's metrics tests.
 	for _, status := range []int{200, 200, 404, 500} {
 		window.ObserveHistogram(observability.MetricHTTPRequestDuration, 0.012,
 			slog.String("route", "/posts/"), slog.String("method", "GET"), slog.Int("status", status))

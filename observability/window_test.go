@@ -293,3 +293,16 @@ func TestWindowRecordsAndSnapshotsConcurrently(t *testing.T) {
 		t.Errorf("Jobs.Success = %d, want %d", snap.Jobs.Success, workers*perWorker)
 	}
 }
+
+func TestWindowSinceFollowsTheRollingWindowAfterAnHourOfUptime(t *testing.T) {
+	clock := &fakeClock{now: windowStart}
+	w := newClockedWindow(clock)
+
+	clock.Set(windowStart.Add(3 * time.Hour))
+	observeRequest(w, 0.01, 200)
+
+	want := windowStart.Add(2 * time.Hour)
+	if snap := mustSnapshot(t, w); !snap.Since.Equal(want) {
+		t.Errorf("Since = %v, want %v: the numbers cover only the last hour, so the window began then, not at process start", snap.Since, want)
+	}
+}
