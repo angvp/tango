@@ -155,3 +155,9 @@ Do not call this a JSON type or a `jsonb` column. tanGO does not query inside it
 The label every dashboard activity number carries to say what it counts: for the built-in `observability.Window`, "this instance only, since <start>". It is data supplied by the source of the numbers, never inferred by the dashboard, so a shared source may declare a wider scope and a single-process one cannot claim it.
 
 Do not confuse the Activity scope's `Since` (when the activity window began) with the process `Started` time the status provider reports: they are different moments with different owners. Do not read an in-memory `Window` as a fleet-wide or durable metric history: it resets on restart and covers one process.
+
+## Theme override
+
+An operator's explicit choice of Light or Dark for the admin, kept in a cookie scoped to `/admin/`. With no cookie the admin follows the browser's `prefers-color-scheme`: "System" is the absence of an override, never a stored value.
+
+Do not confuse the Theme override with the system preference it overrides, or with the always-dark sidebar surface, which is a design choice that holds in both themes. The Markdown preview stays a light, isolated surface in both themes; it is not a promise to match a host's public rendering.
