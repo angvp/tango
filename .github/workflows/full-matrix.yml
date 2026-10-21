@@ -1,0 +1,76 @@
+# The whole suite on all three databases. A pull request's PostgreSQL and
+# MySQL legs run only the packages scripts/dialect-manifest.txt marks
+# sensitive; this is the backstop that catches a package classified wrongly
+# before it ships. It runs weekly, by hand, and before every release (the
+# Release workflow calls it); it is not a required check on pull requests and
+# uploads no coverage, so the dialect flags keep meaning "the PR legs".
+# Each leg writes its wall time to the run summary.
+name: Full matrix
+
+on:
+  schedule:
+    - cron: "17 5 * * 1" # Mondays, 05:17 UTC
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: full (${{ matrix.dialect }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dialect: sqlite
+            postgres-image: ""
+            mysql-image: ""
+            dsn: ""
+          - dialect: postgres
+            postgres-image: postgres:17-alpine
+            mysql-image: ""
+            dsn: postgres://tango:tango@localhost:5432/tango_test?sslmode=disable
+          - dialect: mysql
+            postgres-image: ""
+            mysql-image: mysql:8.4
+            dsn: mysql://root:tango@127.0.0.1:3306/mysql
+    # An empty image skips the service, so each leg starts only its own.
+    services:
+      postgres:
+        image: ${{ matrix.postgres-image }}
+        env:
+          POSTGRES_USER: tango
+          POSTGRES_PASSWORD: tango
+          POSTGRES_DB: tango_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tango -d tango_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: ${{ matrix.mysql-image }}
+        env:
+          MYSQL_ROOT_PASSWORD: tango
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -ptango"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TANGO_TEST_DSN: ${{ matrix.dsn }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+      - name: go test ./...
+        run: |
+          start=$SECONDS
+          go test -count=1 ./...
+          echo "full ${{ matrix.dialect }}: $((SECONDS - start))s of go test" >> "$GITHUB_STEP_SUMMARY"
