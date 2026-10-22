@@ -115,3 +115,10 @@ func Or(children ...Expr) Expr { return Expr{Op: ExprOr, Children: children} }
 // Not returns a node that matches when child does not. In SQL this is a
 // literal NOT (...), so rows whose compared column is NULL are left out.
 func Not(child Expr) Expr { return Expr{Op: ExprNot, Children: []Expr{child}} }
+
+// IsNull returns a leaf matching rows where field is NULL, which is how an
+// unset foreign key is stored.
+func IsNull(field string) Expr { return Cond(field, OpIsNull, nil) }
+
+// IsNotNull returns a leaf matching rows where field is not NULL.
+func IsNotNull(field string) Expr { return Cond(field, OpIsNotNull, nil) }

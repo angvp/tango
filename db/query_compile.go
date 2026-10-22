@@ -53,6 +53,9 @@ func (s *Store) whereClause(meta model.ModelMeta, query Query) (string, []any, e
 // renderCondition renders one validated condition, appending its bind
 // argument to args.
 func (s *Store) renderCondition(condition Condition, args *[]any) string {
+	if isNullOp(condition.Op) {
+		return s.ident(condition.Field) + " " + string(condition.Op)
+	}
 	clause := s.ident(condition.Field) + " " + string(condition.Op) + " " + placeholder(s.dialect, len(*args)+1)
 	*args = append(*args, argumentValue(s.dialect, condition.Value))
 	return clause
@@ -183,11 +186,19 @@ func conditionError(label, format string, args ...any) error {
 	return fmt.Errorf(format, args...)
 }
 
+// isNullOp reports whether op tests for NULL and so has no bind argument.
+func isNullOp(op Op) bool { return op == OpIsNull || op == OpIsNotNull }
+
 func validateKnownCondition(field model.FieldMeta, condition Condition, label string) (model.FieldMeta, error) {
 	fail := func(format string, args ...any) error { return conditionError(label, format, args...) }
 
 	switch condition.Op {
 	case OpEq, OpNe, OpGt, OpGte, OpLt, OpLte, OpLike:
+	case OpIsNull, OpIsNotNull:
+		if condition.Value != nil {
+			return field, fail("operator %q takes no value (field %q)", condition.Op, field.Name)
+		}
+		return field, nil
 	default:
 		return field, fail("unsupported %soperator %q", label, condition.Op)
 	}

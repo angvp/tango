@@ -91,10 +91,22 @@ const (
 	OpLt   Op = "<"
 	OpLte  Op = "<="
 	OpLike Op = "LIKE"
+	// OpIsNull and OpIsNotNull test for SQL NULL and take no Value. They are
+	// how to find an unset foreign key: see Condition.
+	OpIsNull    Op = "IS NULL"
+	OpIsNotNull Op = "IS NOT NULL"
 )
 
 // Condition compares one model field with a non-nil value. OpLike accepts a
-// SQL LIKE pattern on string fields, including % and _ wildcards.
+// SQL LIKE pattern on string fields, including % and _ wildcards. OpIsNull
+// and OpIsNotNull take no Value.
+//
+// An unset foreign key (zero in Go) is stored as NULL, so a condition such as
+// {Field: "OwnerID", Op: OpEq, Value: 0} never matches any row; the SQL is
+// left exactly as written. Use OpIsNull to find unset foreign keys and
+// OpIsNotNull for set ones. Comparisons with NULL are never true, so
+// OpNe and Not(...) also leave NULL rows out; add an IS NULL alternative to
+// include them.
 type Condition struct {
 	Field string
 	Op    Op
