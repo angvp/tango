@@ -6,6 +6,14 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Added
 
+- **Grouped filters.** `Query.Filter` is an optional boolean tree ANDed with `Where` and `Any`, built with `db.Cond`, `db.And`, `db.Or` and `db.Not` (the `Expr` and `ExprOp` types). A `Query` without a `Filter` produces exactly the SQL it did before. A filter holds at most `MaxFilterNodes` (100) nodes and `MaxFilterDepth` (8) levels.
+
+- **`IN`, `IS NULL` and `IS NOT NULL`.** `OpIn` with `db.In(field, slice)` (a nil or empty list matches nothing on every dialect; at most `MaxInValues`, 1,000, values per list and `MaxQueryArgs`, 10,000, bind values per query; a zero `time.Time` is rejected), and `OpIsNull`/`OpIsNotNull` with `db.IsNull`/`db.IsNotNull`, which take no value. All three work in `Where`, `Any` and `Filter`. A foreign key left at zero is stored as `NULL`, so `OwnerID = 0` still never matches (unchanged); use `IsNull` for unset keys.
+
+- **`Store.First` and `Store.Exists`.** `First` reads one row (primary-key order unless `OrderBy` is set, `ErrNotFound` naming the model when none, the destination untouched on any error); `Exists` reports whether any row matches. They validate and build SQL exactly as `List` and `Count` do.
+
+- **Typed query errors.** `ErrInvalidQuery`, `ErrQueryLimit`, `*QueryError` and `*QueryLimitError`. Every malformed query is refused before any SQL runs. The existing `Where`/`Any` validation errors keep their text and now also match `ErrInvalidQuery`.
+
 - **Locale resolvers.** `i18n.Resolver` (a locale source that also names the request headers it depends on), the helpers `FromQuery`, `FromCookie` and `FromHost`, `Chain` (the host's order, then `Accept-Language`), `FuncResolver` for a plain function, and `MiddlewareResolver` to install one. Each helper returns only a locale with a registered catalog and none sets a cookie. `Middleware` and `DefaultLocaleResolver` are unchanged.
 
 - **`i18n/i18ntest.Isolate`.** Test support: `i18ntest.Isolate(t)` gives a test an empty i18n state (catalogs, the `OnMissing` hook and its once-state, the observed keys) and restores the previous state in `t.Cleanup`. A test that uses it must not be parallel.

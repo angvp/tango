@@ -12,7 +12,9 @@ Every method takes the model's `model.ModelMeta` (from `registry.Models().Get("P
 
 - **`Create(ctx, meta, dest any) error`** — inserts `dest`, backfilling a database-generated primary key into it.
 - **`Get(ctx, meta, pk any, dest any) error`** — scans the row matching `pk` into `dest`. Returns `db.ErrNotFound` (wrapped) if no row matches.
-- **`List(ctx, meta, query db.Query, dest *[]T) error`** — scans every matching row into `dest`. `db.Query{Where, Any, Limit, Offset, OrderBy}` carries filtering, pagination, and ordering; `OrderBy` entries are Go field names, optionally prefixed with `-` for descending (`"-CreatedAt"`), and are validated against the model's actual fields — an unknown field fails with a clear error rather than silently doing nothing.
+- **`List(ctx, meta, query db.Query, dest *[]T) error`** — scans every matching row into `dest`. `db.Query{Where, Any, Filter, Limit, Offset, OrderBy}` carries filtering, pagination, and ordering; `OrderBy` entries are Go field names, optionally prefixed with `-` for descending (`"-CreatedAt"`), and are validated against the model's actual fields — an unknown field fails with a clear error rather than silently doing nothing.
+- **`First(ctx, meta, query db.Query, dest *T) error`** — the first matching row into `dest`, a pointer to one model struct. With no `OrderBy` it orders by the primary key, so the answer is deterministic; `Offset` is honoured, `Limit` is ignored. No match returns `db.ErrNotFound` (wrapped, naming the model), and `dest` is left untouched on any error.
+- **`Exists(ctx, meta, query db.Query) (bool, error)`** — whether any row matches; `Limit`, `Offset` and `OrderBy` are ignored.
 - **`Update(ctx, meta, dest any) error`** — writes `dest`'s current field values to the row matching its primary key. Returns `db.ErrNotFound` if no row matches.
 - **`Delete(ctx, meta, pk any) error`** — deletes the row matching `pk`. Returns `db.ErrNotFound` if no row matches.
 
@@ -51,15 +53,34 @@ The example returns posts in the `[start, end)` time range. `examples/api-with-a
 
 `Any` is one OR group, combined with `Where` using AND. For example, `Where: []db.Condition{{Field: "Active", Op: db.OpEq, Value: true}}` and `Any: []db.Condition{{Field: "Name", Op: db.OpLike, Value: "Al%"}, {Field: "Name", Op: db.OpLike, Value: "Be%"}}` selects active rows whose name matches either pattern. `OpLike` accepts an SQL pattern: `%` and `_` are wildcards. Case matching follows the configured database's `LIKE` behavior, which can differ between SQLite and Postgres. An empty `Any` applies no OR filter.
 
-`Store.Count(ctx, meta, query)` returns the total rows matching `Where` and `Any`. It ignores `Limit`, `Offset`, and `OrderBy`, so the same `Query` can drive a paginated `List` and its total count.
+`Store.Count(ctx, meta, query)` returns the total rows matching `Where`, `Any` and `Filter`. It ignores `Limit`, `Offset`, and `OrderBy`, so the same `Query` can drive a paginated `List` and its total count.
 
-This API does not support nested boolean groups, automatic wildcard escaping, `IS NULL`, joins, cross-model filtering, or filtering `Store.Get`. Use raw SQL below for queries outside this scope.
+### Grouped filters, `IN` and `NULL`
+
+`Query.Filter` is an optional boolean tree, ANDed with `Where` and `Any`. Build it with `db.Cond`, `db.And`, `db.Or`, `db.Not`, `db.In`, `db.IsNull` and `db.IsNotNull`:
+
+```go
+published := db.And(
+	db.Or(db.Cond("Status", db.OpEq, "published"), db.Cond("Featured", db.OpEq, true)),
+	db.Cond("OwnerID", db.OpEq, ownerID),
+)
+err := store.List(ctx, meta, db.Query{Filter: &published, OrderBy: []string{"-CreatedAt"}}, &posts)
+```
+
+- **`IN`.** `db.In("ID", []int64{3, 5, 8})` takes any slice or array whose elements have the field's type (`[]any` is accepted when every element does). A nil or empty list matches nothing, whatever the dialect. A list holds at most `db.MaxInValues` (1,000) values, and one query sends at most `db.MaxQueryArgs` (10,000) bind values across `Where`, `Any` and `Filter`. A zero `time.Time` in a list is rejected. `OpIn` also works in `Where` and `Any`.
+- **`NULL`.** `db.IsNull("OwnerID")` and `db.IsNotNull("OwnerID")` (`OpIsNull`, `OpIsNotNull`, no value) work on any field. A foreign key left at zero is stored as `NULL`, so `OwnerID = 0` never matches a row: use `IsNull` for unset keys.
+- **`NOT`.** `db.Not` renders a literal `NOT (...)`, and a comparison with `NULL` is never true, so `Not(Cond("OwnerID", OpEq, 7))` leaves rows with an unset owner out. To include them: `db.Or(db.Not(db.Cond("OwnerID", db.OpEq, 7)), db.IsNull("OwnerID"))`. `Not(In(field, emptyList))` matches every row.
+- **Shape.** A filter holds at most `db.MaxFilterNodes` (100) nodes and nests at most `db.MaxFilterDepth` (8) levels. An empty `And()` or `Or()`, a `Not` without exactly one child, and a malformed node are errors; no filter at all is a nil `Filter`.
+- **Errors.** Every malformed query matches `errors.Is(err, db.ErrInvalidQuery)` (`errors.As` with `*db.QueryError` for the model and field); a query over a limit also matches `db.ErrQueryLimit` (`*db.QueryLimitError`). Nothing reaches the database first. `Query`, `Filter` and the lists in it are never modified.
+- **`LIKE` and case.** `OpLike` is case-insensitive on SQLite and MySQL with default collations and case-sensitive on PostgreSQL.
+
+This API does not support automatic wildcard escaping, joins, cross-model filtering, or filtering `Store.Get`. Use raw SQL below for queries outside this scope.
 
 ## NULL and zero values
 
 tanGO fields are plain Go values, never pointers or `sql.Null*` wrappers, so `NULL` and a field's zero value mean the same thing. Every read (`Get`, `List`, `Query`, `QueryRow`) turns a `NULL` column into the field's zero value: `""`, `0`, `false`, or the zero `time.Time`. That's what happens to existing rows when a migration adds a column: they read as the zero value until you write something else. A raw query's `LEFT JOIN` with no match reads the same way. Going the other way, a foreign key field left at `0` is written as `NULL` (see [relationships](relationships-and-admin-foreign-keys.md)); other fields are written as their value.
 
-A `Where` condition compares with `=`, and `NULL` never equals anything, so filtering on a zero value doesn't match `NULL` rows. Use raw SQL with `IS NULL` for that. A raw-SQL destination that needs to tell `NULL` from zero can use a pointer or `sql.Null*` field; those keep their usual meaning. 
+A `Where` condition compares with `=`, and `NULL` never equals anything, so filtering on a zero value doesn't match `NULL` rows. Use `db.OpIsNull` (or `db.IsNull` in a `Filter`) to find `NULL` rows. A raw-SQL destination that needs to tell `NULL` from zero can use a pointer or `sql.Null*` field; those keep their usual meaning.
 
 ## Raw SQL
 

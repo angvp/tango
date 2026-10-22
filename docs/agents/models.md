@@ -40,7 +40,9 @@ Stick to simple scalar Go fields and `time.Time` unless the public model guide s
 - Use `db.Query{Where: []db.Condition{...}}` with `Store.List` for AND conditions on the model's own fields. `Any` adds one OR group; the groups combine with AND. See `examples/api-with-admin/apps/posts/views.go` for a working `Where` (`author_id`) + `Any`/`OpLike` (`q`, across `Title`/`Body`) composition.
 - Use `db.OpEq`/`OpNe` on any supported field; `OpGt`/`OpGte`/`OpLt`/`OpLte` only on numeric or `time.Time` fields. Match `Value` to the field's Go kind. `nil` is invalid; `false`, `0`, and `""` are literal values. Repeating a field permits a range.
 - `db.OpLike` accepts SQL wildcard patterns on string fields. `Store.Count(ctx, meta, query)` counts matching rows without pagination. See `admin/list.go` for the `Any` + `OpLike` + `Count` composition, and `docs/guides/persistence-crud-and-raw-sql.md` for dialect differences.
-- For nested groups, automatic wildcard escaping, `IS NULL`, joins, cross-model filtering, or non-PK `Get` semantics, use `Store.Query`/`QueryRow` with explicit SQL.
+- Use `Query.Filter` (`db.Cond`, `db.And`, `db.Or`, `db.Not`) for nested groups, `db.In(field, slice)` for a list of values (nil or empty matches nothing; at most 1,000 values), and `db.IsNull`/`db.IsNotNull` for unset foreign keys. `Store.First(ctx, meta, query, &row)` reads one row (primary-key order by default, `db.ErrNotFound` when none); `Store.Exists` answers yes or no.
+- For automatic wildcard escaping, joins, cross-model filtering, or non-PK `Get` semantics, use `Store.Query`/`QueryRow` with explicit SQL.
+- Don't filter an unset foreign key with `OwnerID = 0`: it is stored as `NULL`, so it never matches; use `db.IsNull("OwnerID")`. Don't read one row with `List` and `Limit: 1` when `First` says it; `First` orders by primary key, so for an unordered lookup name a unique column.
 
 ## Check
 
