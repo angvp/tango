@@ -103,10 +103,14 @@ type Condition struct {
 
 // Query carries filtering, pagination, and ordering options for List.
 // Where conditions are ANDed; Any conditions are ORed as one group, which
-// is ANDed with Where when both are present.
+// is ANDed with Where when both are present, and Filter, when set, is ANDed
+// with both.
 type Query struct {
-	Where   []Condition
-	Any     []Condition
+	Where []Condition
+	Any   []Condition
+	// Filter is an optional boolean tree of conditions, ANDed with Where and
+	// Any. A nil Filter restricts nothing.
+	Filter  *Expr
 	Limit   int
 	Offset  int
 	OrderBy []string
@@ -852,78 +856,6 @@ func (s *Store) Count(ctx context.Context, meta model.ModelMeta, query Query) (i
 		return 0, err
 	}
 	return count, nil
-}
-
-func (s *Store) whereClause(meta model.ModelMeta, query Query) (string, []any, error) {
-	for _, condition := range append(append([]Condition(nil), query.Where...), query.Any...) {
-		if _, err := validateCondition(meta, condition); err != nil {
-			return "", nil, err
-		}
-	}
-	var groups []string
-	var args []any
-	for _, conditions := range []struct {
-		items []Condition
-		join  string
-	}{{query.Where, " AND "}, {query.Any, " OR "}} {
-		if len(conditions.items) == 0 {
-			continue
-		}
-		clauses := make([]string, len(conditions.items))
-		for i, condition := range conditions.items {
-			clauses[i] = s.ident(condition.Field) + " " + string(condition.Op) + " " + placeholder(s.dialect, len(args)+1)
-			args = append(args, argumentValue(s.dialect, condition.Value))
-		}
-		groups = append(groups, "("+strings.Join(clauses, conditions.join)+")")
-	}
-	if len(groups) == 0 {
-		return "", nil, nil
-	}
-	return " WHERE " + strings.Join(groups, " AND "), args, nil
-}
-
-func validateCondition(meta model.ModelMeta, condition Condition) (model.FieldMeta, error) {
-	var field model.FieldMeta
-	known := false
-	for _, candidate := range meta.Fields {
-		if candidate.Name == condition.Field {
-			field = candidate
-			known = true
-			break
-		}
-	}
-	if !known {
-		return field, fmt.Errorf("tango db: unknown Where field %q for model %s", condition.Field, meta.Name)
-	}
-
-	switch condition.Op {
-	case OpEq, OpNe, OpGt, OpGte, OpLt, OpLte, OpLike:
-	default:
-		return field, fmt.Errorf("tango db: unsupported Where operator %q", condition.Op)
-	}
-
-	fieldKind := field.Type.Kind()
-	if condition.Op == OpLike && fieldKind != reflect.String {
-		return field, fmt.Errorf("tango db: Where operator %q is only supported for string fields, got %q", condition.Op, field.Name)
-	}
-	if condition.Op != OpEq && condition.Op != OpNe && condition.Op != OpLike && field.Type != timeType {
-		switch fieldKind {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-			reflect.Float32, reflect.Float64:
-		default:
-			return field, fmt.Errorf("tango db: Where operator %q is not supported for field %q of kind %s", condition.Op, field.Name, fieldKind)
-		}
-	}
-
-	if condition.Value == nil {
-		return field, fmt.Errorf("tango db: nil Where value for field %q is not supported", field.Name)
-	}
-	valueType := reflect.TypeOf(condition.Value)
-	if valueType.Kind() != fieldKind || (fieldKind == reflect.Struct && valueType != field.Type) {
-		return field, fmt.Errorf("tango db: Where value for field %q has type %s, want %s", field.Name, valueType, field.Type)
-	}
-	return field, nil
 }
 
 // rowScanner is satisfied by both *sql.Row and *sql.Rows.
