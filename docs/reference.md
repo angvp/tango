@@ -311,6 +311,7 @@ See [the accounts guide](guides/accounts.md). Built entirely by composing `auth`
 | `func MiddlewareResolver(resolver Resolver) tango.Middleware` | `Middleware` for a `Resolver`; `nil` uses `Accept-Language`. |
 | `func OnMissing(f func(locale, key string))` | Development hook: reports a missing translation once per (locale, key); `nil` clears it. |
 | `func Keys() []Key`, `func Validate() Report` | The (key, fallback) pairs that have run with a resolved locale, and a check of every catalog against them (`Report.Problems`, advisory `Report.Unobserved`). |
+| `type Key`, `type Report`, `type Problem`, `type ProblemKind` (`ProblemMismatch`, `ProblemEmpty`, `ProblemConflictingFallback`, `ProblemRegistryFull`), `type Unobserved` | The data `Keys` and `Validate` return: an observed (key, fallback) pair, and a catalog's problems and advisory unused keys. |
 | `i18n/i18ntest`: `func Isolate(t testing.TB)` | Test support: an empty i18n state for one test, restored in `t.Cleanup`; the test must not be parallel. |
 | `func WithLocale(ctx context.Context, locale string) context.Context`, `func Locale(ctx context.Context) string` | Low-level context helpers used by the middleware and useful in tests or custom middleware. |
 

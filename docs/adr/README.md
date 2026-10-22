@@ -67,3 +67,4 @@ New records take the next free number here. This directory is the single, public
 | [0059](0059-json-fields-are-declared-by-tag-stored-as-exact-text-and-validated-when-the-model-is-written.md) | JSON fields are declared by tag, stored as exact text and validated when the model is written | Accepted |
 | [0061](0061-activity-numbers-have-a-read-side-separate-from-recorder-and-an-opt-in-bounded-window.md) | Activity numbers have a read side separate from Recorder, and an opt-in bounded in-memory Window | Accepted |
 | [0062](0062-admin-theme-is-semantic-colour-tokens-selected-by-system-preference-with-a-cookie-override.md) | Admin theme is semantic colour tokens, selected by system preference with a cookie override | Accepted |
+| [0063](0063-i18n-resolvers-declare-their-headers-and-a-bad-catalog-value-falls-back.md) | i18n resolvers declare the headers they read, and a bad catalog value falls back | Accepted |
