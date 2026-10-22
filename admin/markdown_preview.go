@@ -11,6 +11,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/adminregistry"
 	"github.com/angvp/tango/internal/security"
 	"github.com/angvp/tango/model"
@@ -37,23 +38,15 @@ var previewTimeout = 5 * time.Second
 // previewDocumentStart and previewDocumentEnd wrap a successful render in a
 // complete document. The CSP meta is the only policy and is pinned by tests: the preview has no scripts,
 // no styles, no forms and no outbound loads, and a base URL cannot be set.
-const previewDocumentStart = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Preview</title>
-</head>
-<body>
-`
-
 const previewDocumentEnd = "\n</body>\n</html>\n"
 
 // previewFailure is a preview request that did not produce HTML: the status
-// to answer with and the message the client may show.
+// to answer with and the message the client may show, as a translation key
+// with its English fallback.
 type previewFailure struct {
-	Status  int
-	Message string
+	Status   int
+	Key      string
+	Fallback string
 }
 
 // previewRoutes returns the one preview route a model needs: a POST to
@@ -98,20 +91,20 @@ func previewView(meta model.ModelMeta, opts adminregistry.Options) tango.View {
 		setPreviewHeaders(ctx)
 		preview, ok := previewWidgetFor(meta, opts, ctx.Param("field"))
 		if !ok {
-			return previewError(ctx, http.StatusNotFound, "not found")
+			return previewError(ctx, http.StatusNotFound, "admin.error.not_found", "not found")
 		}
 		if !verifyPreviewCSRF(ctx) {
-			return previewError(ctx, http.StatusForbidden, "invalid or missing CSRF token")
+			return previewError(ctx, http.StatusForbidden, "admin.error.csrf", "invalid or missing CSRF token")
 		}
 		source, failure := readPreviewSource(ctx)
 		if failure != nil {
-			return previewError(ctx, failure.Status, failure.Message)
+			return previewError(ctx, failure.Status, failure.Key, failure.Fallback)
 		}
 		html, failure := renderPreview(ctx, meta, ctx.Param("field"), preview, source)
 		if failure != nil {
-			return previewError(ctx, failure.Status, failure.Message)
+			return previewError(ctx, failure.Status, failure.Key, failure.Fallback)
 		}
-		return ctx.JSON(http.StatusOK, map[string]string{"html": previewDocument(html)})
+		return ctx.JSON(http.StatusOK, map[string]string{"html": previewDocument(ctx.Context(), html)})
 	}
 }
 
@@ -150,12 +143,12 @@ func readPreviewSource(ctx *tango.Context) (string, *previewFailure) {
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			return "", &previewFailure{http.StatusRequestEntityTooLarge, "request body too large"}
+			return "", &previewFailure{http.StatusRequestEntityTooLarge, "admin.preview.too_large", "request body too large"}
 		}
-		return "", &previewFailure{http.StatusBadRequest, "could not read the preview text"}
+		return "", &previewFailure{http.StatusBadRequest, "admin.preview.unreadable", "could not read the preview text"}
 	}
 	if !utf8.Valid(raw) {
-		return "", &previewFailure{http.StatusBadRequest, "preview text must be UTF-8"}
+		return "", &previewFailure{http.StatusBadRequest, "admin.preview.not_utf8", "preview text must be UTF-8"}
 	}
 	return string(raw), nil
 }
@@ -170,21 +163,35 @@ func renderPreview(ctx *tango.Context, meta model.ModelMeta, field string, previ
 	html, err := preview.Preview(renderCtx, source)
 	if errors.Is(renderCtx.Err(), context.DeadlineExceeded) {
 		ctx.Logger().Warn("admin preview timed out", "model", meta.Name, "field", field)
-		return "", &previewFailure{http.StatusGatewayTimeout, "the preview took too long to render"}
+		return "", &previewFailure{http.StatusGatewayTimeout, "admin.preview.timeout", "the preview took too long to render"}
 	}
 	if err != nil {
 		ctx.Logger().Error("admin preview failed", "model", meta.Name, "field", field, "error", err)
-		return "", &previewFailure{http.StatusUnprocessableEntity, "the preview could not be rendered"}
+		return "", &previewFailure{http.StatusUnprocessableEntity, "admin.preview.failed", "the preview could not be rendered"}
 	}
 	if len(html) > previewOutputLimit {
 		ctx.Logger().Error("admin preview output too large", "model", meta.Name, "field", field, "bytes", len(html))
-		return "", &previewFailure{http.StatusUnprocessableEntity, "the preview is too large"}
+		return "", &previewFailure{http.StatusUnprocessableEntity, "admin.preview.output_too_large", "the preview is too large"}
 	}
 	return html, nil
 }
 
-func previewDocument(body template.HTML) string {
-	return previewDocumentStart + string(body) + previewDocumentEnd
+// previewDocument wraps body in the preview page, in the language and with
+// the title of the catalog the request selected.
+func previewDocument(ctx context.Context, body template.HTML) string {
+	return previewDocumentStart(ctx) + string(body) + previewDocumentEnd
+}
+
+func previewDocumentStart(ctx context.Context) string {
+	return `<!doctype html>
+<html lang="` + template.HTMLEscapeString(pageLang(ctx)) + `">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'">
+<title>` + template.HTMLEscapeString(i18n.T(ctx, "admin.markdown.document_title", "Preview")) + `</title>
+</head>
+<body>
+`
 }
 
 // setPreviewHeaders keeps every preview response out of caches and stops a
@@ -195,6 +202,6 @@ func setPreviewHeaders(ctx *tango.Context) {
 	header.Set("X-Content-Type-Options", "nosniff")
 }
 
-func previewError(ctx *tango.Context, status int, message string) error {
-	return ctx.JSON(status, map[string]string{"error": message})
+func previewError(ctx *tango.Context, status int, key, fallback string) error {
+	return ctx.JSON(status, map[string]string{"error": i18n.T(ctx.Context(), key, fallback)})
 }

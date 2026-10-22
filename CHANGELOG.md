@@ -14,6 +14,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **`i18n.OnMissing`.** A development hook that reports a missing translation (an absent key, an empty value or a value whose format verbs do not match the fallback's) with the resolved locale and key, at most once per pair. It is `nil` by default, runs outside the package's locks, and `OnMissing(nil)` clears it.
 
+- **The admin's remaining English is translatable.** `<html lang>` follows the selected catalog on every admin page and on the Markdown preview document (`en` when none is selected). The Markdown and JSON widgets' tab labels, buttons, character count, `aria-label`s, iframe title, script messages (`Nothing to format.`, `Preview failed.` and the rest, delivered as `data-msg-*` attributes only when a locale was resolved), the JSON validation errors and the preview endpoint's error messages now use `admin.*` keys with the current English as fallback. An app without i18n renders the same output as before. A test keeps new literal text out of admin's templates.
+
 ### Changed
 
 - **The i18n middleware sets `Vary` and `Content-Language`.** With `i18n.Middleware(nil)` every response gets `Vary: Accept-Language`, so a cache in front of the app no longer serves one language to another visitor; `MiddlewareResolver(Chain(...))` sends the tokens its resolvers need (`Cookie` for `FromCookie`). `Content-Language` names the selected catalog's locale, and only when a catalog was selected. Existing `Vary` values are merged without repeating a token. A resolver passed as a plain function adds no `Vary` (use `FuncResolver` to declare one). Nothing changes for an app without the middleware.

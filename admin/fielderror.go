@@ -18,6 +18,18 @@ import (
 // fmt.Errorf("%w"), or inside errors.Join; every one found is shown.
 type FieldError struct {
 	Message string
+
+	// text, when set, is the translatable form of Message that the built-in
+	// widgets use; Message holds its English rendering for Error.
+	text *localizedText
+}
+
+// localizedText is a message's translation key, English fallback and format
+// arguments.
+type localizedText struct {
+	key      string
+	fallback string
+	args     []any
 }
 
 func (e FieldError) Error() string { return e.Message }
@@ -54,6 +66,9 @@ func fieldErrorMessages(ctx context.Context, err error) []string {
 }
 
 func fieldErrorText(ctx context.Context, e FieldError) string {
+	if e.text != nil {
+		return i18n.T(ctx, e.text.key, e.text.fallback, e.text.args...)
+	}
 	if e.Message == "" {
 		return i18n.T(ctx, "admin.error.invalid_value", "Invalid value")
 	}

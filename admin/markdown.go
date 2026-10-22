@@ -2,9 +2,10 @@ package admin
 
 import (
 	"context"
-	"fmt"
 	"html/template"
 	"reflect"
+	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -72,18 +73,18 @@ func (w markdownPreviewWidget) Preview(ctx context.Context, source string) (temp
 // to match any public site, and the host owns its own dark-mode behaviour.
 var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>{{if .Preview}}
-<div class="widget-tabs" role="tablist" aria-label="{{.Label}} view" data-widget-tabs hidden>
-  <button type="button" role="tab" id="field-{{.Name}}-tab-write" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-write" data-tab="write">Write</button>
-  <button type="button" role="tab" id="field-{{.Name}}-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-preview" tabindex="-1" data-tab="preview">Preview</button>
+<div class="widget-tabs" role="tablist" aria-label="{{.Text.T "admin.widget.view_label" "%s view" .Label}}" data-widget-tabs hidden>
+  <button type="button" role="tab" id="field-{{.Name}}-tab-write" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-write" data-tab="write">{{.Text.T "admin.markdown.tab_write" "Write"}}</button>
+  <button type="button" role="tab" id="field-{{.Name}}-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-preview" tabindex="-1" data-tab="preview">{{.Text.T "admin.markdown.tab_preview" "Preview"}}</button>
 </div>
 <div id="field-{{.Name}}-panel-write" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-write" class="widget-panel">{{end}}
-<textarea id="field-{{.Name}}" name="{{.Name}}" class="input font-mono resize-y" rows="12" data-tango-widget="markdown"{{if .Preview}} data-preview-url="{{.PreviewURL}}"{{end}}{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}}` + ariaAttrs + `>
+<textarea id="field-{{.Name}}" name="{{.Name}}" class="input font-mono resize-y" rows="12" data-tango-widget="markdown"{{if .Preview}} data-preview-url="{{.PreviewURL}}"{{end}}{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}}{{if .Text.Active}} data-msg-count="{{.Text.T "admin.markdown.count" "{count} characters"}}" data-msg-count-max="{{.Text.T "admin.markdown.count_max" "{count} / {max} characters"}}"{{if .Preview}} data-msg-preview-failed="{{.Text.T "admin.markdown.preview_failed" "Preview failed."}}" data-msg-preview-unavailable="{{.Text.T "admin.markdown.preview_unavailable" "Preview unavailable. Reload the page and try again."}}" data-msg-preview-rendering="{{.Text.T "admin.markdown.preview_rendering" "Rendering preview..."}}"{{end}}{{end}}` + ariaAttrs + `>
 {{.Value}}</textarea>
 <p id="field-{{.Name}}-count" class="text-xs text-ink-faint mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
 </div>
 <div id="field-{{.Name}}-panel-preview" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-preview" class="widget-panel" hidden>
   <p id="field-{{.Name}}-preview-status" role="status" class="text-xs text-ink-faint" data-markdown-status></p>
-  <iframe id="field-{{.Name}}-preview" title="Preview of {{.Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-line-strong bg-white"></iframe>
+  <iframe id="field-{{.Name}}-preview" title="{{.Text.T "admin.markdown.preview_title" "Preview of %s" .Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-line-strong bg-white"></iframe>
 </div>{{end}}`))
 
 // markdownWidgetData is what markdownWidgetTemplate renders: the field plus
@@ -91,6 +92,7 @@ var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
 // controls are present.
 type markdownWidgetData struct {
 	FieldContext
+	Text    widgetText
 	Count   string
 	Preview bool
 }
@@ -104,9 +106,11 @@ func (w markdownWidget) Parse(f FieldContext, form FieldValues, dest reflect.Val
 }
 
 func renderMarkdown(f FieldContext, preview bool) template.HTML {
+	text := newWidgetText(f)
 	return renderWidgetTemplate(markdownWidgetTemplate, markdownWidgetData{
 		FieldContext: f,
-		Count:        markdownCountText(f.Value, f.MaxLength),
+		Text:         text,
+		Count:        markdownCountText(text, f.Value, f.MaxLength),
 		Preview:      preview,
 	})
 }
@@ -117,13 +121,16 @@ func parseMarkdown(f FieldContext, form FieldValues, dest reflect.Value) error {
 }
 
 // markdownCountText describes value's length in characters (runes, not
-// bytes), with the declared maximum when the field has one.
-func markdownCountText(value string, maxLength int) string {
-	n := utf8.RuneCountInString(value)
+// bytes), with the declared maximum when the field has one. The text comes
+// from the same {count} and {max} patterns the widget script reads, so the
+// server and the browser word it alike.
+func markdownCountText(text widgetText, value string, maxLength int) string {
+	n := strconv.Itoa(utf8.RuneCountInString(value))
 	if maxLength > 0 {
-		return fmt.Sprintf("%d / %d characters", n, maxLength)
+		pattern := text.T("admin.markdown.count_max", "{count} / {max} characters")
+		return strings.NewReplacer("{count}", n, "{max}", strconv.Itoa(maxLength)).Replace(pattern)
 	}
-	return fmt.Sprintf("%d characters", n)
+	return strings.NewReplacer("{count}", n).Replace(text.T("admin.markdown.count", "{count} characters"))
 }
 
 func (w markdownPreviewWidget) Render(f FieldContext) template.HTML {

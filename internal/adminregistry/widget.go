@@ -68,6 +68,25 @@ type FieldContext struct {
 	// their control aria-invalid when it is set; a custom widget may do the
 	// same.
 	Error string
+
+	// ctx is the request's context, for built-in widgets that translate
+	// their text. Attach it with WithContext; read it with ContextOf.
+	ctx context.Context
+}
+
+// WithContext returns f carrying the request context ctx.
+func WithContext(f FieldContext, ctx context.Context) FieldContext {
+	f.ctx = ctx
+	return f
+}
+
+// ContextOf returns the request context attached to f, or
+// context.Background() when none was.
+func ContextOf(f FieldContext) context.Context {
+	if f.ctx == nil {
+		return context.Background()
+	}
+	return f.ctx
 }
 
 // DescribedBy returns the value for the control's aria-describedby: the ids

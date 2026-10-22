@@ -5,6 +5,7 @@ import (
 	"html/template"
 
 	"github.com/angvp/tango/i18n"
+	"github.com/angvp/tango/internal/i18nbridge"
 )
 
 // tailwindScriptTag loads Tailwind's Play CDN: no Node/npm build step,
@@ -42,6 +43,12 @@ func (c chrome) SignedIn() *signedIn {
 	return signedInFrom(c.ctx)
 }
 
+// Lang is the registered locale of the catalog the request selected, or "en"
+// when none was, for the page's lang attribute.
+func (c chrome) Lang() string {
+	return pageLang(c.ctx)
+}
+
 func (c chrome) T(key, fallback string, args ...any) string {
 	return i18n.T(c.ctx, key, fallback, args...)
 }
@@ -52,7 +59,7 @@ func (c chrome) T(key, fallback string, args ...any) string {
 // "content" block falls back to empty output so the layout stays valid,
 // renderable HTML in isolation.
 var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
-<html lang="en"{{with .Theme}} data-theme="{{.}}"{{end}}>
+<html lang="{{.Lang}}"{{with .Theme}} data-theme="{{.}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -219,4 +226,17 @@ func freshLayout() *template.Template {
 // head/nav/Tailwind setup around that page's body.
 func cloneWithContent(contentSource string) *template.Template {
 	return template.Must(freshLayout().New("content").Parse(contentSource))
+}
+
+// pageLang is the value of an admin page's lang attribute: the registered
+// locale a catalog was selected for, else "en", the language of the built-in
+// text.
+func pageLang(ctx context.Context) string {
+	if ctx == nil || i18nbridge.Selected == nil {
+		return "en"
+	}
+	if lang := i18nbridge.Selected(ctx); lang != "" {
+		return lang
+	}
+	return "en"
 }

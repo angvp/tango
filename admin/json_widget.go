@@ -18,10 +18,10 @@ import (
 // survives the round trip.
 var jsonWidgetTemplate = template.Must(template.New("jsonWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
-<div class="json-widget" data-tango-widget="json">
-  <div class="widget-tabs" role="tablist" aria-label="{{.Label}} view" data-widget-tabs hidden>
-    <button type="button" role="tab" id="field-{{.Name}}-tab-edit" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-edit" data-tab="edit">Edit</button>
-    <button type="button" role="tab" id="field-{{.Name}}-tab-view" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-view" tabindex="-1" data-tab="view">Formatted</button>
+<div class="json-widget" data-tango-widget="json"{{if .Text.Active}} data-msg-nothing="{{.Text.T "admin.json.status_nothing" "Nothing to format."}}" data-msg-invalid="{{.Text.T "admin.json.status_invalid" "Not valid JSON."}}" data-msg-invalid-detail="{{.Text.T "admin.json.view_invalid" "Not valid JSON: {error}"}}" data-msg-applied="{{.Text.T "admin.json.status_applied" "Formatting applied."}}"{{end}}>
+  <div class="widget-tabs" role="tablist" aria-label="{{.Text.T "admin.widget.view_label" "%s view" .Label}}" data-widget-tabs hidden>
+    <button type="button" role="tab" id="field-{{.Name}}-tab-edit" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-edit" data-tab="edit">{{.Text.T "admin.json.tab_edit" "Edit"}}</button>
+    <button type="button" role="tab" id="field-{{.Name}}-tab-view" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-view" tabindex="-1" data-tab="view">{{.Text.T "admin.json.tab_formatted" "Formatted"}}</button>
   </div>
   <div id="field-{{.Name}}-panel-edit" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-edit" class="widget-panel">
     <textarea id="field-{{.Name}}" name="{{.Name}}" class="input json-input" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off"` + ariaAttrs + `>
@@ -29,7 +29,7 @@ var jsonWidgetTemplate = template.Must(template.New("jsonWidget").Parse(
   </div>
   <div id="field-{{.Name}}-panel-view" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-view" class="widget-panel" hidden>
     <pre class="json-formatted" data-json-formatted></pre>
-    <button type="button" class="btn-secondary" data-json-apply hidden>Use this formatting</button>
+    <button type="button" class="btn-secondary" data-json-apply hidden>{{.Text.T "admin.json.apply" "Use this formatting"}}</button>
   </div>
   <p data-json-status role="status"></p>
   <script src="{{.ScriptURL}}" defer></script>
@@ -37,6 +37,7 @@ var jsonWidgetTemplate = template.Must(template.New("jsonWidget").Parse(
 
 type jsonWidgetData struct {
 	FieldContext
+	Text      widgetText
 	ScriptURL string
 }
 
@@ -52,7 +53,7 @@ type jsonWidget struct{}
 func JSON() Widget { return jsonWidget{} }
 
 func (jsonWidget) Render(f FieldContext) template.HTML {
-	return renderWidgetTemplate(jsonWidgetTemplate, jsonWidgetData{FieldContext: f, ScriptURL: widgetsAsset.URL})
+	return renderWidgetTemplate(jsonWidgetTemplate, jsonWidgetData{FieldContext: f, Text: newWidgetText(f), ScriptURL: widgetsAsset.URL})
 }
 
 // Parse stores the submitted text before checking it, so that an invalid
@@ -82,9 +83,14 @@ func checkJSONSyntax(raw string) error {
 	}
 	var syntax *json.SyntaxError
 	if !errors.As(err, &syntax) {
-		return FieldError{Message: "Invalid JSON"}
+		return FieldError{Message: "Invalid JSON", text: &localizedText{key: "admin.error.json_invalid", fallback: "Invalid JSON"}}
 	}
-	return FieldError{Message: fmt.Sprintf("Invalid JSON: %s (at character %d)", syntax.Error(), characterPosition(raw, syntax.Offset))}
+	const fallback = "Invalid JSON: %s (at character %d)"
+	args := []any{syntax.Error(), characterPosition(raw, syntax.Offset)}
+	return FieldError{
+		Message: fmt.Sprintf(fallback, args...),
+		text:    &localizedText{key: "admin.error.json_syntax", fallback: fallback, args: args},
+	}
 }
 
 // characterPosition converts a json.SyntaxError.Offset, which counts bytes

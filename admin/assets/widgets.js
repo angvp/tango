@@ -23,6 +23,19 @@
 
   window.tangoAdminWidgets = { register: register };
 
+  // msg returns the message a widget's server markup carried in
+  // data-msg-<name>, or fallback (the English text) when it carried none.
+  // {name} placeholders are replaced from vars.
+  function msg(element, name, fallback, vars) {
+    var text = element.getAttribute("data-msg-" + name);
+    if (text === null) {
+      text = fallback;
+    }
+    return text.replace(/\{(\w+)\}/g, function (whole, key) {
+      return vars && Object.prototype.hasOwnProperty.call(vars, key) ? String(vars[key]) : whole;
+    });
+  }
+
   function showStatus(element, message) {
     element.textContent = message;
   }
@@ -119,11 +132,11 @@
       view.removeAttribute("data-invalid");
       if (result.empty) {
         view.textContent = "";
-        showStatus(status, "Nothing to format.");
+        showStatus(status, msg(root, "nothing", "Nothing to format."));
       } else if (result.error) {
         view.setAttribute("data-invalid", "");
-        view.textContent = "Not valid JSON: " + result.error;
-        showStatus(status, "Not valid JSON.");
+        view.textContent = msg(root, "invalid-detail", "Not valid JSON: {error}", { error: result.error });
+        showStatus(status, msg(root, "invalid", "Not valid JSON."));
       } else {
         formatted = result.text;
         view.textContent = result.text;
@@ -141,18 +154,18 @@
       textarea.value = formatted;
       select("edit");
       textarea.focus();
-      showStatus(status, "Formatting applied.");
+      showStatus(status, msg(root, "applied", "Formatting applied."));
     });
   }
 
   // The count text matches the server's: "n characters", or "n / max
   // characters" when the field is bounded. Array.from counts code points,
   // as Go's rune count does.
-  function markdownCountText(length, max) {
+  function markdownCountText(textarea, length, max) {
     if (max > 0) {
-      return length + " / " + max + " characters";
+      return msg(textarea, "count-max", "{count} / {max} characters", { count: length, max: max });
     }
-    return length + " characters";
+    return msg(textarea, "count", "{count} characters", { count: length });
   }
 
   function setupMarkdownCount(textarea) {
@@ -163,7 +176,7 @@
     var max = parseInt(textarea.getAttribute("maxlength"), 10);
     textarea.addEventListener("input", function () {
       var length = Array.from(textarea.value).length;
-      count.textContent = markdownCountText(length, max);
+      count.textContent = markdownCountText(textarea, length, max);
     });
   }
 
@@ -176,7 +189,7 @@
   // readPreview turns the response into the HTML to show, or throws the
   // message to show instead. A response that is not our JSON (for example a
   // redirect to the login page) gets the generic message.
-  function readPreview(response) {
+  function readPreview(textarea, response) {
     return response
       .json()
       .catch(function () {
@@ -184,10 +197,10 @@
       })
       .then(function (body) {
         if (!response.ok) {
-          throw new Error(body.error || "Preview failed.");
+          throw new Error(body.error || msg(textarea, "preview-failed", "Preview failed."));
         }
         if (typeof body.html !== "string") {
-          throw new Error("Preview failed.");
+          throw new Error(msg(textarea, "preview-failed", "Preview failed."));
         }
         return body.html;
       });
@@ -196,11 +209,11 @@
   function requestPreview(textarea, frame, status, current) {
     var token = csrfToken(textarea);
     if (!token) {
-      showStatus(status, "Preview unavailable. Reload the page and try again.");
+      showStatus(status, msg(textarea, "preview-unavailable", "Preview unavailable. Reload the page and try again."));
       return;
     }
     var ticket = current.next();
-    showStatus(status, "Rendering preview...");
+    showStatus(status, msg(textarea, "preview-rendering", "Rendering preview..."));
     fetch(textarea.getAttribute("data-preview-url"), {
       method: "POST",
       credentials: "same-origin",
@@ -212,7 +225,9 @@
       },
       body: textarea.value
     })
-      .then(readPreview)
+      .then(function (response) {
+        return readPreview(textarea, response);
+      })
       .then(function (html) {
         if (!current.is(ticket)) {
           return;

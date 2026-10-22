@@ -123,12 +123,12 @@ type formContextOptions struct {
 }
 
 func buildFieldContext(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, opts adminregistry.Options, instance reflect.Value, formOpts formContextOptions) (FieldContext, bool) {
-	fc := FieldContext{
+	fc := adminregistry.WithContext(FieldContext{
 		Name:      field.Name,
 		Label:     humanizeFieldName(field.Name),
 		MaxLength: field.MaxLength,
 		ReadOnly:  contains(opts.ReadOnly, field.Name),
-	}
+	}, ctx)
 	if label, ok := opts.Labels[field.Name]; ok {
 		fc.Label = label
 	}
