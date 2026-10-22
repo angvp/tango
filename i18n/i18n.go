@@ -86,21 +86,17 @@ func DefaultLocaleResolver(r *http.Request) string {
 }
 
 // Middleware stores the locale resolved for each request on the request's
-// context so later T calls can observe it. A nil resolver uses
-// DefaultLocaleResolver.
+// context so later T calls can observe it, and tells caches and clients what
+// it did: Content-Language names the catalog that was selected (nothing is
+// sent when no catalog matched), and a nil resolver, which uses
+// DefaultLocaleResolver, also adds Vary: Accept-Language to every response.
+// A resolver function cannot say which headers it reads, so none is added for
+// it; wrap it with FuncResolver and MiddlewareResolver to declare them.
 func Middleware(resolver LocaleResolver) tango.Middleware {
 	if resolver == nil {
-		resolver = DefaultLocaleResolver
+		return MiddlewareResolver(nil)
 	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			locale := resolver(r)
-			if locale != "" {
-				r = r.WithContext(WithLocale(r.Context(), locale))
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
+	return MiddlewareResolver(FuncResolver(resolver))
 }
 
 // T returns the translated string for key using the locale carried by ctx,

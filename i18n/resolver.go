@@ -196,20 +196,65 @@ func (acceptLanguage) Resolve(r *http.Request) string { return DefaultLocaleReso
 func (acceptLanguage) Vary() []string                 { return []string{"Accept-Language"} }
 
 // MiddlewareResolver is Middleware for a Resolver: it stores the resolved
-// locale on the request's context. A nil resolver uses the Accept-Language
-// header.
+// locale on the request's context, adds the resolver's Vary tokens to every
+// response (merged with any Vary header already present, ignoring case and
+// never repeating a token, and leaving "*" alone), and sets Content-Language
+// to the selected catalog's locale when there is one and nothing else has set
+// it. A nil resolver uses the Accept-Language header.
 func MiddlewareResolver(resolver Resolver) tango.Middleware {
 	if resolver == nil {
 		resolver = acceptLanguage{}
 	}
+	vary := normalizeVary(resolver.Vary())
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			header := w.Header()
+			mergeVary(header, vary)
 			if locale := resolver.Resolve(r); locale != "" {
 				r = r.WithContext(WithLocale(r.Context(), locale))
+				if header.Get("Content-Language") == "" {
+					if selected := registeredLocale(locale); selected != "" {
+						header.Set("Content-Language", selected)
+					}
+				}
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// mergeVary adds tokens to the response's Vary header unless they are already
+// there (compared without regard to case). A "*" already present says the
+// response varies on everything, so the header is left as it is.
+func mergeVary(header http.Header, tokens []string) {
+	if len(tokens) == 0 {
+		return
+	}
+	var existing []string
+	have := make(map[string]bool)
+	for _, line := range header.Values("Vary") {
+		for _, token := range strings.Split(line, ",") {
+			token = strings.TrimSpace(token)
+			if token == "" {
+				continue
+			}
+			if token == "*" {
+				return
+			}
+			existing = append(existing, token)
+			have[strings.ToLower(token)] = true
+		}
+	}
+	merged := existing
+	for _, token := range tokens {
+		if !have[strings.ToLower(token)] {
+			merged = append(merged, token)
+		}
+	}
+	if len(merged) == len(existing) {
+		return
+	}
+	header.Set("Vary", strings.Join(merged, ", "))
 }
 
 // normalizeVary returns tokens in canonical header form, comma lists split,
