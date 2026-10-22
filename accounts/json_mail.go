@@ -85,8 +85,8 @@ func (j *jsonAPI) confirmReset(ctx *tango.Context) error {
 	if err != nil {
 		return err
 	}
-	if outcome.Problem != "" {
-		return fieldError("password", strings.TrimSuffix(outcome.Problem, "."))
+	if outcome.Problem.set() {
+		return fieldError("password", strings.TrimSuffix(outcome.Problem.english(), "."))
 	}
 	if outcome.Invalid {
 		return invalidToken()

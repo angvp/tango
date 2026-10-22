@@ -10,6 +10,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/security"
 )
 
@@ -24,16 +25,16 @@ const minPasswordLength = 8
 // bcrypt and surface as an unhandled 500.
 const maxPasswordLength = 72
 
-// passwordProblem returns why password can't be used, or "" if it can:
-// the rules registration and password reset share.
-func passwordProblem(password string) string {
+// passwordProblem returns why password can't be used, or the zero message if
+// it can: the rules registration and password reset share.
+func passwordProblem(password string) message {
 	switch {
 	case len(password) < minPasswordLength:
-		return "Password must be at least 8 characters."
+		return message{key: "accounts.error.password_short", fallback: "Password must be at least %d characters.", args: []any{minPasswordLength}}
 	case len(password) > maxPasswordLength:
-		return "Password must be at most 72 characters."
+		return message{key: "accounts.error.password_long", fallback: "Password must be at most %d characters.", args: []any{maxPasswordLength}}
 	}
-	return ""
+	return message{}
 }
 
 // normalizeEmail lowercases and trims raw, so Alice@Example.com and
@@ -119,11 +120,11 @@ func register(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *
 	if err != nil {
 		return err
 	}
-	if outcome.Problem != "" {
-		return rerender(http.StatusBadRequest, outcome.Problem)
+	if outcome.Problem.set() {
+		return rerender(http.StatusBadRequest, outcome.Problem.in(ctx.Context()))
 	}
 	if outcome.Duplicate {
-		return rerender(http.StatusConflict, "This email is already registered.")
+		return rerender(http.StatusConflict, i18n.T(ctx.Context(), "accounts.error.duplicate", "This email is already registered."))
 	}
 	account := outcome.Account
 	if err := createAccountSession(ctx.Context(), store, cfg, ctx.ResponseWriter(), ctx.Request(), account.ID); err != nil {

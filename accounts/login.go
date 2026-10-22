@@ -6,6 +6,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/security"
 )
 
@@ -71,7 +72,7 @@ func logIn(ctx *tango.Context, store *db.Store, cfg accountsConfig, limiter *sec
 		return render(ctx, http.StatusUnauthorized, loginTemplate, loginPageData{
 			Next:          next,
 			Email:         email,
-			Error:         genericLoginError,
+			Error:         i18n.T(ctx.Context(), "accounts.error.invalid_login", genericLoginError),
 			CSRFToken:     submittedCSRFToken(ctx.Request()),
 			SignupEnabled: !cfg.signupDisabled,
 		})

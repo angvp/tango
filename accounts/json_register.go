@@ -58,8 +58,8 @@ func (j *jsonAPI) register(ctx *tango.Context) error {
 		}
 		return err
 	}
-	if outcome.Problem != "" {
-		return refuse(fieldError("password", strings.TrimSuffix(outcome.Problem, ".")))
+	if outcome.Problem.set() {
+		return refuse(fieldError("password", strings.TrimSuffix(outcome.Problem.english(), ".")))
 	}
 	if outcome.Duplicate {
 		return refuse(&apiError{status: http.StatusConflict, code: "already_registered", message: "this email is already registered"})

@@ -9,6 +9,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/security"
 )
 
@@ -53,7 +54,7 @@ func (m *mailer) askForReset(ctx *tango.Context, limiter *security.RateLimiter) 
 	if err != nil {
 		return render(ctx, http.StatusBadRequest, passwordResetRequestTemplate, tokenFormData{
 			CSRFToken: submittedCSRFToken(ctx.Request()),
-			Error:     "Enter a valid email address.",
+			Error:     i18n.T(ctx.Context(), "accounts.error.invalid_email", "Enter a valid email address."),
 		})
 	}
 	email := normalizeEmail(address.Address)
@@ -91,10 +92,10 @@ func (m *mailer) resetLink() tokenLink {
 			if err != nil {
 				return err
 			}
-			if outcome.Problem != "" {
+			if outcome.Problem.set() {
 				return render(ctx, http.StatusBadRequest, passwordResetConfirmTemplate, tokenFormData{
 					CSRFToken: submittedCSRFToken(ctx.Request()),
-					Error:     outcome.Problem,
+					Error:     outcome.Problem.in(ctx.Context()),
 				})
 			}
 			if outcome.Invalid {

@@ -21,22 +21,22 @@ type registrationOutcome struct {
 	Account Account
 	// Problem is a user-facing reason the input cannot be used; the account
 	// was not created.
-	Problem string
+	Problem message
 	// Duplicate reports that the email is already registered.
 	Duplicate bool
 }
 
 // created reports whether registerAccount created Account.
-func (o registrationOutcome) created() bool { return o.Problem == "" && !o.Duplicate }
+func (o registrationOutcome) created() bool { return !o.Problem.set() && !o.Duplicate }
 
 // registerAccount validates an already-normalized email and a password and,
 // when both are usable, creates an active Account. Mail, sessions and grants
 // are the caller's business, after this returns.
 func registerAccount(ctx context.Context, store *db.Store, email, password string) (registrationOutcome, error) {
 	if email == "" || password == "" {
-		return registrationOutcome{Problem: "Email and password are required."}, nil
+		return registrationOutcome{Problem: message{key: "accounts.error.required", fallback: "Email and password are required."}}, nil
 	}
-	if problem := passwordProblem(password); problem != "" {
+	if problem := passwordProblem(password); problem.set() {
 		return registrationOutcome{Problem: problem}, nil
 	}
 	account, created, err := createAccount(ctx, store, email, password)
@@ -106,7 +106,7 @@ func (m *mailer) requestPasswordReset(ctx context.Context, email string, link li
 type resetOutcome struct {
 	// Problem is a user-facing reason the new password cannot be used; the
 	// token was not consumed.
-	Problem string
+	Problem message
 	// Invalid reports that another request already used the token.
 	Invalid bool
 }
@@ -114,7 +114,7 @@ type resetOutcome struct {
 // completePasswordReset sets a new password for account, consuming its reset
 // token row, when password follows the registration rules.
 func (m *mailer) completePasswordReset(ctx context.Context, row AccountToken, account Account, password string) (resetOutcome, error) {
-	if problem := passwordProblem(password); problem != "" {
+	if problem := passwordProblem(password); problem.set() {
 		return resetOutcome{Problem: problem}, nil
 	}
 	won, err := m.useToken(ctx, row)
