@@ -304,6 +304,14 @@ See [the accounts guide](guides/accounts.md). Built entirely by composing `auth`
 | `type LocaleResolver func(*http.Request) string` | Host-provided per-request locale selection hook. |
 | `func DefaultLocaleResolver(r *http.Request) string` | Parses `Accept-Language` and returns the best registered locale using tanGO's simplified exact-then-base-language matching. |
 | `func Middleware(resolver LocaleResolver) tango.Middleware` | Resolves the locale once per request and stores it on the standard request `context.Context`; pass `nil` to use `DefaultLocaleResolver`. |
+| `type Resolver interface { Resolve(*http.Request) string; Vary() []string }` | A locale source that also names the request headers its answer depends on. |
+| `func FromQuery(param string) Resolver`, `func FromCookie(name string) Resolver`, `func FromHost(hosts map[string]string) Resolver` | Resolve the locale from a query parameter, a cookie or the request host. Each returns only a locale with a registered catalog; none sets a cookie. |
+| `func Chain(resolvers ...Resolver) Resolver` | Tries resolvers in the order given, then `Accept-Language`; its `Vary` is the union of theirs and `Accept-Language`. |
+| `func FuncResolver(f LocaleResolver, vary ...string) Resolver` | Adapts a plain function and declares the headers it reads. |
+| `func MiddlewareResolver(resolver Resolver) tango.Middleware` | `Middleware` for a `Resolver`; `nil` uses `Accept-Language`. |
+| `func OnMissing(f func(locale, key string))` | Development hook: reports a missing translation once per (locale, key); `nil` clears it. |
+| `func Keys() []Key`, `func Validate() Report` | The (key, fallback) pairs that have run with a resolved locale, and a check of every catalog against them (`Report.Problems`, advisory `Report.Unobserved`). |
+| `i18n/i18ntest`: `func Isolate(t testing.TB)` | Test support: an empty i18n state for one test, restored in `t.Cleanup`; the test must not be parallel. |
 | `func WithLocale(ctx context.Context, locale string) context.Context`, `func Locale(ctx context.Context) string` | Low-level context helpers used by the middleware and useful in tests or custom middleware. |
 
 See [i18n and l10n](guides/i18n.md). Admin is converted to call `i18n.T`, but no first-party app wires the middleware automatically — translation is always a host-level opt-in.

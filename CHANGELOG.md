@@ -6,6 +6,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Added
 
+- **Locale resolvers.** `i18n.Resolver` (a locale source that also names the request headers it depends on), the helpers `FromQuery`, `FromCookie` and `FromHost`, `Chain` (the host's order, then `Accept-Language`), `FuncResolver` for a plain function, and `MiddlewareResolver` to install one. Each helper returns only a locale with a registered catalog and none sets a cookie. `Middleware` and `DefaultLocaleResolver` are unchanged.
+
 - **`i18n/i18ntest.Isolate`.** Test support: `i18ntest.Isolate(t)` gives a test an empty i18n state (catalogs, the `OnMissing` hook and its once-state, the observed keys) and restores the previous state in `t.Cleanup`. A test that uses it must not be parallel.
 
 - **`i18n.Keys` and `i18n.Validate`.** `T` records each (key, fallback) pair the first time it runs with a resolved locale (nothing is recorded, and nothing allocated, when no locale is set). `Keys()` lists them; `Validate()` checks every catalog against them and returns a `Report` with `Problems` (`ProblemMismatch`, `ProblemEmpty`, `ProblemConflictingFallback` when a key is seen with two fallbacks, `ProblemRegistryFull`) and the advisory, sorted `Unobserved` catalog keys. It covers only what has run in this process, and the registry holds at most 4,096 keys, so fallbacks must be stable literals.

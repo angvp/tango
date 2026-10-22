@@ -185,13 +185,8 @@ func resolveAcceptLanguage(header string) string {
 		if tag == "" {
 			continue
 		}
-		if name, ok := catalogName(tag); ok {
+		if name := matchTagLocked(tag); name != "" {
 			return name
-		}
-		if base := baseLanguage(tag); base != "" && base != tag {
-			if name, ok := catalogName(base); ok {
-				return name
-			}
 		}
 	}
 	return ""
