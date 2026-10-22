@@ -28,6 +28,12 @@ curl 'http://localhost:8000/posts/?author_id=1'
 
 Logging in to `/admin/` lands on a dashboard: the database's reachability, dialect and migration state, and the last hour of request and job activity. Both come from sources `main.go` hands to `admin.WithDashboard`: a status function built from `tango.Status` (see `dashboard.go`), and an `observability.Window` that `tango.WithRecorder` feeds on every request. The activity is labelled "this instance only" and starts again from zero when the process restarts; use an external monitoring system for history or several instances. See the [admin dashboard guide](../../docs/guides/admin-dashboard.md).
 
+## The admin in Spanish
+
+The admin ships English only; this example supplies the rest. `catalog_es.go` is a complete `es` catalog for every key the admin uses and a small `es-MX` that overrides three of them (a request for `es-MX` gets the `es` text for the rest). A request picks its language from `?lang=`, then the `lang` cookie, then `Accept-Language` (`i18n.Chain(i18n.FromQuery("lang"), i18n.FromCookie("lang"))` in `apps/locale`), and `POST /language/` with `lang` and `next` remembers a choice in the cookie. Try `http://localhost:8000/admin/?lang=es`.
+
+`i18n_test.go` walks the admin pages in `es` and `es-MX`, fails on any key the catalog lacks, and checks `i18n.Validate`. It is the pattern to copy for your own catalogs. See the [i18n guide](../../docs/guides/i18n.md).
+
 ## Configuration
 
 - `TANGO_DB_DSN` picks the database and defaults to `sqlite://app.db`.

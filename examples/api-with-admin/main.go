@@ -14,9 +14,11 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/observability"
 
 	"api-with-admin/apps/authors"
+	"api-with-admin/apps/locale"
 	"api-with-admin/apps/posts"
 	"api-with-admin/migrations"
 
@@ -73,9 +75,14 @@ func appConfig(store *db.Store, sqlDB *sql.DB, dialect db.Dialect, window *obser
 		Status:   dashboardStatus(func() tango.Config { return finished }, sqlDB, dialect),
 		Activity: window,
 	}
+	// The admin and the Spanish catalogs: a request picks its language from
+	// ?lang=, then the lang cookie, then Accept-Language (see apps/locale).
+	registerCatalogs()
+	config.Middleware = []tango.Middleware{i18n.MiddlewareResolver(locale.Resolver())}
 	config.InstalledApps = []tango.App{
 		posts.New(store),
 		authors.New(),
+		locale.New(),
 		admin.New(store, admin.WithDashboard(dashboard)),
 	}
 	finished = config
