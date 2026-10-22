@@ -9,9 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the artifact guard needs the base commit
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
+      # Fails on a built executable or a large binary file in this change; it
+      # never scans older history. See scripts/check-artifacts.sh.
+      - name: build artifacts
+        env:
+          GUARD_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: scripts/check-artifacts.sh
       - name: gofmt
         run: |
           fmt_out="$(gofmt -l .)"

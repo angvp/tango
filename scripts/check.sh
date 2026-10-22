@@ -1,11 +1,14 @@
 #!/bin/sh
-# Runs what CI runs (.github/workflows/ci.yml): gofmt, vet, build, the tests
-# and the offline Markdown link check. Tests use SQLite unless TANGO_TEST_DSN
+# Runs what CI runs (.github/workflows/ci.yml): gofmt, vet, build, the tests,
+# the build-artifact guard and the offline Markdown link check. The guard
+# (scripts/check-artifacts.sh) looks at your change against GUARD_BASE, or
+# HEAD~1 and the working tree when that is not set. Tests use SQLite unless TANGO_TEST_DSN
 # names a PostgreSQL or MySQL database; the link check runs lychee, or the pinned lychee
 # Docker image, and is skipped, loudly, when neither is available.
 set -eu
 cd "$(dirname "$0")/.."
 
+scripts/check-artifacts.sh
 test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: format these files" >&2; exit 1; }
 go vet ./...
 go build ./...

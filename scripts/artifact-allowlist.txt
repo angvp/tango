@@ -1,0 +1,8 @@
+# Paths scripts/check-artifacts.sh skips: one path or glob per line, then a
+# reason after "#". Keep this empty unless a binary file is genuinely part of
+# the source (a test fixture, a vendored asset). Large text files, such as the
+# Swagger UI bundle in openapi/swaggerui/assets, need no entry: only binary
+# content over the size limit is flagged.
+#
+# Example:
+# internal/foo/testdata/sample.bin  # a real-world input the parser test needs
