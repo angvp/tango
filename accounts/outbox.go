@@ -31,8 +31,8 @@ type delivery struct {
 // request, keeps every request the same however the lookup turns out.
 type outboxJob struct {
 	purpose TokenPurpose
-	// locale is the registered locale of the request that asked for the
-	// email ("" for English), kept so the worker renders it in that language.
+	// locale is the locale the i18n middleware resolved for the request that
+	// asked for the email ("" for English), kept so the worker renders it in that language.
 	// It is the only thing of the request the job holds.
 	locale  string
 	prepare func(ctx context.Context) (d delivery, ok bool, err error)

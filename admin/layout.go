@@ -5,6 +5,7 @@ import (
 	"html/template"
 
 	"github.com/angvp/tango/i18n"
+	"github.com/angvp/tango/internal/i18nbridge"
 )
 
 // tailwindScriptTag loads Tailwind's Play CDN: no Node/npm build step,
@@ -231,10 +232,10 @@ func cloneWithContent(contentSource string) *template.Template {
 // locale a catalog was selected for, else "en", the language of the built-in
 // text.
 func pageLang(ctx context.Context) string {
-	if ctx == nil {
+	if ctx == nil || i18nbridge.Selected == nil {
 		return "en"
 	}
-	if lang := i18n.Selected(ctx); lang != "" {
+	if lang := i18nbridge.Selected(ctx); lang != "" {
 		return lang
 	}
 	return "en"

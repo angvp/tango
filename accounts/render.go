@@ -217,7 +217,7 @@ var textEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"
 // Lang is the registered locale of the catalog the request selected, or ""
 // when none was, in which case the page declares no language.
 func (p pageData) Lang() string {
-	return i18n.Selected(p.ctx)
+	return selectedLocale(p.ctx)
 }
 
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {

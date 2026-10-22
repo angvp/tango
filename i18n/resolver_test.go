@@ -222,14 +222,14 @@ func TestMiddlewareResolverNilUsesAcceptLanguage(t *testing.T) {
 	}
 }
 
-func TestSelectedReturnsTheRegisteredSpellingOrNothing(t *testing.T) {
+func TestSelectedLocaleIsTheRegisteredSpellingOrNothing(t *testing.T) {
 	registerSpanish()
 	for locale, want := range map[string]string{"es": "es", "ES_mx": "es-MX", "es-AR": "es", "de": "", "": ""} {
-		if got := Selected(WithLocale(context.Background(), locale)); got != want {
-			t.Errorf("Selected(%q) = %q, want %q", locale, got, want)
+		if got := selectedLocale(WithLocale(context.Background(), locale)); got != want {
+			t.Errorf("selectedLocale(%q) = %q, want %q", locale, got, want)
 		}
 	}
-	if got := Selected(context.Background()); got != "" {
-		t.Errorf("no locale: Selected = %q", got)
+	if got := selectedLocale(context.Background()); got != "" {
+		t.Errorf("no locale: selectedLocale = %q", got)
 	}
 }
