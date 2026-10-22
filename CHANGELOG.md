@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Changed
+
+- **A bad catalog value falls back instead of printing garbage.** `i18n.T` now ignores a catalog value that is empty or whose format verbs differ from the fallback's (positional verbs such as `%[2]s` count, so reordering arguments is still fine), tries the base language, and then shows the fallback. Before, `"Nuevo"` for `"New %s"` rendered `Nuevo%!(EXTRA string=Pet)` and an empty value rendered nothing. A literal `%` in a fallback must be `%%` once arguments are passed.
+
 ### Fixed
 
 - **Locale matching ignores case and the `-`/`_` separator.** `Accept-Language: es-mx`, `ES-MX` and `es_MX` now select a catalog registered as `es-MX` (before, `es-mx` skipped the regional catalog and `ES-MX` matched nothing, not even `es`). The locale the middleware stores is the catalog's own spelling, and catalogs registered under two spellings of one locale are merged.

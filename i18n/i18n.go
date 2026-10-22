@@ -123,11 +123,13 @@ func lookup(locale, key, fallback string) string {
 	catalogsMu.RLock()
 	defer catalogsMu.RUnlock()
 
-	if value, ok := catalogValue(locale, key); ok {
+	// A value the fallback cannot stand in for (empty, or with other format
+	// verbs) counts as absent, so the base language is tried before English.
+	if value, ok := catalogValue(locale, key); ok && usable(value, fallback) {
 		return value
 	}
 	if base := baseLanguage(locale); base != "" && base != locale {
-		if value, ok := catalogValue(base, key); ok {
+		if value, ok := catalogValue(base, key); ok && usable(value, fallback) {
 			return value
 		}
 	}
