@@ -9,15 +9,19 @@
 #
 # base is the commit the change starts from. When it is not given, it is
 # $GUARD_BASE (CI sets this to the pull request's base, or to the commit
-# before a push). A base that is empty, all zeros or unknown to this clone
-# (a new branch, a shallow clone) falls back to HEAD~1, and a repository with
-# one commit checks that commit; the working tree is always checked as well.
+# before a push). With neither, the base is the merge base with the branch's
+# upstream, so every commit not yet pushed is checked and nothing already
+# published is. A base that is empty, all zeros or unknown to this clone
+# (a new branch, a shallow clone) and no upstream falls back to HEAD~1, and a
+# repository with one commit checks that commit. The working tree is always
+# checked as well.
 #
 # A file is a large binary when it is over $GUARD_MAX_BYTES (default
 # 1048576, 1 MiB) and has a NUL byte in its first 8 KiB. Large text, such as a
 # minified bundle, is fine. A path listed in scripts/artifact-allowlist.txt
-# is skipped; each line is a path or a glob, then " # why". The allowlist is
-# part of the change, so adding to it is reviewed like any other line.
+# is skipped; each line is a path or a glob, then "# why". An entry with no
+# reason fails the guard. The allowlist is part of the change, so adding to it
+# is reviewed like any other line.
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 
@@ -27,10 +31,24 @@ base=${1:-${GUARD_BASE:-}}
 
 if [ -n "$base" ] && ! expr "$base" : '0*$' >/dev/null && git rev-parse -q --verify "$base^{commit}" >/dev/null; then
 	range="$base...HEAD"
+elif git rev-parse -q --verify '@{upstream}^{commit}' >/dev/null 2>&1; then
+	range="@{upstream}...HEAD"
 elif git rev-parse -q --verify HEAD~1 >/dev/null; then
 	range="HEAD~1...HEAD"
 else
 	range=""
+fi
+
+# Every allowlist entry must say why. Checked first, whatever else changed.
+if [ -f "$allowlist" ]; then
+	bad=0
+	while IFS= read -r line; do
+		case "$line" in '' | '#'*) continue ;; esac
+		case "$line" in *'#'*) ;; *) bad=1 ;; esac
+		reason=${line#*#}
+		[ "$reason" != "$line" ] && [ -n "$(printf '%s' "$reason" | tr -d '[:space:]')" ] || bad=1
+		[ "$bad" -eq 0 ] || { echo "artifact guard: $allowlist entry has no reason (write 'path  # why'): $line" >&2; exit 1; }
+	done <"$allowlist"
 fi
 
 list=$(mktemp)
@@ -59,7 +77,7 @@ allowed() {
 # executable_kind prints the kind of executable a file starts as, or nothing.
 executable_kind() {
 	case $(head -c 4 "$1" | od -An -tx1 | tr -d ' \n') in
-	feedface | feedfacf | cefaedfe | cffaedfe | cafebabe | bebafeca) echo "Mach-O" ;;
+	feedface | feedfacf | cefaedfe | cffaedfe | cafebabe | cafebabf | bebafeca | bfbafeca) echo "Mach-O" ;;
 	7f454c46) echo "ELF" ;;
 	4d5a*) echo "PE" ;;
 	esac

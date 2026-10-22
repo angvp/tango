@@ -192,6 +192,112 @@ func TestGuardWithoutAUsableBaseChecksTheLastCommit(t *testing.T) {
 	}
 }
 
+// withUpstream pushes the repository's current state to a bare clone and
+// tracks it, so later commits are "ahead" of an upstream.
+func (r *guardRepo) withUpstream() {
+	r.t.Helper()
+	bare := filepath.Join(r.t.TempDir(), "remote.git")
+	r.git("init", "-q", "--bare", "-b", "main", bare)
+	r.git("remote", "add", "origin", bare)
+	r.git("push", "-q", "-u", "origin", "main")
+}
+
+func TestGuardWithoutABaseUsesTheMergeBaseWithTheUpstream(t *testing.T) {
+	r := newGuardRepo(t)
+	r.write("published/tool", machO(), 0o755)
+	r.commit("an old mistake, already published")
+	r.git("rm", "-q", "published/tool")
+	r.commit("remove it")
+	r.withUpstream()
+
+	r.write("local/tool", elf(), 0o755)
+	r.commit("add a tool two commits ago")
+	r.write("later.go", []byte("package main\n"), 0o644)
+	r.commit("source")
+	r.write("more.go", []byte("package main\n"), 0o644)
+	r.commit("more source")
+
+	out, ok := r.guard("")
+	if ok || !strings.Contains(out, "local/tool") {
+		t.Fatalf("an executable added earlier in the unpushed range passed (ok=%v):\n%s", ok, out)
+	}
+	if strings.Contains(out, "published/tool") {
+		t.Fatalf("a published commit was scanned:\n%s", out)
+	}
+}
+
+func TestGuardWithAnUpstreamAndNothingAheadChecksOnlyTheWorkingTree(t *testing.T) {
+	r := newGuardRepo(t)
+	r.write("old/tool", machO(), 0o755)
+	r.commit("published mistake")
+	r.withUpstream()
+	if out, ok := r.guard(""); !ok {
+		t.Fatalf("published history was scanned:\n%s", out)
+	}
+}
+
+func TestGuardExplicitBaseStillWinsOverTheUpstream(t *testing.T) {
+	r := newGuardRepo(t)
+	r.withUpstream()
+	base := r.git("rev-parse", "HEAD")
+	r.write("tool", machO(), 0o755)
+	r.commit("add a tool")
+	if out, ok := r.guard(base); ok || !strings.Contains(out, "tool") {
+		t.Fatalf("passed=%v:\n%s", ok, out)
+	}
+	if out, ok := r.guard("", "GUARD_BASE="+base); ok || !strings.Contains(out, "tool") {
+		t.Fatalf("GUARD_BASE ignored (ok=%v):\n%s", ok, out)
+	}
+}
+
+func TestGuardFailsForFat64MachO(t *testing.T) {
+	for name, magic := range map[string][]byte{
+		"fat64":        {0xca, 0xfe, 0xba, 0xbf},
+		"fat64-swap":   {0xbf, 0xba, 0xfe, 0xca},
+		"fat":          {0xca, 0xfe, 0xba, 0xbe},
+		"fat-swap":     {0xbe, 0xba, 0xfe, 0xca},
+		"macho32":      {0xfe, 0xed, 0xfa, 0xce},
+		"macho32-swap": {0xce, 0xfa, 0xed, 0xfe},
+		"macho64":      {0xfe, 0xed, 0xfa, 0xcf},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newGuardRepo(t)
+			base := r.git("rev-parse", "HEAD")
+			r.write("bin/"+name, append(magic, make([]byte, 64)...), 0o755)
+			r.commit("add")
+			if out, ok := r.guard(base); ok || !strings.Contains(out, "bin/"+name) {
+				t.Fatalf("passed=%v:\n%s", ok, out)
+			}
+		})
+	}
+}
+
+func TestGuardRejectsAllowlistEntriesWithoutAReason(t *testing.T) {
+	for name, line := range map[string]string{
+		"no comment":   "testdata/sample.bin",
+		"empty reason": "testdata/sample.bin  #",
+		"blank reason": "testdata/sample.bin  #    ",
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newGuardRepo(t)
+			base := r.git("rev-parse", "HEAD")
+			r.write("scripts/artifact-allowlist.txt", []byte("# header\n\n"+line+"\n"), 0o644)
+			r.commit("allowlist")
+			out, ok := r.guard(base)
+			if ok || !strings.Contains(out, "allowlist") || !strings.Contains(out, "reason") {
+				t.Fatalf("passed=%v, want a failure about the missing reason:\n%s", ok, out)
+			}
+		})
+	}
+	r := newGuardRepo(t)
+	base := r.git("rev-parse", "HEAD")
+	r.write("scripts/artifact-allowlist.txt", []byte("# header\n\ntestdata/sample.bin # a parser input\n"), 0o644)
+	r.commit("allowlist")
+	if out, ok := r.guard(base); !ok {
+		t.Fatalf("a documented entry failed:\n%s", out)
+	}
+}
+
 func TestGuardPassesOnThisRepositoryWorkingTree(t *testing.T) {
 	script, err := filepath.Abs("../../scripts/check-artifacts.sh")
 	if err != nil {
