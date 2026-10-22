@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/url"
 	"time"
@@ -51,44 +52,45 @@ func sessionUser(ctx context.Context, store *db.Store, token string) (AdminUser,
 	}
 
 	userMeta, sessionMeta := adminModelMetas()
-	var sessions []AdminSession
-	sessionQuery := db.Query{Where: []db.Condition{{Field: "Token", Op: db.OpEq, Value: token}}, Limit: 1}
-	if err := store.List(ctx, sessionMeta, sessionQuery, &sessions); err != nil {
+	var session AdminSession
+	// Token is unique, so at most one row matches.
+	sessionQuery := db.Query{Where: []db.Condition{{Field: "Token", Op: db.OpEq, Value: token}}}
+	if err := store.First(ctx, sessionMeta, sessionQuery, &session); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return AdminUser{}, false, nil
+		}
 		return AdminUser{}, false, err
 	}
-	if len(sessions) == 0 {
-		return AdminUser{}, false, nil
-	}
-	session := sessions[0]
 	if !session.ExpiresAt.After(time.Now().UTC()) {
 		return AdminUser{}, false, nil
 	}
 
-	var users []AdminUser
-	userQuery := db.Query{Where: []db.Condition{{Field: "ID", Op: db.OpEq, Value: session.UserID}}, Limit: 1}
-	if err := store.List(ctx, userMeta, userQuery, &users); err != nil {
+	var user AdminUser
+	userQuery := db.Query{Where: []db.Condition{{Field: "ID", Op: db.OpEq, Value: session.UserID}}}
+	if err := store.First(ctx, userMeta, userQuery, &user); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return AdminUser{}, false, nil
+		}
 		return AdminUser{}, false, err
 	}
-	if len(users) == 0 || !users[0].Active {
+	if !user.Active {
 		return AdminUser{}, false, nil
 	}
-	return users[0], true, nil
+	return user, true, nil
 }
 
 // deleteSessionByToken removes the AdminSession row for token, if any.
 func deleteSessionByToken(ctx context.Context, store *db.Store, token string) error {
 	_, sessionMeta := adminModelMetas()
-	var sessions []AdminSession
-	query := db.Query{Where: []db.Condition{{Field: "Token", Op: db.OpEq, Value: token}}, Limit: 1}
-	if err := store.List(ctx, sessionMeta, query, &sessions); err != nil {
+	var session AdminSession
+	query := db.Query{Where: []db.Condition{{Field: "Token", Op: db.OpEq, Value: token}}}
+	if err := store.First(ctx, sessionMeta, query, &session); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return nil
+		}
 		return err
 	}
-	for _, session := range sessions {
-		if err := store.Delete(ctx, sessionMeta, session.ID); err != nil {
-			return err
-		}
-	}
-	return nil
+	return store.Delete(ctx, sessionMeta, session.ID)
 }
 
 func randomToken() (string, error) {

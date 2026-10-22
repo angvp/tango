@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -51,15 +52,16 @@ func normalizeEmail(raw string) string {
 // constraint, not this lookup, is what actually prevents two concurrent
 // registrations for the same email from both succeeding.
 func findAccountByEmail(ctx context.Context, store *db.Store, email string) (Account, bool, error) {
-	var rows []Account
-	query := db.Query{Where: []db.Condition{{Field: "Email", Op: db.OpEq, Value: email}}, Limit: 1}
-	if err := store.List(ctx, accountMeta(), query, &rows); err != nil {
+	var row Account
+	// Email is unique, so at most one row matches.
+	query := db.Query{Where: []db.Condition{{Field: "Email", Op: db.OpEq, Value: email}}}
+	if err := store.First(ctx, accountMeta(), query, &row); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return Account{}, false, nil
+		}
 		return Account{}, false, err
 	}
-	if len(rows) == 0 {
-		return Account{}, false, nil
-	}
-	return rows[0], true, nil
+	return row, true, nil
 }
 
 // registerView handles GET (render the registration form) and POST

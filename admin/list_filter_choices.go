@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -74,16 +75,17 @@ func loadFilterChoice(ctx context.Context, store *db.Store, models *model.Regist
 		return filterChoice{}, false, nil // malformed: ignored
 	}
 
-	destPtr := reflect.New(reflect.SliceOf(relatedMeta.Type))
-	query := db.Query{Where: []db.Condition{{Field: pkField.Name, Op: db.OpEq, Value: key}}, Limit: 1}
-	if err := store.List(ctx, relatedMeta, query, destPtr.Interface()); err != nil {
+	destPtr := reflect.New(relatedMeta.Type)
+	// The predicate is the related model's primary key, so at most one row
+	// matches and First's default ordering cannot change the result.
+	query := db.Query{Where: []db.Condition{{Field: pkField.Name, Op: db.OpEq, Value: key}}}
+	if err := store.First(ctx, relatedMeta, query, destPtr.Interface()); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return filterChoice{}, false, nil
+		}
 		return filterChoice{}, false, fmt.Errorf("tango admin: look up %s filter value: %w", target, err)
 	}
-	rows := destPtr.Elem()
-	if rows.Len() == 0 {
-		return filterChoice{}, false, nil
-	}
-	row := rows.Index(0)
+	row := destPtr.Elem()
 	value := fmt.Sprint(row.FieldByName(pkField.Name).Interface())
 	return filterChoice{Value: value, Text: relatedChoiceText(row, labelFieldFor(adminReg, target), value)}, true, nil
 }

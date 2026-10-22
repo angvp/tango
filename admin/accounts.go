@@ -40,15 +40,17 @@ func adminModelMetas() (userMeta model.ModelMeta, sessionMeta model.ModelMeta) {
 // ok=false if none exists.
 func findAdminUserByUsername(ctx context.Context, store *db.Store, username string) (AdminUser, bool, error) {
 	meta, _ := adminModelMetas()
-	var rows []AdminUser
-	query := db.Query{Where: []db.Condition{{Field: "Username", Op: db.OpEq, Value: username}}, Limit: 1}
-	if err := store.List(ctx, meta, query, &rows); err != nil {
+	var row AdminUser
+	// Username is unique, so at most one row matches and First's default
+	// primary-key ordering cannot change the result.
+	query := db.Query{Where: []db.Condition{{Field: "Username", Op: db.OpEq, Value: username}}}
+	if err := store.First(ctx, meta, query, &row); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return AdminUser{}, false, nil
+		}
 		return AdminUser{}, false, err
 	}
-	if len(rows) == 0 {
-		return AdminUser{}, false, nil
-	}
-	return rows[0], true, nil
+	return row, true, nil
 }
 
 // AccountOption customizes a new admin account's IsStaff/IsSuperuser flags

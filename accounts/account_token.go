@@ -71,12 +71,14 @@ func (m *mailer) usableToken(ctx context.Context, token string, purpose TokenPur
 	if token == "" {
 		return row, account, false, nil
 	}
-	var rows []AccountToken
-	query := db.Query{Where: []db.Condition{{Field: "TokenHash", Op: db.OpEq, Value: hashSecret(token)}}, Limit: 1}
-	if err := m.store.List(ctx, tokenMeta(), query, &rows); err != nil || len(rows) == 0 {
-		return row, account, false, err
+	// TokenHash is unique, so at most one row matches.
+	query := db.Query{Where: []db.Condition{{Field: "TokenHash", Op: db.OpEq, Value: hashSecret(token)}}}
+	if err := m.store.First(ctx, tokenMeta(), query, &row); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return AccountToken{}, account, false, nil
+		}
+		return AccountToken{}, account, false, err
 	}
-	row = rows[0]
 	if row.Purpose != purpose || !m.cfg.now().Before(row.ExpiresAt) {
 		return row, account, false, nil
 	}

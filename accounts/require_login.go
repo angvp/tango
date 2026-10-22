@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"net/url"
 
 	"github.com/angvp/tango"
@@ -29,15 +30,18 @@ func accountFromToken(ctx context.Context, store *db.Store, token string) (Accou
 		return Account{}, false, nil
 	}
 
-	var rows []Account
-	query := db.Query{Where: []db.Condition{{Field: "ID", Op: db.OpEq, Value: userID}}, Limit: 1}
-	if err := store.List(ctx, accountMeta(), query, &rows); err != nil {
+	var row Account
+	query := db.Query{Where: []db.Condition{{Field: "ID", Op: db.OpEq, Value: userID}}}
+	if err := store.First(ctx, accountMeta(), query, &row); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return Account{}, false, nil
+		}
 		return Account{}, false, err
 	}
-	if len(rows) == 0 || !rows[0].Active {
+	if !row.Active {
 		return Account{}, false, nil
 	}
-	return rows[0], true, nil
+	return row, true, nil
 }
 
 // RequireLogin wraps next so it only runs for a request carrying a valid,
