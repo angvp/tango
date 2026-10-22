@@ -133,6 +133,36 @@ func TestVaryAddedByTheHandlerAfterwardsIsKept(t *testing.T) {
 	}
 }
 
+func TestVaryAddedByTheHandlerInAnotherCaseIsNotRepeated(t *testing.T) {
+	registerSpanish()
+	mw := MiddlewareResolver(Chain(FromCookie("lang")))
+	for name, inner := range map[string]func(http.ResponseWriter, *http.Request){
+		"header only": func(w http.ResponseWriter, _ *http.Request) { w.Header().Add("Vary", "cookie") },
+		"before WriteHeader": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Add("vary", "COOKIE, Origin")
+			w.WriteHeader(http.StatusTeapot)
+		},
+		"before Write": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Add("Vary", "cookie")
+			_, _ = w.Write([]byte("x"))
+		},
+	} {
+		h := serve(mw, request("/", nil), nil, inner)
+		seen := map[string]int{}
+		for _, token := range varyTokens(h) {
+			seen[strings.ToLower(token)]++
+		}
+		for token, n := range seen {
+			if n != 1 {
+				t.Errorf("%s: %q appears %d times in %v", name, token, n, h.Values("Vary"))
+			}
+		}
+		if seen["cookie"] != 1 || seen["accept-language"] != 1 {
+			t.Errorf("%s: Vary = %v, want Cookie and Accept-Language once each", name, h.Values("Vary"))
+		}
+	}
+}
+
 func TestContentLanguageOnlyWhenACatalogWasSelectedAndNeverOverridden(t *testing.T) {
 	registerSpanish()
 	mw := MiddlewareResolver(Chain(FromQuery("lang")))

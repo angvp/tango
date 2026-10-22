@@ -1,6 +1,8 @@
 package i18n
 
 import (
+	"bufio"
+	"net"
 	"net/http"
 	"strings"
 
@@ -210,6 +212,8 @@ func MiddlewareResolver(resolver Resolver) tango.Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := w.Header()
 			mergeVary(header, vary)
+			writer := &varyWriter{ResponseWriter: w, vary: vary}
+			defer writer.finish()
 			if locale := resolver.Resolve(r); locale != "" {
 				r = r.WithContext(WithLocale(r.Context(), locale))
 				if header.Get("Content-Language") == "" {
@@ -218,44 +222,92 @@ func MiddlewareResolver(resolver Resolver) tango.Middleware {
 					}
 				}
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(writer, r)
 		})
 	}
 }
 
-// mergeVary adds tokens to the response's Vary header unless they are already
-// there (compared without regard to case). A "*" already present says the
-// response varies on everything, so the header is left as it is.
+// mergeVary makes the response's Vary header carry tokens and every token it
+// already had, each once (compared without regard to case). A "*" already
+// present says the response varies on everything, so the header is left as it
+// is. It runs again when the response is written, so a Vary that a handler
+// adds after the middleware ran is merged too.
 func mergeVary(header http.Header, tokens []string) {
-	if len(tokens) == 0 {
-		return
-	}
-	var existing []string
+	lines := header.Values("Vary")
+	var merged []string
 	have := make(map[string]bool)
-	for _, line := range header.Values("Vary") {
-		for _, token := range strings.Split(line, ",") {
-			token = strings.TrimSpace(token)
-			if token == "" {
-				continue
-			}
-			if token == "*" {
-				return
-			}
-			existing = append(existing, token)
+	add := func(token string) {
+		token = strings.TrimSpace(token)
+		if token != "" && !have[strings.ToLower(token)] {
 			have[strings.ToLower(token)] = true
-		}
-	}
-	merged := existing
-	for _, token := range tokens {
-		if !have[strings.ToLower(token)] {
 			merged = append(merged, token)
 		}
 	}
-	if len(merged) == len(existing) {
+	for _, line := range lines {
+		for _, token := range strings.Split(line, ",") {
+			if strings.TrimSpace(token) == "*" {
+				return
+			}
+			add(token)
+		}
+	}
+	for _, token := range tokens {
+		add(token)
+	}
+	if len(merged) == 0 {
 		return
 	}
-	header.Set("Vary", strings.Join(merged, ", "))
+	value := strings.Join(merged, ", ")
+	if len(lines) == 1 && lines[0] == value {
+		return
+	}
+	header.Set("Vary", value)
 }
+
+// varyWriter merges the resolver's Vary tokens into the header just before it
+// is sent, whatever the downstream handler added in between.
+type varyWriter struct {
+	http.ResponseWriter
+	vary    []string
+	flushed bool
+}
+
+func (w *varyWriter) finish() {
+	if !w.flushed {
+		w.flushed = true
+		mergeVary(w.ResponseWriter.Header(), w.vary)
+	}
+}
+
+func (w *varyWriter) WriteHeader(status int) {
+	w.finish()
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *varyWriter) Write(b []byte) (int, error) {
+	w.finish()
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *varyWriter) Flush() {
+	w.finish()
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack keeps connection upgrades (WebSockets) working behind the middleware.
+func (w *varyWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	w.finish()
+	return h.Hijack()
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer.
+func (w *varyWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // normalizeVary returns tokens in canonical header form, comma lists split,
 // blanks dropped and case-insensitive duplicates removed, keeping the first
