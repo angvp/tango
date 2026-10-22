@@ -216,6 +216,8 @@ func Config(store *db.Store) tango.Config {
 		// `+"`MaxBodySize`"+` only to the route groups or routes that should remain
 		// limited.
 		tango.MaxBodySize(1 << 20),
+		// To translate the admin and accounts pages, add i18n.Middleware(nil)
+		// here and register catalogs; see docs/guides/i18n.md.
 	}
 	// Global middleware also wraps requests no route matches, so 404s and
 	// 405s are logged and counted too.

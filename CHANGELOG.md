@@ -20,6 +20,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **Accounts emails in the request's language.** The verification and reset emails are rendered in the locale of the request that queued them (`accounts.email.*` keys, English fallback). The locale is captured when the email is queued, before any account lookup; the queued job keeps nothing else of the request. A translated body that lacks the `%s` link placeholder falls back to the English body, so the link is never dropped.
 
+- **The `tango newproject` scaffold points at the i18n guide.** The generated middleware list carries a two-line comment saying how to opt in (`i18n.Middleware(nil)` and catalogs). The generated project is otherwise unchanged.
+
 ### Changed
 
 - **The i18n middleware sets `Vary` and `Content-Language`.** With `i18n.Middleware(nil)` every response gets `Vary: Accept-Language`, so a cache in front of the app no longer serves one language to another visitor; `MiddlewareResolver(Chain(...))` sends the tokens its resolvers need (`Cookie` for `FromCookie`). `Content-Language` names the selected catalog's locale, and only when a catalog was selected. Existing `Vary` values are merged without repeating a token. A resolver passed as a plain function adds no `Vary` (use `FuncResolver` to declare one). Nothing changes for an app without the middleware.
