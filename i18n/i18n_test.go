@@ -322,3 +322,80 @@ func TestWithoutMiddlewareTStillFallsBackInsideView(t *testing.T) {
 		t.Fatalf("response body = %q, want fallback message", got)
 	}
 }
+
+func TestLocaleMatchingIgnoresCaseAndSeparator(t *testing.T) {
+	resolve := func(header string) string {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.Header.Set("Accept-Language", header)
+		return DefaultLocaleResolver(request)
+	}
+
+	cases := []struct {
+		name       string
+		registered []string
+		header     string
+		want       string
+	}{
+		{"lower-case region", []string{"es-MX", "es"}, "es-mx", "es-MX"},
+		{"upper-case tag", []string{"es-MX", "es"}, "ES-MX", "es-MX"},
+		{"underscore separator", []string{"es-MX", "es"}, "es_MX", "es-MX"},
+		{"base language in another case", []string{"es"}, "ES-MX", "es"},
+		{"base language alone", []string{"es"}, "ES", "es"},
+		{"registered spelling wins over the request's", []string{"pt-BR"}, "PT-br", "pt-BR"},
+		{"unregistered language stays unresolved", []string{"es"}, "FR-ca", ""},
+		{"q-values still order the choices", []string{"es", "fr"}, "FR;q=0.4, ES-mx;q=0.9", "es"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetCatalogsForTest()
+			for _, locale := range tc.registered {
+				RegisterCatalog(locale, map[string]string{"k": "v"})
+			}
+			if got := resolve(tc.header); got != tc.want {
+				t.Errorf("DefaultLocaleResolver(%q) = %q, want %q", tc.header, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTFindsCatalogWhenContextLocaleDiffersInCase(t *testing.T) {
+	resetCatalogsForTest()
+	RegisterCatalog("es-MX", map[string]string{"greeting": "Qué onda"})
+	RegisterCatalog("es", map[string]string{"greeting": "Hola", "bye": "Adiós"})
+
+	cases := []struct {
+		locale, key, want string
+	}{
+		{"es-MX", "greeting", "Qué onda"},
+		{"ES-mx", "greeting", "Qué onda"},
+		{"es_MX", "greeting", "Qué onda"},
+		{"ES_mx", "bye", "Adiós"}, // regional catalog lacks the key: base language answers
+		{"ES", "greeting", "Hola"},
+	}
+	for _, tc := range cases {
+		got := T(WithLocale(context.Background(), tc.locale), tc.key, "fallback")
+		if got != tc.want {
+			t.Errorf("T with locale %q, key %q = %q, want %q", tc.locale, tc.key, got, tc.want)
+		}
+	}
+}
+
+func TestSpellingsOfOneLocaleShareOneCatalog(t *testing.T) {
+	resetCatalogsForTest()
+	RegisterCatalog("es-MX", map[string]string{"a": "uno"})
+	RegisterCatalog("es_mx", map[string]string{"b": "dos", "a": "UNO"})
+
+	ctx := WithLocale(context.Background(), "es-MX")
+	if got := T(ctx, "a", "x"); got != "UNO" {
+		t.Errorf("later registration should win a key collision, got %q", got)
+	}
+	if got := T(ctx, "b", "x"); got != "dos" {
+		t.Errorf("keys registered under another spelling should merge, got %q", got)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Header.Set("Accept-Language", "ES_MX")
+	if got := DefaultLocaleResolver(request); got != "es-MX" {
+		t.Errorf("the first registered spelling stays canonical, got %q", got)
+	}
+}

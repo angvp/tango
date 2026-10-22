@@ -22,6 +22,10 @@ type localeContextKey struct{}
 var (
 	catalogsMu sync.RWMutex
 	catalogs   = make(map[string]map[string]string)
+	// canonical maps a folded locale (lower case, "-" separator) to the
+	// spelling its catalog was first registered under, so "es_MX", "es-mx"
+	// and "ES-MX" all reach the catalog registered as "es-MX".
+	canonical = make(map[string]string)
 )
 
 // WithLocale returns a child context carrying locale as the resolved locale
@@ -41,8 +45,12 @@ func Locale(ctx context.Context) string {
 
 // RegisterCatalog merges catalog into the existing catalog for locale.
 // Registering the same key again replaces that key's previous value; other
-// keys and other locales are left untouched.
+// keys and other locales are left untouched. Locales are matched without
+// regard to case or to "-" versus "_", so "es-MX" and "es_mx" name one
+// catalog; the spelling used by the first registration is the one
+// DefaultLocaleResolver and Middleware report.
 func RegisterCatalog(locale string, catalog map[string]string) {
+	locale = normalizeLocale(locale)
 	if locale == "" || len(catalog) == 0 {
 		return
 	}
@@ -50,10 +58,15 @@ func RegisterCatalog(locale string, catalog map[string]string) {
 	catalogsMu.Lock()
 	defer catalogsMu.Unlock()
 
-	dest := catalogs[locale]
+	name, ok := canonical[foldLocale(locale)]
+	if !ok {
+		name = locale
+		canonical[foldLocale(locale)] = name
+	}
+	dest := catalogs[name]
 	if dest == nil {
 		dest = make(map[string]string, len(catalog))
-		catalogs[locale] = dest
+		catalogs[name] = dest
 	}
 	for key, value := range catalog {
 		dest[key] = value
@@ -122,17 +135,23 @@ func lookup(locale, key, fallback string) string {
 }
 
 func catalogValue(locale, key string) (string, bool) {
-	catalog, ok := catalogs[locale]
+	name, ok := catalogName(locale)
 	if !ok {
 		return "", false
 	}
-	value, ok := catalog[key]
+	value, ok := catalogs[name][key]
 	return value, ok
 }
 
-func catalogExists(locale string) bool {
-	_, ok := catalogs[locale]
-	return ok
+// catalogName returns the registered spelling of locale's catalog. The exact
+// spelling is tried first, which keeps the common lookup (a locale the
+// resolver already canonicalised) free of allocation.
+func catalogName(locale string) (string, bool) {
+	if _, ok := catalogs[locale]; ok {
+		return locale, true
+	}
+	name, ok := canonical[foldLocale(locale)]
+	return name, ok
 }
 
 func resolveAcceptLanguage(header string) string {
@@ -149,11 +168,13 @@ func resolveAcceptLanguage(header string) string {
 		if tag == "" {
 			continue
 		}
-		if catalogExists(tag) {
-			return tag
+		if name, ok := catalogName(tag); ok {
+			return name
 		}
-		if base := baseLanguage(tag); base != "" && base != tag && catalogExists(base) {
-			return base
+		if base := baseLanguage(tag); base != "" && base != tag {
+			if name, ok := catalogName(base); ok {
+				return name
+			}
 		}
 	}
 	return ""
@@ -208,6 +229,12 @@ func normalizeLocale(locale string) string {
 	return strings.TrimSpace(locale)
 }
 
+// foldLocale is the form locales are compared in: lower case with "-" as the
+// separator.
+func foldLocale(locale string) string {
+	return strings.ReplaceAll(strings.ToLower(locale), "_", "-")
+}
+
 func baseLanguage(locale string) string {
 	if i := strings.IndexAny(locale, "-_"); i > 0 {
 		return locale[:i]
@@ -219,4 +246,5 @@ func resetCatalogsForTest() {
 	catalogsMu.Lock()
 	defer catalogsMu.Unlock()
 	catalogs = make(map[string]map[string]string)
+	canonical = make(map[string]string)
 }
