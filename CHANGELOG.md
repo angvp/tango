@@ -6,6 +6,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Added
 
+- **`i18n/i18ntest.Isolate`.** Test support: `i18ntest.Isolate(t)` gives a test an empty i18n state (catalogs, the `OnMissing` hook and its once-state, the observed keys) and restores the previous state in `t.Cleanup`. A test that uses it must not be parallel.
+
 - **`i18n.Keys` and `i18n.Validate`.** `T` records each (key, fallback) pair the first time it runs with a resolved locale (nothing is recorded, and nothing allocated, when no locale is set). `Keys()` lists them; `Validate()` checks every catalog against them and returns a `Report` with `Problems` (`ProblemMismatch`, `ProblemEmpty`, `ProblemConflictingFallback` when a key is seen with two fallbacks, `ProblemRegistryFull`) and the advisory, sorted `Unobserved` catalog keys. It covers only what has run in this process, and the registry holds at most 4,096 keys, so fallbacks must be stable literals.
 
 - **`i18n.OnMissing`.** A development hook that reports a missing translation (an absent key, an empty value or a value whose format verbs do not match the fallback's) with the resolved locale and key, at most once per pair. It is `nil` by default, runs outside the package's locks, and `OnMissing(nil)` clears it.

@@ -20,6 +20,8 @@ sqlite-only ./cachetest
 sqlite-only ./cmd/tango
 sensitive ./db
 sqlite-only ./i18n
+sqlite-only ./i18n/i18ntest
+sqlite-only ./i18n/internal/testhook
 sqlite-only ./internal/adminregistry
 sqlite-only ./internal/cli  # mostly command parsing; its accounts-schema test applies the shipped migrations, which migrationcompat runs on every dialect
 sqlite-only ./internal/clientip

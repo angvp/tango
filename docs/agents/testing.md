@@ -10,6 +10,7 @@ Canonical files: `testdb/testdb.go`, `examples/board/main_test.go` and `examples
 - Apply the app's real migrations with `migration.ApplyPending`, then build the app from the same config function `main` uses, and exercise it through `registry.Routes().Handler()` with `httptest`.
 - Test email with `mailtest.Sender`, passed through that config function; no test-only flags.
 - Start `registry.Lifecycles()` when the behaviour needs them (the accounts outbox, realtime hubs), and stop them in `t.Cleanup`.
+- A test that registers i18n catalogs, sets `i18n.OnMissing` or calls `i18n.Validate` starts with `i18ntest.Isolate(t)` and must not use `t.Parallel()`.
 - Mark a test that can run on only one dialect with `testdb.SQLiteOnly`, `testdb.PostgresOnly`, `testdb.MySQLOnly` or `testdb.NotMySQL` and a reason.
 
 Tiny shape:
