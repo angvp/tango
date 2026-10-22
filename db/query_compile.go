@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -44,6 +45,9 @@ func (s *Store) whereClause(meta model.ModelMeta, query Query) (string, []any, e
 	if query.Filter != nil {
 		groups = append(groups, s.renderFilter(*query.Filter, &args))
 	}
+	if len(args) > MaxQueryArgs {
+		return "", nil, &QueryLimitError{Limit: limitBindValues, Max: MaxQueryArgs, Got: len(args)}
+	}
 	if len(groups) == 0 {
 		return "", nil, nil
 	}
@@ -53,6 +57,9 @@ func (s *Store) whereClause(meta model.ModelMeta, query Query) (string, []any, e
 // renderCondition renders one validated condition, appending its bind
 // argument to args.
 func (s *Store) renderCondition(condition Condition, args *[]any) string {
+	if condition.Op == OpIn {
+		return s.renderIn(condition, args)
+	}
 	if isNullOp(condition.Op) {
 		return s.ident(condition.Field) + " " + string(condition.Op)
 	}
@@ -128,6 +135,9 @@ func checkFilterNode(meta model.ModelMeta, expr Expr) error {
 			return invalid("condition has children")
 		}
 		if _, err := validateCondition(meta, expr.Cond, ""); err != nil {
+			if limit := (*QueryLimitError)(nil); errors.As(err, &limit) {
+				return err
+			}
 			return &QueryError{Model: meta.Name, Field: expr.Cond.Field, Reason: err.Error()}
 		}
 		return nil
@@ -154,6 +164,9 @@ func checkFilterNode(meta model.ModelMeta, expr Expr) error {
 // legacyQueryError wraps a Where or Any validation error so it matches
 // ErrInvalidQuery while keeping its text exactly as it always read.
 func legacyQueryError(meta model.ModelMeta, field string, err error) error {
+	if limit := (*QueryLimitError)(nil); errors.As(err, &limit) {
+		return err
+	}
 	return &QueryError{Model: meta.Name, Field: field, text: err.Error(), Reason: err.Error()}
 }
 
@@ -194,6 +207,8 @@ func validateKnownCondition(field model.FieldMeta, condition Condition, label st
 
 	switch condition.Op {
 	case OpEq, OpNe, OpGt, OpGte, OpLt, OpLte, OpLike:
+	case OpIn:
+		return field, validateIn(field, condition, label)
 	case OpIsNull, OpIsNotNull:
 		if condition.Value != nil {
 			return field, fail("operator %q takes no value (field %q)", condition.Op, field.Name)

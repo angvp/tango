@@ -52,6 +52,7 @@ func (e *QueryError) Is(target error) bool { return target == ErrInvalidQuery }
 // and ErrInvalidQuery.
 type QueryLimitError struct {
 	Limit string
+	Field string // the field of an IN list, when Limit is "IN values"
 	Max   int
 	Got   int
 }
@@ -62,6 +63,10 @@ func (e *QueryLimitError) Error() string {
 		return fmt.Sprintf("%v: filter has %d nodes, limit %d", ErrInvalidQuery, e.Got, e.Max)
 	case limitFilterDepth:
 		return fmt.Sprintf("%v: filter is %d levels deep, limit %d", ErrInvalidQuery, e.Got, e.Max)
+	case limitInValues:
+		return fmt.Sprintf("%v: IN list for field %q has %d values, limit %d", ErrInvalidQuery, e.Field, e.Got, e.Max)
+	case limitBindValues:
+		return fmt.Sprintf("%v: query has %d bind values, limit %d", ErrInvalidQuery, e.Got, e.Max)
 	}
 	return fmt.Sprintf("%v: %s is %d, limit %d", ErrInvalidQuery, e.Limit, e.Got, e.Max)
 }
@@ -122,3 +127,8 @@ func IsNull(field string) Expr { return Cond(field, OpIsNull, nil) }
 
 // IsNotNull returns a leaf matching rows where field is not NULL.
 func IsNotNull(field string) Expr { return Cond(field, OpIsNotNull, nil) }
+
+// In returns a leaf matching rows whose field equals any value of values,
+// which must be a slice or array whose elements have the field's type. A nil
+// or empty list matches nothing. At most MaxInValues values are allowed.
+func In(field string, values any) Expr { return Cond(field, OpIn, values) }

@@ -91,6 +91,9 @@ const (
 	OpLt   Op = "<"
 	OpLte  Op = "<="
 	OpLike Op = "LIKE"
+	// OpIn matches any value of a slice or array Value; an empty list matches
+	// nothing. See In.
+	OpIn Op = "IN"
 	// OpIsNull and OpIsNotNull test for SQL NULL and take no Value. They are
 	// how to find an unset foreign key: see Condition.
 	OpIsNull    Op = "IS NULL"
