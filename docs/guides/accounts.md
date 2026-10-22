@@ -74,6 +74,10 @@ The HTML pages (register, login, password reset, email verification and their er
 
 The keys are `accounts.register.*`, `accounts.login.*`, `accounts.reset.*`, `accounts.reset_sent.body`, `accounts.reset_confirm.*`, `accounts.invalid_link.*`, `accounts.verify.*`, `accounts.verified.*`, `accounts.verification_sent.body`, `accounts.unverified.*`, `accounts.check_email.title`, `accounts.link.back_to_login`, `accounts.field.*` and `accounts.error.*` (`required`, `password_short` and `password_long` with a `%d` for the limit, `duplicate`, `invalid_login`, `invalid_email`). `accounts.error.invalid_login` is the one message shown for an unknown account and a wrong password alike, in every language. The JSON API's `error` text stays English: a client branches on the `code`, never on the text.
 
+## Email language
+
+A verification or reset email is written in the language of the request that asked for it. The request's locale is read when the email is queued (the same lookup whether or not the address has an account), and the background worker uses it to render the subject and body; a request with no resolved locale gets English. Nothing else of the request is kept, there is no per-account language preference, and nothing is stored. The keys are `accounts.email.verify_subject`, `accounts.email.verify_body`, `accounts.email.reset_subject` and `accounts.email.reset_body`; each body has exactly one `%s`, where the link goes, and a translation without it is ignored in favour of the English body, so a link is never lost.
+
 ## Password reset and email verification
 
 Both need outbound mail, so they're off until you pass `accounts.WithMail`:

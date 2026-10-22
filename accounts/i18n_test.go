@@ -9,6 +9,7 @@ import (
 
 	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/i18n/i18ntest"
+	"github.com/angvp/tango/mail/mailtest"
 )
 
 // inLocale serves handler with locale already resolved on every request, the
@@ -115,5 +116,57 @@ func TestJSONErrorTextStaysEnglish(t *testing.T) {
 	response = site.postJSON("/accounts/api/register/", `{"email":"bob@example.com","password":"short"}`, inZZ)
 	if body := response.Body.String(); !strings.Contains(body, "Password must be at least 8 characters") || strings.Contains(body, "Corta") {
 		t.Errorf("JSON password problem not English: %d %s", response.Code, body)
+	}
+}
+
+func inZZ(locale string) func(*http.Request) {
+	return func(r *http.Request) { *r = *r.WithContext(i18n.WithLocale(r.Context(), locale)) }
+}
+
+func TestResetEmailFollowsTheLanguageOfTheRequestThatAskedForIt(t *testing.T) {
+	i18ntest.Isolate(t)
+	i18n.RegisterCatalog("zz-mail", map[string]string{
+		"accounts.email.reset_subject": "Restablece tu contraseña",
+		"accounts.email.reset_body":    "Abre este enlace en 1 hora:\n\n%s\n",
+	})
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	site.createAccount("alice@example.com", true)
+	site.start()
+	defer site.stop()
+
+	site.askForReset("alice@example.com", inZZ("ZZ_mail"))
+	message := site.sent(1)[0]
+	if message.Subject != "Restablece tu contraseña" || !strings.Contains(message.Text, "Abre este enlace en 1 hora:") {
+		t.Fatalf("email not translated: %+v", message)
+	}
+	tokenIn(t, message, "https://example.com/accounts/password-reset/confirm/")
+}
+
+func TestEmailWithoutAResolvedLocaleIsEnglish(t *testing.T) {
+	i18ntest.Isolate(t)
+	i18n.RegisterCatalog("zz-mail", map[string]string{"accounts.email.reset_subject": "Restablece"})
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	site.createAccount("alice@example.com", true)
+	site.start()
+	defer site.stop()
+
+	site.askForReset("alice@example.com")
+	if got := site.sent(1)[0].Subject; got != "Reset your password" {
+		t.Fatalf("subject = %q, want English", got)
+	}
+}
+
+func TestEmailBodyThatLostItsLinkFallsBackToEnglish(t *testing.T) {
+	i18ntest.Isolate(t)
+	i18n.RegisterCatalog("zz-mail", map[string]string{"accounts.email.reset_body": "Sin enlace"})
+	site := newMailSite(t, &mailtest.Sender{}, true)
+	site.createAccount("alice@example.com", true)
+	site.start()
+	defer site.stop()
+
+	site.askForReset("alice@example.com", inZZ("zz-mail"))
+	message := site.sent(1)[0]
+	if strings.Contains(message.Text, "Sin enlace") || !strings.Contains(message.Text, "?token=") {
+		t.Fatalf("body = %q, want the English body with its link", message.Text)
 	}
 }

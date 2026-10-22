@@ -8,7 +8,6 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/i18n"
-	"github.com/angvp/tango/internal/i18nbridge"
 )
 
 // registerTemplate is deliberately minimal, plain HTML — this milestone
@@ -216,10 +215,7 @@ var textEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"
 // Lang is the registered locale of the catalog the request selected, or ""
 // when none was, in which case the page declares no language.
 func (p pageData) Lang() string {
-	if i18nbridge.Selected == nil {
-		return ""
-	}
-	return i18nbridge.Selected(p.ctx)
+	return selectedLocale(p.ctx)
 }
 
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {

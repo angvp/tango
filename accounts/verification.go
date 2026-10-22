@@ -39,9 +39,13 @@ func (m *mailer) prepareVerification(ctx context.Context, accountID int64, link 
 	if err != nil {
 		return delivery{}, false, err
 	}
-	return m.emailWithLink(account, token, link, "Confirm your email address",
-		"Please confirm that this is your email address by opening this link within 24 hours:\n\n%s\n\n"+
-			"If you didn't create an account, ignore this email.\n"), true, nil
+	return m.emailWithLink(ctx, account, token, link, emailContent{
+		subjectKey: "accounts.email.verify_subject",
+		subject:    "Confirm your email address",
+		bodyKey:    "accounts.email.verify_body",
+		body: "Please confirm that this is your email address by opening this link within 24 hours:\n\n%s\n\n" +
+			"If you didn't create an account, ignore this email.\n",
+	}), true, nil
 }
 
 // verifyLink is /accounts/verify/: its form is a "Confirm my email"

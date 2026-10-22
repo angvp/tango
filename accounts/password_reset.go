@@ -73,10 +73,14 @@ func (m *mailer) prepareReset(ctx context.Context, email string, link linker) (d
 	if err != nil {
 		return delivery{}, false, err
 	}
-	return m.emailWithLink(account, token, link, "Reset your password",
-		"Someone asked to reset the password for this email address.\n\n"+
-			"To choose a new password, open this link within 1 hour:\n\n%s\n\n"+
-			"If you didn't ask, ignore this email: your password stays the same.\n"), true, nil
+	return m.emailWithLink(ctx, account, token, link, emailContent{
+		subjectKey: "accounts.email.reset_subject",
+		subject:    "Reset your password",
+		bodyKey:    "accounts.email.reset_body",
+		body: "Someone asked to reset the password for this email address.\n\n" +
+			"To choose a new password, open this link within 1 hour:\n\n%s\n\n" +
+			"If you didn't ask, ignore this email: your password stays the same.\n",
+	}), true, nil
 }
 
 // resetLink is /accounts/password-reset/confirm/: its form asks for the new

@@ -14,6 +14,7 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/security"
 	tangomail "github.com/angvp/tango/mail"
 )
@@ -144,6 +145,7 @@ func (m *mailer) routes() tango.URLs {
 // person out. Unknown addresses take a cooldown too, so it never depends
 // on whether an account exists.
 func (m *mailer) queue(ctx context.Context, email string, job outboxJob) {
+	job.locale = selectedLocale(ctx)
 	key := cooldownKey{purpose: job.purpose, email: email}
 	at := m.cfg.now()
 	if !m.cooldown.reserve(key, at) {
@@ -170,11 +172,25 @@ func templateLinker(template string) linker {
 
 // emailWithLink is the delivery for an email to account carrying token in
 // a link.
-func (m *mailer) emailWithLink(account Account, token string, link linker, subject, text string) delivery {
+func (m *mailer) emailWithLink(ctx context.Context, account Account, token string, link linker, content emailContent) delivery {
 	return delivery{
-		message: tangomail.Message{From: m.cfg.mail.From, To: account.Email, Subject: subject, Text: fmt.Sprintf(text, link(token))},
-		secret:  token,
+		message: tangomail.Message{
+			From:    m.cfg.mail.From,
+			To:      account.Email,
+			Subject: i18n.T(ctx, content.subjectKey, content.subject),
+			// The link is a T argument, so a translation that lost its %s
+			// falls back to the English body instead of dropping the link.
+			Text: i18n.T(ctx, content.bodyKey, content.body, link(token)),
+		},
+		secret: token,
 	}
+}
+
+// emailContent is an email's subject and body, each with its translation key
+// and English text; the body has one %s, where the link goes.
+type emailContent struct {
+	subjectKey, subject string
+	bodyKey, body       string
 }
 
 // cooldownKey is one address's cooldown for one kind of email.

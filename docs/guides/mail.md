@@ -76,6 +76,10 @@ Every sender validates a message the same way before sending anything:
 
 By default a message's attachments may total 10 MiB of raw bytes; `mail.WithMaxAttachmentSize(n)` changes that, and over the limit is `mail.ErrMessageTooLarge`. Base64 makes attachments about a third larger on the wire. The limit bounds what is sent, not the memory your `Data` already uses.
 
+## Translated accounts emails
+
+The verification and reset emails that [`accounts`](accounts.md#email-language) sends follow the language of the request that asked for them. Mail you send yourself is yours to render: call `i18n.T` with the context you captured when the request arrived (a background worker has no request, so keep the locale string and restore it with `i18n.WithLocale`).
+
 ## Not included
 
 HTML mail, inline images, streamed or file-path attachments, more than one recipient, DKIM signing, queueing and retries, delivery receipts and bounce handling. `accounts` queues its own emails; a `Send` that fails returns the error, and nothing retries it.

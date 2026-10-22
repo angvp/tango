@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/observabilitysafe"
 	tangomail "github.com/angvp/tango/mail"
 )
@@ -30,6 +31,10 @@ type delivery struct {
 // request, keeps every request the same however the lookup turns out.
 type outboxJob struct {
 	purpose TokenPurpose
+	// locale is the registered locale of the request that asked for the
+	// email ("" for English), kept so the worker renders it in that language.
+	// It is the only thing of the request the job holds.
+	locale  string
 	prepare func(ctx context.Context) (d delivery, ok bool, err error)
 }
 
@@ -133,6 +138,9 @@ func (o *outbox) shutdown(ctx context.Context) error {
 // the lookup touched.
 func (o *outbox) deliver(ctx context.Context, job outboxJob) {
 	purpose := slog.String("purpose", string(job.purpose))
+	if job.locale != "" {
+		ctx = i18n.WithLocale(ctx, job.locale)
+	}
 	d, ok, err := job.prepare(ctx)
 	if err != nil {
 		o.log(ctx, EventMailFailed, purpose, slog.String("error", fmt.Sprintf("preparing the email failed (%T)", err)))
