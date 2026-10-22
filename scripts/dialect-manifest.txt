@@ -26,7 +26,6 @@ sqlite-only ./internal/adminregistry
 sqlite-only ./internal/cli  # mostly command parsing; its accounts-schema test applies the shipped migrations, which migrationcompat runs on every dialect
 sqlite-only ./internal/clientip
 sqlite-only ./internal/clientip/clientiptest
-sqlite-only ./internal/i18nbridge
 sensitive ./internal/migrationcompat
 sensitive ./internal/migrationcompat/unreleased/migrations
 sensitive ./internal/migrationcompat/v0_0_1/migrations

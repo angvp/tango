@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -168,5 +170,17 @@ func TestEmailBodyThatLostItsLinkFallsBackToEnglish(t *testing.T) {
 	message := site.sent(1)[0]
 	if strings.Contains(message.Text, "Sin enlace") || !strings.Contains(message.Text, "?token=") {
 		t.Fatalf("body = %q, want the English body with its link", message.Text)
+	}
+}
+
+// pageData.T escapes for HTML text, not attributes; keep the templates to
+// text positions.
+func TestNoAccountsTemplateUsesTranslatedTextInAnAttribute(t *testing.T) {
+	source, err := os.ReadFile("render.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inAttribute := regexp.MustCompile(`="[^"]*\{\{\.T `).Find(source); inAttribute != nil {
+		t.Fatalf("a template uses .T inside an attribute: %s", inAttribute)
 	}
 }

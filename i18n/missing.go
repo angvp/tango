@@ -5,18 +5,11 @@ import (
 	"sync/atomic"
 )
 
-// missingOnceLimit bounds the memory of the once-per-(locale, key) record.
-// Keys are literals, so a program never gets near it; past the limit new
-// pairs are no longer reported rather than growing without end.
-const missingOnceLimit = 16384
-
 type missingPair struct{ locale, key string }
 
 var (
 	missingHook atomic.Pointer[func(locale, key string)]
-	missingSeen sync.Map // missingPair -> struct{}
-	missingMu   sync.Mutex
-	missingN    int
+	missingSeen sync.Map // missingPair -> struct{}, one entry per pair reported
 )
 
 // OnMissing registers f to be told about a missing translation: a lookup
@@ -49,24 +42,32 @@ func reportMissing(locale, key string) {
 	if _, seen := missingSeen.Load(pair); seen {
 		return
 	}
-	missingMu.Lock()
-	if missingN >= missingOnceLimit {
-		missingMu.Unlock()
-		return
-	}
 	if _, loaded := missingSeen.LoadOrStore(pair, struct{}{}); loaded {
-		missingMu.Unlock()
 		return
 	}
-	missingN++
-	missingMu.Unlock()
 	(*hook)(locale, key)
 }
 
 func resetMissingForTest() {
 	missingHook.Store(nil)
-	missingMu.Lock()
-	defer missingMu.Unlock()
 	missingSeen.Clear()
-	missingN = 0
+}
+
+// isolateMissing empties the hook and its once-state and returns a function
+// that puts back what was there.
+func isolateMissing() (restore func()) {
+	savedHook := missingHook.Load()
+	saved := make(map[missingPair]struct{})
+	missingSeen.Range(func(k, _ any) bool {
+		saved[k.(missingPair)] = struct{}{}
+		return true
+	})
+	resetMissingForTest()
+	return func() {
+		missingSeen.Clear()
+		for pair := range saved {
+			missingSeen.Store(pair, struct{}{})
+		}
+		missingHook.Store(savedHook)
+	}
 }

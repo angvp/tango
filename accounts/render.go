@@ -203,9 +203,11 @@ type pageData struct {
 	ctx  context.Context
 }
 
-// T translates key for the page's request. The result is escaped here, the
-// way a literal in the template would be (an apostrophe stays as typed), so
-// a page with nothing wired renders exactly the text it always did.
+// T translates key for the page's request, for use in HTML text only (an
+// element's content, never an attribute). The result is escaped here the way
+// a literal in the template would be, which leaves an apostrophe as typed, so
+// a page with nothing wired renders exactly the text it always did. A test
+// pins that no accounts template uses it inside an attribute.
 func (p pageData) T(key, fallback string, args ...any) template.HTML {
 	return template.HTML(textEscaper.Replace(i18n.T(p.ctx, key, fallback, args...)))
 }
@@ -215,7 +217,7 @@ var textEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"
 // Lang is the registered locale of the catalog the request selected, or ""
 // when none was, in which case the page declares no language.
 func (p pageData) Lang() string {
-	return selectedLocale(p.ctx)
+	return i18n.Selected(p.ctx)
 }
 
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {

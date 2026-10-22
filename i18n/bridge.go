@@ -1,15 +1,11 @@
 package i18n
 
-import (
-	"context"
+import "context"
 
-	"github.com/angvp/tango/internal/i18nbridge"
-)
-
-func init() { i18nbridge.Selected = selectedLocale }
-
-// selectedLocale is the registered spelling of the catalog ctx's locale
-// selects, or "" when it selects none.
-func selectedLocale(ctx context.Context) string {
+// Selected returns the registered spelling of the catalog that the locale
+// carried by ctx selects, matching without regard to case or "-" versus "_"
+// and falling back to the base language, or "" when no catalog answers to it.
+// It is the value to put in a page's lang attribute.
+func Selected(ctx context.Context) string {
 	return registeredLocale(Locale(ctx))
 }

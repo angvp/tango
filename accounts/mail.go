@@ -145,13 +145,13 @@ func (m *mailer) routes() tango.URLs {
 // person out. Unknown addresses take a cooldown too, so it never depends
 // on whether an account exists.
 func (m *mailer) queue(ctx context.Context, email string, job outboxJob) {
-	job.locale = selectedLocale(ctx)
+	queued := outboxJob{purpose: job.purpose, prepare: job.prepare, locale: i18n.Selected(ctx)}
 	key := cooldownKey{purpose: job.purpose, email: email}
 	at := m.cfg.now()
 	if !m.cooldown.reserve(key, at) {
 		return
 	}
-	if !m.outbox.enqueue(ctx, job) {
+	if !m.outbox.enqueue(ctx, queued) {
 		m.cooldown.release(key, at)
 	}
 }

@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -157,5 +158,20 @@ func TestOnMissingIsOncePerKeyUnderConcurrency(t *testing.T) {
 	wg.Wait()
 	if got := calls.Load(); got != 1 {
 		t.Errorf("hook calls = %d, want 1", got)
+	}
+}
+
+func TestOnMissingReportsEveryDistinctPairWithoutALimit(t *testing.T) {
+	resetCatalogsForTest()
+	t.Cleanup(resetCatalogsForTest)
+	RegisterCatalog("es", map[string]string{"other": "otro"})
+	var n int
+	OnMissing(func(string, string) { n++ })
+	const keys = 20000
+	for i := 0; i < keys; i++ {
+		T(WithLocale(context.Background(), "es"), "key."+strconv.Itoa(i), "x")
+	}
+	if n != keys {
+		t.Fatalf("reported %d of %d distinct missing keys", n, keys)
 	}
 }

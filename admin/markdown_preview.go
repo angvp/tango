@@ -41,12 +41,12 @@ var previewTimeout = 5 * time.Second
 const previewDocumentEnd = "\n</body>\n</html>\n"
 
 // previewFailure is a preview request that did not produce HTML: the status
-// to answer with and the message the client may show, as a translation key
-// with its English fallback.
+// to answer with and the message the client may show. Like the other JSON
+// the admin answers with, the message stays English: clients branch on the
+// status, and the page's own text is what is translated.
 type previewFailure struct {
-	Status   int
-	Key      string
-	Fallback string
+	Status  int
+	Message string
 }
 
 // previewRoutes returns the one preview route a model needs: a POST to
@@ -91,18 +91,18 @@ func previewView(meta model.ModelMeta, opts adminregistry.Options) tango.View {
 		setPreviewHeaders(ctx)
 		preview, ok := previewWidgetFor(meta, opts, ctx.Param("field"))
 		if !ok {
-			return previewError(ctx, http.StatusNotFound, "admin.error.not_found", "not found")
+			return previewError(ctx, http.StatusNotFound, "not found")
 		}
 		if !verifyPreviewCSRF(ctx) {
-			return previewError(ctx, http.StatusForbidden, "admin.error.csrf", "invalid or missing CSRF token")
+			return previewError(ctx, http.StatusForbidden, "invalid or missing CSRF token")
 		}
 		source, failure := readPreviewSource(ctx)
 		if failure != nil {
-			return previewError(ctx, failure.Status, failure.Key, failure.Fallback)
+			return previewError(ctx, failure.Status, failure.Message)
 		}
 		html, failure := renderPreview(ctx, meta, ctx.Param("field"), preview, source)
 		if failure != nil {
-			return previewError(ctx, failure.Status, failure.Key, failure.Fallback)
+			return previewError(ctx, failure.Status, failure.Message)
 		}
 		return ctx.JSON(http.StatusOK, map[string]string{"html": previewDocument(ctx.Context(), html)})
 	}
@@ -143,12 +143,12 @@ func readPreviewSource(ctx *tango.Context) (string, *previewFailure) {
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			return "", &previewFailure{http.StatusRequestEntityTooLarge, "admin.preview.too_large", "request body too large"}
+			return "", &previewFailure{http.StatusRequestEntityTooLarge, "request body too large"}
 		}
-		return "", &previewFailure{http.StatusBadRequest, "admin.preview.unreadable", "could not read the preview text"}
+		return "", &previewFailure{http.StatusBadRequest, "could not read the preview text"}
 	}
 	if !utf8.Valid(raw) {
-		return "", &previewFailure{http.StatusBadRequest, "admin.preview.not_utf8", "preview text must be UTF-8"}
+		return "", &previewFailure{http.StatusBadRequest, "preview text must be UTF-8"}
 	}
 	return string(raw), nil
 }
@@ -163,15 +163,15 @@ func renderPreview(ctx *tango.Context, meta model.ModelMeta, field string, previ
 	html, err := preview.Preview(renderCtx, source)
 	if errors.Is(renderCtx.Err(), context.DeadlineExceeded) {
 		ctx.Logger().Warn("admin preview timed out", "model", meta.Name, "field", field)
-		return "", &previewFailure{http.StatusGatewayTimeout, "admin.preview.timeout", "the preview took too long to render"}
+		return "", &previewFailure{http.StatusGatewayTimeout, "the preview took too long to render"}
 	}
 	if err != nil {
 		ctx.Logger().Error("admin preview failed", "model", meta.Name, "field", field, "error", err)
-		return "", &previewFailure{http.StatusUnprocessableEntity, "admin.preview.failed", "the preview could not be rendered"}
+		return "", &previewFailure{http.StatusUnprocessableEntity, "the preview could not be rendered"}
 	}
 	if len(html) > previewOutputLimit {
 		ctx.Logger().Error("admin preview output too large", "model", meta.Name, "field", field, "bytes", len(html))
-		return "", &previewFailure{http.StatusUnprocessableEntity, "admin.preview.output_too_large", "the preview is too large"}
+		return "", &previewFailure{http.StatusUnprocessableEntity, "the preview is too large"}
 	}
 	return html, nil
 }
@@ -202,6 +202,6 @@ func setPreviewHeaders(ctx *tango.Context) {
 	header.Set("X-Content-Type-Options", "nosniff")
 }
 
-func previewError(ctx *tango.Context, status int, key, fallback string) error {
-	return ctx.JSON(status, map[string]string{"error": i18n.T(ctx.Context(), key, fallback)})
+func previewError(ctx *tango.Context, status int, message string) error {
+	return ctx.JSON(status, map[string]string{"error": message})
 }

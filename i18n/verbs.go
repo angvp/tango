@@ -31,50 +31,10 @@ func verbSet(format string) (uses []verbUse, ok bool) {
 			i++
 			continue
 		}
-		i++
-		for i < len(format) && strings.IndexByte("+-# 0", format[i]) >= 0 {
-			i++
-		}
-		var good bool
-		if arg, i, good = bracketIndex(format, i, arg); !good {
+		uses, arg, i, ok = directive(format, i+1, arg, uses)
+		if !ok {
 			return nil, false
 		}
-		if i < len(format) && format[i] == '*' {
-			uses = append(uses, verbUse{arg, '*'})
-			arg++
-			i++
-		} else {
-			i = skipDigits(format, i)
-		}
-		if i < len(format) && format[i] == '.' {
-			i++
-			if arg, i, good = bracketIndex(format, i, arg); !good {
-				return nil, false
-			}
-			if i < len(format) && format[i] == '*' {
-				uses = append(uses, verbUse{arg, '*'})
-				arg++
-				i++
-			} else {
-				i = skipDigits(format, i)
-			}
-		}
-		if arg, i, good = bracketIndex(format, i, arg); !good {
-			return nil, false
-		}
-		if i >= len(format) {
-			return nil, false // %!(NOVERB)
-		}
-		verb, size := utf8.DecodeRuneInString(format[i:])
-		i += size
-		if verb == '%' {
-			continue
-		}
-		if !strings.ContainsRune(knownVerbs, verb) {
-			return nil, false
-		}
-		uses = append(uses, verbUse{arg, verb})
-		arg++
 	}
 	slices.SortFunc(uses, func(a, b verbUse) int {
 		if a.arg != b.arg {
@@ -83,6 +43,48 @@ func verbSet(format string) (uses []verbUse, ok bool) {
 		return int(a.verb - b.verb)
 	})
 	return slices.Compact(uses), true
+}
+
+// directive reads one directive whose '%' precedes format[i:]: flags, an
+// optional [n] index, width, precision and the verb. It returns the uses
+// extended by what the directive consumes, the next argument and the new
+// position; ok is false for a malformed directive.
+func directive(format string, i, arg int, uses []verbUse) ([]verbUse, int, int, bool) {
+	for i < len(format) && strings.IndexByte("+-# 0", format[i]) >= 0 {
+		i++
+	}
+	var good bool
+	if arg, i, good = bracketIndex(format, i, arg); !good {
+		return nil, 0, 0, false
+	}
+	uses, arg, i = widthOrStar(format, i, arg, uses)
+	if i < len(format) && format[i] == '.' {
+		if arg, i, good = bracketIndex(format, i+1, arg); !good {
+			return nil, 0, 0, false
+		}
+		uses, arg, i = widthOrStar(format, i, arg, uses)
+	}
+	if arg, i, good = bracketIndex(format, i, arg); !good || i >= len(format) {
+		return nil, 0, 0, false // malformed index, or %!(NOVERB)
+	}
+	verb, size := utf8.DecodeRuneInString(format[i:])
+	i += size
+	if verb == '%' {
+		return uses, arg, i, true
+	}
+	if !strings.ContainsRune(knownVerbs, verb) {
+		return nil, 0, 0, false
+	}
+	return append(uses, verbUse{arg, verb}), arg + 1, i, true
+}
+
+// widthOrStar reads a width or precision at format[i:]: a run of digits, or a
+// * that consumes the next argument and is recorded in uses.
+func widthOrStar(format string, i, arg int, uses []verbUse) ([]verbUse, int, int) {
+	if i < len(format) && format[i] == '*' {
+		return append(uses, verbUse{arg, '*'}), arg + 1, i + 1
+	}
+	return uses, arg, skipDigits(format, i)
 }
 
 // bracketIndex reads an optional [n] argument index at format[i:]. It returns

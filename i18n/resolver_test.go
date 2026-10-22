@@ -1,6 +1,7 @@
 package i18n
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -218,5 +219,17 @@ func TestMiddlewareResolverNilUsesAcceptLanguage(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), request("/", func(r *http.Request) { r.Header.Set("Accept-Language", "FR") }))
 	if seen != "fr" {
 		t.Errorf("handler saw %q, want fr", seen)
+	}
+}
+
+func TestSelectedReturnsTheRegisteredSpellingOrNothing(t *testing.T) {
+	registerSpanish()
+	for locale, want := range map[string]string{"es": "es", "ES_mx": "es-MX", "es-AR": "es", "de": "", "": ""} {
+		if got := Selected(WithLocale(context.Background(), locale)); got != want {
+			t.Errorf("Selected(%q) = %q, want %q", locale, got, want)
+		}
+	}
+	if got := Selected(context.Background()); got != "" {
+		t.Errorf("no locale: Selected = %q", got)
 	}
 }

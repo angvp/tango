@@ -172,13 +172,12 @@ func TestJSONFieldErrorTranslates(t *testing.T) {
 	}
 }
 
-func TestPreviewDocumentAndEndpointErrorsTranslate(t *testing.T) {
+func TestPreviewDocumentIsTranslatedButEndpointErrorsStayEnglish(t *testing.T) {
 	i18ntest.Isolate(t)
 	i18n.RegisterCatalog("zz-prev", map[string]string{
 		"admin.markdown.document_title": "Vista previa",
 		"admin.error.csrf":              "falta el token CSRF",
 		"admin.error.not_found":         "no encontrado",
-		"admin.preview.too_large":       "el cuerpo es demasiado grande",
 	})
 	handler := buildI18NNoteAdmin(t, admin.Markdown(admin.WithMarkdownPreview(previewHTML)), resolveTo("zz-prev"))
 
@@ -188,14 +187,14 @@ func TestPreviewDocumentAndEndpointErrorsTranslate(t *testing.T) {
 		t.Errorf("preview document not localised:\n%s", doc)
 	}
 
-	if msg := previewBody(t, previewRequest(handler, http.MethodPost, notePreviewPath, "hi", "wrong"))["error"]; msg != "falta el token CSRF" {
-		t.Errorf("csrf error = %v", msg)
+	if msg := previewBody(t, previewRequest(handler, http.MethodPost, notePreviewPath, "hi", "wrong"))["error"]; msg != "invalid or missing CSRF token" {
+		t.Errorf("csrf error = %v, want the English JSON text", msg)
 	}
-	if msg := previewBody(t, previewRequest(handler, http.MethodPost, "/admin/admin_note/_preview/Nope/", "hi", testSessionCSRFToken))["error"]; msg != "no encontrado" {
-		t.Errorf("not found error = %v", msg)
+	if msg := previewBody(t, previewRequest(handler, http.MethodPost, "/admin/admin_note/_preview/Nope/", "hi", testSessionCSRFToken))["error"]; msg != "not found" {
+		t.Errorf("not found error = %v, want the English JSON text", msg)
 	}
 	big := strings.Repeat("x", (256<<10)+1)
-	if msg := previewBody(t, previewRequest(handler, http.MethodPost, notePreviewPath, big, testSessionCSRFToken))["error"]; msg != "el cuerpo es demasiado grande" {
-		t.Errorf("too large error = %v", msg)
+	if msg := previewBody(t, previewRequest(handler, http.MethodPost, notePreviewPath, big, testSessionCSRFToken))["error"]; msg != "request body too large" {
+		t.Errorf("too large error = %v, want the English JSON text", msg)
 	}
 }

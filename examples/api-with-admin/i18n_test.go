@@ -169,7 +169,7 @@ func TestSpanishAdminIsComplete(t *testing.T) {
 // states the walk does not produce (a non-staff login, a bad theme or method).
 func unwalkedKey(key string) bool {
 	for _, prefix := range []string{
-		"admin.json.", "admin.markdown.", "admin.preview.", "admin.widget.", "admin.error.", "admin.dashboard.activity.job.",
+		"admin.json.", "admin.markdown.", "admin.widget.", "admin.error.", "admin.dashboard.activity.job.",
 		"admin.dashboard.status.unreachable", "admin.dashboard.status.missing", "admin.dashboard.status.pending",
 		"admin.dashboard.status.unknown", "admin.dashboard.unavailable", "admin.dashboard.not_configured",
 		"admin.list.filter_too_many", "admin.index.empty", "admin.login.invalid",

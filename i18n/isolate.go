@@ -6,13 +6,26 @@ import (
 	"github.com/angvp/tango/i18n/internal/testhook"
 )
 
+// init hands i18ntest the one function it needs. It registers nothing about
+// the application: it only lets the test-support package reach this package's
+// state without exporting a reset.
 func init() { testhook.Isolate = isolate }
 
 // isolate empties every piece of package state and returns a function that
 // restores the previous values. The state is process-global, so it must not be
 // used while other goroutines call into the package.
 func isolate() (restore func()) {
+	restores := []func(){isolateCatalogs(), isolateMissing(), isolateObserved()}
+	return func() {
+		for _, restore := range restores {
+			restore()
+		}
+	}
+}
+
+func isolateCatalogs() (restore func()) {
 	catalogsMu.Lock()
+	defer catalogsMu.Unlock()
 	savedCatalogs := make(map[string]map[string]string, len(catalogs))
 	for locale, catalog := range catalogs {
 		savedCatalogs[locale] = maps.Clone(catalog)
@@ -20,47 +33,28 @@ func isolate() (restore func()) {
 	savedCanonical := maps.Clone(canonical)
 	catalogs = make(map[string]map[string]string)
 	canonical = make(map[string]string)
-	catalogsMu.Unlock()
+	return func() {
+		catalogsMu.Lock()
+		defer catalogsMu.Unlock()
+		catalogs = savedCatalogs
+		canonical = savedCanonical
+	}
+}
 
-	savedHook := missingHook.Load()
-	missingMu.Lock()
-	savedSeen := make(map[missingPair]struct{})
-	missingSeen.Range(func(k, _ any) bool {
-		savedSeen[k.(missingPair)] = struct{}{}
-		return true
-	})
-	savedSeenN := missingN
-	missingMu.Unlock()
-	resetMissingForTest()
-
+func isolateObserved() (restore func()) {
 	observedMu.Lock()
+	defer observedMu.Unlock()
 	savedObserved := maps.Clone(observed)
 	savedConflicts := maps.Clone(conflicts)
 	savedFull := observedFull.Load()
 	observed = make(map[string]string)
 	conflicts = make(map[string]fallbackConflict)
 	observedFull.Store(false)
-	observedMu.Unlock()
-
 	return func() {
-		catalogsMu.Lock()
-		catalogs = savedCatalogs
-		canonical = savedCanonical
-		catalogsMu.Unlock()
-
-		missingMu.Lock()
-		missingSeen.Clear()
-		for pair := range savedSeen {
-			missingSeen.Store(pair, struct{}{})
-		}
-		missingN = savedSeenN
-		missingMu.Unlock()
-		missingHook.Store(savedHook)
-
 		observedMu.Lock()
+		defer observedMu.Unlock()
 		observed = savedObserved
 		conflicts = savedConflicts
 		observedFull.Store(savedFull)
-		observedMu.Unlock()
 	}
 }
