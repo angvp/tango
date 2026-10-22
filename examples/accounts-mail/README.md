@@ -22,6 +22,10 @@ Then, in a browser:
 
 `go test .` walks the same steps with `mailtest.Sender`, which records the emails instead of printing them.
 
+## In Spanish
+
+`catalog_es.go` is a Spanish catalog for every page, form error and email the `accounts` app produces, and `i18n.MiddlewareResolver(nil)` picks the language from `Accept-Language`. Open the pages with a browser set to Spanish (or `curl -H 'Accept-Language: es'`) and the pages, the errors and both emails come out in Spanish, links included; any other language gets the English you saw above. `i18n_test.go` runs the whole flow in Spanish and fails on any key the catalog lacks. See the [i18n guide](../../docs/guides/i18n.md) and [translating the pages](../../docs/guides/accounts.md#translating-the-pages).
+
 ## Configuration
 
 - `TANGO_DB_DSN` picks the database and defaults to `sqlite://app.db`.

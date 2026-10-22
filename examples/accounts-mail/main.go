@@ -17,6 +17,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/mail"
 
 	"accounts-mail/migrations"
@@ -77,6 +78,10 @@ func baseURL(addr string) string {
 func appConfig(store *db.Store, sender mail.Sender, baseURL string) tango.Config {
 	// The address is TANGO_ADDR, else the PORT hosting platforms set, else :8000.
 	config := tango.LoadConfigFromEnv(tango.WithPortFromEnv())
+	// Pages and emails follow the request's Accept-Language; the Spanish
+	// catalog is the example's own (see catalog_es.go).
+	registerCatalogs()
+	config.Middleware = []tango.Middleware{i18n.MiddlewareResolver(nil)}
 	config.InstalledApps = []tango.App{
 		accounts.New(store, accounts.WithMail(accounts.MailConfig{
 			Sender:  sender,

@@ -32,7 +32,7 @@ err = sender.Send(ctx, mail.Message{From: from, To: to, Subject: "Hi", Text: "â€
 - Do not log message text, recipients, links or SMTP URLs.
 - Do not call `Send` inside a request when its timing could reveal something, such as whether an account exists. Queue the work instead, as `accounts` does.
 - Do not expect HTML mail, several recipients, retries or queueing from `mail`.
-- Mail you render in a background worker needs the request's locale captured as a string and restored with `i18n.WithLocale`; `accounts` does this for its own emails.
+- Mail you render in a background worker needs the request's locale captured as a string and restored with `i18n.WithLocale`; `accounts` does this for its own emails (`examples/accounts-mail` shows them in Spanish).
 
 ## Check
 

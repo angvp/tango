@@ -33,7 +33,7 @@ protected := accounts.RequireLogin(store, accounts.DefaultSessionCookieName, "/a
 - Write several rows that must succeed together with `store.InTx(ctx, func(tx *db.Store) error { … })`: nil commits, an error rolls back and is returned as is, a panic rolls back and re-panics.
 - Use `tx` for every call inside the callback; the outer store is another connection. A nested `InTx` joins the outer transaction (no savepoints), so an inner error only rolls back if it reaches the outermost callback. Canonical file: `db/store.go`; proof: `examples/spa-accounts/apps/profiles`.
 
-- Accounts' HTML pages and form errors translate through `i18n.T` under `accounts.*` keys (list: the accounts guide's "Translating the pages"); JSON `error` text stays English, so clients branch on `code`. Verification and reset emails use the language of the request that queued them (`accounts.email.*`, one `%s` link per body); there is no per-account language.
+- Accounts' HTML pages and form errors translate through `i18n.T` under `accounts.*` keys (list: the accounts guide's "Translating the pages"); JSON `error` text stays English, so clients branch on `code`. Verification and reset emails use the language of the request that queued them (`accounts.email.*`, one `%s` link per body); there is no per-account language. A Spanish worked example: `examples/accounts-mail`.
 
 ## Do With `auth`
 

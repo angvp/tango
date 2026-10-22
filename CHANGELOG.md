@@ -24,6 +24,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **`examples/api-with-admin` in Spanish.** The example serves the admin in Spanish end to end: a complete `es` catalog, a small `es-MX` override, a `?lang=` → cookie → `Accept-Language` order and a language switcher, with a test that walks the pages in both locales and checks `OnMissing` and `Validate`. tanGO itself still ships no catalogs.
 
+- **`examples/accounts-mail` in Spanish.** Registering, confirming an address and resetting a password run in Spanish, emails and links included, with a test that walks the flow and fails on any missing key.
+
 ### Changed
 
 - **The i18n middleware sets `Vary` and `Content-Language`.** With `i18n.Middleware(nil)` every response gets `Vary: Accept-Language`, so a cache in front of the app no longer serves one language to another visitor; `MiddlewareResolver(Chain(...))` sends the tokens its resolvers need (`Cookie` for `FromCookie`). `Content-Language` names the selected catalog's locale, and only when a catalog was selected. Existing `Vary` values, including ones a downstream handler adds, are merged without repeating a token (ignoring case). A resolver passed as a plain function adds no `Vary` (use `FuncResolver` to declare one). Nothing changes for an app without the middleware.
