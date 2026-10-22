@@ -244,3 +244,51 @@ func validateKnownCondition(field model.FieldMeta, condition Condition, label st
 	}
 	return field, nil
 }
+
+// selectSQL builds the SELECT statement and bind arguments for query. List,
+// First and every other row read go through it, so they validate and render
+// identically.
+func (s *Store) selectSQL(meta model.ModelMeta, query Query) (string, []any, error) {
+	columns := make([]string, len(meta.Fields))
+	for i, field := range meta.Fields {
+		columns[i] = s.ident(field.Name)
+	}
+
+	sqlQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(columns, ", "), s.ident(meta.Name))
+	whereSQL, args, err := s.whereClause(meta, query)
+	if err != nil {
+		return "", nil, err
+	}
+	sqlQuery += whereSQL
+
+	if len(query.OrderBy) > 0 {
+		orderClauses := make([]string, len(query.OrderBy))
+		for i, entry := range query.OrderBy {
+			fieldName := entry
+			direction := "ASC"
+			if strings.HasPrefix(entry, "-") {
+				fieldName = entry[1:]
+				direction = "DESC"
+			}
+
+			if !hasField(meta, fieldName) {
+				return "", nil, fmt.Errorf("tango db: unknown OrderBy field %q for model %s", fieldName, meta.Name)
+			}
+
+			orderClauses[i] = s.ident(fieldName) + " " + direction
+		}
+		sqlQuery += " ORDER BY " + strings.Join(orderClauses, ", ")
+	}
+
+	if query.Limit > 0 {
+		sqlQuery += fmt.Sprintf(" LIMIT %d", query.Limit)
+	} else if query.Offset > 0 && s.dialect.offsetNeedsLimit() {
+		// SQLite and MySQL refuse OFFSET without LIMIT.
+		sqlQuery += " LIMIT " + s.dialect.noLimit()
+	}
+	if query.Offset > 0 {
+		sqlQuery += fmt.Sprintf(" OFFSET %d", query.Offset)
+	}
+
+	return sqlQuery, args, nil
+}
