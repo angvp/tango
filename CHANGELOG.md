@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- **`i18n.OnMissing`.** A development hook that reports a missing translation (an absent key, an empty value or a value whose format verbs do not match the fallback's) with the resolved locale and key, at most once per pair. It is `nil` by default, runs outside the package's locks, and `OnMissing(nil)` clears it.
+
 ### Changed
 
 - **A bad catalog value falls back instead of printing garbage.** `i18n.T` now ignores a catalog value that is empty or whose format verbs differ from the fallback's (positional verbs such as `%[2]s` count, so reordering arguments is still fine), tries the base language, and then shows the fallback. Before, `"Nuevo"` for `"New %s"` rendered `Nuevo%!(EXTRA string=Pet)` and an empty value rendered nothing. A literal `%` in a fallback must be `%%` once arguments are passed.

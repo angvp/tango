@@ -108,16 +108,24 @@ func Middleware(resolver LocaleResolver) tango.Middleware {
 // are present, the chosen string is formatted with fmt.Sprintf before being
 // returned.
 func T(ctx context.Context, key, fallback string, args ...any) string {
-	chosen := lookup(Locale(ctx), key, fallback)
+	locale := Locale(ctx)
+	chosen, missing := lookup(locale, key, fallback)
+	if missing {
+		reportMissing(locale, key)
+	}
 	if len(args) > 0 {
 		return fmt.Sprintf(chosen, args...)
 	}
 	return chosen
 }
 
-func lookup(locale, key, fallback string) string {
+// lookup returns the text for key and whether it was a missing translation:
+// the locale (or its base language) has a catalog, but none supplied usable
+// text. A locale with no catalog at all is not missing, it is simply outside
+// the locales the host translated.
+func lookup(locale, key, fallback string) (text string, missing bool) {
 	if locale == "" || key == "" {
-		return fallback
+		return fallback, false
 	}
 
 	catalogsMu.RLock()
@@ -125,15 +133,19 @@ func lookup(locale, key, fallback string) string {
 
 	// A value the fallback cannot stand in for (empty, or with other format
 	// verbs) counts as absent, so the base language is tried before English.
+	_, hasCatalog := catalogName(locale)
 	if value, ok := catalogValue(locale, key); ok && usable(value, fallback) {
-		return value
+		return value, false
 	}
 	if base := baseLanguage(locale); base != "" && base != locale {
+		if _, ok := catalogName(base); ok {
+			hasCatalog = true
+		}
 		if value, ok := catalogValue(base, key); ok && usable(value, fallback) {
-			return value
+			return value, false
 		}
 	}
-	return fallback
+	return fallback, hasCatalog
 }
 
 func catalogValue(locale, key string) (string, bool) {
@@ -249,4 +261,5 @@ func resetCatalogsForTest() {
 	defer catalogsMu.Unlock()
 	catalogs = make(map[string]map[string]string)
 	canonical = make(map[string]string)
+	resetMissingForTest()
 }
