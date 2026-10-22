@@ -113,6 +113,9 @@ func T(ctx context.Context, key, fallback string, args ...any) string {
 	if missing {
 		reportMissing(locale, key)
 	}
+	if locale != "" && key != "" {
+		observe(key, fallback)
+	}
 	if len(args) > 0 {
 		return fmt.Sprintf(chosen, args...)
 	}
@@ -262,4 +265,5 @@ func resetCatalogsForTest() {
 	catalogs = make(map[string]map[string]string)
 	canonical = make(map[string]string)
 	resetMissingForTest()
+	resetObservedForTest()
 }
