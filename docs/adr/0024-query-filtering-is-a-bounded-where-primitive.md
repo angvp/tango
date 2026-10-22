@@ -7,3 +7,5 @@
 **Amendment:** "AND-only" and "no `Contains`/`StartsWith`" didn't last. Once admin search needed migrating off raw SQL, the bounded shape widened to add `OpLike` and one OR group (`Query.Any`) — see [ADR 0025](0025-query-filtering-gains-like-any-and-count.md). The `IS NULL`/`Store.Get`/joins/cross-model boundaries in this ADR still hold unchanged.
 
 See also [ADR 0038](0038-null-reads-as-the-zero-value-and-unset-foreign-keys-write-null.md): `NULL` columns now read back as the zero value, which still leaves `IS NULL` filtering to raw SQL.
+
+**Amendment:** `IS NULL`/`IS NOT NULL`, `IN` and nested boolean groups were added later; see [ADR 0064](0064-query-filtering-gains-a-boolean-tree-in-null-first-and-exists.md). `Value: nil` is still rejected for the comparison operators.
