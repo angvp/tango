@@ -187,6 +187,7 @@ func TestFilterErrors(t *testing.T) {
 		{"too deep", db.Query{Filter: &deep}, `tango db: invalid query: filter is 9 levels deep, limit 8`, true},
 		{"too many nodes", db.Query{Filter: ptr(db.And(wide...))}, `tango db: invalid query: filter has 101 nodes, limit 100`, true},
 		{"legacy unknown where field keeps its text", db.Query{Where: []db.Condition{{Field: "Nope", Op: db.OpEq, Value: 1}}}, `tango db: unknown Where field "Nope" for model goldenPost`, false},
+		{"unknown OrderBy field keeps its text and matches ErrInvalidQuery", db.Query{OrderBy: []string{"-Nope"}}, `tango db: unknown OrderBy field "Nope" for model goldenPost`, false},
 		{"legacy any operator keeps its text", db.Query{Any: []db.Condition{{Field: "Score", Op: db.Op("~"), Value: 1}}}, `tango db: unsupported Where operator "~"`, false},
 	}
 	for _, tc := range tests {
@@ -213,7 +214,7 @@ func TestFilterErrors(t *testing.T) {
 			if !tc.limit && !errors.As(err, &queryErr) {
 				t.Errorf("errors.As QueryError = false for %v", err)
 			}
-			if _, countErr := store.Count(context.Background(), meta, tc.query); countErr == nil || countErr.Error() != tc.want {
+			if _, countErr := store.Count(context.Background(), meta, tc.query); len(tc.query.OrderBy) == 0 && (countErr == nil || countErr.Error() != tc.want) { // Count ignores OrderBy
 				t.Errorf("Count error = %v, want the same as List", countErr)
 			}
 		})

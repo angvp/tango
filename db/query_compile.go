@@ -272,7 +272,7 @@ func (s *Store) selectSQL(meta model.ModelMeta, query Query) (string, []any, err
 			}
 
 			if !hasField(meta, fieldName) {
-				return "", nil, fmt.Errorf("tango db: unknown OrderBy field %q for model %s", fieldName, meta.Name)
+				return "", nil, legacyQueryError(meta, fieldName, fmt.Errorf("tango db: unknown OrderBy field %q for model %s", fieldName, meta.Name))
 			}
 
 			orderClauses[i] = s.ident(fieldName) + " " + direction
