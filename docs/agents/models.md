@@ -42,7 +42,7 @@ Stick to simple scalar Go fields and `time.Time` unless the public model guide s
 - `db.OpLike` accepts SQL wildcard patterns on string fields. `Store.Count(ctx, meta, query)` counts matching rows without pagination. See `admin/list.go` for the `Any` + `OpLike` + `Count` composition, and `docs/guides/persistence-crud-and-raw-sql.md` for dialect differences.
 - Use `Query.Filter` (`db.Cond`, `db.And`, `db.Or`, `db.Not`) for nested groups, `db.In(field, slice)` for a list of values (nil or empty matches nothing; at most 1,000 values), and `db.IsNull`/`db.IsNotNull` for unset foreign keys. `Store.First(ctx, meta, query, &row)` reads one row (primary-key order by default, `db.ErrNotFound` when none); `Store.Exists` answers yes or no.
 - For automatic wildcard escaping, joins, cross-model filtering, or non-PK `Get` semantics, use `Store.Query`/`QueryRow` with explicit SQL.
-- Don't filter an unset foreign key with `OwnerID = 0`: it is stored as `NULL`, so it never matches; use `db.IsNull("OwnerID")`. Don't read one row with `List` and `Limit: 1` when `First` says it; `First` orders by primary key, so for an unordered lookup name a unique column.
+- Don't filter an unset foreign key with `OwnerID = 0` or `OwnerID IN (0, 3)`: it is stored as `NULL`, so unset rows never match; use `db.IsNull("OwnerID")`, or `db.Or(db.In("OwnerID", ids), db.IsNull("OwnerID"))` for assigned IDs plus unset rows. Don't read one row with `List` and `Limit: 1` when `First` says it; `First` orders by primary key, so for an unordered lookup name a unique column.
 
 ## Check
 
