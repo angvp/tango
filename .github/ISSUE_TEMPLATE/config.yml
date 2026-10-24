@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation and tutorial
+    url: https://tangoframework.com
+    about: Guides, the tutorial and the API reference.
+  - name: Report a security vulnerability
+    url: https://github.com/angvp/tango/security/policy
+    about: Report privately, not in a public issue.

@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not behave the way the documentation says it does.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: tanGO version
+      description: The output of `go list -m github.com/angvp/tango` in your project.
+    validations:
+      required: true
+  - type: dropdown
+    id: dialect
+    attributes:
+      label: Database
+      options: [SQLite, PostgreSQL, MySQL, Not applicable]
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Include the error text or output.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest example that reproduces it
+      description: A short Go snippet or the commands you ran. Remove secrets and credentials.
+      render: go
+    validations:
+      required: true
