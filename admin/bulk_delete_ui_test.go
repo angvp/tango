@@ -62,6 +62,18 @@ func TestBulkDeleteSelectAllLabelNamesThePageRowCount(t *testing.T) {
 	}
 }
 
+func TestBulkDeleteDialogOpensOnTheSafeButton(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	seedProduct(t, sqlDB, "Widget", 3)
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	if !regexp.MustCompile(`<button[^>]*data-bulk-cancel[^>]*\bautofocus\b|<button[^>]*\bautofocus\b[^>]*data-bulk-cancel`).MatchString(body) {
+		t.Errorf("the dialog must open with Cancel focused, so a stray Enter cannot delete")
+	}
+	if regexp.MustCompile(`<button[^>]*data-bulk-confirm[^>]*\bautofocus\b`).MatchString(body) {
+		t.Errorf("Confirm delete must not take the initial focus")
+	}
+}
+
 func TestBulkDeleteListReturnToKeepsTheCurrentView(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	for i := 0; i < 30; i++ {

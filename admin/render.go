@@ -52,7 +52,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         <p class="mb-5 text-sm text-ink-muted">{{.T "admin.bulk.cascade_warning" "Rows that reference these rows are deleted with them. This action cannot be undone."}}</p>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn-danger" data-bulk-confirm>{{.T "admin.button.confirm_delete" "Confirm delete"}}</button>
-          <button type="button" class="btn-secondary" data-bulk-cancel>{{.T "admin.button.cancel" "Cancel"}}</button>
+          <button type="button" class="btn-secondary" data-bulk-cancel autofocus>{{.T "admin.button.cancel" "Cancel"}}</button>
         </div>
       </form>
     </dialog>{{end}}

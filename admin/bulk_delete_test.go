@@ -1,6 +1,7 @@
 package admin_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -209,6 +210,31 @@ func TestBulkDeleteRollsBackWhenASelectedKeyHasNoRow(t *testing.T) {
 	})
 }
 
+func TestBulkDeleteRowMissingAtTheReReadRejectsWithoutDeletingOrLogging(t *testing.T) {
+	var logs bytes.Buffer
+	restore := captureDefaultLog(&logs)
+	defer restore()
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	first := seedProduct(t, sqlDB, "A", 1)
+	second := seedProduct(t, sqlDB, "B", 2)
+	gone := seedProduct(t, sqlDB, "C", 3)
+	if _, err := sqlDB.Exec(`DELETE FROM crud_product WHERE id = ` + strconv.FormatInt(gone, 10)); err != nil {
+		t.Fatal(err)
+	}
+
+	response := doRequest(t, handler, http.MethodPost, bulkDeletePath, bulkForm(3, first, second, gone))
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+	if !productExists(t, sqlDB, first) || !productExists(t, sqlDB, second) {
+		t.Errorf("a row that existed was deleted although the action was rejected")
+	}
+	if strings.Contains(logs.String(), admin.EventBulkDelete) {
+		t.Errorf("a rejected action logged a deletion event: %s", logs.String())
+	}
+}
+
 func TestBulkDeleteOverlappingCascadeStillRollsBackOnAMissingKey(t *testing.T) {
 	handler, sqlDB, _ := buildBulkAdmin(t, bulkOn(bulkNode{}))
 	parent := insertReturningID(t, sqlDB, `INSERT INTO bulk_node (name, parent_id) VALUES ($1, NULL) RETURNING id`, "root")
@@ -255,6 +281,9 @@ func TestBulkDeleteOutcomeDoesNotDependOnTheOrderOfOverlappingKeys(t *testing.T)
 		"child first":  func(parent, child int64) []int64 { return []int64{child, parent} },
 	} {
 		t.Run(name, func(t *testing.T) {
+			var logs bytes.Buffer
+			restore := captureDefaultLog(&logs)
+			defer restore()
 			handler, sqlDB, _ := buildBulkAdmin(t, bulkOn(bulkNode{}))
 			parent := insertReturningID(t, sqlDB, `INSERT INTO bulk_node (name, parent_id) VALUES ($1, NULL) RETURNING id`, "root")
 			child := insertReturningID(t, sqlDB, `INSERT INTO bulk_node (name, parent_id) VALUES ($1, $2) RETURNING id`, "child", parent)
@@ -281,6 +310,10 @@ func TestBulkDeleteOutcomeDoesNotDependOnTheOrderOfOverlappingKeys(t *testing.T)
 			}
 			if len(left) != 1 || left[0] != other {
 				t.Fatalf("rows left = %v, want only %d: the selection and everything referencing it (%d) must be gone", left, other, grandchild)
+			}
+			// The count is the selected keys (2), not the three rows removed.
+			if text := logs.String(); strings.Count(text, admin.EventBulkDelete) != 1 || !strings.Contains(text, "count=2") {
+				t.Fatalf("want one %s event with count=2: %s", admin.EventBulkDelete, text)
 			}
 		})
 	}

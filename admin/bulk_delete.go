@@ -128,10 +128,8 @@ func existingBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, f
 	return found, nil
 }
 
-// deleteBulkKeys removes the selected rows, and every row that references
-// them, inside the transaction tx. A selected row that an earlier selected
-// row's cascade already removed is not a failure, so the outcome does not
-// depend on the order of the keys.
+// deleteBulkKeys re-reads every selected key inside the transaction tx and
+// refuses the whole action when one has no row, then removes the selection.
 func deleteBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, field model.FieldMeta, keys []bulkKey) error {
 	found, err := existingBulkKeys(ctx, tx, meta, field, keys)
 	if err != nil {
@@ -142,6 +140,16 @@ func deleteBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, fie
 			return errBulkKeyMissing
 		}
 	}
+	return removeBulkKeys(ctx, tx, meta, field, keys)
+}
+
+// removeBulkKeys deletes the selected rows, and every row that references
+// them, in ascending key order. A selected row that is already gone when its
+// turn comes (an earlier selected row's cascade removed it, or another
+// transaction did after the re-read) is not a failure, so the outcome does
+// not depend on the order of the keys. Every selected key must be absent at
+// the end.
+func removeBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, field model.FieldMeta, keys []bulkKey) error {
 	for _, key := range keys {
 		if err := tx.Delete(ctx, meta, key.value.Interface()); err != nil && !errors.Is(err, db.ErrNotFound) {
 			return err
