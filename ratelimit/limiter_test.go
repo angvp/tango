@@ -254,15 +254,6 @@ func TestTakeRejectsCanceledContext(t *testing.T) {
 	}
 }
 
-// bucketCount is a small test helper reaching into Limiter's unexported
-// state — package-private, same-package inspection, never exported
-// diagnostics that would exist solely for tests.
-func bucketCount(l *Limiter) int {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return len(l.buckets)
-}
-
 func hasBucket(l *Limiter, key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -55,7 +55,7 @@ func runJobLoopObserved(ctx context.Context, job Job, stopCh <-chan struct{}, wg
 // on goroutine-scheduling timing to land a race window.
 var jobLoopReady = func() {}
 
-// runJobLoopWithTicker is the sole owner of one Job's active/idle state. It
+// runJobLoopWithTickerObserved is the sole owner of one Job's active/idle state. It
 // runs until stopCh is closed; stopping ticker itself is the caller's
 // responsibility (see runJobLoop and scheduler.Stop), not this loop's.
 //
@@ -65,10 +65,6 @@ var jobLoopReady = func() {}
 // signal of any kind. An Invocation completing does not itself consume a
 // buffered Tick; only a genuinely new Tick, occurring after completion,
 // starts the next Invocation.
-func runJobLoopWithTicker(ctx context.Context, job Job, ticker tickerSource, stopCh <-chan struct{}) {
-	runJobLoopWithTickerObserved(ctx, job, ticker, stopCh, newJobObserver(slog.Default(), observability.NopRecorder{}))
-}
-
 func runJobLoopWithTickerObserved(ctx context.Context, job Job, ticker tickerSource, stopCh <-chan struct{}, observer jobObserver) {
 	jobLoopReady()
 
@@ -111,7 +107,7 @@ func runJobLoopWithTickerObserved(ctx context.Context, job Job, ticker tickerSou
 	}
 }
 
-// handleTick processes a Tick the main select in runJobLoopWithTicker just
+// handleTick processes a Tick the main select in runJobLoopWithTickerObserved just
 // received — except that select can itself race shutdown: both its
 // ticker.C() and stopCh cases can become ready at once (a Tick may already
 // be buffered in the ticker's channel even after Stop, since stopping a

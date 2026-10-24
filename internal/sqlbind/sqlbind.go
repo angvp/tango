@@ -4,35 +4,15 @@
 package sqlbind
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
 
-// Rebind returns query ready for a dialect whose placeholders are numbered
-// (numbered true: the query is returned unchanged) or positional ("?").
-// Outside quoted string literals and identifiers each $N becomes "?", which
-// is only meaningful when the placeholders appear once each, in order
-// 1, 2, 3, …: anything else panics, since silently rebinding would change
-// which argument goes where. RebindArgs handles a query that reuses or
-// reorders them.
-func Rebind(query string, numbered bool) string {
-	if numbered {
-		return query
-	}
-	rewritten, order := scan(query)
-	for i, n := range order {
-		if n != i+1 {
-			panic(fmt.Sprintf("sqlbind: $%d where $%d was expected; positional placeholders cannot reuse or reorder arguments (use RebindArgs)", n, i+1))
-		}
-	}
-	return rewritten
-}
-
-// RebindArgs rewrites query for a positional dialect like Rebind and also
-// returns which numbered argument each "?" takes, 1-indexed, in order: a query
-// that uses $1 twice returns order [1 …, 1]. A query with no numbered
-// placeholders returns a nil order, meaning the arguments are used as given.
+// RebindArgs rewrites query for a positional dialect: outside quoted string
+// literals and identifiers each $N becomes "?". It also returns which
+// numbered argument each "?" takes, 1-indexed, in order: a query that uses $1
+// twice returns order [1 …, 1]. A query with no numbered placeholders returns
+// a nil order, meaning the arguments are used as given.
 func RebindArgs(query string) (rewritten string, order []int) {
 	return scan(query)
 }

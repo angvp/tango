@@ -42,7 +42,7 @@ var newTicker = func(d time.Duration) tickerSource {
 // where a Tick already in flight races shutdown in that Job loop's select.
 // Stopping every ticker first narrows, but does not by itself close, that
 // window — stopping a ticker does not drain a Tick already buffered in its
-// channel — so runJobLoopWithTicker additionally re-checks stopCh itself
+// channel — so runJobLoopWithTickerObserved additionally re-checks stopCh itself
 // before starting an Invocation (see handleTick).
 type scheduler struct {
 	jobs     []Job
