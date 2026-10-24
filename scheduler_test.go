@@ -3,10 +3,12 @@ package tango
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/angvp/tango/observability"
 	"github.com/angvp/tango/testdb"
 )
 
@@ -345,4 +347,8 @@ func TestSchedulerRunsDifferentJobsIndependentlyWithoutInterference(t *testing.T
 	if len(log) != 2 {
 		t.Fatalf("log = %v, want both jobs to have run exactly once", log)
 	}
+}
+
+func schedulerLifecycles(registry *Registry) []Lifecycle {
+	return schedulerLifecyclesWithObservability(registry, slog.Default(), observability.NopRecorder{})
 }

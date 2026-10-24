@@ -120,15 +120,12 @@ func newSchedulerLifecycle(registry *Registry, logger *slog.Logger, recorder obs
 	}
 }
 
-// schedulerLifecycles returns the full Lifecycle list ServeContext should
-// drive: every host-registered Lifecycle, in registration order, followed
-// by the Scheduler lifecycle whenever registry has at least one registered
-// Job. registry.Lifecycles() (and the slice backing it) is never mutated,
-// so Registry.Lifecycles() never exposes the Scheduler lifecycle.
-func schedulerLifecycles(registry *Registry) []Lifecycle {
-	return schedulerLifecyclesWithObservability(registry, slog.Default(), observability.NopRecorder{})
-}
-
+// schedulerLifecyclesWithObservability returns the full Lifecycle list
+// ServeContext should drive: every host-registered Lifecycle, in registration
+// order, followed by the Scheduler lifecycle whenever registry has at least
+// one registered Job. registry.Lifecycles() (and the slice backing it) is
+// never mutated, so Registry.Lifecycles() never exposes the Scheduler
+// lifecycle.
 func schedulerLifecyclesWithObservability(registry *Registry, logger *slog.Logger, recorder observability.Recorder) []Lifecycle {
 	lifecycles := registry.Lifecycles()
 	if len(registry.jobs) == 0 {

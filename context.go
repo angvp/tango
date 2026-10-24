@@ -22,13 +22,6 @@ type Context struct {
 	logger  *slog.Logger
 }
 
-// newContext builds a Context. Param wiring from the compiled route tree
-// lands in a later milestone ticket; params may be nil or supplied directly
-// for now.
-func newContext(w http.ResponseWriter, r *http.Request, params map[string]string) *Context {
-	return newContextWithLogger(w, r, params, slog.Default())
-}
-
 func newContextWithLogger(w http.ResponseWriter, r *http.Request, params map[string]string, logger *slog.Logger) *Context {
 	if logger == nil {
 		logger = slog.Default()

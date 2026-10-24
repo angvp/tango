@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
-	"sync"
 
 	"github.com/angvp/tango/internal/observabilitysafe"
 	"github.com/angvp/tango/observability"
@@ -25,26 +24,6 @@ func newJobObserver(logger *slog.Logger, recorder observability.Recorder) jobObs
 		recorder = observability.NopRecorder{}
 	}
 	return jobObserver{logger: logger, recorder: recorder}
-}
-
-// runJobLoop builds job's ticker, owns stopping it on exit, and runs its
-// loop. Used where ticker creation order doesn't matter (a single Job loop
-// in isolation); scheduler Start instead creates each Job's ticker
-// synchronously, in registration order, via newTicker directly, and stops
-// every ticker itself from Scheduler.Stop (see scheduler.go) rather than
-// leaving that to the Job loop — so which Job's ticker is created first is
-// never left to goroutine scheduling, and every ticker is stopped before
-// shutdown waiting begins, not merely eventually as each Job loop notices
-// stopCh.
-func runJobLoop(ctx context.Context, job Job, stopCh <-chan struct{}, wg *sync.WaitGroup) {
-	runJobLoopObserved(ctx, job, stopCh, wg, newJobObserver(slog.Default(), observability.NopRecorder{}))
-}
-
-func runJobLoopObserved(ctx context.Context, job Job, stopCh <-chan struct{}, wg *sync.WaitGroup, observer jobObserver) {
-	defer wg.Done()
-	ticker := newTicker(job.Interval)
-	defer ticker.Stop()
-	runJobLoopWithTickerObserved(ctx, job, ticker, stopCh, observer)
 }
 
 // jobLoopReady is called once, synchronously, immediately before a Job
@@ -107,7 +86,7 @@ func runJobLoopWithTickerObserved(ctx context.Context, job Job, ticker tickerSou
 	}
 }
 
-// handleTick processes a Tick the main select in runJobLoopWithTickerObserved just
+// handleTickObserved processes a Tick the main select in runJobLoopWithTickerObserved just
 // received — except that select can itself race shutdown: both its
 // ticker.C() and stopCh cases can become ready at once (a Tick may already
 // be buffered in the ticker's channel even after Stop, since stopping a
@@ -116,10 +95,6 @@ func runJobLoopWithTickerObserved(ctx context.Context, job Job, ticker tickerSou
 // before starting an Invocation, closes that window: if stopCh is already
 // closed, the Tick is discarded instead of starting a new Invocation. It
 // returns the Invocation's completion channel, or nil if none was started.
-func handleTick(ctx context.Context, job Job, stopCh <-chan struct{}) chan struct{} {
-	return handleTickObserved(ctx, job, stopCh, newJobObserver(slog.Default(), observability.NopRecorder{}))
-}
-
 func handleTickObserved(ctx context.Context, job Job, stopCh <-chan struct{}, observer jobObserver) chan struct{} {
 	select {
 	case <-stopCh:

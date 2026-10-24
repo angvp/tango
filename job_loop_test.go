@@ -618,3 +618,21 @@ func TestSchedulerStopDiscardsATickAlreadyPendingWhenShutdownBegins(t *testing.T
 	default:
 	}
 }
+
+// runJobLoop runs job's loop on a ticker it creates and stops, with the
+// default logger and no recorder. The scheduler creates each ticker itself,
+// in registration order, so production code never takes this path.
+func runJobLoop(ctx context.Context, job Job, stopCh <-chan struct{}, wg *sync.WaitGroup) {
+	runJobLoopObserved(ctx, job, stopCh, wg, newJobObserver(slog.Default(), observability.NopRecorder{}))
+}
+
+func runJobLoopObserved(ctx context.Context, job Job, stopCh <-chan struct{}, wg *sync.WaitGroup, observer jobObserver) {
+	defer wg.Done()
+	ticker := newTicker(job.Interval)
+	defer ticker.Stop()
+	runJobLoopWithTickerObserved(ctx, job, ticker, stopCh, observer)
+}
+
+func handleTick(ctx context.Context, job Job, stopCh <-chan struct{}) chan struct{} {
+	return handleTickObserved(ctx, job, stopCh, newJobObserver(slog.Default(), observability.NopRecorder{}))
+}

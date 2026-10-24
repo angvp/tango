@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -195,4 +196,8 @@ func TestContextContextReturnsRequestContext(t *testing.T) {
 	if ctx.Context() != r.Context() {
 		t.Fatal("Context() did not return the wrapped request's context.Context")
 	}
+}
+
+func newContext(w http.ResponseWriter, r *http.Request, params map[string]string) *Context {
+	return newContextWithLogger(w, r, params, slog.Default())
 }
