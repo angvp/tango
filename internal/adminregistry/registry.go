@@ -43,6 +43,12 @@ type Options struct {
 	// Filters lists boolean and foreign key fields the changelist can be
 	// filtered by, in the order they appear above the list.
 	Filters []string
+	// BulkDelete lets a staff account delete the rows checked on one
+	// changelist page, after a confirmation, in one all-or-nothing
+	// transaction. Rows that reference a deleted row are deleted with it,
+	// exactly as in a single-row delete. Off by default; it needs JavaScript
+	// in the browser and never spans more than one page of rows.
+	BulkDelete bool
 }
 
 // ModelRegistration is the admin metadata for a registered model.

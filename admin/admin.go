@@ -148,5 +148,9 @@ func modelRoutes(modelPath string, store *db.Store, models *model.Registry, admi
 		tango.Path(http.MethodGet, modelPath+"{pk}/delete/", del, hiddenPage),
 		tango.Path(http.MethodPost, modelPath+"{pk}/delete/", del, hiddenPage),
 	}
+	if registration.Options.BulkDelete {
+		bulk := requireSession(store, bulkDeleteView(store, registration))
+		urls = append(urls, tango.Path(http.MethodPost, modelPath+"delete-selected/", bulk, hiddenPage))
+	}
 	return append(urls, previewRoutes(modelPath, store, registration)...)
 }
