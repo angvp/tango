@@ -26,6 +26,7 @@ func New(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.App {
 			Ordering:    []string{"CreatedAt"},
 			Label:       "Title",
 			Filters:     []string{"AccountID"},
+			BulkDelete:  true,
 		}); err != nil {
 			return err
 		}
@@ -33,6 +34,7 @@ func New(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.App {
 			ListDisplay: []string{"PostID", "Author", "CreatedAt"},
 			Search:      []string{"Author", "Body"},
 			Filters:     []string{"PostID"},
+			BulkDelete:  true,
 		}); err != nil {
 			return err
 		}

@@ -8,6 +8,10 @@ The code follows the tutorial text; when one changes, change the other.
 
 The HTML admin shows the boolean and foreign key filters from the admin guide's [changelist filters](../../docs/guides/admin-registration.md#changelist-filters) section: Accounts filter by `Active`, Posts by their author, and Comments by their post. `TestAdminChangelistFilters` in `admin_filters_test.go` exercises them over HTTP on whichever database `TANGO_TEST_DSN` selects.
 
+## Admin bulk delete
+
+Posts and Comments set `BulkDelete: true`, so their changelists offer checkboxes and a **Delete selected** button that deletes the checked rows of the page after a confirmation. Deleting a Post also deletes its Comments, exactly as the single-row delete does. `TestAdminBulkDeleteRemovesSelectedPostsAndTheirComments` in `admin_bulk_delete_test.go` covers it over HTTP.
+
 ## Run locally
 
 ```sh
