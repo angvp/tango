@@ -6,6 +6,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Added
 
+- **Admin bulk delete.** `admin.Options.BulkDelete` lets a staff account delete the checked rows of one changelist page after a confirmation dialog. The delete is one all-or-nothing transaction that cascades like a single-row delete, an invalid selection (empty, over a page, a wrong `count`, a repeated or non-canonical key) is rejected whole, and each committed delete logs one `admin.EventBulkDelete` (`tango.admin.bulk_delete`) event. It is off by default, needs JavaScript and never spans more than a page. See [admin registration](docs/guides/admin-registration.md#bulk-delete).
+
 - **Grouped filters.** `Query.Filter` is an optional boolean tree ANDed with `Where` and `Any`, built with `db.Cond`, `db.And`, `db.Or` and `db.Not` (the `Expr` and `ExprOp` types). A `Query` without a `Filter` produces exactly the SQL it did before. A filter holds at most `MaxFilterNodes` (100) nodes and `MaxFilterDepth` (8) levels.
 
 - **`IN`, `IS NULL` and `IS NOT NULL`.** `OpIn` with `db.In(field, slice)` (a nil or empty list matches nothing on every dialect; at most `MaxInValues`, 1,000, values per list and `MaxQueryArgs`, 10,000, bind values per query; a zero `time.Time` is rejected), and `OpIsNull`/`OpIsNotNull` with `db.IsNull`/`db.IsNotNull`, which take no value. All three work in `Where`, `Any` and `Filter`. A foreign key left at zero is stored as `NULL`, so `OwnerID = 0` still never matches (unchanged); use `IsNull` for unset keys.

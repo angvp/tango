@@ -192,6 +192,30 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 
 Each filter is a query parameter named `filter_` followed by the column name: `filter_published=yes`, `filter_author_id=3`. Treat these names as presentation details that may change between releases, not as a stable interface.
 
+## Bulk delete
+
+`BulkDelete: true` lets a staff account delete several rows of one model at once. It is off by default and set per model:
+
+```go
+if err := registry.Admin().Register(Comment{}, admin.Options{
+	ListDisplay: []string{"PostID", "Author", "CreatedAt"},
+	BulkDelete:  true,
+}); err != nil {
+	return err
+}
+```
+
+The changelist gains a checkbox on each row, a select-all box and a **Delete selected** button. Pressing it opens a dialog that lists the checked rows (by the first `ListDisplay` value, or by the primary key when that is blank) and warns that rows referencing them are deleted too. Confirming sends one POST to `/admin/<model>/delete-selected/`; the changelist then shows how many rows were deleted and keeps the search, page and filters it had.
+
+- **Who:** any staff account, with the same session and CSRF checks as every admin form. `IsSuperuser` has no effect.
+- **One page at most:** the checked rows of the page in view, never more than a page (25). There is no "select everything that matches" and no selection across pages.
+- **All or nothing:** the rows are deleted in one transaction. If any selected row no longer exists, nothing is deleted and the response is a 400. Rows that reference a deleted row are deleted with it, as in a single-row delete, and the dialog does not count them.
+- **The server validates the selection again.** A request with no keys, more keys than a page, a `count` that differs from the keys sent, a repeated key, or a key that is not the exact decimal text of the field's type (`01`, `+5`, a value outside the field's width, an unsigned value above the `int64` maximum, an empty string) is rejected as a whole with a 400. Nothing is deleted and no event is logged.
+- **Needs JavaScript:** the controls are hidden, and the confirmation dialog is a script, so a browser without JavaScript sees the changelist as before.
+- **The trail:** each committed bulk delete logs one `admin.EventBulkDelete` (`tango.admin.bulk_delete`) event with the model, the number of rows and the account's username. It never logs keys or values. There is no audit table.
+
+The `BulkDelete` option and the guarantees above are covered by the [compatibility promise](../compatibility.md#the-covered-api). The markup, the route path and the form field names are presentation details that may change between releases.
+
 ## Customizing form fields
 
 Beyond `ListDisplay`/`Search`/`Ordering`/`Label`, `admin.Options` has four more field-name-keyed controls for the create/edit form, all validated against the model's real fields the same way:
