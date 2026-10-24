@@ -9,6 +9,7 @@ updates:
     directories:
       - /
       - /storage/s3
+      - /storage/gcs
       - /cache/redis
       - /cache/memcache
     schedule:

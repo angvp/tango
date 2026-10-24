@@ -38,6 +38,6 @@ The list links each file to `/documents/{id}/download/`, which still asks for th
 ## Things to know
 
 - Deleting a file in the admin removes its row but leaves its stored bytes behind, since admin has no hook into the host's storage. Delete through `DELETE /documents/{id}/` to remove both.
-- Local disk is not shared between instances and does not outlive a container with no volume. For that, use [`storage/s3`](../../docs/guides/uploads.md#choosing-a-backend) (Amazon S3, Cloudflare R2 or another S3-compatible provider) instead of `storage/local`; only `main.go` changes.
+- Local disk is not shared between instances and does not outlive a container with no volume. For that, use [`storage/s3`](../../docs/guides/uploads.md#choosing-a-backend) (Amazon S3, Cloudflare R2 or another S3-compatible provider) instead of `storage/local`. Swapping backends changes only `main.go`, plus the module requirement for the backend you choose. This example has no Google Cloud code or dependency; `storage/gcs` is unreleased, and its [guide section](../../docs/guides/uploads.md#google-cloud-storage-unreleased) is the reference for that backend.
 - tanGO ships no sweeper, virus scanning or CDN. See the [uploads guide](../../docs/guides/uploads.md).
 - `go test .` runs the whole flow against an in-memory object store (`storagetest.NewMemory`), on SQLite or, with `TANGO_TEST_DSN`, PostgreSQL.

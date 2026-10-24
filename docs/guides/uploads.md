@@ -13,16 +13,17 @@ The runnable proof is [`examples/uploads`](../../examples/uploads).
 | `storage.Serve` | Delivers an object to a request your View has already authorized. |
 | `storage/local` | A filesystem `Store`. |
 | `storage/s3` | An S3-compatible `Store`, in its own Go module. |
+| `storage/gcs` | A Google Cloud Storage `Store`, in its own Go module. Unreleased; see [Google Cloud Storage](#google-cloud-storage-unreleased). |
 | `storagetest` | `NewMemory()` for tests, and `Run`, the conformance suite every `Store` passes. |
 
 ## Choosing a backend
 
-| | `storage/local` | `storage/s3` |
-|---|---|---|
-| Use it for | Development, tests, and one host with a persistent volume | More than one instance, or a disk that does not outlive the container |
-| Shared between instances | No | Yes |
-| Dependencies | None beyond tanGO | The AWS SDK for Go v2, in its own module |
-| Needs credentials | No | Yes |
+| | `storage/local` | `storage/s3` | `storage/gcs` (unreleased) |
+|---|---|---|---|
+| Use it for | Development, tests, and one host with a persistent volume | More than one instance, or a disk that does not outlive the container | The same as `storage/s3`, on Google Cloud |
+| Shared between instances | No | Yes | Yes |
+| Dependencies | None beyond tanGO | The AWS SDK for Go v2, in its own module | The Google Cloud Storage SDK, in its own module |
+| Needs credentials | No | Yes | Yes, unless `Endpoint` names an emulator or test server |
 
 ```go
 objects, err := local.New("/var/lib/myapp/uploads") // directories 0700, files 0600
@@ -42,7 +43,62 @@ objects, err := s3.New(ctx, s3.Config{
 
 `storage/s3` is a separate module, `github.com/angvp/tango/storage/s3`, so a project that never imports it never sees the AWS SDK in its `go.mod`, `go.sum` or vulnerability scan. `Endpoint` and `PathStyle` select Cloudflare R2 or any other S3-compatible provider. Because S3 fixes an object's metadata when the upload starts and the SHA-256 is only known at the end, `Put` spools the bytes to a temporary file (`Config.TempDir`, default the system temp directory) before uploading them. Memory stays bounded, but you need disk space for one upload at a time.
 
-Native Google Cloud Storage is not built. The `Store` interface is small enough for an adapter later, and a GCS bucket is reachable today through its S3-compatible interoperability API.
+## Google Cloud Storage (unreleased)
+
+`storage/gcs` (`github.com/angvp/tango/storage/gcs`) is a `Store` on Google Cloud Storage. It is unreleased, and its release is not scheduled. Its release will carry its own tag, `storage/gcs/vX.Y.Z`, and needs the maintainer's approval. Do not add it to a project until it is released. Until then, the two ways to put uploads in GCS are:
+
+| Path | Use it when | Configure with |
+|---|---|---|
+| Native: `storage/gcs` (unreleased) | The application runs on Google Cloud and authenticates with application-default credentials or workload identity | `gcs.New`, with no credentials named |
+| S3-compatible: `storage/s3` (released) | You authenticate with HMAC keys | `s3.New`, with `Endpoint` set to Google's S3 interoperability endpoint and HMAC keys in `Credentials` |
+
+tanGO's tests for `storage/s3` do not run against Google's interoperability endpoint, so check that path against your bucket before you rely on it.
+
+```go
+store, err := gcs.New(ctx, gcs.Config{
+	Bucket: "myapp-uploads",
+	Prefix: "documents", // optional
+	// No credentials named: application-default credentials, workload identity,
+	// or the file named by GOOGLE_APPLICATION_CREDENTIALS.
+})
+```
+
+`CredentialsFile` or `CredentialsJSON` replace application-default credentials explicitly. Naming both is refused, and so is naming either with `Endpoint`.
+
+To supply the client yourself, for example one with a custom transport, build it with `cloud.google.com/go/storage` and pass it to `NewFromClient`:
+
+```go
+client, err := storage.NewClient(ctx) // cloud.google.com/go/storage, built by the host
+store, err := gcs.NewFromClient(client, gcs.Config{Bucket: "myapp-uploads"})
+```
+
+`NewFromClient` uses the client you built, and you own it. It refuses `Endpoint` and the credential fields, because the client already carries them. `Bucket`, `Prefix`, `ChunkSize` and `TempDir` still apply.
+
+**Endpoint.** `Config.Endpoint` points the Store at a non-Google server, such as an emulator or a test server. A non-empty `Endpoint` never authenticates. The SDK's `STORAGE_EMULATOR_HOST` variable is ignored, so an emulator is reached only through `Endpoint`.
+
+**Construction is lazy.** `New` validates the configuration and makes no request. The SDK client, and with it the credential lookup, is built on first use, so a missing credential or an unreachable endpoint shows on the first call, not at startup. To fail at startup instead, make one call, such as `Stat`, and treat any error other than `storage.ErrNotFound` as fatal. The context passed to `New` is not kept.
+
+**Upload size and spooling.** `Put` spools each upload to `Config.TempDir` (default the system temp directory) before it uploads, because GCS fixes an object's metadata when its upload starts and the SHA-256 is known only at the end. The spool is bounded by `PutOptions.MaxSize` and is removed when `Put` returns. `Config.ChunkSize` bounds the memory one upload request holds. Zero means `gcs.DefaultChunkSize` (8 MiB). Otherwise it must be a positive multiple of 256 KiB, and any other value fails `New`.
+
+**Close.** `Close` closes the client the Store built and makes later calls fail with an error. For a client passed to `NewFromClient`, `Close` does nothing, and the Store stays usable. Do not call `Close` while another method of the Store is running.
+
+**Errors.** Match them with `errors.Is`. The adapter maps these conditions:
+
+| Condition | Returned as |
+|---|---|
+| The object does not exist (`Stat`, `Open`) | `storage.ErrNotFound`. An object with no valid SHA-256 is also reported as not found. `Delete` of a missing object returns nil. |
+| The requested byte range cannot be satisfied | `storage.ErrInvalidRange` |
+| The stream exceeds `PutOptions.MaxSize` | `storage.ErrTooLarge`, before anything is uploaded |
+| The generated key is taken by different bytes on every bounded attempt | `storage.ErrExists` |
+| Any other SDK failure | `storage/gcs: <operation>: <SDK error>`, with the SDK error kept in the chain |
+
+`Put` picks a new key when the generated one is taken by different bytes. It returns `storage.ErrExists` only after a bounded number of such collisions in a row.
+
+The SDK error is always preserved, so `errors.Is` and `errors.As` can reach it. `errors.As` to `*googleapi.Error` is guaranteed only for the client the adapter builds, which uses HTTP/JSON. A client passed to `NewFromClient` may use its own transport, such as gRPC. Its failures then arrive as that transport's error, for example a gRPC status error, and `*googleapi.Error` does not match them. Put's create-only conflict handling also recognizes only an HTTP 412 `*googleapi.Error`, so with an injected client that reports a conflict another way, `Put` returns the wrapped error rather than confirming an earlier write or choosing a new key. Only the HTTP/JSON path is tested.
+
+Credential-construction errors carry no wrapped chain, so `errors.Is` and `errors.As` do not reach the SDK or operating-system error behind them. This covers reading `CredentialsFile`, parsing `CredentialsJSON` or the file's contents, the application-default credentials lookup, and building the SDK client. Errors from parsing a credentials document are redacted: no credential value appears in them. The file-read error names the path, never the contents.
+
+SDK messages can name the bucket or the object. Do not render them to users. The Store logs nothing itself; if you need the detail, record it on the server with the request's context.
 
 ## The write contract
 

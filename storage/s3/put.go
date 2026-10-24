@@ -18,7 +18,7 @@ import (
 
 // Put implements storage.Store. The upload is create-only and atomic: S3
 // shows an object only once its upload completes.
-func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (storage.Object, error) {
+func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (obj storage.Object, err error) {
 	if err := ctx.Err(); err != nil {
 		return storage.Object{}, err
 	}
@@ -26,18 +26,17 @@ func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (
 	if err != nil {
 		return storage.Object{}, err
 	}
-	spool, err := os.CreateTemp(s.tempDir, "tango-s3-*")
+	spool, err := storagekit.Spool(ctx, "storage/s3", s.tempDir, "tango-s3-*", inspected)
 	if err != nil {
-		return storage.Object{}, fmt.Errorf("storage/s3: spool: %w", err)
-	}
-	defer func() {
-		spool.Close()
-		os.Remove(spool.Name())
-	}()
-	if _, err := io.Copy(spool, &storagekit.ContextReader{Ctx: ctx, R: inspected}); err != nil {
 		return storage.Object{}, err
 	}
-	obj := inspected.Object("")
+	defer func() {
+		// A close failure surfaces only when the upload has not already failed.
+		if closeErr := storagekit.ReleaseSpool("storage/s3", spool); err == nil && closeErr != nil {
+			obj, err = storage.Object{}, closeErr
+		}
+	}()
+	obj = inspected.Object("")
 
 	for attempt := 0; attempt < storagekit.KeyAttempts; attempt++ {
 		key := s.nextKey()

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"os"
 	"strings"
 	"testing"
 
@@ -64,5 +65,117 @@ func TestContextReaderStopsAsSoonAsTheContextIsDone(t *testing.T) {
 	}
 	if _, err := io.ReadAll(&storagekit.ContextReader{Ctx: context.Background(), R: strings.NewReader("xy")}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSpoolWritesTheStreamAndReleaseRemovesIt(t *testing.T) {
+	dir := t.TempDir()
+	f, err := storagekit.Spool(context.Background(), "pfx", dir, "spool-*", strings.NewReader("payload"))
+	if err != nil {
+		t.Fatalf("Spool = %v", err)
+	}
+	got, err := os.ReadFile(f.Name())
+	if err != nil || string(got) != "payload" {
+		t.Fatalf("spooled bytes = %q, %v; want \"payload\"", got, err)
+	}
+	if err := storagekit.ReleaseSpool("pfx", f); err != nil {
+		t.Fatalf("ReleaseSpool on a healthy file = %v", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("spool left %d file(s) behind", len(entries))
+	}
+}
+
+func TestSpoolWrapsACopyFailureAndLeavesNothingBehind(t *testing.T) {
+	sentinel := errors.New("source failed")
+	dir := t.TempDir()
+	_, err := storagekit.Spool(context.Background(), "storage/x", dir, "spool-*", io.MultiReader(strings.NewReader("ab"), failingReader{sentinel}))
+	if !errors.Is(err, sentinel) || !strings.HasPrefix(err.Error(), "storage/x: spool: ") {
+		t.Fatalf("Spool = %v; want storage/x: spool: wrapping the source error", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("failed spool left %d file(s) behind", len(entries))
+	}
+}
+
+func TestSpoolRefusesACancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := storagekit.Spool(ctx, "pfx", t.TempDir(), "spool-*", strings.NewReader("payload"))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Spool with a cancelled context = %v, want context.Canceled", err)
+	}
+}
+
+func TestReleaseSpoolReportsACloseFailureAndStillRemoves(t *testing.T) {
+	f, err := storagekit.Spool(context.Background(), "pfx", t.TempDir(), "spool-*", strings.NewReader("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err = storagekit.ReleaseSpool("storage/x", f)
+	if !errors.Is(err, os.ErrClosed) || !strings.HasPrefix(err.Error(), "storage/x: spool close: ") {
+		t.Fatalf("ReleaseSpool on a closed file = %v; want storage/x: spool close: wrapping os.ErrClosed", err)
+	}
+	if _, statErr := os.Stat(f.Name()); !os.IsNotExist(statErr) {
+		t.Fatalf("spool file still present after ReleaseSpool: %v", statErr)
+	}
+}
+
+type failingReader struct{ err error }
+
+func (r failingReader) Read([]byte) (int, error) { return 0, r.err }
+
+func TestNormalizePrefixAcceptsOnlyPathsThatStayInside(t *testing.T) {
+	tests := []struct {
+		in, want string
+		bad      bool
+	}{
+		{in: "", want: ""},
+		{in: "/", want: ""},
+		{in: "a/b", want: "a/b/"},
+		{in: "a/b/", want: "a/b/"},
+		{in: "a.b_c-D9", want: "a.b_c-D9/"},
+		{in: "a//b", bad: true},
+		{in: "a/./b", bad: true},
+		{in: "a/../b", bad: true},
+		{in: "/a", bad: true},
+		{in: "a b", bad: true},
+		{in: "a%2F", bad: true},
+	}
+	for _, tt := range tests {
+		got, err := storagekit.NormalizePrefix(tt.in)
+		if tt.bad {
+			if err == nil {
+				t.Errorf("NormalizePrefix(%q) = %q, want an error", tt.in, got)
+			}
+			continue
+		}
+		if err != nil || got != tt.want {
+			t.Errorf("NormalizePrefix(%q) = %q, %v; want %q", tt.in, got, err, tt.want)
+		}
+	}
+}
+
+func TestValidSHA256IsExactly64LowercaseHex(t *testing.T) {
+	const hello = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{hello, true},
+		{strings.Repeat("0", 64), true},
+		{"", false},
+		{hello[:63], false},
+		{hello + "0", false},
+		{strings.ToUpper(hello), false},
+		{hello[:63] + "g", false},
+	}
+	for _, tt := range tests {
+		if got := storagekit.ValidSHA256(tt.in); got != tt.want {
+			t.Errorf("ValidSHA256(%q) = %v, want %v", tt.in, got, tt.want)
+		}
 	}
 }

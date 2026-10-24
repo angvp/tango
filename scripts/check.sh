@@ -20,7 +20,7 @@ go test -count=1 $packages
 # These are their own Go modules, so ./... above skips
 # them. The cache adapters' conformance tests need a server and skip without
 # TANGO_TEST_REDIS_URL / TANGO_TEST_MEMCACHE_ADDR.
-for module in storage/s3 cache/redis cache/memcache; do
+for module in storage/s3 storage/gcs cache/redis cache/memcache; do
 	(cd "$module" && ! gofmt -l . | grep . && go vet ./... && go test -count=1 ./...)
 done
 

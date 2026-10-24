@@ -163,6 +163,14 @@ jobs:
         run: |
           go vet ./...
           go test -count=1 ./...
+      # storage/gcs is its own Go module, so ./... above skips it. It runs against
+      # the in-process fake, so it needs no database service and runs on SQLite only.
+      - name: go test storage/gcs
+        if: ${{ matrix.dialect == 'sqlite' }}
+        working-directory: storage/gcs
+        run: |
+          go vet ./...
+          go test -count=1 ./...
       - name: Upload coverage to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7

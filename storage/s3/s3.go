@@ -149,27 +149,11 @@ func (cfg Config) validate() (string, error) {
 	if cfg.PartSize != 0 && cfg.PartSize < MinPartSize {
 		return "", fmt.Errorf("storage/s3: Config.PartSize %d is below the %d bytes S3 accepts", cfg.PartSize, MinPartSize)
 	}
-	return normalizePrefix(cfg.Prefix)
-}
-
-// normalizePrefix returns prefix as "" or "a/b/" after checking that it
-// cannot name anything outside itself.
-func normalizePrefix(prefix string) (string, error) {
-	prefix = strings.TrimSuffix(prefix, "/")
-	if prefix == "" {
-		return "", nil
+	prefix, err := storagekit.NormalizePrefix(cfg.Prefix)
+	if err != nil {
+		return "", fmt.Errorf("storage/s3: %w", err)
 	}
-	for _, segment := range strings.Split(prefix, "/") {
-		if segment == "" || segment == "." || segment == ".." {
-			return "", fmt.Errorf("storage/s3: Config.Prefix %q has an empty, \".\" or \"..\" segment", prefix)
-		}
-		for _, c := range segment {
-			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-') {
-				return "", fmt.Errorf("storage/s3: Config.Prefix %q has the character %q", prefix, c)
-			}
-		}
-	}
-	return prefix + "/", nil
+	return prefix, nil
 }
 
 func (s *Store) objectName(key string) string { return s.prefix + key }
@@ -185,7 +169,7 @@ func (s *Store) Stat(ctx context.Context, key string) (storage.Info, error) {
 		return storage.Info{}, mapError(err)
 	}
 	sha := out.Metadata[shaMetadata]
-	if !validSHA256(sha) {
+	if !storagekit.ValidSHA256(sha) {
 		return storage.Info{}, storage.ErrNotFound
 	}
 	info := storage.Info{Key: key, Size: aws.ToInt64(out.ContentLength), SHA256: sha, ContentType: aws.ToString(out.ContentType), ETag: storage.ETagFor(sha)}
@@ -248,16 +232,4 @@ func mapError(err error) error {
 		}
 	}
 	return fmt.Errorf("storage/s3: %w", err)
-}
-
-func validSHA256(s string) bool {
-	if len(s) != 64 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if c := s[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return false
-		}
-	}
-	return true
 }

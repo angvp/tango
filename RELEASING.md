@@ -78,6 +78,8 @@ The Release job refuses the tag, creating nothing, unless the tagged commit is o
 
 `storage/s3` is its own Go module. The root tag `vX.Y.Z` does not version it: it is tagged `storage/s3/vA.B.C` on the commit it ships from, after the root tag it requires exists, and the module's `go.mod` requires that root version (the local `replace` is for development only and is removed in the commit that is tagged). Run `scripts/check.sh`, which also tests the module, before tagging either.
 
+`storage/gcs` follows the same rule: it is tagged on its own as `storage/gcs/vA.B.C`, after the root tag it requires exists, and its `go.mod` requires that root version (the local `replace` is for development only and is removed in the commit that is tagged). It is not released until that tag exists.
+
 `cache/redis` and `cache/memcache` follow the same rule: each is tagged on its own as `cache/redis/vA.B.C` or `cache/memcache/vA.B.C`, after the root tag it requires exists, with the `replace` removed in the tagged commit. Their conformance tests need a server, so before tagging run them against the pinned images CI uses (`redis:7.4.11-alpine`, `valkey/valkey:8.1.10-alpine`, `memcached:1.6.45-alpine`) with `TANGO_TEST_REDIS_URL` and `TANGO_TEST_MEMCACHE_ADDR` set. The `cache adapters` CI job is one of the jobs `releasecheck` requires (with `lint`, `test (sqlite)`, `test (postgres)` and `test (mysql)`) on the exact commit a root tag points to, so a root release cannot be tagged while it is failing or has not run.
 
 ## Why
