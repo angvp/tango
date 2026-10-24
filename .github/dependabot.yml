@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+  - package-ecosystem: gomod
+    directories:
+      - /
+      - /storage/s3
+      - /cache/redis
+      - /cache/memcache
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
