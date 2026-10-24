@@ -6,7 +6,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Added
 
-- **Admin bulk delete.** `admin.Options.BulkDelete` lets a staff account delete the checked rows of one changelist page after a confirmation dialog. The delete is one all-or-nothing transaction that cascades like a single-row delete, an invalid selection (empty, over a page, a wrong `count`, a repeated or non-canonical key) is rejected whole, and each committed delete logs one `admin.EventBulkDelete` (`tango.admin.bulk_delete`) event. It is off by default, needs JavaScript and never spans more than a page. See [admin registration](docs/guides/admin-registration.md#bulk-delete).
+- **Admin bulk delete.** `admin.Options.BulkDelete` lets a staff account delete the checked rows of one changelist page after a confirmation dialog. The delete is one all-or-nothing transaction that cascades like a single-row delete, an invalid selection (empty, over a page, a wrong `count`, a repeated or non-canonical key) is rejected whole, and each committed delete logs one `admin.EventBulkDelete` (`tango.admin.bulk_delete`) event with `model`, `selected_count` (the rows selected, not the database rows a cascade deleted) and `username`. It is off by default, needs JavaScript and never spans more than a page. See [admin registration](docs/guides/admin-registration.md#bulk-delete).
 
 - **Grouped filters.** `Query.Filter` is an optional boolean tree ANDed with `Where` and `Any`, built with `db.Cond`, `db.And`, `db.Or` and `db.Not` (the `Expr` and `ExprOp` types). A `Query` without a `Filter` produces exactly the SQL it did before. A filter holds at most `MaxFilterNodes` (100) nodes and `MaxFilterDepth` (8) levels.
 

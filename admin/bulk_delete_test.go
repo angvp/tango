@@ -311,9 +311,9 @@ func TestBulkDeleteOutcomeDoesNotDependOnTheOrderOfOverlappingKeys(t *testing.T)
 			if len(left) != 1 || left[0] != other {
 				t.Fatalf("rows left = %v, want only %d: the selection and everything referencing it (%d) must be gone", left, other, grandchild)
 			}
-			// The count is the selected keys (2), not the three rows removed.
-			if text := logs.String(); strings.Count(text, admin.EventBulkDelete) != 1 || !strings.Contains(text, "count=2") {
-				t.Fatalf("want one %s event with count=2: %s", admin.EventBulkDelete, text)
+			// selected_count is the selected keys (2), not the three rows removed.
+			if text := logs.String(); strings.Count(text, admin.EventBulkDelete) != 1 || !strings.Contains(text, "selected_count=2") {
+				t.Fatalf("want one %s event with selected_count=2: %s", admin.EventBulkDelete, text)
 			}
 		})
 	}

@@ -19,8 +19,9 @@ import (
 )
 
 // EventBulkDelete is the structured log event emitted once for each bulk
-// delete that committed. It carries the model name, the number of selected
-// rows and the Admin account's username, never keys or row values.
+// delete that committed. It carries the model name, selected_count (the number
+// of selected rows accepted, not the rows physically deleted, which cascades
+// can raise) and the Admin account's username, never keys or row values.
 const EventBulkDelete = "tango.admin.bulk_delete"
 
 const (
@@ -254,7 +255,7 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration, nav []navIt
 		if who := signedInFrom(ctx.Context()); who != nil {
 			username = who.Username
 		}
-		ctx.Logger().Info(EventBulkDelete, "model", meta.Name, "count", len(keys), "username", username)
+		ctx.Logger().Info(EventBulkDelete, "model", meta.Name, "selected_count", len(keys), "username", username)
 
 		target := bulkReturnURL(form.Get(bulkReturnToField), basePath, registration)
 		target.Set(bulkDeletedParam, strconv.Itoa(len(keys)))

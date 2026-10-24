@@ -151,7 +151,7 @@ func TestBulkDeleteLogsOneEventWithoutKeysOrValues(t *testing.T) {
 	if got := strings.Count(text, admin.EventBulkDelete); got != 1 {
 		t.Fatalf("event logged %d times, want once: %s", got, text)
 	}
-	for _, want := range []string{"model=crudProduct", "count=2", "username="} {
+	for _, want := range []string{"model=crudProduct", "selected_count=2", "username="} {
 		if !strings.Contains(text, want) {
 			t.Errorf("log lacks %q: %s", want, text)
 		}
