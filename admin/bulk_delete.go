@@ -3,7 +3,9 @@ package admin
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
+	"net/url"
 	"reflect"
 	"sort"
 	"strconv"
@@ -14,8 +16,17 @@ import (
 	"github.com/angvp/tango/model"
 )
 
-// bulkPKField is the repeated form field carrying the selected primary keys.
-const bulkPKField = "pk"
+// EventBulkDelete is the structured log event emitted once for each bulk
+// delete that committed. It carries the model name, the number of selected
+// rows and the Admin account's username, never keys or row values.
+const EventBulkDelete = "tango.admin.bulk_delete"
+
+const (
+	bulkPKField       = "pk"
+	bulkCountField    = "count"
+	bulkReturnToField = "return_to"
+	bulkDeletedParam  = "deleted"
+)
 
 var errBulkKeyMissing = errors.New("tango admin: a selected row does not exist")
 
@@ -31,18 +42,21 @@ func parseBulkKey(field model.FieldMeta, raw string) (bulkKey, bool) {
 	value := reflect.New(field.Type).Elem()
 	switch field.Type.Kind() {
 	case reflect.String:
+		if raw == "" {
+			return bulkKey{}, false
+		}
 		value.SetString(raw)
 		return bulkKey{value: value, canon: raw}, true
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || value.OverflowInt(n) {
+		if err != nil || strconv.FormatInt(n, 10) != raw || value.OverflowInt(n) {
 			return bulkKey{}, false
 		}
 		value.SetInt(n)
 		return bulkKey{value: value, canon: n}, true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil || value.OverflowUint(n) {
+		if err != nil || strconv.FormatUint(n, 10) != raw || n > math.MaxInt64 || value.OverflowUint(n) {
 			return bulkKey{}, false
 		}
 		value.SetUint(n)
@@ -65,11 +79,16 @@ func canonicalKey(value reflect.Value) any {
 
 func parseBulkKeys(field model.FieldMeta, raws []string) ([]bulkKey, bool) {
 	keys := make([]bulkKey, 0, len(raws))
+	seen := make(map[any]struct{}, len(raws))
 	for _, raw := range raws {
 		key, ok := parseBulkKey(field, raw)
 		if !ok {
 			return nil, false
 		}
+		if _, dup := seen[key.canon]; dup {
+			return nil, false
+		}
+		seen[key.canon] = struct{}{}
 		keys = append(keys, key)
 	}
 	sort.Slice(keys, func(i, j int) bool { return bulkKeyLess(keys[i].canon, keys[j].canon) })
@@ -140,6 +159,38 @@ func rejectBulk(ctx *tango.Context, key, fallback string) error {
 	return ctx.JSON(http.StatusBadRequest, map[string]string{"error": i18n.T(ctx.Context(), key, fallback)})
 }
 
+// bulkReturnURL rebuilds the list URL to return to from the submitted
+// return_to. Only a local URL of this model's changelist carrying search,
+// page and registered filter parameters, each once, is honoured; anything
+// else falls back to the plain list. The result is assembled from parsed
+// parts, never from the submitted string.
+func bulkReturnURL(raw, basePath string, registration ModelRegistration) url.Values {
+	allowed := map[string]struct{}{"q": {}, "page": {}}
+	for _, name := range registration.Options.Filters {
+		allowed[filterKey(name)] = struct{}{}
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "" || parsed.Host != "" || parsed.User != nil ||
+		parsed.Opaque != "" || parsed.Fragment != "" || parsed.Path != basePath {
+		return url.Values{}
+	}
+	query, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil {
+		return url.Values{}
+	}
+	for key, values := range query {
+		if _, ok := allowed[key]; !ok || len(values) != 1 {
+			return url.Values{}
+		}
+	}
+	if page, ok := query["page"]; ok {
+		if n, err := strconv.Atoi(page[0]); err != nil || n < 1 {
+			return url.Values{}
+		}
+	}
+	return query
+}
+
 func bulkDeleteView(store *db.Store, registration ModelRegistration) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
@@ -159,7 +210,13 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration) tango.View 
 			return forbiddenCSRF(ctx)
 		}
 
-		keys, ok := parseBulkKeys(field, ctx.Request().PostForm[bulkPKField])
+		form := ctx.Request().PostForm
+		raws := form[bulkPKField]
+		count, countErr := strconv.Atoi(form.Get(bulkCountField))
+		if len(raws) == 0 || len(raws) > pageSize || countErr != nil || count != len(raws) {
+			return rejectBulk(ctx, "admin.error.bulk_invalid", "the selection is not valid; nothing was deleted")
+		}
+		keys, ok := parseBulkKeys(field, raws)
 		if !ok {
 			return rejectBulk(ctx, "admin.error.bulk_invalid", "the selection is not valid; nothing was deleted")
 		}
@@ -173,6 +230,15 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration) tango.View 
 		case err != nil:
 			return err
 		}
-		return ctx.Redirect(basePath)
+
+		username := ""
+		if who := signedInFrom(ctx.Context()); who != nil {
+			username = who.Username
+		}
+		ctx.Logger().Info(EventBulkDelete, "model", meta.Name, "count", len(keys), "username", username)
+
+		target := bulkReturnURL(form.Get(bulkReturnToField), basePath, registration)
+		target.Set(bulkDeletedParam, strconv.Itoa(len(keys)))
+		return ctx.Redirect(basePath + "?" + target.Encode())
 	}
 }
