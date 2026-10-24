@@ -209,6 +209,21 @@ func TestBulkDeleteRollsBackWhenASelectedKeyHasNoRow(t *testing.T) {
 	})
 }
 
+func TestBulkDeleteOverlappingCascadeStillRollsBackOnAMissingKey(t *testing.T) {
+	handler, sqlDB, _ := buildBulkAdmin(t, bulkOn(bulkNode{}))
+	parent := insertReturningID(t, sqlDB, `INSERT INTO bulk_node (name, parent_id) VALUES ($1, NULL) RETURNING id`, "root")
+	child := insertReturningID(t, sqlDB, `INSERT INTO bulk_node (name, parent_id) VALUES ($1, $2) RETURNING id`, "child", parent)
+
+	response := doRequest(t, handler, http.MethodPost, "/admin/bulk_node/delete-selected/", bulkForm(3, parent, child, 99999))
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+	if got := countRows(t, sqlDB, "bulk_node"); got != 2 {
+		t.Fatalf("rows left = %d, want 2", got)
+	}
+}
+
 func TestBulkDeleteCascadesToRowsThatReferenceTheSelection(t *testing.T) {
 	handler, sqlDB, _ := buildBulkAdmin(t,
 		bulkSpec{value: flAuthor{}, options: admin.Options{ListDisplay: []string{"Name"}, BulkDelete: true}},

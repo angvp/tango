@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
@@ -125,7 +126,7 @@ func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adm
 			row.Cells[j] = cells.cell(elem, column)
 		}
 		row.Identity = row.PK
-		if len(row.Cells) > 0 && row.Cells[0].Text != "" {
+		if len(row.Cells) > 0 && strings.TrimSpace(row.Cells[0].Text) != "" {
 			row.Identity = row.Cells[0].Text
 		}
 		rows = append(rows, row)

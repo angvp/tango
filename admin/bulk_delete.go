@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
@@ -169,6 +171,9 @@ func bulkReturnURL(raw, basePath string, registration ModelRegistration) url.Val
 	for _, name := range registration.Options.Filters {
 		allowed[filterKey(name)] = struct{}{}
 	}
+	if strings.ContainsAny(raw, "#\\") || strings.IndexFunc(raw, unicode.IsControl) >= 0 {
+		return url.Values{}
+	}
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "" || parsed.Host != "" || parsed.User != nil ||
 		parsed.Opaque != "" || parsed.Fragment != "" || parsed.Path != basePath {
@@ -184,7 +189,7 @@ func bulkReturnURL(raw, basePath string, registration ModelRegistration) url.Val
 		}
 	}
 	if page, ok := query["page"]; ok {
-		if n, err := strconv.Atoi(page[0]); err != nil || n < 1 {
+		if n, err := strconv.Atoi(page[0]); err != nil || n < 1 || strconv.Itoa(n) != page[0] {
 			return url.Values{}
 		}
 	}

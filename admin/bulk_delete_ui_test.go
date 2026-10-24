@@ -77,6 +77,24 @@ func TestBulkDeleteIdentityIsTheFirstListDisplayValueOrTheKey(t *testing.T) {
 	}
 }
 
+func TestBulkDeleteIdentityFallsBackToTheKeyForABlankValue(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	blank := seedProduct(t, sqlDB, "   ", 2)
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	if !strings.Contains(body, `data-bulk-pk="`+idString(blank)+`" data-bulk-identity="`+idString(blank)+`"`) {
+		t.Errorf("a whitespace-only first column must fall back to the key")
+	}
+}
+
+func TestBulkDeleteListClampsAPastTheEndPageInReturnTo(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	seedProduct(t, sqlDB, "Only", 1)
+	body := doRequest(t, handler, http.MethodGet, crudBasePath+"?page=9", nil).Body.String()
+	if !strings.Contains(body, `name="return_to" value="`+crudBasePath+`?page=1"`) {
+		t.Errorf("return_to must carry the clamped page")
+	}
+}
+
 func TestBulkDeleteBannerShowsOnlyForAValidCount(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	seedProduct(t, sqlDB, "Widget", 3)

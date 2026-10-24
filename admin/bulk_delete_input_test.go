@@ -64,8 +64,7 @@ func TestBulkDeleteRejectsKeysOutsideTheFieldWidth(t *testing.T) {
 	if _, err := sqlDB.Exec(`INSERT INTO bulk_ticket (id, label) VALUES (44, 'x'), (1, 'y')`); err != nil {
 		t.Fatal(err)
 	}
-	// 300 would wrap to 44 in an int8-style conversion; an int32 field must
-	// still refuse a value beyond its own width.
+	// A value beyond the field's own width is refused, not wrapped.
 	response := doRequest(t, handler, http.MethodPost, "/admin/bulk_ticket/delete-selected/", bulkFormOf(2, "1", "2147483648"))
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", response.Code)
@@ -173,6 +172,12 @@ func TestBulkDeleteRedirectKeepsAValidatedReturnTo(t *testing.T) {
 		{"non numeric page", "/admin/crud_product/?page=x", "/admin/crud_product/?deleted=2"},
 		{"preexisting deleted", "/admin/crud_product/?deleted=9", "/admin/crud_product/?deleted=2"},
 		{"fragment", "/admin/crud_product/?page=2#x", "/admin/crud_product/?deleted=2"},
+		{"empty fragment", "/admin/crud_product/?page=2#", "/admin/crud_product/?deleted=2"},
+		{"backslash", "/admin/crud_product/?q=a\\b", "/admin/crud_product/?deleted=2"},
+		{"control character", "/admin/crud_product/?q=a\x01b", "/admin/crud_product/?deleted=2"},
+		{"signed page", "/admin/crud_product/?page=%2B2", "/admin/crud_product/?deleted=2"},
+		{"malformed query", "/admin/crud_product/?q=%zz", "/admin/crud_product/?deleted=2"},
+		{"encoded round trip", "/admin/crud_product/?q=a%2Bb+%23%25%C3%A9", "/admin/crud_product/?deleted=2&q=a%2Bb+%23%25%C3%A9"},
 		{"extra path", "/admin/crud_product/new/", "/admin/crud_product/?deleted=2"},
 	}
 	for _, tc := range cases {
