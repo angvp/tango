@@ -157,8 +157,14 @@ func deleteBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, fie
 	return nil
 }
 
-func rejectBulk(ctx *tango.Context, key, fallback string) error {
-	return ctx.JSON(http.StatusBadRequest, map[string]string{"error": i18n.T(ctx.Context(), key, fallback)})
+// rejectBulk answers a refused bulk delete with an admin page, because the
+// request comes from a form submission a person is looking at.
+func rejectBulk(ctx *tango.Context, nav []navItem, brand Branding, meta model.ModelMeta, basePath, key, fallback string) error {
+	return render(ctx, http.StatusBadRequest, bulkRejectedTemplate, bulkRejectedPageData{
+		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()),
+		Message:  i18n.T(ctx.Context(), key, fallback),
+		BasePath: basePath,
+	})
 }
 
 // bulkReturnURL rebuilds the list URL to return to from the submitted
@@ -196,7 +202,7 @@ func bulkReturnURL(raw, basePath string, registration ModelRegistration) url.Val
 	return query
 }
 
-func bulkDeleteView(store *db.Store, registration ModelRegistration) tango.View {
+func bulkDeleteView(store *db.Store, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
 
@@ -219,11 +225,11 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration) tango.View 
 		raws := form[bulkPKField]
 		count, countErr := strconv.Atoi(form.Get(bulkCountField))
 		if len(raws) == 0 || len(raws) > pageSize || countErr != nil || count != len(raws) {
-			return rejectBulk(ctx, "admin.error.bulk_invalid", "the selection is not valid; nothing was deleted")
+			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_invalid", "the selection is not valid; nothing was deleted")
 		}
 		keys, ok := parseBulkKeys(field, raws)
 		if !ok {
-			return rejectBulk(ctx, "admin.error.bulk_invalid", "the selection is not valid; nothing was deleted")
+			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_invalid", "the selection is not valid; nothing was deleted")
 		}
 
 		err = store.InTx(ctx.Context(), func(tx *db.Store) error {
@@ -231,7 +237,7 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration) tango.View 
 		})
 		switch {
 		case errors.Is(err, errBulkKeyMissing):
-			return rejectBulk(ctx, "admin.error.bulk_missing", "a selected row no longer exists; nothing was deleted")
+			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_missing", "a selected row no longer exists; nothing was deleted")
 		case err != nil:
 			return err
 		}

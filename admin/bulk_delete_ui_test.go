@@ -51,6 +51,17 @@ func TestBulkDeleteListRendersSelectionControlsOnlyWhenEnabled(t *testing.T) {
 	})
 }
 
+func TestBulkDeleteSelectAllLabelNamesThePageRowCount(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	for i := 0; i < 3; i++ {
+		seedProduct(t, sqlDB, "Item", float64(i))
+	}
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	if !strings.Contains(body, `aria-label="Select all 3 rows on this page"`) {
+		t.Errorf("select-all label does not carry the row count")
+	}
+}
+
 func TestBulkDeleteListReturnToKeepsTheCurrentView(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	for i := 0; i < 30; i++ {

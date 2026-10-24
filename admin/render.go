@@ -59,7 +59,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     <div class="table-wrap">
       <table class="table-admin">
         <caption class="sr-only">{{.ModelName}}</caption>
-        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all rows on this page"}}"></th>{{end}}{{range .Columns}}<th scope="col">{{.}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
+        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col">{{.}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
           {{if $.BulkDelete}}<td data-bulk-cell hidden><input type="checkbox" data-bulk-pk="{{.PK}}" data-bulk-identity="{{.Identity}}" aria-label="{{$.T "admin.bulk.select_row" "Select %s" .Identity}}"></td>{{end}}
@@ -204,6 +204,29 @@ type deletePageData struct {
 	ModelName string
 	PK        string
 	CSRFToken string
+}
+
+var bulkRejectedTemplate = cloneWithContent(`{{define "content"}}
+<header class="topbar">
+  <div class="flex items-center gap-2">
+    {{template "menuBtn" .}}
+    <h1 class="topbar-title">{{.T "admin.bulk.rejected_title" "Nothing was deleted"}}</h1>
+  </div>
+</header>
+<div class="content-body">
+  <div class="card max-w-lg">
+    <div class="card-body">
+      <div class="alert-error" role="alert">{{.Message}}</div>
+      <a href="{{.BasePath}}" class="btn-secondary">{{.T "admin.bulk.back" "Back to the list"}}</a>
+    </div>
+  </div>
+</div>
+{{end}}`)
+
+type bulkRejectedPageData struct {
+	chrome
+	Message  string
+	BasePath string
 }
 
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {

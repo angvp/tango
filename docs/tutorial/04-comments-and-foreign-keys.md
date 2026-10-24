@@ -227,7 +227,7 @@ func deletePost(store *db.Store, meta model.ModelMeta) tango.View {
 }
 ```
 
-`store.Delete` finds every row that references the post through a foreign key, deletes those first, then deletes the post — all in one transaction. This cascade happens in the framework, not the database: the database constraint stays `RESTRICT`, so a raw `DELETE FROM post` that bypasses `store.Delete` is refused instead of leaving orphaned comments behind (on SQLite, by any connection that has foreign keys switched on). Deleting a post in the admin cascades the same way.
+`store.Delete` finds every row that references the post through a foreign key, deletes those first, then deletes the post — all in one transaction. This cascade happens in the framework, not the database: the database constraint stays `RESTRICT`, so a raw `DELETE FROM post` that bypasses `store.Delete` is refused instead of leaving orphaned comments behind (on SQLite, by any connection that has foreign keys switched on). Deleting a post in the admin cascades the same way. To delete several posts at once, set `BulkDelete: true` on the `Post` registration: its list then gets a checkbox on each row and a **Delete selected** button, which asks for confirmation and removes the checked rows of that page, and their comments, in one transaction (see [bulk delete](../guides/admin-registration.md#bulk-delete)). The [board example](../../examples/board/README.md#admin-bulk-delete) turns it on for posts and comments.
 
 ## When `db.Store` isn't enough: raw SQL
 

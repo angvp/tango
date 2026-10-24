@@ -114,6 +114,8 @@ func (s *adminSite) walk(locale string) map[string]page {
 		"edit":       "/admin/post/" + id + "/",
 		"delete":     "/admin/post/" + id + "/delete/",
 		"authors":    "/admin/author/",
+		"deleted":    "/admin/post/?deleted=1",
+		"deleted n":  "/admin/post/?deleted=2",
 		"login":      "/admin/login/",
 	}
 	pages := make(map[string]page, len(paths))
@@ -175,7 +177,7 @@ func unwalkedKey(key string) bool {
 		"admin.list.filter_too_many", "admin.index.empty", "admin.login.invalid",
 		// Data the example does not have: boolean columns, filters, a second
 		// page of rows, an empty model, and traffic recorded by a Window.
-		"admin.boolean.", "admin.list.filter_any", "admin.list.empty_body", "admin.list.empty_filtered", "admin.list.result_plural",
+		"admin.boolean.", "admin.bulk.rejected_title", "admin.bulk.back", "admin.list.filter_any", "admin.list.empty_body", "admin.list.empty_filtered", "admin.list.result_plural",
 		"admin.pagination.", "admin.dashboard.activity.latency", "admin.dashboard.activity.samples",
 		"admin.dashboard.activity.total", "admin.dashboard.status.not_reported",
 	} {
@@ -196,6 +198,8 @@ func TestSpanishAdminPagesReadAsSpanish(t *testing.T) {
 		"changelist": "Buscar",
 		"create":     "Guardar",
 		"delete":     "Esta acción no se puede deshacer.",
+		"deleted":    "Se eliminó 1 fila.",
+		"deleted n":  "Se eliminaron 2 filas.",
 		"no results": "Nada coincide con",
 	} {
 		if !strings.Contains(pages[name].body, want) {

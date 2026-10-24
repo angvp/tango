@@ -17,6 +17,7 @@ func New(store *db.Store) tango.App {
 			ListDisplay: []string{"Title", "AuthorID", "CreatedAt"},
 			Search:      []string{"Title"},
 			Ordering:    []string{"CreatedAt"},
+			BulkDelete:  true,
 		}); err != nil {
 			return err
 		}
