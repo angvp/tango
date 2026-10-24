@@ -146,6 +146,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
   .page-link-current { @apply bg-accent text-accent-fg hover:bg-accent hover:text-accent-fg; }
   .page-ellipsis { @apply inline-flex items-center justify-center h-8 px-1 text-sm text-ink-faint; }
 
+  .alert-success { @apply mb-5 rounded-md border border-success-border bg-success-bg px-4 py-3 text-sm text-success-fg; }
   .alert-error { @apply mb-5 rounded-md border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg; }
 
   .field-help { @apply mt-1 text-sm text-ink-muted; }

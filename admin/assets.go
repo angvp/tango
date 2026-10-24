@@ -17,7 +17,7 @@ import (
 // never be stale and the response can be cached immutably.
 const assetRoutePrefix = "/admin/_assets/"
 
-//go:embed assets/widgets.js
+//go:embed assets/widgets.js assets/bulk.js
 var assetFiles embed.FS
 
 // staticAsset is one embedded admin file served at its content-hashed URL.
@@ -49,12 +49,17 @@ func newStaticAsset(source, contentType string) staticAsset {
 // Its markup references it by URL; its behaviour lives in assets/widgets.js.
 var widgetsAsset = newStaticAsset("assets/widgets.js", "text/javascript; charset=utf-8")
 
+// bulkAsset is the changelist's bulk delete script. Only a list page whose
+// model opted in to BulkDelete references it.
+var bulkAsset = newStaticAsset("assets/bulk.js", "text/javascript; charset=utf-8")
+
 // assetRoutes serves the admin's static files at their hashed URLs. They
 // are public, since they contain no data; the pages that use them still
 // require a session.
 func assetRoutes() tango.URLs {
 	return tango.URLs{
 		tango.Path(http.MethodGet, widgetsAsset.URL, serveStaticAsset(widgetsAsset), hiddenPage),
+		tango.Path(http.MethodGet, bulkAsset.URL, serveStaticAsset(bulkAsset), hiddenPage),
 	}
 }
 

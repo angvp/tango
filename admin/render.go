@@ -19,6 +19,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
   <a href="{{.BasePath}}new/" class="btn-primary">{{.T "admin.button.add_model" "+ Add %s" .ModelName}}</a>
 </header>
 <div class="content-body">
+  {{if .Deleted}}<div class="alert-success" role="status">{{if eq .Deleted 1}}{{.T "admin.bulk.deleted_one" "Deleted 1 row."}}{{else}}{{.T "admin.bulk.deleted_many" "Deleted %d rows." .Deleted}}{{end}}</div>{{end}}
   <div class="card">
     <div class="card-header">
       <form method="get" class="flex flex-wrap items-end gap-3 w-full">
@@ -36,12 +37,32 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       </form>
     </div>
     {{if .Rows}}
+    {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.modal_title" "Delete {count} selected rows?"}}">
+    <div class="flex items-center gap-3 border-b border-line-subtle px-5 py-3" data-bulk-bar hidden>
+      <button type="button" class="btn-danger" data-bulk-open disabled>{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
+      <span class="text-sm text-ink-muted" data-bulk-count aria-live="polite"></span>
+    </div>
+    <dialog class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-line bg-surface p-0 text-ink shadow-lg backdrop:bg-sidebar/50" data-bulk-dialog aria-labelledby="bulk-title">
+      <form method="post" action="{{.BasePath}}delete-selected/" class="p-5" data-bulk-form>
+        <input type="hidden" name="csrf_token" value="{{.SignedIn.CSRFToken}}">
+        <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+        <input type="hidden" name="count" value="" data-bulk-form-count>
+        <h2 id="bulk-title" class="text-base font-semibold text-ink" data-bulk-title></h2>
+        <ul class="my-3 max-h-48 list-disc overflow-y-auto pl-5 text-sm text-ink-muted" data-bulk-list></ul>
+        <p class="mb-5 text-sm text-ink-muted">{{.T "admin.bulk.cascade_warning" "Rows that reference these rows are deleted with them. This action cannot be undone."}}</p>
+        <div class="flex items-center gap-2">
+          <button type="submit" class="btn-danger" data-bulk-confirm>{{.T "admin.button.confirm_delete" "Confirm delete"}}</button>
+          <button type="button" class="btn-secondary" data-bulk-cancel>{{.T "admin.button.cancel" "Cancel"}}</button>
+        </div>
+      </form>
+    </dialog>{{end}}
     <div class="table-wrap">
       <table class="table-admin">
         <caption class="sr-only">{{.ModelName}}</caption>
-        <thead><tr>{{range .Columns}}<th scope="col">{{.}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
+        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all rows on this page"}}"></th>{{end}}{{range .Columns}}<th scope="col">{{.}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
+          {{if $.BulkDelete}}<td data-bulk-cell hidden><input type="checkbox" data-bulk-pk="{{.PK}}" data-bulk-identity="{{.Identity}}" aria-label="{{$.T "admin.bulk.select_row" "Select %s" .Identity}}"></td>{{end}}
           {{range .Cells}}<td>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
           <td class="text-right">
             <div class="table-actions">
@@ -53,6 +74,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         </tbody>
       </table>
     </div>
+    {{if .BulkDelete}}</div>{{end}}
     <div class="pagination">
       <span>{{.TotalCount}} {{if eq .TotalCount 1}}{{.T "admin.list.result_singular" "result"}}{{else}}{{.T "admin.list.result_plural" "results"}}{{end}}{{if .SearchQuery}} {{.T "admin.list.for_query" "for"}} &ldquo;{{.SearchQuery}}&rdquo;{{end}}</span>
       {{if gt .TotalPages 1}}
@@ -71,8 +93,12 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     </div>
     {{end}}
   </div>
+  {{if .BulkDelete}}` + bulkScriptTag + `{{end}}
 </div>
 {{end}}`)
+
+// bulkScriptTag loads the bulk delete script on a list page that enables it.
+var bulkScriptTag = `<script src="` + bulkAsset.URL + `" defer></script>`
 
 // widgetScriptTag loads the shared widget script on every form page, once.
 // It serves the live character count of the Markdown widget, which the
@@ -127,8 +153,11 @@ var deleteTemplate = cloneWithContent(`{{define "content"}}
 {{end}}`)
 
 type listRow struct {
-	PK    string
-	Cells []listCell
+	PK string
+	// Identity names the row in the bulk delete confirmation: its first
+	// ListDisplay value, or the key when that is blank.
+	Identity string
+	Cells    []listCell
 }
 
 type listPageData struct {
@@ -148,6 +177,11 @@ type listPageData struct {
 	HasNext     bool
 	PrevHref    string
 	NextHref    string
+	BulkDelete  bool
+	ReturnTo    string
+	// Deleted is the row count of a bulk delete the previous request
+	// completed, or 0 when there is none to announce.
+	Deleted int
 }
 
 type formField struct {

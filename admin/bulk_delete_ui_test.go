@@ -1,0 +1,132 @@
+package admin_test
+
+import (
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func idString(id int64) string { return strconv.FormatInt(id, 10) }
+
+func TestBulkDeleteListRendersSelectionControlsOnlyWhenEnabled(t *testing.T) {
+	t.Run("enabled", func(t *testing.T) {
+		handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+		id := seedProduct(t, sqlDB, "Widget", 3)
+		body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+
+		for _, want := range []string{
+			`data-bulk-delete`,
+			`action="` + crudBasePath + `delete-selected/"`,
+			`name="csrf_token"`,
+			`name="return_to" value="` + crudBasePath + `?page=1"`,
+			`<dialog`,
+			`data-bulk-select-all`,
+			`data-bulk-pk="` + idString(id) + `"`,
+			`data-bulk-identity="Widget"`,
+			`/admin/_assets/bulk.`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("list lacks %q", want)
+			}
+		}
+		// Controls start hidden so a browser without JavaScript never shows
+		// an inert delete control.
+		for _, marker := range []string{`data-bulk-bar`, `data-bulk-cell`} {
+			if !regexp.MustCompile(`(?s)<[^>]*` + marker + `[^>]*\bhidden\b[^>]*>|<[^>]*\bhidden\b[^>]*` + marker + `[^>]*>`).MatchString(body) {
+				t.Errorf("%s is not hidden by default", marker)
+			}
+		}
+	})
+	t.Run("disabled", func(t *testing.T) {
+		handler, sqlDB := buildProductAdmin(t)
+		seedProduct(t, sqlDB, "Widget", 3)
+		body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+		for _, unwanted := range []string{`data-bulk`, `delete-selected`, `<dialog`, `/admin/_assets/bulk.`} {
+			if strings.Contains(body, unwanted) {
+				t.Errorf("list carries %q for a model that did not opt in", unwanted)
+			}
+		}
+	})
+}
+
+func TestBulkDeleteListReturnToKeepsTheCurrentView(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	for i := 0; i < 30; i++ {
+		seedProduct(t, sqlDB, "Item", float64(i))
+	}
+	body := doRequest(t, handler, http.MethodGet, crudBasePath+"?q=Item&page=2", nil).Body.String()
+	want := `name="return_to" value="` + crudBasePath + `?page=2&amp;q=Item"`
+	if !strings.Contains(body, want) {
+		t.Fatalf("list lacks %q", want)
+	}
+}
+
+func TestBulkDeleteIdentityIsTheFirstListDisplayValueOrTheKey(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	named := seedProduct(t, sqlDB, `<b>"x"</b>`, 1)
+	blank := seedProduct(t, sqlDB, "", 2)
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+
+	if !strings.Contains(body, `data-bulk-pk="`+idString(named)+`" data-bulk-identity="&lt;b&gt;&#34;x&#34;&lt;/b&gt;"`) {
+		t.Errorf("identity of the named row is not escaped text of its first column")
+	}
+	if !strings.Contains(body, `data-bulk-pk="`+idString(blank)+`" data-bulk-identity="`+idString(blank)+`"`) {
+		t.Errorf("a blank first column must fall back to the key")
+	}
+}
+
+func TestBulkDeleteBannerShowsOnlyForAValidCount(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	seedProduct(t, sqlDB, "Widget", 3)
+	banner := regexp.MustCompile(`role="status"`)
+
+	for query, want := range map[string]string{
+		"deleted=1":           "Deleted 1 row.",
+		"deleted=2":           "Deleted 2 rows.",
+		"deleted=25":          "Deleted 25 rows.",
+		"deleted=0":           "",
+		"deleted=26":          "",
+		"deleted=-1":          "",
+		"deleted=abc":         "",
+		"deleted=02":          "",
+		"deleted=2&deleted=3": "",
+	} {
+		body := doRequest(t, handler, http.MethodGet, crudBasePath+"?"+query, nil).Body.String()
+		if want == "" {
+			if banner.MatchString(body) {
+				t.Errorf("%s: banner shown", query)
+			}
+			continue
+		}
+		if !strings.Contains(body, want) {
+			t.Errorf("%s: banner %q missing", query, want)
+		}
+	}
+	plain := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	if banner.MatchString(plain) {
+		t.Errorf("banner shown without a deleted parameter")
+	}
+	// The banner count is not carried into pagination or return_to links.
+	body := doRequest(t, handler, http.MethodGet, crudBasePath+"?deleted=2", nil).Body.String()
+	if strings.Contains(body, `return_to" value="`+crudBasePath+`?deleted`) {
+		t.Errorf("deleted leaked into return_to")
+	}
+}
+
+func TestBulkDeleteScriptAssetIsServed(t *testing.T) {
+	handler, _ := buildProductAdminWithOptions(t, bulkProductOptions())
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	match := regexp.MustCompile(`src="(/admin/_assets/bulk\.[0-9a-f]+\.js)"`).FindStringSubmatch(body)
+	if match == nil {
+		t.Fatal("list does not reference the bulk script")
+	}
+	response := doRequest(t, handler, http.MethodGet, match[1], nil)
+	if response.Code != http.StatusOK || !strings.Contains(response.Header().Get("Content-Type"), "javascript") {
+		t.Fatalf("asset status %d type %q", response.Code, response.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(response.Body.String(), "showModal") {
+		t.Errorf("asset does not open the confirmation dialog")
+	}
+}
