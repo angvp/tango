@@ -9,14 +9,6 @@ import (
 	"testing"
 )
 
-// rawColourExceptions are the only raw palette classes an admin page may
-// carry. Each one is a surface that must not follow the theme.
-var rawColourExceptions = map[string]string{
-	// The Markdown preview is a sandboxed iframe whose document is rendered
-	// outside the theme; its canvas stays white in both themes (ADR 0062).
-	"bg-white": "Markdown preview canvas",
-}
-
 var tailwindStyleBlock = regexp.MustCompile(`(?s)<style type="text/tailwindcss">(.*?)</style>`)
 
 // themedColourViolations returns every class attribute, and every @apply
@@ -46,7 +38,9 @@ func withoutExceptions(body string) string {
 	return previewCanvas.ReplaceAllString(body, "$1")
 }
 
-// previewCanvas matches the Markdown preview iframe's white canvas class.
+// previewCanvas matches the Markdown preview iframe's white canvas class, the
+// only raw palette class an admin page may carry: the iframe's document is
+// rendered outside the theme and stays white in both themes (ADR 0062).
 var previewCanvas = regexp.MustCompile(`(<iframe[^>]*?) bg-white`)
 
 func TestRawColourGuardCatchesAClassAndACSSRule(t *testing.T) {

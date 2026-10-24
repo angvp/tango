@@ -21,11 +21,6 @@ type adminShellUser struct {
 	Email string `tango:"unique"`
 }
 
-type adminShellPost struct {
-	ID    int64 `tango:"pk"`
-	Title string
-}
-
 // TestAdminSessionGating covers how requests to admin routes respond to
 // every session/account state this milestone distinguishes: no session, an
 // invalid session cookie, a valid session, an account deactivated after
