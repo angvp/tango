@@ -115,7 +115,6 @@ var deleteTemplate = cloneWithContent(`{{define "content"}}
 <div class="content-body">
   <div class="card max-w-lg">
     <div class="card-body">
-      {{if .Error}}<div class="alert-error">{{.Error}}</div>{{end}}
       <p class="text-sm text-ink-muted mb-5">{{.T "admin.delete.confirm_prefix" "Are you sure you want to delete"}} <span class="font-medium text-ink">{{.ModelName}} {{.PK}}</span>? {{.T "admin.delete.confirm_suffix" "This action cannot be undone."}}</p>
       <form method="post" class="flex items-center gap-2">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -170,7 +169,6 @@ type deletePageData struct {
 	chrome
 	ModelName string
 	PK        string
-	Error     string
 	CSRFToken string
 }
 
