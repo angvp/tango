@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // firstFramedSequence is the sequence of the first payload framed after
@@ -285,14 +286,20 @@ func TestFramedQueueOverflowEndsMemberAndAdmitsNothingFurther(t *testing.T) {
 	}
 	hub, _ := newTestHub(t, func(string) Logic { return logic }, Options{PeerQueue: 1})
 
-	slow := &fakePeer{block: make(chan struct{})} // never released: Send stays pending
+	slow := &fakePeer{block: make(chan struct{}), entered: make(chan struct{}, 1)} // never released: Send stays pending
 	fast := &fakePeer{}
 	mustJoin(t, hub, "room-1", "slow", slow)
 	mustJoin(t, hub, "room-1", "fast", fast)
 	waitForMessages(t, fast, 1)
 
-	// slow's writer holds the snapshot in Send, so its single queue slot is
-	// free for the first framed payload and full for the second.
+	// slow's writer must have dequeued the snapshot and entered Send before
+	// the queue slot is measured. Otherwise the snapshot may still occupy the
+	// single slot and the first payload would overflow instead of the second.
+	select {
+	case <-slow.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow's writer never entered Send for the snapshot")
+	}
 	dispatch(t, hub, "room-1", "fast", "x")
 	waitForMessages(t, fast, 2)
 	dispatch(t, hub, "room-1", "fast", "y")
