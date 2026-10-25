@@ -13,12 +13,12 @@ The runnable proof is [`examples/uploads`](../../examples/uploads).
 | `storage.Serve` | Delivers an object to a request your View has already authorized. |
 | `storage/local` | A filesystem `Store`. |
 | `storage/s3` | An S3-compatible `Store`, in its own Go module. |
-| `storage/gcs` | A Google Cloud Storage `Store`, in its own Go module. Unreleased; see [Google Cloud Storage](#google-cloud-storage-experimental-separate-module). |
+| `storage/gcs` | A Google Cloud Storage `Store`, in its own Go module. Experimental, released as `v0.1.0`; see [Google Cloud Storage (experimental)](#google-cloud-storage-experimental). |
 | `storagetest` | `NewMemory()` for tests, and `Run`, the conformance suite every `Store` passes. |
 
 ## Choosing a backend
 
-| | `storage/local` | `storage/s3` | `storage/gcs` (unreleased) |
+| | `storage/local` | `storage/s3` | `storage/gcs` (experimental) |
 |---|---|---|---|
 | Use it for | Development, tests, and one host with a persistent volume | More than one instance, or a disk that does not outlive the container | The same as `storage/s3`, on Google Cloud |
 | Shared between instances | No | Yes | Yes |
@@ -43,13 +43,13 @@ objects, err := s3.New(ctx, s3.Config{
 
 `storage/s3` is a separate module, `github.com/angvp/tango/storage/s3`, so a project that never imports it never sees the AWS SDK in its `go.mod`, `go.sum` or vulnerability scan. `Endpoint` and `PathStyle` select Cloudflare R2 or any other S3-compatible provider. Because S3 fixes an object's metadata when the upload starts and the SHA-256 is only known at the end, `Put` spools the bytes to a temporary file (`Config.TempDir`, default the system temp directory) before uploading them. Memory stays bounded, but you need disk space for one upload at a time.
 
-## Google Cloud Storage (experimental, separate module)
+## Google Cloud Storage (experimental)
 
-`storage/gcs` (`github.com/angvp/tango/storage/gcs`) is a `Store` on Google Cloud Storage. It is experimental and not yet released: it passes the shared `storagetest` conformance suite and its own tests against an in-process Google Cloud Storage emulator (`fake-gcs-server`), and has not been run against a real Google Cloud Storage bucket, so behaviour specific to Google's service is unverified. The module is versioned and tagged separately as `storage/gcs/vA.B.C`, after the root tag it requires, and needs the maintainer's approval. Do not add it to a project until it is released. Until then, the two ways to put uploads in GCS are:
+`storage/gcs` (`github.com/angvp/tango/storage/gcs`) is a `Store` on Google Cloud Storage, released as `storage/gcs/v0.1.0` and still experimental. It passes the shared `storagetest` conformance suite and its own tests against an in-process Google Cloud Storage emulator (`fake-gcs-server`), and has not been run against a real Google Cloud Storage bucket, so behaviour specific to Google's service is unverified. The module is versioned and tagged separately as `storage/gcs/vA.B.C`, after the root tag it requires. The two ways to put uploads in GCS are:
 
 | Path | Use it when | Configure with |
 |---|---|---|
-| Native: `storage/gcs` (unreleased) | The application runs on Google Cloud and authenticates with application-default credentials or workload identity | `gcs.New`, with no credentials named |
+| Native: `storage/gcs` (experimental) | The application runs on Google Cloud and authenticates with application-default credentials or workload identity | `gcs.New`, with no credentials named |
 | S3-compatible: `storage/s3` (released) | You authenticate with HMAC keys | `s3.New`, with `Endpoint` set to Google's S3 interoperability endpoint and HMAC keys in `Credentials` |
 
 tanGO's tests for `storage/s3` do not run against Google's interoperability endpoint, so check that path against your bucket before you rely on it.

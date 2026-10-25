@@ -53,7 +53,7 @@ With `accounts.WithMail`, emails wait in an in-memory outbox in the instance tha
 
 ### Uploaded files
 
-`storage/local` writes to one machine's disk. Another instance cannot read those files, and a container replacement deletes them unless the directory is a persistent volume mounted on exactly one instance. Use `storage/s3` for any deployment with more than one instance or an ephemeral disk (on Google Cloud, `storage/gcs` once it is released). The metadata rows are in your database and are shared; the bytes are what must be reachable from every instance. See [file uploads](uploads.md#choosing-a-backend).
+`storage/local` writes to one machine's disk. Another instance cannot read those files, and a container replacement deletes them unless the directory is a persistent volume mounted on exactly one instance. Use `storage/s3` for any deployment with more than one instance or an ephemeral disk (on Google Cloud, `storage/gcs`, which is experimental). The metadata rows are in your database and are shared; the bytes are what must be reachable from every instance. See [file uploads](uploads.md#choosing-a-backend).
 
 ## Behind a reverse proxy
 
