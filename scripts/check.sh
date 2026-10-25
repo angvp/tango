@@ -16,6 +16,9 @@ go build ./...
 # PostgreSQL or MySQL (see scripts/dialect-manifest.txt).
 packages=$(scripts/dialect-packages.sh) || exit 1
 go test -count=1 $packages
+# The room goroutine is the single owner of the realtime sequence counter; -race
+# is what keeps that ownership checked. Needs cgo.
+go test -race -count=1 ./realtime/...
 
 # These are their own Go modules, so ./... above skips
 # them. The cache adapters' conformance tests need a server and skip without

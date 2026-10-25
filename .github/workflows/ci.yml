@@ -171,6 +171,12 @@ jobs:
         run: |
           go vet ./...
           go test -count=1 ./...
+      # The room goroutine is the single owner of the realtime sequence counter;
+      # -race is what keeps that ownership checked. Needs cgo (on by default on
+      # ubuntu-latest). No database, so SQLite only.
+      - name: go test -race realtime
+        if: ${{ matrix.dialect == 'sqlite' }}
+        run: go test -race -count=1 ./realtime/...
       - name: Upload coverage to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
