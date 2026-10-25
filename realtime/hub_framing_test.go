@@ -64,10 +64,44 @@ func (l *framingLogic) frameCallCount() int {
 	return len(l.calls)
 }
 
-// framed is the expected wire bytes for the i-th framed payload (0-based)
-// after join.
-func framed(i int, payload string) string {
+// expectedFrame is the wire bytes for the i-th framed payload (0-based) after
+// join.
+func expectedFrame(i int, payload string) string {
 	return fmt.Sprintf("%d:%s", firstFramedSequence+uint64(i), payload)
+}
+
+// TestFrameReceivesTheJoinedPrincipal pins that Frame is handed the principal
+// the member joined with. Principal currently carries only UserID, so this
+// passes whether or not the member stores the full value; it guards the
+// wiring if Principal gains fields.
+func TestFrameReceivesTheJoinedPrincipal(t *testing.T) {
+	logic := newFramingLogic()
+	logic.handle = func(rc *RoomContext, ev Event) error {
+		if ev.Kind == EventAction {
+			return rc.SendUser("alice", []byte("hi"))
+		}
+		return nil
+	}
+	hub, _ := newTestHub(t, func(string) Logic { return logic }, Options{})
+	ctx := context.Background()
+
+	joined := Principal{UserID: "alice"}
+	alice := &fakePeer{}
+	if err := hub.Join(ctx, "room-1", joined, alice); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	dispatch(t, hub, "room-1", "alice", "go")
+	assertMessages(t, waitForMessages(t, alice, 2), []string{"1:snapshot:alice", "2:hi"})
+
+	calls := logic.framedCallsFor("alice")
+	if len(calls) != 2 {
+		t.Fatalf("Frame calls for alice = %d, want 2", len(calls))
+	}
+	for i, c := range calls {
+		if c.to != joined {
+			t.Fatalf("Frame call %d received principal %+v, want the joined %+v", i, c.to, joined)
+		}
+	}
 }
 
 func TestFramedMixedLegacySendsArriveConsecutively(t *testing.T) {
@@ -111,8 +145,8 @@ func TestFramedMixedLegacySendsArriveConsecutively(t *testing.T) {
 	}
 
 	// The join snapshot is sequence 1; every later payload follows it.
-	wantAlice := []string{"1:snapshot:alice", framed(0, "b"), framed(1, "a")}
-	wantBob := []string{"1:snapshot:bob", framed(0, "b"), framed(1, "e"), framed(2, "r"), framed(3, "h")}
+	wantAlice := []string{"1:snapshot:alice", expectedFrame(0, "b"), expectedFrame(1, "a")}
+	wantBob := []string{"1:snapshot:bob", expectedFrame(0, "b"), expectedFrame(1, "e"), expectedFrame(2, "r"), expectedFrame(3, "h")}
 	assertMessages(t, waitForMessages(t, alice, len(wantAlice)), wantAlice)
 	assertMessages(t, waitForMessages(t, bob, len(wantBob)), wantBob)
 }
@@ -147,10 +181,10 @@ func TestFramedCountersAreIndependentPerMemberAndPerRoom(t *testing.T) {
 		t.Fatalf("hub send alice: %v", err)
 	}
 
-	assertMessages(t, waitForMessages(t, alice1, 4), []string{"1:snapshot:alice", framed(0, "a1"), framed(1, "a2"), framed(2, "z")})
-	assertMessages(t, waitForMessages(t, bob, 3), []string{"1:snapshot:bob", framed(0, "a1"), framed(1, "a2")})
-	assertMessages(t, waitForMessages(t, alice2, 3), []string{"1:snapshot:alice", framed(0, "b1"), framed(1, "z")})
-	assertMessages(t, waitForMessages(t, carol, 2), []string{"1:snapshot:carol", framed(0, "b1")})
+	assertMessages(t, waitForMessages(t, alice1, 4), []string{"1:snapshot:alice", expectedFrame(0, "a1"), expectedFrame(1, "a2"), expectedFrame(2, "z")})
+	assertMessages(t, waitForMessages(t, bob, 3), []string{"1:snapshot:bob", expectedFrame(0, "a1"), expectedFrame(1, "a2")})
+	assertMessages(t, waitForMessages(t, alice2, 3), []string{"1:snapshot:alice", expectedFrame(0, "b1"), expectedFrame(1, "z")})
+	assertMessages(t, waitForMessages(t, carol, 2), []string{"1:snapshot:carol", expectedFrame(0, "b1")})
 }
 
 func TestFramedEmptyResultAndExcludedMembersConsumeNoSequence(t *testing.T) {
@@ -193,8 +227,8 @@ func TestFramedEmptyResultAndExcludedMembersConsumeNoSequence(t *testing.T) {
 		t.Fatalf("hub send nobody: %v", err)
 	}
 
-	assertMessages(t, waitForMessages(t, alice, 3), []string{"1:snapshot:alice", framed(0, "x"), framed(1, "y")})
-	assertMessages(t, waitForMessages(t, bob, 3), []string{"1:snapshot:bob", framed(0, "x"), framed(1, "e")})
+	assertMessages(t, waitForMessages(t, alice, 3), []string{"1:snapshot:alice", expectedFrame(0, "x"), expectedFrame(1, "y")})
+	assertMessages(t, waitForMessages(t, bob, 3), []string{"1:snapshot:bob", expectedFrame(0, "x"), expectedFrame(1, "e")})
 
 	// Frame calls are synchronous with the room loop, so every call for the
 	// sends above has returned by now. Each member's snapshot is its first call.
@@ -230,12 +264,12 @@ func TestFramedEncoderErrorClosesOnlyThatMemberAndConsumesNoSequence(t *testing.
 	dispatch(t, hub, "room-1", "bob", "x")
 	// Wait for alice's writer to send "x" before closing her: closing a
 	// member cancels its writer, which may drop a frame still queued.
-	assertMessages(t, waitForMessages(t, alice, 2), []string{"1:snapshot:alice", framed(0, "x")})
+	assertMessages(t, waitForMessages(t, alice, 2), []string{"1:snapshot:alice", expectedFrame(0, "x")})
 	dispatch(t, hub, "room-1", "bob", "boom")
 	dispatch(t, hub, "room-1", "bob", "after")
 
 	waitFor(t, alice.isClosed, "alice was not closed after an encoder error")
-	assertMessages(t, waitForMessages(t, bob, 4), []string{"1:snapshot:bob", framed(0, "x"), framed(1, "boom"), framed(2, "after")})
+	assertMessages(t, waitForMessages(t, bob, 4), []string{"1:snapshot:bob", expectedFrame(0, "x"), expectedFrame(1, "boom"), expectedFrame(2, "after")})
 	// alice is no longer a member after the error, so "after" is never
 	// passed to Frame for her.
 	assertFrameCalls(t, logic.framedCallsFor("alice"), []string{"snapshot:alice", "x", "boom"}, []uint64{1, 2, 3})
@@ -265,7 +299,7 @@ func TestFramedQueueOverflowEndsMemberAndAdmitsNothingFurther(t *testing.T) {
 	waitFor(t, slow.isClosed, "slow was not closed after queue overflow")
 	dispatch(t, hub, "room-1", "fast", "z")
 
-	assertMessages(t, waitForMessages(t, fast, 4), []string{"1:snapshot:fast", framed(0, "x"), framed(1, "y"), framed(2, "z")})
+	assertMessages(t, waitForMessages(t, fast, 4), []string{"1:snapshot:fast", expectedFrame(0, "x"), expectedFrame(1, "y"), expectedFrame(2, "z")})
 	// The overflowed payload was offered to Frame with the candidate sequence
 	// 3 and never admitted; the member ended, so nothing after it reaches Frame.
 	assertFrameCalls(t, logic.framedCallsFor("slow"), []string{"snapshot:slow", "x", "y"}, []uint64{1, 2, 3})
@@ -331,7 +365,7 @@ func TestFramedBlockedSendDoesNotStopFrameForOtherMembers(t *testing.T) {
 	if got := logic.frameCallCount(); got != 8 {
 		t.Fatalf("Frame calls while a peer is stalled = %d, want 8", got)
 	}
-	assertMessages(t, waitForMessages(t, fast, 4), []string{"1:snapshot:fast", framed(0, "m1"), framed(1, "m2"), framed(2, "m3")})
+	assertMessages(t, waitForMessages(t, fast, 4), []string{"1:snapshot:fast", expectedFrame(0, "m1"), expectedFrame(1, "m2"), expectedFrame(2, "m3")})
 	if n := len(stalled.messages()); n != 0 {
 		t.Fatalf("stalled peer received %d messages while blocked, want 0", n)
 	}

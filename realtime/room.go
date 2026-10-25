@@ -37,9 +37,11 @@ type roomOp struct {
 
 type member struct {
 	userID string
-	peer   Peer
-	queue  chan []byte
-	cancel context.CancelFunc
+	// principal is the identity the member joined with; Frame receives it.
+	principal Principal
+	peer      Peer
+	queue     chan []byte
+	cancel    context.CancelFunc
 	// seq is the sequence of the last framed payload admitted to queue. It
 	// is read and written only on the room goroutine.
 	seq uint64
@@ -278,15 +280,16 @@ func (r *room) handleJoin(op roomOp) {
 		return
 	}
 
-	// On an opted-in room the snapshot is framed as sequence 1 before the
-	// existing member is touched, so a failure here leaves that member live.
-	var framed []byte
+	// The framed snapshot is computed before the existing member is touched,
+	// so a failure here leaves that member live.
+	payload, admit := snapshot, r.deliverUnframed
 	if r.framer != nil {
-		framed, err = r.frameSnapshot(op.principal, snapshot)
+		framed, err := r.frameSnapshot(op.principal, snapshot)
 		if err != nil {
 			op.reply <- err
 			return
 		}
+		payload, admit = framed, r.admitSnapshotFrame
 	}
 
 	userID := op.principal.UserID
@@ -294,16 +297,12 @@ func (r *room) handleJoin(op roomOp) {
 		r.closeMember(userID, existing)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &member{userID: userID, peer: op.peer, queue: make(chan []byte, r.hub.opts.PeerQueue), cancel: cancel}
+	m := &member{userID: userID, principal: op.principal, peer: op.peer, queue: make(chan []byte, r.hub.opts.PeerQueue), cancel: cancel}
 	r.members[userID] = m
 	go runPeerWriter(ctx, r, m)
 	r.cancelEviction()
 
-	if r.framer != nil {
-		r.admitSnapshotFrame(userID, m, framed)
-	} else {
-		r.deliverUnframed(userID, m, snapshot)
-	}
+	admit(userID, m, payload)
 
 	// Join does not return until EventJoin has been handled: membership and
 	// the snapshot delivery above are never rolled back on a Handle error
@@ -423,9 +422,7 @@ func (r *room) deliver(userID string, m *member, payload []byte) {
 // deliverFramed passes payload through the room's Framer and admits the
 // framed bytes. The sequence advances only after admission succeeds.
 func (r *room) deliverFramed(userID string, m *member, payload []byte) {
-	buf := make([]byte, len(payload))
-	copy(buf, payload)
-	framed, err := r.framer.Frame(Principal{UserID: userID}, m.seq+1, buf)
+	framed, err := r.framer.Frame(m.principal, m.seq+1, copyPayload(payload))
 	if err != nil {
 		r.closeMember(userID, m)
 		return
@@ -433,12 +430,29 @@ func (r *room) deliverFramed(userID string, m *member, payload []byte) {
 	if len(framed) == 0 {
 		return
 	}
+	if r.enqueue(userID, m, framed) {
+		m.seq++
+	}
+}
+
+// enqueue offers framed to m's queue without blocking. A full queue closes m;
+// the caller advances any sequence only when enqueue reports admission.
+func (r *room) enqueue(userID string, m *member, framed []byte) bool {
 	select {
 	case m.queue <- framed:
-		m.seq++
+		return true
 	default:
 		r.closeMember(userID, m)
+		return false
 	}
+}
+
+// copyPayload returns a private copy of payload. Delivery happens later on a
+// writer goroutine, so the caller's slice must not be shared.
+func copyPayload(payload []byte) []byte {
+	buf := make([]byte, len(payload))
+	copy(buf, payload)
+	return buf
 }
 
 // frameSnapshot returns the join snapshot framed as sequence 1. A nil or
@@ -457,29 +471,18 @@ func (r *room) frameSnapshot(p Principal, snapshot []byte) ([]byte, error) {
 	return framed, nil
 }
 
-// admitSnapshotFrame enqueues the already-framed join snapshot on m's fresh
-// queue. PeerQueue is at least one, so the first frame is always admitted;
-// an overflow still takes the ordinary overflow path, and the sequence stays
-// unchanged because nothing was admitted.
+// admitSnapshotFrame enqueues the framed join snapshot on m's fresh queue. It
+// is sequence 1 only once admitted.
 func (r *room) admitSnapshotFrame(userID string, m *member, framed []byte) {
-	select {
-	case m.queue <- framed:
+	if r.enqueue(userID, m, framed) {
 		m.seq = 1
-	default:
-		r.closeMember(userID, m)
 	}
 }
 
 // deliverUnframed is the delivery path for a room whose Logic does not
 // implement Framer.
 func (r *room) deliverUnframed(userID string, m *member, payload []byte) {
-	buf := make([]byte, len(payload))
-	copy(buf, payload)
-	select {
-	case m.queue <- buf:
-	default:
-		r.closeMember(userID, m)
-	}
+	r.enqueue(userID, m, copyPayload(payload))
 }
 
 // closeMember removes m from membership (if it is still the current one)

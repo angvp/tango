@@ -45,11 +45,9 @@ func joinFixture(t *testing.T, logic *framingLogic) (*Hub, *fakePeer) {
 	return hub, alice
 }
 
-// assertFailedJoinLeftExistingLive checks that a failed replacement join for
-// alice changed nothing: the existing peer was not closed, the next broadcast
-// reaches it with its counter continuing after the snapshot, the replacement
-// peer was never made a member, and EventJoin was handled once (for the
-// original join only).
+// assertFailedJoinLeftExistingLive is the shared post-condition for every
+// failed join. The replacement join must fail before it touches the existing
+// member, so a later broadcast still reaches that member on its own counter.
 func assertFailedJoinLeftExistingLive(t *testing.T, hub *Hub, logic *framingLogic, existing, replacement *fakePeer) {
 	t.Helper()
 	if existing.isClosed() {
