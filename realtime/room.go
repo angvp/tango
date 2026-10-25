@@ -280,8 +280,10 @@ func (r *room) handleJoin(op roomOp) {
 		return
 	}
 
-	// The framed snapshot is computed before the existing member is touched,
-	// so a failure here leaves that member live.
+	// Framing the replacement snapshot happens before the existing member is
+	// closed, so a failure here keeps that member live. Deliveries Snapshot made
+	// through RoomContext are not undone; one that closes the existing member is
+	// not reported to Snapshot, and the join proceeds.
 	payload, admit := snapshot, r.deliverUnframed
 	if r.framer != nil {
 		framed, err := r.frameSnapshot(op.principal, snapshot)
