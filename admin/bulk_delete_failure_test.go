@@ -137,8 +137,8 @@ func TestBulkDeleteRejectsAMalformedFormBodyBeforeDeleting(t *testing.T) {
 	}
 }
 
-// The route is registered for POST only, so the router answers a GET before
-// the view runs; the view's own method check is therefore never reached.
+// The route accepts POST only, so a GET is expected to get a 404 from the
+// router and no row may be deleted by it.
 func TestBulkDeleteRefusesTheWrongMethodWithoutDeleting(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	id := seedProduct(t, sqlDB, "A", 1)
