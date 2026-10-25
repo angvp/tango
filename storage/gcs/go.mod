@@ -2,11 +2,9 @@ module github.com/angvp/tango/storage/gcs
 
 go 1.27.1
 
-replace github.com/angvp/tango => ../..
-
 require (
 	cloud.google.com/go/storage v1.70.0
-	github.com/angvp/tango v0.0.0
+	github.com/angvp/tango v0.7.0
 	github.com/fsouza/fake-gcs-server v1.56.1
 	google.golang.org/api v0.308.0
 )
