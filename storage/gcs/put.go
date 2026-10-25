@@ -2,6 +2,8 @@ package gcs
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -20,31 +22,39 @@ func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (
 	if err := ctx.Err(); err != nil {
 		return storage.Object{}, err
 	}
-	if _, err := s.sdk(); err != nil {
+	if _, err := s.sdk(ctx); err != nil {
 		return storage.Object{}, err
 	}
 	inspected, err := storage.Inspect(r, opts)
 	if err != nil {
 		return storage.Object{}, err
 	}
-	spool, err := storagekit.Spool(ctx, "storage/gcs", s.tempDir, "tango-gcs-*", inspected)
+	spool, err := storagekit.NewSpoolFile("storage/gcs", s.tempDir, "tango-gcs-*", s.spoolOps)
 	if err != nil {
 		return storage.Object{}, err
 	}
-	defer func() {
-		// A close failure surfaces only when the upload has not already failed.
-		if closeErr := storagekit.ReleaseSpool("storage/gcs", spool); err == nil && closeErr != nil {
-			obj, err = storage.Object{}, closeErr
-		}
-	}()
+	// Release is best effort and its error is not returned: once the upload
+	// has committed, a cleanup failure must not turn it into a failed Put.
+	defer func() { _ = s.releaseSpool(spool) }()
+	if err := spool.Fill(ctx, inspected); err != nil {
+		return storage.Object{}, err
+	}
+	file, err := spool.Open()
+	if err != nil {
+		return storage.Object{}, err
+	}
 	obj = inspected.Object("")
+	token, err := s.newToken()
+	if err != nil {
+		return storage.Object{}, err
+	}
 
 	key := s.nextKey()
 	for attempt := 0; attempt < storagekit.KeyAttempts; attempt++ {
 		if !storage.ValidKey(key) {
 			return storage.Object{}, fmt.Errorf("storage/gcs: generated key %q is invalid", key)
 		}
-		err := s.create(ctx, spool, obj, key)
+		err := s.create(ctx, file, obj, token, key)
 		if err == nil {
 			obj.Key = key
 			return obj, nil
@@ -52,7 +62,7 @@ func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (
 		if !isPrecondition(err) {
 			return storage.Object{}, mapError("put", err)
 		}
-		state, err := s.conflict(ctx, key, obj.SHA256)
+		state, err := s.conflict(ctx, key, obj, token)
 		if err != nil {
 			return storage.Object{}, err
 		}
@@ -88,8 +98,8 @@ const (
 // create sends the spooled bytes as key with the create-only precondition.
 // The metadata is set before the first write, because GCS fixes it at the
 // start of the upload.
-func (s *Store) create(ctx context.Context, spool *os.File, obj storage.Object, key string) error {
-	handle, err := s.object(key)
+func (s *Store) create(ctx context.Context, spool *os.File, obj storage.Object, token, key string) error {
+	handle, err := s.object(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -102,7 +112,7 @@ func (s *Store) create(ctx context.Context, spool *os.File, obj storage.Object, 
 	w := handle.If(gcsstorage.Conditions{DoesNotExist: true}).NewWriter(wctx)
 	w.ChunkSize = int(s.chunkSize)
 	w.ContentType = obj.ContentType
-	w.Metadata = map[string]string{shaMetadata: obj.SHA256}
+	w.Metadata = map[string]string{shaMetadata: obj.SHA256, tokenMetadata: token}
 	_, err = io.Copy(w, spoolSource(spool, obj.Size))
 	if err != nil {
 		cancel()
@@ -118,9 +128,11 @@ var spoolSource = func(f *os.File, size int64) io.Reader {
 	return io.NewSectionReader(f, 0, size)
 }
 
-// conflict reads the object at key once and says what the 412 meant.
-func (s *Store) conflict(ctx context.Context, key, sha string) (conflictState, error) {
-	handle, err := s.object(key)
+// conflict reads the object at key once and says what the 412 meant. Only an
+// object carrying this write's token, size and SHA-256 is this write's own:
+// a SHA-256 alone can be a foreign object's claim over different bytes.
+func (s *Store) conflict(ctx context.Context, key string, obj storage.Object, token string) (conflictState, error) {
+	handle, err := s.object(ctx, key)
 	if err != nil {
 		return keyTaken, err
 	}
@@ -131,7 +143,7 @@ func (s *Store) conflict(ctx context.Context, key, sha string) (conflictState, e
 	if err != nil {
 		return keyTaken, mapError("put", err)
 	}
-	if attrs.Metadata[shaMetadata] == sha {
+	if attrs.Metadata[tokenMetadata] == token && attrs.Metadata[shaMetadata] == obj.SHA256 && attrs.Size == obj.Size {
 		return committedHere, nil
 	}
 	return keyTaken, nil
@@ -143,3 +155,15 @@ func isPrecondition(err error) bool {
 	var g *googleapi.Error
 	return errors.As(err, &g) && g.Code == 412
 }
+
+// randomToken returns a fresh write token: 16 bytes from crypto/rand, hex.
+func randomToken() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("storage/gcs: write token: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
+// releaseSpoolFile is the default release: best effort, see storagekit.SpoolFile.
+func releaseSpoolFile(sp *storagekit.SpoolFile) error { return sp.Release() }

@@ -68,59 +68,47 @@ func TestContextReaderStopsAsSoonAsTheContextIsDone(t *testing.T) {
 	}
 }
 
-func TestSpoolWritesTheStreamAndReleaseRemovesIt(t *testing.T) {
-	dir := t.TempDir()
-	f, err := storagekit.Spool(context.Background(), "pfx", dir, "spool-*", strings.NewReader("payload"))
-	if err != nil {
-		t.Fatalf("Spool = %v", err)
-	}
-	got, err := os.ReadFile(f.Name())
-	if err != nil || string(got) != "payload" {
-		t.Fatalf("spooled bytes = %q, %v; want \"payload\"", got, err)
-	}
-	if err := storagekit.ReleaseSpool("pfx", f); err != nil {
-		t.Fatalf("ReleaseSpool on a healthy file = %v", err)
-	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
-		t.Fatalf("spool left %d file(s) behind", len(entries))
-	}
-}
-
-func TestSpoolWrapsACopyFailureAndLeavesNothingBehind(t *testing.T) {
+func TestSpoolFileCopyFailureNamesTheStageAndLeavesNothingBehind(t *testing.T) {
 	sentinel := errors.New("source failed")
 	dir := t.TempDir()
-	_, err := storagekit.Spool(context.Background(), "storage/x", dir, "spool-*", io.MultiReader(strings.NewReader("ab"), failingReader{sentinel}))
+	sp, err := storagekit.NewSpoolFile("storage/x", dir, "spool-*", storagekit.FileOps{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = sp.Fill(context.Background(), io.MultiReader(strings.NewReader("ab"), failingReader{sentinel}))
 	if !errors.Is(err, sentinel) || !strings.HasPrefix(err.Error(), "storage/x: spool: ") {
-		t.Fatalf("Spool = %v; want storage/x: spool: wrapping the source error", err)
+		t.Fatalf("Fill = %v; want storage/x: spool: wrapping the source error", err)
+	}
+	if err := sp.Release(); err != nil {
+		t.Fatalf("Release after a failed copy = %v", err)
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 		t.Fatalf("failed spool left %d file(s) behind", len(entries))
 	}
 }
 
-func TestSpoolRefusesACancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err := storagekit.Spool(ctx, "pfx", t.TempDir(), "spool-*", strings.NewReader("payload"))
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("Spool with a cancelled context = %v, want context.Canceled", err)
+func TestSpoolFileReleaseReportsACloseFailureAndStillRemoves(t *testing.T) {
+	dir := t.TempDir()
+	sp, err := storagekit.NewSpoolFile("storage/x", dir, "spool-*", storagekit.FileOps{})
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestReleaseSpoolReportsACloseFailureAndStillRemoves(t *testing.T) {
-	f, err := storagekit.Spool(context.Background(), "pfx", t.TempDir(), "spool-*", strings.NewReader("payload"))
+	if err := sp.Fill(context.Background(), strings.NewReader("payload")); err != nil {
+		t.Fatal(err)
+	}
+	f, err := sp.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	err = storagekit.ReleaseSpool("storage/x", f)
-	if !errors.Is(err, os.ErrClosed) || !strings.HasPrefix(err.Error(), "storage/x: spool close: ") {
-		t.Fatalf("ReleaseSpool on a closed file = %v; want storage/x: spool close: wrapping os.ErrClosed", err)
+	err = sp.Release()
+	if !errors.Is(err, os.ErrClosed) || !strings.HasPrefix(err.Error(), "storage/x: spool release: ") {
+		t.Fatalf("Release with a closed handle = %v; want storage/x: spool release: wrapping os.ErrClosed", err)
 	}
-	if _, statErr := os.Stat(f.Name()); !os.IsNotExist(statErr) {
-		t.Fatalf("spool file still present after ReleaseSpool: %v", statErr)
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("spool left %d file(s) behind after a failed release", len(entries))
 	}
 }
 
@@ -177,5 +165,91 @@ func TestValidSHA256IsExactly64LowercaseHex(t *testing.T) {
 		if got := storagekit.ValidSHA256(tt.in); got != tt.want {
 			t.Errorf("ValidSHA256(%q) = %v, want %v", tt.in, got, tt.want)
 		}
+	}
+}
+
+var errInjected = errors.New("test: injected spool failure")
+
+// syncFails and closeFails are FileOps that fail one operation and still
+// perform it, so no handle or file leaks in the test.
+func syncFails() storagekit.FileOps {
+	return storagekit.FileOps{Sync: func(f *os.File) error { _ = f.Sync(); return errInjected }}
+}
+
+func closeFails() storagekit.FileOps {
+	return storagekit.FileOps{Close: func(f *os.File) error { _ = f.Close(); return errInjected }}
+}
+
+func TestSpoolFileFillOpenReleaseRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	sp, err := storagekit.NewSpoolFile("pfx", dir, "spool-*", storagekit.FileOps{})
+	if err != nil {
+		t.Fatalf("NewSpoolFile = %v", err)
+	}
+	if err := sp.Fill(context.Background(), strings.NewReader("payload")); err != nil {
+		t.Fatalf("Fill = %v", err)
+	}
+	f, err := sp.Open()
+	if err != nil {
+		t.Fatalf("Open = %v", err)
+	}
+	got, err := io.ReadAll(f)
+	if err != nil || string(got) != "payload" {
+		t.Fatalf("read back %q, %v; want payload", got, err)
+	}
+	if err := sp.Release(); err != nil {
+		t.Fatalf("Release on a healthy spool = %v", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("%d files left after Release", len(entries))
+	}
+}
+
+func TestSpoolFileSyncFailureIsReportedByFill(t *testing.T) {
+	sp, err := storagekit.NewSpoolFile("pfx", t.TempDir(), "spool-*", syncFails())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sp.Fill(context.Background(), strings.NewReader("payload")); !errors.Is(err, errInjected) {
+		t.Fatalf("Fill = %v; want the sync failure", err)
+	}
+}
+
+func TestSpoolFileCloseFailureIsReportedByFill(t *testing.T) {
+	sp, err := storagekit.NewSpoolFile("pfx", t.TempDir(), "spool-*", closeFails())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sp.Fill(context.Background(), strings.NewReader("payload")); !errors.Is(err, errInjected) {
+		t.Fatalf("Fill = %v; want the close failure", err)
+	}
+}
+
+func TestSpoolFileReleaseRemovesTheFileAfterAFailedFill(t *testing.T) {
+	dir := t.TempDir()
+	sp, err := storagekit.NewSpoolFile("pfx", dir, "spool-*", closeFails())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sp.Fill(context.Background(), strings.NewReader("payload")); err == nil {
+		t.Fatal("Fill succeeded; the close failure must surface")
+	}
+	if err := sp.Release(); err != nil {
+		t.Logf("Release after a failed Fill = %v", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("%d files left after Release of a failed spool", len(entries))
+	}
+}
+
+func TestSpoolFileRefusesACancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sp, err := storagekit.NewSpoolFile("pfx", t.TempDir(), "spool-*", storagekit.FileOps{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sp.Fill(ctx, strings.NewReader("payload")); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Fill = %v; want context.Canceled", err)
 	}
 }

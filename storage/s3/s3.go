@@ -94,6 +94,10 @@ type Store struct {
 	tempDir  string
 	partSize int64
 	nextKey  func() string
+	// spoolOps are the spool's file operations; the zero value is the OS.
+	spoolOps storagekit.FileOps
+	// releaseSpool is how Put releases its spool; a test may wrap it.
+	releaseSpool func(*storagekit.SpoolFile) error
 }
 
 // New returns a Store for cfg. It validates the configuration but makes no
@@ -132,7 +136,7 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 	if partSize == 0 {
 		partSize = DefaultPartSize
 	}
-	return &Store{client: client, bucket: cfg.Bucket, prefix: prefix, tempDir: cfg.TempDir, partSize: partSize, nextKey: storage.NewKey}, nil
+	return &Store{client: client, bucket: cfg.Bucket, prefix: prefix, tempDir: cfg.TempDir, partSize: partSize, nextKey: storage.NewKey, releaseSpool: releaseSpoolFile}, nil
 }
 
 // validate checks cfg and returns the normalized prefix ("" or "a/b/").

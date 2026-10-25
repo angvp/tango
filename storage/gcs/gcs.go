@@ -38,6 +38,9 @@ import (
 
 const (
 	shaMetadata = "sha256"
+	// tokenMetadata is internal. It holds a random per-Put write token, so a
+	// retry can tell its own object from a foreign object with the same SHA-256.
+	tokenMetadata = "tango-write-token"
 
 	// DefaultChunkSize is the upload chunk size when Config.ChunkSize is 0.
 	DefaultChunkSize int64 = 8 << 20
@@ -85,15 +88,22 @@ type Store struct {
 	tempDir   string
 	chunkSize int64
 	nextKey   func() string
+	newToken  func() (string, error)
+	// spoolOps are the file operations of the spool; the zero value is the OS.
+	spoolOps storagekit.FileOps
+	// releaseSpool is how Put releases its spool; a test may wrap it.
+	releaseSpool func(*storagekit.SpoolFile) error
 
-	// mu guards client, closed and the lazy build. A client passed to
-	// NewFromClient is set at construction and never rebuilt.
+	// mu guards client, closed and publishes. It is never held during a build.
+	// A client passed to NewFromClient is set at construction and never rebuilt.
 	mu     sync.Mutex
 	client *gcsstorage.Client
 	// build makes the adapter's own client on first use. It is nil for a
 	// client the host passed in, which the host owns.
-	build  func() (*gcsstorage.Client, error)
-	closed bool
+	build func(context.Context) (*gcsstorage.Client, error)
+	// publishes counts the adapter-built clients kept, for a test.
+	publishes int
+	closed    bool
 }
 
 // New returns a Store for cfg. It validates the configuration and makes no
@@ -124,12 +134,15 @@ func NewFromClient(client *gcsstorage.Client, cfg Config) (*Store, error) {
 }
 
 func newStore(cfg Config, extra ...option.ClientOption) (*Store, error) {
+	// The lazy build reads the credentials later, so it must not share the
+	// caller's slice, which the caller may change after New.
+	cfg.CredentialsJSON = bytes.Clone(cfg.CredentialsJSON)
 	prefix, err := cfg.validate()
 	if err != nil {
 		return nil, err
 	}
 	s := newBase(cfg, prefix)
-	s.build = func() (*gcsstorage.Client, error) { return dial(cfg, extra...) }
+	s.build = func(ctx context.Context) (*gcsstorage.Client, error) { return dial(ctx, cfg, extra...) }
 	return s, nil
 }
 
@@ -138,15 +151,14 @@ func newBase(cfg Config, prefix string) *Store {
 	if chunk == 0 {
 		chunk = DefaultChunkSize
 	}
-	return &Store{bucket: cfg.Bucket, prefix: prefix, tempDir: cfg.TempDir, chunkSize: chunk, nextKey: storage.NewKey}
+	return &Store{bucket: cfg.Bucket, prefix: prefix, tempDir: cfg.TempDir, chunkSize: chunk, nextKey: storage.NewKey, newToken: randomToken, releaseSpool: releaseSpoolFile}
 }
 
 // dial builds the adapter's client. The SDK reads STORAGE_EMULATOR_HOST
 // itself, and only when it is set, so the authorized client is built here and
 // given an explicit endpoint: the variable then cannot redirect requests or
 // turn authentication off.
-func dial(cfg Config, extra ...option.ClientOption) (*gcsstorage.Client, error) {
-	ctx := context.Background()
+func dial(ctx context.Context, cfg Config, extra ...option.ClientOption) (*gcsstorage.Client, error) {
 	opts := []option.ClientOption{gcsstorage.WithJSONReads()}
 	var raw []byte
 	if cfg.Endpoint != "" {
@@ -328,30 +340,72 @@ func (cfg Config) validate() (string, error) {
 	return prefix, nil
 }
 
-// sdk returns the SDK client, building the adapter's own on first use. A
-// failed build is not remembered, so a later call may succeed.
-func (s *Store) sdk() (*gcsstorage.Client, error) {
+// buildResult is the outcome of one build of the adapter's client.
+type buildResult struct {
+	client *gcsstorage.Client
+	err    error
+}
+
+// sdk returns the SDK client, building the adapter's own on first use. The build
+// runs without the lock, so Close and other operations are never held behind
+// credential work. It runs under the operation's values but without its
+// cancellation, since the token source keeps the build context for refreshes.
+// The operation returns as soon as ctx ends; a build still running then is
+// published for later operations. A failed build is not remembered.
+func (s *Store) sdk(ctx context.Context) (*gcsstorage.Client, error) {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil, errStoreClosed
+	}
+	if s.client != nil {
+		c := s.client
+		s.mu.Unlock()
+		return c, nil
+	}
+	s.mu.Unlock()
+
+	done := make(chan buildResult, 1)
+	go func() {
+		c, err := s.build(context.WithoutCancel(ctx))
+		done <- s.publish(c, err)
+	}()
+	select {
+	case r := <-done:
+		return r.client, r.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// publish keeps a finished build as the Store's client. If another build was
+// published first, or the Store was closed meanwhile, the extra client is
+// closed and never used.
+func (s *Store) publish(c *gcsstorage.Client, err error) buildResult {
+	if err != nil {
+		return buildResult{err: err}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, errStoreClosed
+		_ = c.Close()
+		return buildResult{err: errStoreClosed}
 	}
-	if s.client == nil {
-		c, err := s.build()
-		if err != nil {
-			return nil, err
-		}
-		s.client = c
+	if s.client != nil {
+		_ = c.Close()
+		return buildResult{client: s.client}
 	}
-	return s.client, nil
+	s.client = c
+	s.publishes++
+	return buildResult{client: c}
 }
 
 func (s *Store) objectName(key string) string { return s.prefix + key }
 
 // object returns an error only because the SDK client is built lazily, on
 // first use; the handle itself needs no request.
-func (s *Store) object(key string) (*gcsstorage.ObjectHandle, error) {
-	client, err := s.sdk()
+func (s *Store) object(ctx context.Context, key string) (*gcsstorage.ObjectHandle, error) {
+	client, err := s.sdk(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -362,8 +416,9 @@ func (s *Store) object(key string) (*gcsstorage.ObjectHandle, error) {
 // Store refuse further use. A client passed to NewFromClient belongs to the
 // host: Close does nothing to it, and the Store stays usable.
 //
-// Close must not run while another method of the Store is in flight: the SDK
-// clears its state on Close, so a call still using it would fail.
+// Close must not run while an operation is using the client: the SDK clears
+// its state on Close, so an operation still using it would fail. A build still
+// running when Close is called is closed as soon as it finishes.
 func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -388,7 +443,7 @@ func (s *Store) Stat(ctx context.Context, key string) (storage.Info, error) {
 	if err := storagekit.Check(ctx, key); err != nil {
 		return storage.Info{}, err
 	}
-	obj, err := s.object(key)
+	obj, err := s.object(ctx, key)
 	if err != nil {
 		return storage.Info{}, err
 	}
@@ -423,7 +478,7 @@ func (s *Store) Open(ctx context.Context, key string, offset, length int64) (io.
 	if end == offset {
 		return io.NopCloser(strings.NewReader("")), nil
 	}
-	obj, err := s.object(key)
+	obj, err := s.object(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +494,7 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 	if err := storagekit.Check(ctx, key); err != nil {
 		return err
 	}
-	obj, err := s.object(key)
+	obj, err := s.object(ctx, key)
 	if err != nil {
 		return err
 	}

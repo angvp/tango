@@ -26,16 +26,20 @@ func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (
 	if err != nil {
 		return storage.Object{}, err
 	}
-	spool, err := storagekit.Spool(ctx, "storage/s3", s.tempDir, "tango-s3-*", inspected)
+	spool, err := storagekit.NewSpoolFile("storage/s3", s.tempDir, "tango-s3-*", s.spoolOps)
 	if err != nil {
 		return storage.Object{}, err
 	}
-	defer func() {
-		// A close failure surfaces only when the upload has not already failed.
-		if closeErr := storagekit.ReleaseSpool("storage/s3", spool); err == nil && closeErr != nil {
-			obj, err = storage.Object{}, closeErr
-		}
-	}()
+	// Release is best effort and its error is not returned: once the upload
+	// has committed, a cleanup failure must not turn it into a failed Put.
+	defer func() { _ = s.releaseSpool(spool) }()
+	if err := spool.Fill(ctx, inspected); err != nil {
+		return storage.Object{}, err
+	}
+	file, err := spool.Open()
+	if err != nil {
+		return storage.Object{}, err
+	}
 	obj = inspected.Object("")
 
 	for attempt := 0; attempt < storagekit.KeyAttempts; attempt++ {
@@ -43,7 +47,7 @@ func (s *Store) Put(ctx context.Context, r io.Reader, opts storage.PutOptions) (
 		if !storage.ValidKey(key) {
 			return storage.Object{}, fmt.Errorf("storage/s3: generated key %q is invalid", key)
 		}
-		err := s.upload(ctx, spool, obj, key)
+		err := s.upload(ctx, file, obj, key)
 		if errors.Is(err, storage.ErrExists) {
 			continue // a collision: the existing object is untouched
 		}
@@ -131,3 +135,6 @@ func (s *Store) uploadParts(ctx context.Context, file *os.File, obj storage.Obje
 	}
 	return nil
 }
+
+// releaseSpoolFile is the default release: best effort, see storagekit.SpoolFile.
+func releaseSpoolFile(sp *storagekit.SpoolFile) error { return sp.Release() }

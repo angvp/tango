@@ -27,14 +27,16 @@ func newFake(t *testing.T) *fakestorage.Server {
 }
 
 // wire sits between the adapter's client and the fake. It counts the requests
-// that reach the fake, and can lose the response to the first uploads (the
-// create has committed, the caller sees a 503) or answer every request with a
-// fixed status without forwarding it.
+// that reach the fake, and can lose the response to the first uploads or answer
+// every request with a fixed status without forwarding it.
 type wire struct {
 	base http.RoundTripper
 
-	// loseUploads is how many upload responses to replace with a 503.
-	loseUploads int
+	// dropUploads is how many upload responses to lose. The fake has already
+	// committed the object; the complete response is read, and the caller gets a
+	// transport error instead of it, as when a connection breaks after the
+	// server has written its reply.
+	dropUploads int
 	// denyStatus, when set, answers every request with that status.
 	denyStatus int
 	// beforeMetadataRead, when set, runs before each metadata read is forwarded.
@@ -83,7 +85,7 @@ func (w *wire) RoundTrip(req *http.Request) (*http.Response, error) {
 	if upload {
 		w.statuses = append(w.statuses, resp.StatusCode)
 	}
-	lose := upload && w.lost < w.loseUploads
+	lose := upload && w.lost < w.dropUploads
 	if lose {
 		w.lost++
 	}
@@ -93,7 +95,7 @@ func (w *wire) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
-	return synthetic(req, http.StatusServiceUnavailable, `{"error":{"code":503,"message":"response lost by the test wire"}}`), nil
+	return nil, io.ErrUnexpectedEOF
 }
 
 func synthetic(req *http.Request, status int, body string) *http.Response {

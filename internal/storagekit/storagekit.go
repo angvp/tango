@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/angvp/tango/storage"
@@ -43,33 +42,6 @@ func (c *ContextReader) Read(p []byte) (int, error) {
 		return 0, err
 	}
 	return c.R.Read(p)
-}
-
-// Spool copies r into a new file in dir and returns it, open. prefix names the
-// adapter in errors. A failed copy leaves no file behind.
-func Spool(ctx context.Context, prefix, dir, pattern string, r io.Reader) (*os.File, error) {
-	f, err := os.CreateTemp(dir, pattern)
-	if err != nil {
-		return nil, fmt.Errorf("%s: spool: %w", prefix, err)
-	}
-	if _, err := io.Copy(f, &ContextReader{Ctx: ctx, R: r}); err != nil {
-		_ = f.Close()
-		_ = os.Remove(f.Name())
-		return nil, fmt.Errorf("%s: spool: %w", prefix, err)
-	}
-	return f, nil
-}
-
-// ReleaseSpool closes a file from Spool and removes it. A close error is
-// returned, since on a written file it can be the first sign that the bytes
-// never reached the disk; the removal is best effort.
-func ReleaseSpool(prefix string, f *os.File) error {
-	closeErr := f.Close()
-	_ = os.Remove(f.Name())
-	if closeErr != nil {
-		return fmt.Errorf("%s: spool close: %w", prefix, closeErr)
-	}
-	return nil
 }
 
 // NormalizePrefix returns prefix as "" or "a/b/" after checking that it cannot
