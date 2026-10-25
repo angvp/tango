@@ -282,9 +282,10 @@ func (r *room) handleJoin(op roomOp) {
 
 	// The replacement snapshot is framed before the existing member is replaced,
 	// so a framing failure here does not itself close that member. Sends
-	// Snapshot made through RoomContext are not rolled back, and one that closed
-	// the existing member by a framing error or queue overflow stays closed; it
-	// is not reported to Snapshot, and the join proceeds to frame the replacement.
+	// Snapshot made through RoomContext are not rolled back: admitted sends keep
+	// their sequence, and a send whose Frame errored or overflowed the queue
+	// closed the existing member, which stays closed. That closure is not
+	// reported to Snapshot, and the join proceeds to frame the replacement.
 	payload, admit := snapshot, r.deliverUnframed
 	if r.framer != nil {
 		framed, err := r.frameSnapshot(op.principal, snapshot)

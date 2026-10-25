@@ -105,10 +105,13 @@ type Logic interface {
 // member exactly as queue overflow does. For the join snapshot, a nil or
 // empty result, or an error, fails Join instead. That failure does not itself
 // close, rewind or skip the existing member, and never admits the new peer.
-// Sends Snapshot made through RoomContext are not rolled back: each is
-// admitted to the existing member's queue and keeps its sequence, and one that
-// closed the member by a framing error or queue overflow leaves it closed.
-// RoomContext reports no error to Snapshot.
+// Sends Snapshot made through RoomContext are not rolled back. A send is
+// admitted to the existing member's queue only if Frame returns a non-empty
+// result and the queue accepts it; an admitted send keeps its next sequence.
+// An empty result is skipped and consumes no sequence. A Frame error or queue
+// overflow closes the existing member, the rejected payload consumes no
+// sequence, and the member stays closed. RoomContext reports no error to
+// Snapshot.
 //
 // On a connection whose Logic implements Framer, every payload admitted to
 // the member's queue is passed through Frame with a sequence that starts at
