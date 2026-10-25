@@ -92,6 +92,31 @@ type Logic interface {
 	Snapshot(*RoomContext, Principal) ([]byte, error)
 }
 
+// Framer is an optional interface a Logic implements to opt its room in to
+// sequenced framing. Frame runs on the room goroutine, like every Logic
+// callback, and a panic in Frame is not recovered: it crashes the process,
+// as a panic in Handle or Snapshot does.
+//
+// payload is the callee's own per-member copy: Frame may inspect or modify
+// it without affecting other members or the caller. The returned slice
+// becomes the queued buffer and is owned by the room from the moment Frame
+// returns; the implementation must not retain or modify it afterwards. A nil
+// or empty result sends nothing to that member. A non-nil error closes that
+// member exactly as queue overflow does.
+//
+// On a connection whose Logic implements Framer, every payload admitted to
+// the member's queue is passed through Frame with a sequence that starts at
+// 1 for the join snapshot and increases by 1 for each later admitted payload,
+// in queue order, with no gaps. The sequence is per member (per connection;
+// reconnecting restarts at 1), not per room, and records admission to the
+// outgoing queue, not delivery or acknowledgement by the peer. A payload that
+// is not admitted (excluded or unknown member, empty encoder result, encoder
+// error, queue overflow) uses no sequence; a socket write failure ends the
+// member.
+type Framer interface {
+	Frame(to Principal, seq uint64, payload []byte) ([]byte, error)
+}
+
 // Factory constructs the Logic for one room ID. One Hub always uses the
 // same Factory, so one Hub corresponds to one room type; a host running
 // several kinds of room constructs several Hubs.

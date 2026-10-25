@@ -39,6 +39,9 @@ type member struct {
 	peer   Peer
 	queue  chan []byte
 	cancel context.CancelFunc
+	// seq is the sequence of the last framed payload admitted to queue. It
+	// is read and written only on the room goroutine.
+	seq uint64
 }
 
 // peerEqual reports whether a and b are the same Peer identity. It is a
@@ -60,6 +63,9 @@ type room struct {
 	id    string
 	hub   *Hub
 	logic Logic
+	// framer is logic's Framer, or nil when logic does not opt in. It is
+	// detected once, when the room is created.
+	framer Framer
 
 	inbox chan roomOp
 	done  chan struct{}
@@ -80,10 +86,13 @@ type room struct {
 }
 
 func newRoom(hub *Hub, id string) *room {
+	logic := hub.factory(id)
+	framer, _ := logic.(Framer)
 	r := &room{
 		id:      id,
 		hub:     hub,
-		logic:   hub.factory(id),
+		logic:   logic,
+		framer:  framer,
 		inbox:   make(chan roomOp, hub.opts.RoomQueue),
 		done:    make(chan struct{}),
 		members: make(map[string]*member),
@@ -278,7 +287,9 @@ func (r *room) handleJoin(op roomOp) {
 	go runPeerWriter(ctx, r, m)
 	r.cancelEviction()
 
-	r.deliver(userID, m, snapshot)
+	// The snapshot bypasses framing until the join-snapshot change makes it
+	// the first framed payload; that change replaces this call.
+	r.deliverUnframed(userID, m, snapshot)
 
 	// Join does not return until EventJoin has been handled: membership and
 	// the snapshot delivery above are never rolled back on a Handle error
@@ -388,6 +399,37 @@ func (r *room) sendUser(userID string, payload []byte) {
 // slice would let it observe a mutation the caller makes to that slice
 // after Dispatch/DispatchPeer has already returned.
 func (r *room) deliver(userID string, m *member, payload []byte) {
+	if r.framer != nil {
+		r.deliverFramed(userID, m, payload)
+		return
+	}
+	r.deliverUnframed(userID, m, payload)
+}
+
+// deliverFramed passes payload through the room's Framer and admits the
+// framed bytes. The sequence advances only after admission succeeds.
+func (r *room) deliverFramed(userID string, m *member, payload []byte) {
+	buf := make([]byte, len(payload))
+	copy(buf, payload)
+	framed, err := r.framer.Frame(Principal{UserID: userID}, m.seq+1, buf)
+	if err != nil {
+		r.closeMember(userID, m)
+		return
+	}
+	if len(framed) == 0 {
+		return
+	}
+	select {
+	case m.queue <- framed:
+		m.seq++
+	default:
+		r.closeMember(userID, m)
+	}
+}
+
+// deliverUnframed is the delivery path for a room whose Logic does not
+// implement Framer, and for the join snapshot.
+func (r *room) deliverUnframed(userID string, m *member, payload []byte) {
 	buf := make([]byte, len(payload))
 	copy(buf, payload)
 	select {
