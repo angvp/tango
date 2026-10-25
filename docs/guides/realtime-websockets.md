@@ -124,9 +124,22 @@ type Framer interface {
 
 `Frame` is an optional interface. A `Logic` that implements it is framed; one that does not is unchanged. The check happens once, when the room is created, so the choice is per `Logic` value and therefore per room: a `Factory` may return framed and unframed logics in one Hub. Every connection to a framed room is framed. There is no per-connection switch, so all members of a room agree on the envelope.
 
-`Frame` returns raw bytes. tanGO defines no wire format and ships no default envelope; the host chooses how the sequence is written. A framed `Logic` for the chat example might look like this:
+`Frame` returns raw bytes. tanGO defines no wire format and ships no default envelope; the host chooses how the sequence is written. A framed `Logic` for a chat room might look like this. The other `Logic` methods are omitted; they are unchanged by the framing.
 
 ```go
+package chat
+
+import (
+    "strconv"
+
+    "github.com/angvp/tango/realtime"
+)
+
+type chatLogic struct{}
+
+// Frame writes the sequence as a decimal line followed by the payload. The
+// capacity reserves room for the longest decimal uint64 (20 digits) plus the
+// newline, so the buffer is allocated once per frame.
 func (chatLogic) Frame(_ realtime.Principal, seq uint64, payload []byte) ([]byte, error) {
     framed := make([]byte, 0, len(payload)+21)
     framed = strconv.AppendUint(framed, seq, 10)
