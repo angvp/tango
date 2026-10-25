@@ -45,7 +45,7 @@ objects, err := s3.New(ctx, s3.Config{
 
 ## Google Cloud Storage (unreleased)
 
-`storage/gcs` (`github.com/angvp/tango/storage/gcs`) is a `Store` on Google Cloud Storage. It is unreleased, and its release is not scheduled. Its release will carry its own tag, `storage/gcs/vX.Y.Z`, and needs the maintainer's approval. Do not add it to a project until it is released. Until then, the two ways to put uploads in GCS are:
+`storage/gcs` (`github.com/angvp/tango/storage/gcs`) is a `Store` on Google Cloud Storage. It is unreleased and will be experimental when released: it passes the shared `storagetest` conformance suite and its own tests against an in-process Google Cloud Storage emulator (`fake-gcs-server`), and has not been run against a real Google Cloud Storage bucket, so behaviour specific to Google's service is unverified. Its release will carry its own tag, `storage/gcs/vX.Y.Z`, and needs the maintainer's approval. Do not add it to a project until it is released. Until then, the two ways to put uploads in GCS are:
 
 | Path | Use it when | Configure with |
 |---|---|---|
