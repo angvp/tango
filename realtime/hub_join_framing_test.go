@@ -1,0 +1,215 @@
+package realtime
+
+import (
+	"context"
+	"errors"
+	"strconv"
+	"testing"
+)
+
+// The join-snapshot tests below drive Hub.Join on an opted-in room. The
+// snapshot is framed as sequence 1 before the existing member for that user
+// is touched; a failure at that point must leave the existing member live.
+
+func TestFramedJoinSnapshotIsSequenceOneAndJoinEventSendsFollow(t *testing.T) {
+	logic := newFramingLogic()
+	logic.handle = func(rc *RoomContext, ev Event) error {
+		if ev.Kind == EventJoin {
+			return rc.SendUser(ev.Principal.UserID, []byte("welcome"))
+		}
+		return nil
+	}
+	hub, _ := newTestHub(t, func(string) Logic { return logic }, Options{})
+
+	alice := &fakePeer{}
+	mustJoin(t, hub, "room-1", "alice", alice)
+
+	assertMessages(t, waitForMessages(t, alice, 2), []string{"1:snapshot:alice", "2:welcome"})
+	assertFrameCalls(t, logic.framedCallsFor("alice"), []string{"snapshot:alice", "welcome"}, []uint64{1, 2})
+}
+
+// joinFixture starts a framed room with alice already joined on alice. The
+// logic broadcasts every action it receives, so a later dispatch reaches
+// every member and the counters are visible in the peers' messages.
+func joinFixture(t *testing.T, logic *framingLogic) (*Hub, *fakePeer) {
+	t.Helper()
+	logic.handle = func(rc *RoomContext, ev Event) error {
+		if ev.Kind == EventAction {
+			return rc.Broadcast(ev.Payload)
+		}
+		return nil
+	}
+	hub, _ := newTestHub(t, func(string) Logic { return logic }, Options{})
+	alice := &fakePeer{}
+	mustJoin(t, hub, "room-1", "alice", alice)
+	return hub, alice
+}
+
+// assertFailedJoinLeftExistingLive checks that a failed replacement join for
+// alice changed nothing: the existing peer was not closed, the next broadcast
+// reaches it with its counter continuing after the snapshot, the replacement
+// peer was never made a member, and EventJoin was handled once (for the
+// original join only).
+func assertFailedJoinLeftExistingLive(t *testing.T, hub *Hub, logic *framingLogic, existing, replacement *fakePeer) {
+	t.Helper()
+	if existing.isClosed() {
+		t.Fatal("existing member was closed by a failed join")
+	}
+	dispatch(t, hub, "room-1", "alice", "later")
+	assertMessages(t, waitForMessages(t, existing, 2), []string{"1:snapshot:alice", "2:later"})
+	if existing.isClosed() {
+		t.Fatal("existing member was closed after a failed join")
+	}
+	if n := len(replacement.messages()); n != 0 {
+		t.Fatalf("replacement peer received %d messages from a failed join, want 0", n)
+	}
+	if n := countEvents(logic, EventJoin, "alice"); n != 1 {
+		t.Fatalf("EventJoin handled %d times for alice, want 1 (the failed join must not handle it)", n)
+	}
+}
+
+func countEvents(logic *framingLogic, kind EventKind, userID string) int {
+	n := 0
+	for _, ev := range logic.recordedEvents() {
+		if ev.Kind == kind && ev.Principal.UserID == userID {
+			n++
+		}
+	}
+	return n
+}
+
+func TestJoinSnapshotErrorLeavesExistingMemberLive(t *testing.T) {
+	wantErr := errors.New("snapshot refused")
+	logic := newFramingLogic()
+	failSnapshot := false
+	logic.snapshot = func(p Principal) ([]byte, error) {
+		if failSnapshot {
+			return nil, wantErr
+		}
+		return []byte("snapshot:" + p.UserID), nil
+	}
+	hub, alice := joinFixture(t, logic)
+
+	failSnapshot = true
+	replacement := &fakePeer{}
+	err := hub.Join(context.Background(), "room-1", Principal{UserID: "alice"}, replacement)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Join error = %v, want %v", err, wantErr)
+	}
+	if got := logic.framedCallsFor("alice"); len(got) != 1 {
+		t.Fatalf("Frame calls for alice = %d, want 1 (only the original snapshot): the failed snapshot must not be framed", len(got))
+	}
+	assertFailedJoinLeftExistingLive(t, hub, logic, alice, replacement)
+}
+
+func TestJoinFrameErrorLeavesExistingMemberLive(t *testing.T) {
+	errFrame := errors.New("encoder refused")
+	logic := newFramingLogic()
+	failSnapshot := false
+	logic.encode = func(_ Principal, seq uint64, payload []byte) ([]byte, error) {
+		if failSnapshot && seq == 1 {
+			return nil, errFrame
+		}
+		return []byte(strconv.FormatUint(seq, 10) + ":" + string(payload)), nil
+	}
+	hub, alice := joinFixture(t, logic)
+
+	failSnapshot = true
+	replacement := &fakePeer{}
+	err := hub.Join(context.Background(), "room-1", Principal{UserID: "alice"}, replacement)
+	if !errors.Is(err, errFrame) {
+		t.Fatalf("Join error = %v, want it to wrap %v", err, errFrame)
+	}
+	assertFailedJoinLeftExistingLive(t, hub, logic, alice, replacement)
+}
+
+func TestJoinNilFramedSnapshotLeavesExistingMemberLive(t *testing.T) {
+	logic := newFramingLogic()
+	failSnapshot := false
+	logic.encode = func(_ Principal, seq uint64, payload []byte) ([]byte, error) {
+		if failSnapshot && seq == 1 {
+			return nil, nil
+		}
+		return []byte(strconv.FormatUint(seq, 10) + ":" + string(payload)), nil
+	}
+	hub, alice := joinFixture(t, logic)
+
+	failSnapshot = true
+	replacement := &fakePeer{}
+	err := hub.Join(context.Background(), "room-1", Principal{UserID: "alice"}, replacement)
+	if !errors.Is(err, ErrEmptyFrame) {
+		t.Fatalf("Join error = %v, want ErrEmptyFrame", err)
+	}
+	assertFailedJoinLeftExistingLive(t, hub, logic, alice, replacement)
+}
+
+func TestJoinEmptyFramedSnapshotLeavesExistingMemberLive(t *testing.T) {
+	logic := newFramingLogic()
+	failSnapshot := false
+	logic.encode = func(_ Principal, seq uint64, payload []byte) ([]byte, error) {
+		if failSnapshot && seq == 1 {
+			return []byte{}, nil
+		}
+		return []byte(strconv.FormatUint(seq, 10) + ":" + string(payload)), nil
+	}
+	hub, alice := joinFixture(t, logic)
+
+	failSnapshot = true
+	replacement := &fakePeer{}
+	err := hub.Join(context.Background(), "room-1", Principal{UserID: "alice"}, replacement)
+	if !errors.Is(err, ErrEmptyFrame) {
+		t.Fatalf("Join error = %v, want ErrEmptyFrame", err)
+	}
+	assertFailedJoinLeftExistingLive(t, hub, logic, alice, replacement)
+}
+
+func TestReconnectRestartsAtSequenceOneAndReplacedPeerGetsNoMoreFrames(t *testing.T) {
+	logic := newFramingLogic()
+	hub, alice1 := joinFixture(t, logic)
+	ctx := context.Background()
+	bob := &fakePeer{}
+	mustJoin(t, hub, "room-1", "bob", bob)
+
+	dispatch(t, hub, "room-1", "alice", "a")
+	// Wait for alice1's writer to send "a" before replacing it: closing the
+	// member cancels its writer, which may drop a frame still queued.
+	assertMessages(t, waitForMessages(t, alice1, 2), []string{"1:snapshot:alice", "2:a"})
+
+	alice2 := &fakePeer{}
+	if err := hub.Join(ctx, "room-1", Principal{UserID: "alice"}, alice2); err != nil {
+		t.Fatalf("replacement join: %v", err)
+	}
+	waitFor(t, alice1.isClosed, "replaced peer was not closed")
+	dispatch(t, hub, "room-1", "alice", "b")
+
+	assertMessages(t, waitForMessages(t, alice2, 2), []string{"1:snapshot:alice", "2:b"})
+	assertMessages(t, waitForMessages(t, bob, 3), []string{"1:snapshot:bob", "2:a", "3:b"})
+	assertMessages(t, alice1.messages(), []string{"1:snapshot:alice", "2:a"})
+	assertFrameCalls(t, logic.framedCallsFor("alice"),
+		[]string{"snapshot:alice", "a", "snapshot:alice", "b"}, []uint64{1, 2, 1, 2})
+}
+
+func TestStalePeerLeaveAndDispatchNeverReachFrameOrReplacementCounter(t *testing.T) {
+	logic := newFramingLogic()
+	hub, stale := joinFixture(t, logic)
+	ctx := context.Background()
+	replacement := &fakePeer{}
+	if err := hub.Join(ctx, "room-1", Principal{UserID: "alice"}, replacement); err != nil {
+		t.Fatalf("replacement join: %v", err)
+	}
+	before := logic.frameCallCount()
+
+	if err := hub.Leave(ctx, "room-1", Principal{UserID: "alice"}, stale); err != nil {
+		t.Fatalf("stale leave: %v", err)
+	}
+	ev := Event{Kind: EventAction, RoomID: "room-1", Principal: Principal{UserID: "alice"}, Payload: []byte("stale")}
+	if err := hub.DispatchPeer(ctx, ev, stale); !errors.Is(err, ErrStalePeer) {
+		t.Fatalf("stale DispatchPeer error = %v, want ErrStalePeer", err)
+	}
+	if got := logic.frameCallCount(); got != before {
+		t.Fatalf("stale operations reached Frame: %d calls, want %d", got, before)
+	}
+
+	dispatch(t, hub, "room-1", "alice", "next")
+	assertMessages(t, waitForMessages(t, replacement, 2), []string{"1:snapshot:alice", "2:next"})
+}

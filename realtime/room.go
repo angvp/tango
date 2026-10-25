@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -277,6 +278,17 @@ func (r *room) handleJoin(op roomOp) {
 		return
 	}
 
+	// On an opted-in room the snapshot is framed as sequence 1 before the
+	// existing member is touched, so a failure here leaves that member live.
+	var framed []byte
+	if r.framer != nil {
+		framed, err = r.frameSnapshot(op.principal, snapshot)
+		if err != nil {
+			op.reply <- err
+			return
+		}
+	}
+
 	userID := op.principal.UserID
 	if existing, ok := r.members[userID]; ok {
 		r.closeMember(userID, existing)
@@ -287,9 +299,11 @@ func (r *room) handleJoin(op roomOp) {
 	go runPeerWriter(ctx, r, m)
 	r.cancelEviction()
 
-	// The snapshot bypasses framing until the join-snapshot change makes it
-	// the first framed payload; that change replaces this call.
-	r.deliverUnframed(userID, m, snapshot)
+	if r.framer != nil {
+		r.admitSnapshotFrame(userID, m, framed)
+	} else {
+		r.deliverUnframed(userID, m, snapshot)
+	}
 
 	// Join does not return until EventJoin has been handled: membership and
 	// the snapshot delivery above are never rolled back on a Handle error
@@ -427,8 +441,37 @@ func (r *room) deliverFramed(userID string, m *member, payload []byte) {
 	}
 }
 
+// frameSnapshot returns the join snapshot framed as sequence 1. A nil or
+// empty result cannot be skipped, because the first frame of a connection
+// must be the snapshot, so it fails the join instead.
+func (r *room) frameSnapshot(p Principal, snapshot []byte) ([]byte, error) {
+	buf := make([]byte, len(snapshot))
+	copy(buf, snapshot)
+	framed, err := r.framer.Frame(p, 1, buf)
+	if err != nil {
+		return nil, fmt.Errorf("realtime: frame snapshot: %w", err)
+	}
+	if len(framed) == 0 {
+		return nil, ErrEmptyFrame
+	}
+	return framed, nil
+}
+
+// admitSnapshotFrame enqueues the already-framed join snapshot on m's fresh
+// queue. PeerQueue is at least one, so the first frame is always admitted;
+// an overflow still takes the ordinary overflow path, and the sequence stays
+// unchanged because nothing was admitted.
+func (r *room) admitSnapshotFrame(userID string, m *member, framed []byte) {
+	select {
+	case m.queue <- framed:
+		m.seq = 1
+	default:
+		r.closeMember(userID, m)
+	}
+}
+
 // deliverUnframed is the delivery path for a room whose Logic does not
-// implement Framer, and for the join snapshot.
+// implement Framer.
 func (r *room) deliverUnframed(userID string, m *member, payload []byte) {
 	buf := make([]byte, len(payload))
 	copy(buf, payload)
