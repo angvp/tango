@@ -110,6 +110,50 @@ A pattern is a host, optionally with a scheme, and `*` may stand in for part of 
 
 `Leave` is called exactly once, with a fresh bounded background context, in both places the connection can end: after the read loop returns normally, and after a failed `Join`. The latter exists because `Join` has no rollback (see above) — an `EventJoin` handler error can leave membership installed even though `View` is about to close the socket, so `View` always calls `Leave` before closing it. If `Join` failed before membership existed (e.g. a `Snapshot` error), that `Leave` is simply a safe, idempotent no-op.
 
+## Sequenced frames (unreleased)
+
+This section describes behaviour in the next release and is not in any tagged version yet.
+
+A `Logic` can opt its room in to per-connection sequence numbers by also implementing `Framer`:
+
+```go
+type Framer interface {
+    Frame(to Principal, seq uint64, payload []byte) ([]byte, error)
+}
+```
+
+`Frame` is an optional interface. A `Logic` that implements it is framed; one that does not is unchanged. The check happens once, when the room is created, so the choice is per `Logic` value and therefore per room: a `Factory` may return framed and unframed logics in one Hub. Every connection to a framed room is framed. There is no per-connection switch, so all members of a room agree on the envelope.
+
+`Frame` returns raw bytes. tanGO defines no wire format and ships no default envelope; the host chooses how the sequence is written. A framed `Logic` for the chat example might look like this:
+
+```go
+func (chatLogic) Frame(_ realtime.Principal, seq uint64, payload []byte) ([]byte, error) {
+    framed := make([]byte, 0, len(payload)+21)
+    framed = strconv.AppendUint(framed, seq, 10)
+    framed = append(framed, '\n')
+    framed = append(framed, payload...)
+    return framed, nil
+}
+```
+
+The client reads the decimal sequence up to the first newline and then the payload. Any other envelope works as well, such as a fixed-width header or a length prefix, as long as the client can recover the sequence from each frame.
+
+The guarantee, which the Framer documentation states verbatim:
+
+> On a connection whose Logic implements Framer, every payload admitted to the member's queue is passed through Frame with a sequence that starts at 1 for the join snapshot and increases by 1 for each later admitted payload, in queue order, with no gaps. The sequence is per member (per connection; reconnecting restarts at 1), not per room, and records admission to the outgoing queue, not delivery or acknowledgement by the peer. A payload that is not admitted (excluded or unknown member, empty encoder result, encoder error, queue overflow) uses no sequence; a socket write failure ends the member.
+
+What this means in practice:
+
+- **The join snapshot is sequence 1.** `Join` calls `Snapshot`, then `Frame` with sequence 1, before the existing connection for that user is touched. Anything `Handle(EventJoin)` sends to the new member is sequence 2 or later.
+- **Reconnecting restarts at 1.** A reconnect is a new `Join` with a new `Peer`, and it starts a new counter.
+- **A failed join keeps the existing connection.** If `Snapshot` fails, or `Frame` returns an error for the snapshot, `Join` returns that error. If the framed snapshot is nil or empty, `Join` returns `ErrEmptyFrame`, because sequence 1 cannot be skipped. In each case the existing member is left exactly as it was.
+- **An empty result sends nothing.** For a later payload, a nil or empty `Frame` result sends nothing to that member. No sequence is used and the member stays connected.
+- **An encoder error ends the member.** A non-nil error from `Frame` closes that member, as queue overflow does. No sequence is used and nothing is logged or recorded, so the client must reconnect and will restart at 1.
+- **Queue overflow ends the member.** A full outbound queue closes that member and uses no sequence.
+- **Excluded and unknown members are never framed.** A payload addressed to a member that `BroadcastExcept` excludes, or to a user with no live connection, never reaches `Frame` and uses no sequence.
+- **`Frame` runs on the room goroutine.** It is called from the same single-owner loop as `Handle` and `Snapshot`, so a slow encoder stalls the room. A panic in `Frame` is not recovered and crashes the process, as a panic in `Handle` or `Snapshot` does. Keep the encoder fast and total.
+- **The bytes belong to the room after `Frame` returns.** `payload` is a copy made for that member, so `Frame` may inspect or change it without affecting other members or the caller. The slice `Frame` returns becomes the queued buffer and is owned by the room. Do not retain it or modify it after returning.
+
 ## Deliberate limits
 
 - Single-process, in-memory only — no distributed pub/sub, no cross-instance presence; [running more than one instance](running-more-than-one-instance.md) covers routing a room to one process.
