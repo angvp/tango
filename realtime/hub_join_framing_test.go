@@ -378,3 +378,62 @@ func TestSnapshotSendOverflowClosesExistingMemberAndJoinProceeds(t *testing.T) {
 	assertFrameCalls(t, logic.framedCallsFor("alice"),
 		[]string{"snapshot:alice", "p1", "p2", "during", "snapshot:alice", "later"}, []uint64{1, 2, 3, 4, 1, 2})
 }
+
+// The Snapshot send's Frame error closes the existing member inside Snapshot,
+// and the replacement snapshot then fails to frame. Join returns that error,
+// the new peer is never admitted, and the room keeps no live member for alice.
+func TestSnapshotSendFrameErrorThenReplacementFrameFailureLeavesNoMember(t *testing.T) {
+	errFrame := errors.New("send refused")
+	errReplacement := errors.New("replacement snapshot refused")
+	cases := []struct {
+		name           string
+		replacementOut []byte
+		replacementErr error
+		wantErr        error
+	}{
+		{name: "error", replacementErr: errReplacement, wantErr: errReplacement},
+		{name: "empty", replacementOut: []byte{}, wantErr: ErrEmptyFrame},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logic := &snapshotSendLogic{framingLogic: newFramingLogic()}
+			failReplacement := false
+			logic.encode = func(_ Principal, seq uint64, payload []byte) ([]byte, error) {
+				if string(payload) == "during" {
+					return nil, errFrame
+				}
+				if failReplacement && seq == 1 {
+					return tc.replacementOut, tc.replacementErr
+				}
+				return []byte(strconv.FormatUint(seq, 10) + ":" + string(payload)), nil
+			}
+			alice := &fakePeer{}
+			hub := joinWithSnapshotSend(t, logic, Options{}, alice)
+			ctx := context.Background()
+			dispatch(t, hub, "room-1", "alice", "a")
+			assertMessages(t, waitForMessages(t, alice, 2), []string{"1:snapshot:alice", "2:a"})
+
+			logic.armed, logic.sendPayload = true, "during"
+			failReplacement = true
+			replacement := &fakePeer{}
+			err := hub.Join(ctx, "room-1", Principal{UserID: "alice"}, replacement)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("Join error = %v, want %v", err, tc.wantErr)
+			}
+			waitFor(t, alice.isClosed, "existing member was not closed by the Snapshot send's Frame error")
+
+			dispatch(t, hub, "room-1", "alice", "later")
+			waitFor(t, alice.isClosed, "existing member is not closed")
+			assertMessages(t, alice.messages(), []string{"1:snapshot:alice", "2:a"})
+			if n := len(replacement.messages()); n != 0 {
+				t.Fatalf("replacement peer received %d messages, want 0 (the join failed before admission)", n)
+			}
+			if replacement.isClosed() {
+				t.Fatal("replacement peer was closed, want it never admitted and never closed by the room")
+			}
+			if n := countEvents(logic.framingLogic, EventJoin, "alice"); n != 1 {
+				t.Fatalf("EventJoin handled %d times for alice, want 1 (the failed join must not handle it)", n)
+			}
+		})
+	}
+}
