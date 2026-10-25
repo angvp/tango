@@ -110,9 +110,7 @@ A pattern is a host, optionally with a scheme, and `*` may stand in for part of 
 
 `Leave` is called exactly once, with a fresh bounded background context, in both places the connection can end: after the read loop returns normally, and after a failed `Join`. The latter exists because `Join` has no rollback (see above) — an `EventJoin` handler error can leave membership installed even though `View` is about to close the socket, so `View` always calls `Leave` before closing it. If `Join` failed before membership existed (e.g. a `Snapshot` error), that `Leave` is simply a safe, idempotent no-op.
 
-## Sequenced frames (unreleased)
-
-This section describes behaviour in the next release and is not in any tagged version yet.
+## Sequenced frames
 
 A `Logic` can opt its room in to per-connection sequence numbers by also implementing `Framer`:
 
