@@ -103,8 +103,12 @@ type Logic interface {
 // returns; the implementation must not retain or modify it afterwards. A nil
 // or empty result sends nothing to that member. A non-nil error closes that
 // member exactly as queue overflow does. For the join snapshot, a nil or
-// empty result, or an error, fails Join instead, and the existing member is
-// kept unless a send Snapshot made through RoomContext already closed it.
+// empty result, or an error, fails Join instead. That failure does not itself
+// close, rewind or skip the existing member, and never admits the new peer.
+// Sends Snapshot made through RoomContext are not rolled back: each is
+// admitted to the existing member's queue and keeps its sequence, and one that
+// closed the member by a framing error or queue overflow leaves it closed.
+// RoomContext reports no error to Snapshot.
 //
 // On a connection whose Logic implements Framer, every payload admitted to
 // the member's queue is passed through Frame with a sequence that starts at
@@ -176,8 +180,8 @@ var (
 	ErrInvalidPeer = errors.New("tango realtime: peer must be non-nil and comparable")
 	// ErrEmptyFrame is returned by Join when the Framer returns a nil or
 	// empty result for the join snapshot. The snapshot is sequence 1 and
-	// cannot be skipped, so the join fails and the existing connection is
-	// left in place, unless a send Snapshot made through RoomContext already
-	// closed it.
+	// cannot be skipped, so the join fails. The failure does not close the
+	// existing member or admit the new peer; sends Snapshot made through
+	// RoomContext are not rolled back (see Framer).
 	ErrEmptyFrame = errors.New("tango realtime: framed join snapshot is empty")
 )
