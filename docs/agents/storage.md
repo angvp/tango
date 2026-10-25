@@ -6,7 +6,7 @@ Canonical files: `storage/storage.go`, `storage/upload.go`, `storage/serve.go`, 
 
 ## Rule
 
-- Depend on `storage.Store` (`Put`, `Stat`, `Open`, `Delete`); construct the concrete store in `main`: `local.New(dir)` for development and one host, `s3.New(ctx, s3.Config{…})` (module `github.com/angvp/tango/storage/s3`) for several instances or an ephemeral disk. `gcs.New(ctx, gcs.Config{…})` (module `github.com/angvp/tango/storage/gcs`) is unreleased: do not add it to a project until it is released.
+- Depend on `storage.Store` (`Put`, `Stat`, `Open`, `Delete`); construct the concrete store in `main`: `local.New(dir)` for development and one host, `s3.New(ctx, s3.Config{…})` (module `github.com/angvp/tango/storage/s3`) for several instances or an ephemeral disk. `gcs.New(ctx, gcs.Config{…})` (module `github.com/angvp/tango/storage/gcs`) is experimental (released as `storage/gcs/v0.1.0`, not yet run against a real bucket): read the [uploads guide](../guides/uploads.md#google-cloud-storage-experimental) before adding it to a project.
 - Read an upload with `storage.Upload(store, r, storage.UploadOptions{PutOptions: …})`. `MaxSize` is required; put the type policy in `PutOptions.AllowedTypes` (sniffed, such as `image/*`), never in code that trusts `DeclaredType`.
 - Keep the returned `Key`, `Size`, `SHA256` and `ContentType` in an app-owned model; use `tango:"varchar=n"` on its strings. There is no `FileField`, no file model and no listing.
 - Write order: `Upload`, then the row in `store.InTx`, then `Delete` the new object if the row fails. To remove: delete the row first, the bytes best-effort, with `context.WithoutCancel`.
