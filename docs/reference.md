@@ -155,7 +155,7 @@ See [JWT authentication](guides/jwt-auth.md) and the runnable [`examples/jwt-api
 | `func (*Hub) SendUser(ctx context.Context, userID string, payload []byte) error` | Delivers to `userID`'s live peer in every room the Hub currently tracks where they have one. |
 | `func (*Hub) Close(ctx context.Context) error` | Idempotent: rejects new `Join`/`Dispatch`/`DispatchPeer` with `ErrClosed`, stops timers, closes peers, waits for every room loop to exit (or `ctx` to be canceled). An op already queued, or blocked trying to enqueue, when `Close` began also resolves to `ErrClosed` — never `ErrRoomNotFound`, which stays reserved for an actual room eviction. |
 | `ErrRoomNotFound`, `ErrClosed`, `ErrStalePeer`, `ErrInvalidPeer` | Sentinel errors checkable with `errors.Is`. |
-| `ErrEmptyFrame` (unreleased, next release) | Returned by `Join` when a `Framer` returns a nil or empty result for the join snapshot. The existing connection is kept. Checkable with `errors.Is`. |
+| `ErrEmptyFrame` (unreleased, next release) | Returned by `Join` when a `Framer` returns a nil or empty result for the join snapshot. The existing connection is kept, unless a send `Snapshot` made through `RoomContext` already closed it. Checkable with `errors.Is`. |
 
 See [realtime and WebSockets](guides/realtime-websockets.md), and the runnable [`examples/realtime-chat`](../examples/realtime-chat).
 
