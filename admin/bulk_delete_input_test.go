@@ -49,7 +49,7 @@ func TestBulkDeleteRejectsInvalidSelectionsWholesale(t *testing.T) {
 			if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
 				t.Errorf("Content-Type = %q, want an admin HTML page", contentType)
 			}
-			if body := response.Body.String(); !strings.Contains(body, "nothing was deleted") || !strings.Contains(body, `href="`+crudBasePath+`"`) {
+			if body := response.Body.String(); !strings.Contains(body, "Nothing was deleted.") || !strings.Contains(body, `href="`+crudBasePath+`"`) {
 				t.Errorf("rejection page lacks the reason or a link back to the list:\n%s", body)
 			}
 			if location := response.Header().Get("Location"); location != "" {

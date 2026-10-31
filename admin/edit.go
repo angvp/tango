@@ -18,7 +18,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 	pageChrome := chrome{Nav: nav, Active: meta.Name, Brand: brand}
 
 	return func(ctx *tango.Context) error {
-		title := i18n.T(ctx.Context(), "admin.edit.title", "Edit %s", meta.Name)
+		title := i18n.T(ctx.Context(), "admin.edit.title", "Edit %s", displayNoun(meta, registration.Options))
 		pkField, err := primaryKeyField(meta)
 		if err != nil {
 			return err

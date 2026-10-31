@@ -78,20 +78,3 @@ func uniqueViolationKey(err error) string {
 func uniqueFieldMessage(ctx context.Context, meta model.ModelMeta, field model.FieldMeta, opts adminregistry.Options) string {
 	return i18n.T(ctx, "admin.error.unique_field", "Another %s already uses this %s.", displayNoun(meta, opts), strings.ToLower(fieldLabel(opts, field.Name)))
 }
-
-// fieldLabel is the label the form shows for a field: the host's Labels
-// entry when it has one, else the humanized Go name.
-func fieldLabel(opts adminregistry.Options, name string) string {
-	if label, ok := opts.Labels[name]; ok {
-		return label
-	}
-	return humanizeFieldName(name)
-}
-
-// displayNoun is the lowercase noun messages use for one row of the model.
-func displayNoun(meta model.ModelMeta, opts adminregistry.Options) string {
-	if opts.SingularName != "" {
-		return strings.ToLower(opts.SingularName)
-	}
-	return strings.ToLower(humanizeFieldName(meta.Name))
-}

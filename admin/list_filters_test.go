@@ -321,7 +321,7 @@ func TestChangelistControlsAreLabelledForAssistiveTech(t *testing.T) {
 		`<select id="filter-published" name="filter_published"`,
 		`<label for="filter-author_id"`,
 		`<select id="filter-author_id" name="filter_author_id"`,
-		`<caption class="sr-only">flBook</caption>`,
+		`<caption class="sr-only">Fl books</caption>`,
 		`<th scope="col">Title</th>`,
 		`<th scope="col" class="cell-actions">Actions</th>`,
 	} {
@@ -362,7 +362,7 @@ func TestUnlistedFieldParametersAreIgnoredAndEmptyStateExplainsFilters(t *testin
 	}
 
 	body = doRequest(t, handler, "GET", flBookPath+"?filter_published=yes", nil).Body.String()
-	if !strings.Contains(body, "No rows match the selected filters.") {
+	if !strings.Contains(body, "No fl books match the selected filters.") {
 		t.Fatalf("an empty filtered list should say the filters matched nothing:\n%s", body)
 	}
 }

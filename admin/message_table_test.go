@@ -26,7 +26,7 @@ type messageBook struct {
 
 const messageBookBasePath = "/admin/message_book/"
 
-func buildMessageBookAdmin(t *testing.T) (http.Handler, *sql.DB) {
+func buildMessageBookAdmin(t *testing.T, adminOpts ...admin.Option) (http.Handler, *sql.DB) {
 	t.Helper()
 
 	registry := tango.NewRegistry()
@@ -35,15 +35,17 @@ func buildMessageBookAdmin(t *testing.T) (http.Handler, *sql.DB) {
 	}
 	if err := registry.Admin().Register(messageBook{}, admin.Options{
 		ListDisplay:  []string{"Title", "Year"},
+		Search:       []string{"Title"},
 		SingularName: "book",
 		PluralName:   "books",
+		BulkDelete:   true,
 	}); err != nil {
 		t.Fatalf("register admin model: %v", err)
 	}
 
 	sqlDB, store := migratedAdminDB(t, registry)
 	seedAdminAccountAndSession(t, sqlDB, store)
-	if err := registry.Register(admin.New(store)); err != nil {
+	if err := registry.Register(admin.New(store, adminOpts...)); err != nil {
 		t.Fatalf("register admin app: %v", err)
 	}
 	if err := registry.RunRegistration(); err != nil {
@@ -156,6 +158,32 @@ func TestBadInputYieldsFriendlyMessagesOnCreateAndEdit(t *testing.T) {
 					}
 				}
 			})
+		}
+	}
+}
+
+// TestSaveWithMissingForeignKeyTargetIsAFormMessage covers a save whose
+// foreign key names a row that does not exist: the refusal is a form-level
+// message with no database text, and the page is a 422, not a server error.
+func TestSaveWithMissingForeignKeyTargetIsAFormMessage(t *testing.T) {
+	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+	seedAuthor(t, sqlDB, "Ursula")
+
+	response := doRequest(t, handler, http.MethodPost, "/admin/fk_post/new/", url.Values{
+		"Title":    {"A post"},
+		"AuthorID": {"999"},
+	})
+
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422; body %.300s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "The item you chose no longer exists. Choose another and save again.") {
+		t.Fatalf("body lacks the form-level message: %.300s", body)
+	}
+	for _, leak := range []string{"FOREIGN KEY", "constraint", "nonexistent", "internal error", "tango db"} {
+		if strings.Contains(body, leak) {
+			t.Fatalf("body leaks %q", leak)
 		}
 	}
 }

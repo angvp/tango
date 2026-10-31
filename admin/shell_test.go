@@ -122,7 +122,7 @@ func TestBreadcrumbsLinkTheTrailAndMarkTheCurrentItem(t *testing.T) {
 		links   []crumbLink
 		current string
 	}{
-		{"new", []crumbLink{model}, "New crudProduct"},
+		{"new", []crumbLink{model}, "New crud product"},
 		{"edit", []crumbLink{model}, "Widget"},
 		{"edit-422", []crumbLink{model}, "Widget"},
 		{"delete", []crumbLink{model, {crudBasePath + "1/", "Widget"}}, "Delete"},

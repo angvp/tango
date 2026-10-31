@@ -14,18 +14,18 @@ var listTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
   <div class="inline-row">
     {{template "menuBtn" .}}
-    <h1 class="topbar-title">{{.ModelName}}</h1>
+    <h1 class="topbar-title">{{.Heading}}</h1>
   </div>
-  <a href="{{.BasePath}}new/" class="btn-primary">{{.T "admin.button.add_model" "+ Add %s" .ModelName}}</a>
+  <a href="{{.BasePath}}new/" class="btn-primary">{{.T "admin.button.add_model" "+ Add %s" .Singular}}</a>
 </header>
 <div class="content-body">
-  {{if .Deleted}}<div class="alert-success" role="status">{{if eq .Deleted 1}}{{.T "admin.bulk.deleted_one" "Deleted 1 row."}}{{else}}{{.T "admin.bulk.deleted_many" "Deleted %d rows." .Deleted}}{{end}}</div>{{end}}
+  {{if .Deleted}}<div class="alert-success" role="status">{{if eq .Deleted 1}}{{.T "admin.bulk.deleted_one" "1 %s deleted" .Singular}}{{else}}{{.T "admin.bulk.deleted_many" "%d %s deleted" .Deleted .Plural}}{{end}}</div>{{end}}
   <div class="card changelist-card">
     <div class="card-header">
       <form method="get" class="flex flex-wrap items-end gap-3 w-full">
         <div class="flex flex-col gap-1 flex-1 min-w-[200px]">
           <label for="list-search" class="field-caption">{{.T "admin.list.search_label" "Search"}}</label>
-          <input id="list-search" type="text" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .ModelName}}" class="input">
+          <input id="list-search" type="text" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .Plural}}" class="input">
         </div>
         {{range .Filters}}<div class="flex flex-col gap-1">
           {{if .Options}}<label for="{{.ID}}" class="field-caption">{{.Label}}</label>
@@ -44,7 +44,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       <button type="submit" name="density" value="compact" aria-pressed="{{.Compact}}" class="density-option {{if .Compact}}density-option-on{{else}}density-option-off{{end}}">{{.T "admin.density.compact" "Compact"}}</button>
     </form>
     {{if .Rows}}
-    {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.modal_title" "Delete {count} selected rows?"}}">
+    {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.modal_title" "Delete {count} selected %s?" .Plural}}">
     <div class="flex items-center gap-3 border-b border-line-subtle px-5 py-3" data-bulk-bar hidden>
       <button type="button" class="btn-danger" data-bulk-open disabled>{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
       <span class="text-sm text-ink-muted" data-bulk-count aria-live="polite"></span>
@@ -65,7 +65,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     </dialog>{{end}}
     <div class="table-wrap">
       <table class="table-admin {{if .Compact}}table-compact{{else}}table-comfortable{{end}}">
-        <caption class="sr-only">{{.ModelName}}</caption>
+        <caption class="sr-only">{{.Heading}}</caption>
         <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col"{{if .Numeric}} class="cell-num"{{end}}>{{.Label}}</th>{{end}}<th scope="col" class="cell-actions">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
@@ -94,9 +94,9 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     </div>
     {{else}}
     <div class="empty-state">
-      <p class="empty-state-title">{{.T "admin.list.empty_title" "No %s rows yet" .ModelName}}</p>
-      <p class="empty-state-body">{{if .SearchQuery}}{{.T "admin.list.empty_search" "Nothing matches “%s”." .SearchQuery}}{{else if .Criteria}}{{.T "admin.list.empty_filtered" "No rows match the selected filters."}}{{else}}{{.T "admin.list.empty_body" "Get started by adding the first one."}}{{end}}</p>
-      {{if not .Criteria}}<a href="{{.BasePath}}new/" class="btn-primary mt-3">{{.T "admin.button.add_model" "+ Add %s" .ModelName}}</a>{{end}}
+      <p class="empty-state-title">{{.T "admin.list.empty_title" "No %s yet" .Plural}}</p>
+      <p class="empty-state-body">{{if .SearchQuery}}{{.T "admin.list.empty_search" "No %s match “%s”." .Plural .SearchQuery}}{{else if .Criteria}}{{.T "admin.list.empty_filtered" "No %s match the selected filters." .Plural}}{{else}}{{.T "admin.list.empty_body" "Add the first %s to see it here." .Singular}}{{end}}</p>
+      {{if not .Criteria}}<a href="{{.BasePath}}new/" class="btn-primary mt-3">{{.T "admin.button.add_model" "+ Add %s" .Singular}}</a>{{end}}
     </div>
     {{end}}
   </div>
@@ -142,13 +142,13 @@ var deleteTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
   <div class="inline-row">
     {{template "menuBtn" .}}
-    <div>{{template "breadcrumbs" .}}<h1 class="topbar-title">{{.T "admin.delete.title" "Delete %s" .ModelName}}</h1></div>
+    <div>{{template "breadcrumbs" .}}<h1 class="topbar-title">{{.T "admin.delete.title" "Delete this %s" .Singular}}</h1></div>
   </div>
 </header>
 <div class="content-body">
   <div class="card max-w-lg">
     <div class="card-body">
-      <p class="text-sm text-ink-muted mb-5">{{.T "admin.delete.confirm_prefix" "Are you sure you want to delete"}} <span class="font-medium text-ink">{{.ModelName}} {{.PK}}</span>? {{.T "admin.delete.confirm_suffix" "This action cannot be undone."}}</p>
+      <p class="text-sm text-ink-muted mb-5">{{.T "admin.delete.confirm_prefix" "Are you sure you want to delete"}} <span class="font-medium text-ink">{{.Singular}} {{.PK}}</span>? {{.T "admin.delete.confirm_suffix" "This action cannot be undone."}}</p>
       <form method="post" class="inline-row">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button type="submit" class="btn-danger">{{.T "admin.button.confirm_delete" "Confirm delete"}}</button>
@@ -175,7 +175,11 @@ type listColumn struct {
 
 type listPageData struct {
 	chrome
-	ModelName   string
+	// Heading is the model's plural noun, capitalized, for the page title.
+	Heading string
+	// Singular and Plural are the model's display nouns (admin.Options).
+	Singular    string
+	Plural      string
 	BasePath    string
 	Columns     []listColumn
 	Compact     bool
@@ -216,7 +220,7 @@ type formPageData struct {
 
 type deletePageData struct {
 	chrome
-	ModelName string
+	Singular  string
 	PK        string
 	CSRFToken string
 }

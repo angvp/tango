@@ -47,7 +47,7 @@ func deleteView(store *db.Store, models *model.Registry, adminReg *adminregistry
 			}
 			return render(ctx, http.StatusOK, deleteTemplate, deletePageData{
 				chrome:    rc,
-				ModelName: meta.Name,
+				Singular:  displayNoun(meta, registration.Options),
 				PK:        pk,
 				CSRFToken: csrfTokenFromRequest(ctx.Request()),
 			})

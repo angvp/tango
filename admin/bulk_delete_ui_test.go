@@ -124,9 +124,9 @@ func TestBulkDeleteBannerShowsOnlyForAValidCount(t *testing.T) {
 	banner := regexp.MustCompile(`role="status"`)
 
 	for query, want := range map[string]string{
-		"deleted=1":           "Deleted 1 row.",
-		"deleted=2":           "Deleted 2 rows.",
-		"deleted=25":          "Deleted 25 rows.",
+		"deleted=1":           "1 crud product deleted",
+		"deleted=2":           "2 crud products deleted",
+		"deleted=25":          "25 crud products deleted",
 		"deleted=0":           "",
 		"deleted=26":          "",
 		"deleted=-1":          "",

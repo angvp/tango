@@ -168,12 +168,12 @@ func removeBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, fie
 
 // rejectBulk answers a refused bulk delete with an admin page, because the
 // request comes from a form submission a person is looking at.
-func rejectBulk(ctx *tango.Context, nav []navItem, brand Branding, meta model.ModelMeta, basePath, key, fallback string) error {
+func rejectBulk(ctx *tango.Context, nav []navItem, brand Branding, meta model.ModelMeta, basePath, key, fallback string, args ...any) error {
 	title := i18n.T(ctx.Context(), "admin.bulk.rejected_title", "Nothing was deleted")
 	return render(ctx, http.StatusBadRequest, bulkRejectedTemplate, bulkRejectedPageData{
 		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: meta.Name, Href: basePath}, crumb{Label: title}),
 		Title:    title,
-		Message:  i18n.T(ctx.Context(), key, fallback),
+		Message:  i18n.T(ctx.Context(), key, fallback, args...),
 		BasePath: basePath,
 	})
 }
@@ -236,11 +236,11 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration, nav []navIt
 		raws := form[bulkPKField]
 		count, countErr := strconv.Atoi(form.Get(bulkCountField))
 		if len(raws) == 0 || len(raws) > pageSize || countErr != nil || count != len(raws) {
-			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_invalid", "the selection is not valid; nothing was deleted")
+			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_invalid", "Nothing was deleted. The selection is not valid.")
 		}
 		keys, ok := parseBulkKeys(field, raws)
 		if !ok {
-			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_invalid", "the selection is not valid; nothing was deleted")
+			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_invalid", "Nothing was deleted. The selection is not valid.")
 		}
 
 		err = store.InTx(ctx.Context(), func(tx *db.Store) error {
@@ -248,7 +248,7 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration, nav []navIt
 		})
 		switch {
 		case errors.Is(err, errBulkKeyMissing):
-			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_missing", "a selected row no longer exists; nothing was deleted")
+			return rejectBulk(ctx, nav, brand, meta, basePath, "admin.error.bulk_missing", "Nothing was deleted. One selected %s no longer exists.", displayNoun(meta, registration.Options))
 		case err != nil:
 			return err
 		}

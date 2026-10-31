@@ -19,7 +19,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 	pageChrome := chrome{Nav: nav, Active: meta.Name, Brand: brand}
 
 	return func(ctx *tango.Context) error {
-		title := i18n.T(ctx.Context(), "admin.create.title", "New %s", meta.Name)
+		title := i18n.T(ctx.Context(), "admin.create.title", "New %s", displayNoun(meta, registration.Options))
 		createChrome := pageChrome.withContext(ctx.Context()).withCrumbs(crumb{Label: meta.Name, Href: basePath}, crumb{Label: title})
 		switch ctx.Request().Method {
 		case http.MethodGet:

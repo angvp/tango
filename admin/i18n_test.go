@@ -115,22 +115,22 @@ func TestAdminCRUDSurfacesTranslateWithI18nMiddleware(t *testing.T) {
 	})
 
 	list := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
-	if !strings.Contains(list, "Crear crudProduct") || !strings.Contains(list, "Buscar") || !strings.Contains(list, "Modelos") || !strings.Contains(list, "Editar") || !strings.Contains(list, "Sesión iniciada como admin") || !strings.Contains(list, "Cerrar sesión") {
+	if !strings.Contains(list, "Crear crud product") || !strings.Contains(list, "Buscar") || !strings.Contains(list, "Modelos") || !strings.Contains(list, "Editar") || !strings.Contains(list, "Sesión iniciada como admin") || !strings.Contains(list, "Cerrar sesión") {
 		t.Fatalf("list body missing translated text:\n%s", list)
 	}
 
 	create := doRequest(t, handler, http.MethodGet, crudBasePath+"new/", nil).Body.String()
-	if !strings.Contains(create, "Nuevo crudProduct") || !strings.Contains(create, "Guardar") {
+	if !strings.Contains(create, "Nuevo crud product") || !strings.Contains(create, "Guardar") {
 		t.Fatalf("create body missing translated text:\n%s", create)
 	}
 
 	edit := doRequest(t, handler, http.MethodGet, fmt.Sprintf("%s%d/", crudBasePath, id), nil).Body.String()
-	if !strings.Contains(edit, "Editar crudProduct") || !strings.Contains(edit, "Cancelar") {
+	if !strings.Contains(edit, "Editar crud product") || !strings.Contains(edit, "Cancelar") {
 		t.Fatalf("edit body missing translated text:\n%s", edit)
 	}
 
 	del := doRequest(t, handler, http.MethodGet, fmt.Sprintf("%s%d/delete/", crudBasePath, id), nil).Body.String()
-	if !strings.Contains(del, "Borrar crudProduct") || !strings.Contains(del, "Confirmar borrado") {
+	if !strings.Contains(del, "Borrar crud product") || !strings.Contains(del, "Confirmar borrado") {
 		t.Fatalf("delete body missing translated text:\n%s", del)
 	}
 }
