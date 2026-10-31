@@ -918,6 +918,12 @@ html, body{
     transition:transform 200ms ease-out,visibility 0s linear 200ms;
   }
 
+  @media (prefers-reduced-motion: reduce){
+    .nav-js .sidebar{
+      transition:none;
+    }
+  }
+
   .nav-js .\!sidebar{
     visibility:hidden;
     position:fixed;
@@ -929,6 +935,12 @@ html, body{
     --tw-translate-x:-100%;
     transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
     transition:transform 200ms ease-out,visibility 0s linear 200ms;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .nav-js .\!sidebar{
+      transition:none;
+    }
   }
 }
 
@@ -946,6 +958,12 @@ html, body{
     --tw-translate-x:0px;
     transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
     transition:transform 200ms ease-out,visibility 0s;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .nav-js .sidebar-open{
+      transition:none;
+    }
   }
 }
 

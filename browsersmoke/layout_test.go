@@ -128,6 +128,7 @@ func TestAdminLayoutAtPhoneWidths(t *testing.T) {
 	s.check(s.evalInt(`document.getAnimations().filter(function (a) {
 		return a.playState === 'running' && a.effect && a.effect.getComputedTiming().duration > 5;
 	}).length`) == 0, "the drawer opened with a running animation under prefers-reduced-motion: reduce")
+	s.check(s.evalString(`String(getComputedStyle(document.getElementById('sidebar')).transitionDuration.split(',').every(function (d) { return parseFloat(d) === 0; }))`) == "true", "the drawer keeps a non-zero transition under prefers-reduced-motion: reduce")
 
 	s.report()
 }

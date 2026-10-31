@@ -10,6 +10,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Changed
 
+- **The admin phone drawer opens and closes without animation when the operating system asks for reduced motion.** The drawer's slide is replaced by an immediate change under `prefers-reduced-motion: reduce`.
+
 - **The admin changelist row checkboxes are larger click targets.** Each row checkbox sits in a label at least 24 CSS pixels square, so a touch on a phone selects the row rather than missing it.
 
 - **The admin's list, form, delete, bulk outcome, sign-in and dashboard pages each have their own browser tab title.** The title starts with the page's heading, such as "Crud products · tanGO Admin", and the sign-in page reads "Sign in · tanGO Admin". The bulk delete outcome page is titled with its action, "Delete selected". **Catalog impact:** new key `admin.login.page_title` ("Sign in"), with an English fallback; a catalog without it shows the English text. The admin's name is still the `admin.layout.title` key.
