@@ -177,7 +177,7 @@ func TestListViewExactPageSizeShowsNoPhantomNextPage(t *testing.T) {
 	response := doRequest(t, handler, http.MethodGet, crudBasePath+"?page=1", nil)
 	body := response.Body.String()
 
-	if !strings.Contains(body, "25 results") {
+	if !strings.Contains(body, "25 crud products") {
 		t.Fatalf("body does not report the true total count:\n%s", body)
 	}
 	if strings.Contains(body, "Next page") {
@@ -194,7 +194,7 @@ func TestListViewManyPagesShowsPageLinksAndTotalCount(t *testing.T) {
 	response := doRequest(t, handler, http.MethodGet, crudBasePath+"?page=1", nil)
 	body := response.Body.String()
 
-	if !strings.Contains(body, "100 results") {
+	if !strings.Contains(body, "Showing 1 to 25 of 100 crud products") {
 		t.Fatalf("body does not report the true total count:\n%s", body)
 	}
 	if !strings.Contains(body, "Next page") {

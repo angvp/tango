@@ -25,16 +25,18 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       <form method="get" class="flex flex-wrap items-end gap-3 w-full">
         <div class="flex flex-col gap-1 flex-1 min-w-[200px]">
           <label for="list-search" class="field-caption">{{.T "admin.list.search_label" "Search"}}</label>
-          <input id="list-search" type="text" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .Plural}}" class="input">
+          <input id="list-search" type="search" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .Plural}}" class="input">
         </div>
         {{range .Filters}}<div class="flex flex-col gap-1">
           {{if .Options}}<label for="{{.ID}}" class="field-caption">{{.Label}}</label>
-          <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{else}}<span class="field-caption">{{.Label}}</span>{{end}}
-          {{if .Applied}}<input type="hidden" name="{{.Key}}" value="{{.AppliedValue}}"><p class="text-xs text-ink-muted">{{.Applied}}</p>{{end}}
+          <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{end}}
+          {{if .AppliedValue}}<input type="hidden" name="{{.Key}}" value="{{.AppliedValue}}">{{end}}
           {{if .Message}}<p class="hint-small">{{.Message}}</p>{{end}}
         </div>{{end}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
+        {{if .SearchQuery}}<a href="{{.ClearSearchHref}}" class="btn-ghost">{{.T "admin.list.clear_search" "Clear search"}}</a>{{end}}
       </form>
+      {{if .AppliedFilters}}<p class="mt-3 text-sm text-ink-muted">{{.T "admin.list.filters_applied" "Filters applied:"}} {{range $i, $f := .AppliedFilters}}{{if $i}}, {{end}}{{$.T "admin.list.filter_pair" "%s: %s" $f.Label $f.Value}}{{end}} <a href="{{.ClearFiltersHref}}" class="btn-ghost">{{.T "admin.list.clear_filters" "Clear filters"}}</a></p>{{end}}
     </div>
     <form method="post" action="{{.DensityPath}}" class="density-bar">
       <input type="hidden" name="csrf_token" value="{{.SignedIn.CSRFToken}}">
@@ -83,7 +85,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     </div>
     {{if .BulkDelete}}</div>{{end}}
     <div class="pagination">
-      <span>{{.TotalCount}} {{if eq .TotalCount 1}}{{.T "admin.list.result_singular" "result"}}{{else}}{{.T "admin.list.result_plural" "results"}}{{end}}{{if .SearchQuery}} {{.T "admin.list.for_query" "for"}} &ldquo;{{.SearchQuery}}&rdquo;{{end}}</span>
+      <span>{{if gt .TotalPages 1}}{{.T "admin.list.showing" "Showing %d to %d of %d %s" .ResultFirst .ResultLast .TotalCount .Plural}}{{else if eq .TotalCount 1}}{{.T "admin.list.count_one" "%d %s" .TotalCount .Singular}}{{else}}{{.T "admin.list.count_many" "%d %s" .TotalCount .Plural}}{{end}}</span>
       {{if gt .TotalPages 1}}
       <nav class="pagination-pages" aria-label="{{.T "admin.pagination.label" "Pagination"}}">
         {{if .HasPrev}}<a href="{{.PrevHref}}" class="page-link" aria-label="{{.T "admin.pagination.previous" "Previous page"}}">&larr;</a>{{end}}
@@ -188,7 +190,17 @@ type listPageData struct {
 	DensityPath string
 	Rows        []listRow
 	SearchQuery string
-	Filters     []filterControl
+	// ClearSearchHref keeps the applied filters and drops the search.
+	ClearSearchHref string
+	Filters         []filterControl
+	// AppliedFilters names each applied filter in the summary above the table.
+	AppliedFilters []filterSummary
+	// ClearFiltersHref keeps the search and drops the applied filters.
+	ClearFiltersHref string
+	// ResultFirst and ResultLast are the position of the page's first and last
+	// rows among all the matching rows.
+	ResultFirst int
+	ResultLast  int
 	Criteria    bool
 	Page        int
 	TotalPages  int

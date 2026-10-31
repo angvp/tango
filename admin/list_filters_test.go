@@ -113,7 +113,7 @@ func TestBooleanFilterNarrowsChangelist(t *testing.T) {
 		if !strings.Contains(body, `<option value="yes" selected>`) {
 			t.Fatalf("yes option should be selected:\n%s", body)
 		}
-		if !strings.Contains(body, "1 result") {
+		if !strings.Contains(body, "1 fl book") {
 			t.Fatalf("count should reflect the filtered set:\n%s", body)
 		}
 	})
@@ -172,7 +172,7 @@ func TestForeignKeyFilterOffersLabelledAuthorsAndNarrowsRows(t *testing.T) {
 		if !strings.Contains(body, `<option value="`+strconv.FormatInt(grace, 10)+`" selected>`) {
 			t.Fatalf("Grace's option should be selected:\n%s", body)
 		}
-		if !strings.Contains(body, "1 result") {
+		if !strings.Contains(body, "1 fl book") {
 			t.Fatalf("count should reflect the filtered set:\n%s", body)
 		}
 	})
@@ -212,6 +212,9 @@ func TestForeignKeyFilterOverCapExplainsItselfAndOffersNoChoices(t *testing.T) {
 	}
 	if strings.Contains(body, `<label for="filter-author_id"`) {
 		t.Fatalf("over-cap filter has no control, so its label must not point at one:\n%s", body)
+	}
+	if strings.Contains(body, `<span class="field-caption">Author`) {
+		t.Fatalf("over-cap filter must not leave its label standing alone as a span:\n%s", body)
 	}
 
 	// A bookmarked value still filters: the cap limits listing, not filtering.
@@ -270,7 +273,7 @@ func TestFiltersAndSearchComposeWithCountsAndPagination(t *testing.T) {
 		if strings.Contains(body, "Engine Draft") || strings.Contains(body, "Engine Other") || strings.Contains(body, "Plain Published") {
 			t.Fatalf("only published Ada books matching Engine should show:\n%s", body)
 		}
-		if !strings.Contains(body, "30 results") {
+		if !strings.Contains(body, "30 fl books") {
 			t.Fatalf("count should be the filtered total (30):\n%s", body)
 		}
 	})
@@ -302,7 +305,7 @@ func TestFiltersAndSearchComposeWithCountsAndPagination(t *testing.T) {
 		if strings.Contains(body, "Engine Draft") {
 			t.Fatalf("page 2 must keep the published filter:\n%s", body)
 		}
-		if !strings.Contains(body, "32 results") {
+		if !strings.Contains(body, "Showing 26 to 32 of 32 fl books") {
 			t.Fatalf("count should be the filtered total (32):\n%s", body)
 		}
 	})
@@ -316,7 +319,7 @@ func TestChangelistControlsAreLabelledForAssistiveTech(t *testing.T) {
 	body := doRequest(t, handler, "GET", flBookPath, nil).Body.String()
 	for _, want := range []string{
 		`<label for="list-search"`,
-		`<input id="list-search" type="text" name="q"`,
+		`<input id="list-search" type="search" name="q"`,
 		`<label for="filter-published"`,
 		`<select id="filter-published" name="filter_published"`,
 		`<label for="filter-author_id"`,
@@ -365,4 +368,114 @@ func TestUnlistedFieldParametersAreIgnoredAndEmptyStateExplainsFilters(t *testin
 	if !strings.Contains(body, "No fl books match the selected filters.") {
 		t.Fatalf("an empty filtered list should say the filters matched nothing:\n%s", body)
 	}
+}
+
+func TestResultLineStatesTheRangeOfTheRowsOnThePage(t *testing.T) {
+	t.Run("a full first page names the first and last row and the total", func(t *testing.T) {
+		handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
+		author := seedFilterAuthor(t, sqlDB, "Ada")
+		for i := 0; i < 60; i++ {
+			seedBook(t, sqlDB, fmt.Sprintf("Row %02d", i), true, author)
+		}
+		body := doRequest(t, handler, "GET", flBookPath, nil).Body.String()
+		if !strings.Contains(body, "Showing 1 to 25 of 60 fl books") {
+			t.Fatalf("first page should state its range:\n%s", body)
+		}
+	})
+
+	t.Run("a partial last page ends at the total", func(t *testing.T) {
+		handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
+		author := seedFilterAuthor(t, sqlDB, "Ada")
+		for i := 0; i < 60; i++ {
+			seedBook(t, sqlDB, fmt.Sprintf("Row %02d", i), true, author)
+		}
+		body := doRequest(t, handler, "GET", flBookPath+"?page=3", nil).Body.String()
+		if !strings.Contains(body, "Showing 51 to 60 of 60 fl books") {
+			t.Fatalf("last page should state rows 51 to 60:\n%s", body)
+		}
+	})
+
+	t.Run("an out-of-range page is clamped and states the last page's range", func(t *testing.T) {
+		handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
+		author := seedFilterAuthor(t, sqlDB, "Ada")
+		for i := 0; i < 60; i++ {
+			seedBook(t, sqlDB, fmt.Sprintf("Row %02d", i), true, author)
+		}
+		body := doRequest(t, handler, "GET", flBookPath+"?page=99", nil).Body.String()
+		if !strings.Contains(body, "Showing 51 to 60 of 60 fl books") {
+			t.Fatalf("clamped page should state rows 51 to 60:\n%s", body)
+		}
+	})
+
+	t.Run("one row uses the singular noun", func(t *testing.T) {
+		handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
+		author := seedFilterAuthor(t, sqlDB, "Ada")
+		seedBook(t, sqlDB, "Only Row", true, author)
+		body := doRequest(t, handler, "GET", flBookPath, nil).Body.String()
+		if !strings.Contains(body, ">1 fl book<") {
+			t.Fatalf("one row should read 1 fl book:\n%s", body)
+		}
+		if strings.Contains(body, "Showing") {
+			t.Fatalf("a single page should not use the range sentence:\n%s", body)
+		}
+	})
+}
+
+func TestAppliedFilterSummaryNamesEachFilterAndClearsThem(t *testing.T) {
+	handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
+	ada := seedFilterAuthor(t, sqlDB, "Ada Lovelace")
+	seedBook(t, sqlDB, "Engine & Co Notes", true, ada)
+	seedBook(t, sqlDB, "Engine Draft", false, ada)
+
+	t.Run("each applied filter is named with its value", func(t *testing.T) {
+		values := url.Values{"q": {"Engine & Co"}, "filter_published": {"yes"}, "filter_author_id": {strconv.FormatInt(ada, 10)}}
+		body := doRequest(t, handler, "GET", listURL(flBookPath, values), nil).Body.String()
+		for _, want := range []string{"Filters applied:", "Published: Yes", "Author ID: Ada Lovelace"} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("summary should contain %q:\n%s", want, body)
+			}
+		}
+	})
+
+	t.Run("Clear filters keeps the search and drops the filters", func(t *testing.T) {
+		values := url.Values{"q": {"Engine & Co"}, "filter_published": {"yes"}}
+		body := doRequest(t, handler, "GET", listURL(flBookPath, values), nil).Body.String()
+		if got := clearLinkHref(t, body, "Clear filters"); got != flBookPath+"?q=Engine+%26+Co" {
+			t.Fatalf("Clear filters should keep the search and drop the filters, got %q:\n%s", got, body)
+		}
+	})
+
+	t.Run("Clear search keeps the filters and drops the search", func(t *testing.T) {
+		values := url.Values{"q": {"Engine & Co"}, "filter_published": {"yes"}}
+		body := doRequest(t, handler, "GET", listURL(flBookPath, values), nil).Body.String()
+		if got := clearLinkHref(t, body, "Clear search"); got != flBookPath+"?filter_published=yes" {
+			t.Fatalf("Clear search should keep the filters and drop the search, got %q:\n%s", got, body)
+		}
+	})
+
+	t.Run("the summary and Clear filters remain when no row matches", func(t *testing.T) {
+		body := doRequest(t, handler, "GET", listURL(flBookPath, url.Values{"q": {"Nothing Matches"}, "filter_published": {"no"}}), nil).Body.String()
+		if !strings.Contains(body, "Published: No") || !strings.Contains(body, ">Clear filters</a>") {
+			t.Fatalf("an empty result should still offer the summary and Clear filters:\n%s", body)
+		}
+	})
+
+	t.Run("no criteria means no summary and no clear link", func(t *testing.T) {
+		body := doRequest(t, handler, "GET", flBookPath, nil).Body.String()
+		if strings.Contains(body, "Filters applied:") || strings.Contains(body, "Clear filters") || strings.Contains(body, "Clear search") {
+			t.Fatalf("an unfiltered list should show no summary or clear link:\n%s", body)
+		}
+	})
+}
+
+// clearLinkHref returns the unescaped href of the body's link labelled text.
+// The attribute is HTML-escaped, so a browser reads "+" where the raw bytes
+// hold "&#43;".
+func clearLinkHref(t *testing.T, body, text string) string {
+	t.Helper()
+	m := regexp.MustCompile(`<a href="([^"]*)" class="btn-ghost">` + regexp.QuoteMeta(text) + `</a>`).FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("no %q link in:\n%s", text, body)
+	}
+	return html.UnescapeString(m[1])
 }

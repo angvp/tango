@@ -74,33 +74,39 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 		if hasNext {
 			rows = rows[:pageSize]
 		}
+		pageStart := (page - 1) * pageSize
 
 		params := listParams(q, filters.Params)
 
 		data := listPageData{
-			chrome:      chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()),
-			Heading:     capitalizeFirst(pluralNoun(meta, registration.Options)),
-			Singular:    displayNoun(meta, registration.Options),
-			Plural:      pluralNoun(meta, registration.Options),
-			BasePath:    basePath,
-			Columns:     columns,
-			Compact:     densityFromRequest(ctx.Request()) == densityCompact,
-			DensityPath: densityBasePath,
-			Rows:        rows,
-			SearchQuery: q,
-			Filters:     filters.Controls,
-			Criteria:    hasCriteria(q, filters),
-			Page:        page,
-			TotalPages:  totalPages,
-			TotalCount:  total,
-			PageLinks:   withPageHrefs(paginationLinks(page, totalPages), params),
-			HasPrev:     page > 1,
-			PrevHref:    pageHref(params, page-1),
-			HasNext:     hasNext,
-			NextHref:    pageHref(params, page+1),
-			BulkDelete:  registration.Options.BulkDelete,
-			ReturnTo:    basePath + pageHref(params, page),
-			Deleted:     bulkDeletedCount(ctx.Request().URL.Query()),
+			chrome:           chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()),
+			Heading:          capitalizeFirst(pluralNoun(meta, registration.Options)),
+			Singular:         displayNoun(meta, registration.Options),
+			Plural:           pluralNoun(meta, registration.Options),
+			BasePath:         basePath,
+			Columns:          columns,
+			Compact:          densityFromRequest(ctx.Request()) == densityCompact,
+			DensityPath:      densityBasePath,
+			Rows:             rows,
+			SearchQuery:      q,
+			ClearSearchHref:  changelistHref(basePath, filters.Params),
+			Filters:          filters.Controls,
+			AppliedFilters:   appliedFilterSummary(filters.Controls),
+			ClearFiltersHref: changelistHref(basePath, listParams(q, nil)),
+			ResultFirst:      pageStart + 1,
+			ResultLast:       pageStart + len(rows),
+			Criteria:         hasCriteria(q, filters),
+			Page:             page,
+			TotalPages:       totalPages,
+			TotalCount:       total,
+			PageLinks:        withPageHrefs(paginationLinks(page, totalPages), params),
+			HasPrev:          page > 1,
+			PrevHref:         pageHref(params, page-1),
+			HasNext:          hasNext,
+			NextHref:         pageHref(params, page+1),
+			BulkDelete:       registration.Options.BulkDelete,
+			ReturnTo:         basePath + pageHref(params, page),
+			Deleted:          bulkDeletedCount(ctx.Request().URL.Query()),
 		}
 
 		return render(ctx, http.StatusOK, listTemplate, data)

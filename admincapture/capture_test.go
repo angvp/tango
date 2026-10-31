@@ -227,6 +227,12 @@ var signedInShots = []shot{
 			chromedp.Click(".menu-btn", chromedp.NodeVisible),
 		}
 	}},
+	{name: "search-with-clear", ready: ".content-body", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/?q=volume")}
+	}},
+	{name: "search-one-row", ready: ".content-body", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/?q=volume+14")}
+	}},
 	// Compact density is the last shot: its cookie outlives this step in the
 	// shared browser, so no later shot may depend on the default density.
 	{name: "changelist-rows-compact", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {

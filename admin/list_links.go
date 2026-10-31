@@ -17,6 +17,14 @@ func listParams(search string, applied url.Values) url.Values {
 	return params
 }
 
+// changelistHref is the changelist link carrying exactly params, with no page.
+func changelistHref(basePath string, params url.Values) string {
+	if len(params) == 0 {
+		return basePath
+	}
+	return basePath + "?" + params.Encode()
+}
+
 // pageHref is the changelist link to page, keeping params. url.Values
 // encodes every value, so a search query with &, # or + survives the round
 // trip.

@@ -111,7 +111,7 @@
 
   .pagination { @apply flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-5 py-3.5 text-sm text-ink-faint; }
   .pagination-pages { @apply flex items-center gap-1; }
-  .page-link { @apply inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-md text-sm font-medium text-ink-muted hover:bg-surface-hover hover:text-ink transition-colors; }
+  .page-link { @apply inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-md text-sm font-medium text-ink-muted hover:bg-surface-hover hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface; }
   .page-link-current { @apply bg-accent text-accent-fg hover:bg-accent hover:text-accent-fg; }
   .page-ellipsis { @apply inline-flex items-center justify-center h-8 px-1 text-sm text-ink-faint; }
 

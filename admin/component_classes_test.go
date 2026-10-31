@@ -88,3 +88,14 @@ func TestCardRadiusIsOneNamedToken(t *testing.T) {
 		t.Error("tailwind config does not define the card radius as 18px")
 	}
 }
+
+// A page link shows its focus ring on its own rule, and keeps the 24px minimum
+// target size WCAG 2.2 asks of a control.
+func TestPaginationLinkHasAFocusRingAndATarget(t *testing.T) {
+	rule := componentRules(t)["page-link"]
+	for _, want := range []string{"focus-visible:ring-2", "focus-visible:ring-ring", "h-8", "min-w-[2rem]"} {
+		if !regexp.MustCompile(`(?:^|\s)` + regexp.QuoteMeta(want) + `(?:\s|$)`).MatchString(rule) {
+			t.Errorf(".page-link applies %q, want it to include %s", rule, want)
+		}
+	}
+}

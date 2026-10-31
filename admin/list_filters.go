@@ -176,6 +176,31 @@ func overCapFilter(ctx context.Context, store *db.Store, models *model.Registry,
 	}, nil
 }
 
+// filterSummary is one applied filter as the summary above the table names it:
+// the filter's label and the text of the value it applies.
+type filterSummary struct {
+	Label string
+	Value string
+}
+
+// appliedFilterSummary names each applied filter, in the order the filters
+// are configured. A filter with no applied value is left out.
+func appliedFilterSummary(controls []filterControl) []filterSummary {
+	var summary []filterSummary
+	for _, control := range controls {
+		if control.AppliedValue != "" {
+			summary = append(summary, filterSummary{Label: control.Label, Value: control.Applied})
+			continue
+		}
+		for _, option := range control.Options {
+			if option.Selected && option.Value != filterAny {
+				summary = append(summary, filterSummary{Label: control.Label, Value: option.Text})
+			}
+		}
+	}
+	return summary
+}
+
 // markSelected returns options with the one whose Value is selected marked.
 func markSelected(options []filterOption, selected string) []filterOption {
 	marked := make([]filterOption, len(options))

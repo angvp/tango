@@ -89,9 +89,10 @@ func strictReferencePolicy() tango.CSP {
 
 // smokeNote is the one model the admin lists, edits and previews.
 type smokeNote struct {
-	ID    int64 `tango:"pk"`
-	Title string
-	Body  string
+	ID     int64 `tango:"pk"`
+	Title  string
+	Body   string
+	Pinned bool
 }
 
 // previewNote is the host's Markdown renderer for the smoke. It emits a
@@ -108,6 +109,7 @@ func notesApp() tango.App {
 		return registry.Admin().Register(smokeNote{}, admin.Options{
 			ListDisplay: []string{"Title"},
 			Search:      []string{"Title"},
+			Filters:     []string{"Pinned"},
 			BulkDelete:  true,
 			Widgets: map[string]admin.Widget{
 				"Body": admin.Markdown(admin.WithMarkdownPreview(previewNote)),
@@ -139,8 +141,15 @@ func composedSite(t *testing.T) http.Handler {
 	}
 	// The second title is one unbroken word, wider than a phone screen, so a
 	// table that does not wrap its cells is caught by the phone check.
-	if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body) VALUES (1, 'Hello', 'Body'), (2, 'Unbrokenphonecheckvalue0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ', 'Body')`); err != nil {
+	if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body, pinned) VALUES (1, 'Hello', 'Body', FALSE), (2, 'Unbrokenphonecheckvalue0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ', 'Body', TRUE)`); err != nil {
 		t.Fatalf("seed note: %v", err)
+	}
+	// More rows than one page, so the changelist shows its pagination at the
+	// phone width.
+	for id := 3; id <= 28; id++ {
+		if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body, pinned) VALUES ($1, $2, 'Body', FALSE)`, id, fmt.Sprintf("Note %02d", id)); err != nil {
+			t.Fatalf("seed note %d: %v", id, err)
+		}
 	}
 
 	config := tango.Config{
@@ -523,7 +532,23 @@ func (s *smoke) phoneChangelist() {
 	s.check(s.eval(`document.documentElement.scrollWidth <= window.innerWidth`), "the changelist scrolls sideways at the phone width")
 	s.check(s.eval(`(function () { var w = document.querySelector('.table-wrap'); return !w || w.scrollWidth <= w.clientWidth; })()`), "the changelist table scrolls inside its wrapper at the phone width")
 	s.check(s.eval(rowActionsInViewport), "a row's Edit or Delete link is outside the phone viewport")
+	s.check(s.eval(phoneControlsReachable), "the search, the filter or a page link is outside the phone viewport, or a page link is under 24px")
 }
+
+// phoneControlsReachable checks that the search field, the filter and the
+// pagination links all exist and sit inside the phone viewport, and that each
+// page link is at least 24px square.
+const phoneControlsReachable = `(function () {
+	var required = ['#list-search', 'select[name="filter_pinned"]', 'nav[aria-label="Pagination"] a.page-link'];
+	if (!required.every(function (sel) { return document.querySelector(sel) !== null; })) return false;
+	var controls = document.querySelectorAll(required.join(', '));
+	return Array.prototype.every.call(controls, function (el) {
+		var r = el.getBoundingClientRect();
+		var inside = r.width > 0 && r.left >= 0 && r.right <= window.innerWidth;
+		if (el.matches('a.page-link')) return inside && r.width >= 24 && r.height >= 24;
+		return inside;
+	});
+})()`
 
 const rowActionsInViewport = `(function () {
 	var links = document.querySelectorAll('.table-admin tbody a.btn-ghost');
