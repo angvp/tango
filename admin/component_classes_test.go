@@ -21,11 +21,17 @@ func TestDashboardUsesNamedComponentsForRepeatedChains(t *testing.T) {
 			t.Errorf("dashboard markup carries %q instead of a named component", banned)
 		}
 	}
-	for _, want := range []string{`class="row-list"`, `class="hint-text"`, "status-dot"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("dashboard markup lacks %s", want)
+	for _, want := range []string{"row-list", "hint-text", "status-dot-success"} {
+		if !hasClassToken(body, want) {
+			t.Errorf("dashboard markup lacks the %s class", want)
 		}
 	}
+}
+
+// hasClassToken reports whether some class attribute in html lists token as a
+// whole class, so status-dot-success does not satisfy status-dot.
+func hasClassToken(html, token string) bool {
+	return regexp.MustCompile(`class="(?:[^"]*\s)?` + regexp.QuoteMeta(token) + `(?:\s[^"]*)?"`).MatchString(html)
 }
 
 func TestMarkdownWidgetHintsUseTheNamedHintClass(t *testing.T) {
@@ -34,8 +40,15 @@ func TestMarkdownWidgetHintsUseTheNamedHintClass(t *testing.T) {
 	if strings.Contains(body, "text-xs text-ink-faint") {
 		t.Error("Markdown widget repeats the hint utility chain")
 	}
-	if got := strings.Count(body, "hint-small"); got != 2 {
-		t.Errorf("hint-small count = %d, want the count and the preview status", got)
+	for _, id := range []string{`id="field-[^"]*-count"`, `id="field-[^"]*-preview-status"`} {
+		tag := regexp.MustCompile(`<p[^>]*` + id + `[^>]*>`).FindString(body)
+		if tag == "" {
+			t.Errorf("Markdown widget renders no element matching %s", id)
+			continue
+		}
+		if !hasClassToken(tag, "hint-small") {
+			t.Errorf("%s does not use the hint-small class", tag)
+		}
 	}
 }
 
