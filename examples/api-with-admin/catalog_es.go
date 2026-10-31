@@ -106,6 +106,7 @@ var spanish = map[string]string{
 	"admin.layout.skip":                     "Saltar al contenido",
 	"admin.layout.signed_in_as":             "Sesión iniciada como %s",
 	"admin.layout.title":                    "Administración tanGO",
+	"admin.error.invalid_density":           "Densidad no válida.",
 	"admin.density.comfortable":             "Cómoda",
 	"admin.density.compact":                 "Compacta",
 	"admin.density.label":                   "Densidad de filas",
