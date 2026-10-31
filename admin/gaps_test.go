@@ -110,20 +110,18 @@ func TestCreateViewPostWithUnreadableBodyReturnsError(t *testing.T) {
 	}
 }
 
-// TestCreateViewPropagatesStoreErrorOnDuplicateUniqueField covers
-// createView's store.Create error branch with a real, reachable cause: a
-// unique-constrained field (adminShellUser.Email) colliding with an
-// existing row. createView has no special handling for this (unlike
-// accounts.registerView's IsUniqueConstraintViolation branch) — the
-// database error propagates as-is, which this test locks in.
-func TestCreateViewPropagatesStoreErrorOnDuplicateUniqueField(t *testing.T) {
+// TestCreateViewReportsDuplicateUniqueFieldBesideTheField covers createView's
+// store.Create refusal with a real cause: a unique-constrained field
+// (adminShellUser.Email) colliding with the row the fixture seeds. The duplicate is
+// shown beside the field as a 422, never as a server error.
+func TestCreateViewReportsDuplicateUniqueFieldBesideTheField(t *testing.T) {
 	// The migrated schema carries Email's unique index, as a project's would.
 	handler, _, _ := buildAdminHandlerWithStore(t)
 	cookie := loginAndGetSessionCookie(t, handler, "admin", "secret")
 	response := doAdminShellUserCreate(t, handler, cookie, "seed@example.com")
 
-	if response.Code < 500 {
-		t.Fatalf("status = %d, want a server error for a duplicate unique field", response.Code)
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422 for a duplicate unique field", response.Code)
 	}
 }
 

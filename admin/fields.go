@@ -377,15 +377,27 @@ func primaryKeyField(meta model.ModelMeta) (model.FieldMeta, error) {
 	return model.FieldMeta{}, fmt.Errorf("model %s has no primary key field", meta.Name)
 }
 
-// storeFieldErrors turns a field-specific refusal from Store.Create or
-// Store.Update into the message shown beside the offending field, and
-// reports whether err was one. The messages never include the submitted
-// value: a too-long value gets its length, invalid JSON gets a fixed text.
-func storeFieldErrors(ctx context.Context, err error, opts adminregistry.Options) (map[string]string, bool) {
+// storeFailure turns a refusal from Store.Create or Store.Update into what
+// the form shows: messages beside the fields it names, or one form-level
+// message. It reports false for any other error, which stays a server error.
+// The messages never include the submitted value or the database's text.
+func storeFailure(ctx context.Context, err error, meta model.ModelMeta, opts adminregistry.Options) (fieldErrors map[string]string, formError string, refused bool) {
 	if messages, ok := tooLongFieldErrors(ctx, err, opts); ok {
-		return messages, true
+		return messages, "", true
 	}
-	return invalidJSONFieldErrors(ctx, err)
+	if messages, ok := invalidJSONFieldErrors(ctx, err); ok {
+		return messages, "", true
+	}
+	if db.IsUniqueConstraintViolation(err) {
+		if field, ok := uniqueViolationField(meta, err); ok {
+			return map[string]string{field.Name: uniqueFieldMessage(ctx, meta, field, opts)}, "", true
+		}
+		return nil, i18n.T(ctx, "admin.error.unique_form", "Another %s already uses one of these values.", displayNoun(meta, opts)), true
+	}
+	if errors.Is(err, db.ErrInvalidForeignKey) {
+		return nil, i18n.T(ctx, "admin.error.foreign_key", "The item you chose no longer exists. Choose another and save again."), true
+	}
+	return nil, "", false
 }
 
 // tooLongFieldErrors turns a db.ValueTooLongError into the message shown
@@ -395,11 +407,7 @@ func tooLongFieldErrors(ctx context.Context, err error, opts adminregistry.Optio
 	if !errors.As(err, &tooLong) {
 		return nil, false
 	}
-	label := humanizeFieldName(tooLong.Field)
-	if custom, ok := opts.Labels[tooLong.Field]; ok {
-		label = custom
-	}
-	message := i18n.T(ctx, "admin.error.too_long", "%s must be at most %d characters (got %d)", label, tooLong.Max, tooLong.Got)
+	message := i18n.T(ctx, "admin.error.too_long", "%s must be at most %d characters (got %d)", fieldLabel(opts, tooLong.Field), tooLong.Max, tooLong.Got)
 	return map[string]string{tooLong.Field: message}, true
 }
 

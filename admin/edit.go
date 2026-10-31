@@ -89,7 +89,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				if errors.Is(err, db.ErrNotFound) {
 					return notFound(ctx)
 				}
-				fieldErrors, refused := storeFieldErrors(ctx.Context(), err, registration.Options)
+				fieldErrors, formError, refused := storeFailure(ctx.Context(), err, meta, registration.Options)
 				if !refused {
 					return err
 				}
@@ -99,6 +99,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
 					chrome:    rc,
 					Title:     title,
+					Error:     formError,
 					Fields:    fields,
 					CSRFToken: csrfTokenFromRequest(ctx.Request()),
 				})

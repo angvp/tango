@@ -11,6 +11,11 @@ import (
 // Options controls how a model appears in the admin.
 type Options struct {
 	ListDisplay []string
+	// SingularName and PluralName name one row and several rows in messages
+	// and confirmations, such as "Delete this book" and "3 books deleted".
+	// Unset, each falls back to the humanized Go type name.
+	SingularName string
+	PluralName   string
 	// Display computes changelist cells, keyed by a name in ListDisplay: a
 	// registered field (overriding its value) or a synthetic column, which
 	// needs a Labels entry for its header. See DisplayFunc.

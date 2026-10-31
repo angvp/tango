@@ -49,7 +49,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 			}
 
 			if err := store.Create(ctx.Context(), meta, instancePtr.Interface()); err != nil {
-				fieldErrors, refused := storeFieldErrors(ctx.Context(), err, registration.Options)
+				fieldErrors, formError, refused := storeFailure(ctx.Context(), err, meta, registration.Options)
 				if !refused {
 					return err
 				}
@@ -59,6 +59,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
 					chrome:    createChrome,
 					Title:     title,
+					Error:     formError,
 					Fields:    fields,
 					CSRFToken: csrfTokenFromRequest(ctx.Request()),
 				})
