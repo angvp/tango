@@ -124,7 +124,7 @@ The Release job refuses the tag, creating nothing, unless the tagged commit is o
 
 ### Where work lands
 
-Work for the next minor release goes to the **`develop`** branch, not `main`. `main` only ever holds released code and the commit being released, so the website's `main` links (and anyone cloning) never see unreleased behaviour. CI runs on every push, so every `develop` commit is tested on both dialects.
+Work for the next minor release goes to the **`develop`** branch, not `main`. `main` only ever holds released code and the commit being released, so the website's `main` links (and anyone cloning) never see unreleased behaviour. CI runs on every push, so every `develop` commit is tested on each database in the CI matrix: SQLite, PostgreSQL and MySQL.
 
 History stays linear: no merge commits, ever. A fix that cannot wait for the next minor goes to `main` first and is released as a patch; then rebase `develop` onto it as above. Rewriting `develop` this way is expected, since it is unreleased and shared by no one else. `main` is only ever fast-forwarded (`--ff-only`), and a rebase is how any branch catches up with it.
 

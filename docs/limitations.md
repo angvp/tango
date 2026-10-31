@@ -23,7 +23,7 @@ tanGO is still early. This page is the honest summary of where it stops, so you 
   - **Queued in memory:** emails wait in an in-memory outbox. A crash loses what's queued, a full outbox drops new emails (logging `tango.accounts.mail_dropped`), and a failed send is logged, never retried.
   - **Per process:** the per-address cooldown is in-memory and per-process, like the login rate limiter.
   - **No email change:** there's no email-change flow. Whoever changes `Account.Email` must clear `EmailVerifiedAt`.
-  - **Fixed wording:** emails are fixed English plain text.
+  - **Plain text:** account emails are plain text. Their subjects and bodies go through `i18n.T` under the `accounts.email.*` keys, so a host catalog can translate them.
   - **No CLI:** there's no dedicated CLI for managing accounts either; the generic admin CRUD is the whole operational story, once you've manually registered `Account` with `admin`.
 
   See [the accounts guide](guides/accounts.md#password-reset-and-email-verification). For more than one instance, see [running more than one instance](guides/running-more-than-one-instance.md).

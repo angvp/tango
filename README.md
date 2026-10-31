@@ -66,7 +66,7 @@ curl http://localhost:8000/greetings/World/
 - **Admin**: server-rendered list, create, edit and delete with pagination, search, filters and ordering, behind a session-cookie login with CSRF protection and a rate-limited login. Accounts are managed with `tango admin create/resetpassword/deactivate`.
 - **Batteries, each optional**: accounts with password reset, email verification and a JSON mode for single-page apps; SMTP `mail`; `storage` with local-disk and S3 stores; `cache` with in-process, Redis and Memcached stores; WebSocket rooms; a token-bucket rate limiter.
 - **OpenAPI 3.1** generated from your routes, with Swagger UI (`openapi.New`, or `openapi.Dev` to serve it only while developing).
-- **A CLI** (`tango run/check/makemigrations/migrate/newproject/newapp/tui/shell/admin`) that wraps ordinary `go build` and `go run` rather than replacing them.
+- **A CLI** (`tango run/check/makemigrations/openapi/migrate/newproject/newapp/tui/shell/admin`) that wraps ordinary `go build` and `go run` rather than replacing them.
 
 ## Principles
 
