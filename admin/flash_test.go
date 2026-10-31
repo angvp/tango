@@ -259,11 +259,10 @@ func TestForgedOrAlteredOutcomeFlashIsIgnored(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	first := seedProduct(t, sqlDB, "A", 1)
 	second := seedProduct(t, sqlDB, "B", 2)
-	genuineCookie := mustFlash(t, signedRequest(handler, http.MethodPost, bulkDeletePath, testSessionToken, bulkForm(2, first, second)))
-	if genuineCookie == nil {
-		t.Fatal("bulk delete set no flash cookie to forge from")
+	genuine := mustFlash(t, signedRequest(handler, http.MethodPost, bulkDeletePath, testSessionToken, bulkForm(2, first, second))).Value
+	if body := signedRequest(handler, http.MethodGet, crudBasePath, testSessionToken, nil, &http.Cookie{Name: flashCookieName, Value: genuine}).Body.String(); !strings.Contains(body, "2 crud products deleted") {
+		t.Fatal("the genuine outcome was not shown; the forged values below would prove nothing")
 	}
-	genuine := genuineCookie.Value
 
 	payload, mac, _ := strings.Cut(genuine, ".")
 	raise := base64.RawURLEncoding.EncodeToString([]byte(`{"k":"admin.bulk.outcome_many","a":["9","crud products"]}`))
@@ -465,5 +464,26 @@ func TestAnOutcomeThatCannotBeCarriedStillRedirectsAndIsLogged(t *testing.T) {
 	}
 	if countProducts(t, sqlDB) != 2 {
 		t.Fatalf("product count = %d, want 2 (create, then the delete and bulk delete remove two of three)", countProducts(t, sqlDB))
+	}
+}
+
+func TestRejectedPagesHaveOneStatusRegion(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	row := seedProduct(t, sqlDB, "Only", 1)
+
+	bulkRejected := signedRequest(handler, http.MethodPost, bulkDeletePath, testSessionToken, bulkForm(2, row))
+	if bulkRejected.Code != http.StatusBadRequest {
+		t.Fatalf("bulk rejection = %d, want %d", bulkRejected.Code, http.StatusBadRequest)
+	}
+	if n := len(statusRegionPattern.FindAllString(bulkRejected.Body.String(), -1)); n != 1 {
+		t.Errorf("bulk rejection: status regions = %d, want 1", n)
+	}
+
+	failedSave := signedRequest(handler, http.MethodPost, crudBasePath+"new/", testSessionToken, url.Values{"Name": {"Broken"}, "Price": {"not-a-number"}})
+	if failedSave.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("failed save = %d, want %d", failedSave.Code, http.StatusUnprocessableEntity)
+	}
+	if n := len(statusRegionPattern.FindAllString(failedSave.Body.String(), -1)); n != 1 {
+		t.Errorf("failed save: status regions = %d, want 1", n)
 	}
 }

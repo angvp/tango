@@ -31,7 +31,7 @@ func TestAdminBulkDeleteRemovesSelectedPostsAndTheirComments(t *testing.T) {
 		t.Fatalf("status = %d, Location = %q, want 302 to /admin/post/: %s", rec.Code, rec.Header().Get("Location"), rec.Body)
 	}
 
-	// The outcome arrives in the flash cookie the browser holds, not in the URL.
+	// The outcome arrives in the flash cookie the browser holds.
 	posts := ops.do("GET", "/admin/post/", nil).Body.String()
 	if !strings.Contains(posts, "2 posts deleted") || !strings.Contains(posts, "Post to keep") ||
 		strings.Contains(posts, "Post to remove") || strings.Contains(posts, "Another post to remove") {

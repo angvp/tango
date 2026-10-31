@@ -118,13 +118,18 @@ func TestBulkDeleteListClampsAPastTheEndPageInReturnTo(t *testing.T) {
 	}
 }
 
-// The outcome is no longer read from a query parameter, so a deleted
-// parameter on the list URL announces nothing. The announcement itself is
-// covered by the flash tests.
+// An outcome is announced only from the flash cookie, so a deleted parameter
+// on the list URL announces nothing. The announcement itself is covered by the
+// flash tests.
 func TestBulkDeleteListIgnoresADeletedQueryParameter(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
-	seedProduct(t, sqlDB, "Widget", 3)
+	first := seedProduct(t, sqlDB, "A", 1)
+	second := seedProduct(t, sqlDB, "B", 2)
 	banner := regexp.MustCompile(`role="alert"|alert-success`)
+	flash := mustFlash(t, signedRequest(handler, http.MethodPost, bulkDeletePath, testSessionToken, bulkForm(2, first, second)))
+	if shown := signedRequest(handler, http.MethodGet, crudBasePath, testSessionToken, nil, flash); !banner.MatchString(shown.Body.String()) {
+		t.Fatal("a genuine outcome was not shown; the query-only rejections below would prove nothing")
+	}
 	for _, query := range []string{"deleted=1", "deleted=2", "deleted=25", "deleted=0"} {
 		body := doRequest(t, handler, http.MethodGet, crudBasePath+"?"+query, nil).Body.String()
 		if banner.MatchString(body) {

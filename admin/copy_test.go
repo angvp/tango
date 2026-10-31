@@ -11,8 +11,8 @@ import (
 	"github.com/angvp/tango/i18n/i18ntest"
 )
 
-// The outcome is a flash message, so the count wording is read from the page
-// after a real bulk delete, not from a query parameter.
+// Reads the count wording from the page a real bulk delete redirects to, where
+// the outcome is carried as a flash message.
 func TestBulkOutcomeReadsAsAPlainCount(t *testing.T) {
 	handler, sqlDB := buildMessageBookAdmin(t)
 	ids := []int64{seedMessageBook(t, sqlDB, "Alpha"), seedMessageBook(t, sqlDB, "Beta"), seedMessageBook(t, sqlDB, "Gamma")}
