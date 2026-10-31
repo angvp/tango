@@ -584,22 +584,92 @@ func (s *smoke) bulkConfirmFollowsCount() {
 	s.check(many == manyWant, "the bulk confirm button read %q with two rows selected, want %q", many, manyWant)
 }
 
-// bulkBarFollowsSelection checks the bar is hidden until a row is picked, that
-// select-all turns indeterminate with one of several rows picked, and that the
+// bulkBarFollowsSelection checks the bar in both states with the script
+// running: with no row picked the count slot shows the visible reason, Delete
+// selected is disabled and described by that reason; with one row picked the
+// count shows the selection, Delete selected is enabled and not described.
+// Select-all turns indeterminate with one of several rows picked, and the
 // dialog takes focus on Cancel, closes on Escape and returns focus to the
 // Delete selected button. The dialog is closed without a submit.
 func (s *smoke) bulkBarFollowsSelection() {
 	s.t.Helper()
 	const bar = `document.querySelector('[data-bulk-bar]').hidden`
-	s.check(s.evalString("String("+bar+")") == "true", "the bulk bar is shown with no row selected")
+	const count = `document.querySelector('[data-bulk-count]').textContent`
+	const open = `document.querySelector('[data-bulk-open]')`
+	const meta = `document.querySelector('[data-bulk-delete]')`
+	none := s.evalString(meta + `.getAttribute('data-msg-none') || ''`)
+	s.check(s.evalString("String("+bar+")") == "false", "the bulk bar is hidden with the script running")
+	s.check(s.evalString(count) == none, "with no row picked the count slot reads %q, want the reason %q", s.evalString(count), none)
+	s.check(s.evalString("String("+open+".disabled)") == "true", "Delete selected is enabled with no row picked")
+	s.check(s.evalString("String("+open+".getAttribute('aria-describedby') === 'bulk-count')") == "true", "Delete selected is not described by the reason with no row picked")
+
 	s.run("bulk bar select first row", chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible))
-	s.check(s.evalString("String(!"+bar+")") == "true", "the bulk bar stays hidden after a row is picked")
+	one := strings.ReplaceAll(s.evalString(meta+`.getAttribute('data-msg-selected') || ''`), "{count}", "1")
+	s.check(s.evalString(count) == one, "with one row picked the count slot reads %q, want %q", s.evalString(count), one)
+	s.check(s.evalString("String("+open+".disabled)") == "false", "Delete selected is disabled with one row picked")
+	s.check(s.evalString("String("+open+".hasAttribute('aria-describedby'))") == "false", "Delete selected is still described by the reason with one row picked")
 	s.check(s.evalString(`String(document.querySelector('[data-bulk-select-all]').indeterminate)`) == "true", "select-all is not indeterminate with one of several rows picked")
+
 	s.run("bulk bar open dialog", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	wantTitle := s.evalString(meta + `.getAttribute('data-msg-title-one') || ''`)
+	s.check(s.evalString(`document.querySelector('[data-bulk-title]').textContent`) == wantTitle, "the dialog title is not the singular count copy %q", wantTitle)
 	s.check(s.evalString(`String(document.activeElement && document.activeElement.hasAttribute('data-bulk-cancel'))`) == "true", "the dialog did not open with Cancel focused")
 	s.run("bulk bar escape closes", chromedp.KeyEvent(kb.Escape))
 	s.check(s.evalString(`String(document.querySelector('[data-bulk-dialog]').open)`) == "false", "Escape did not close the dialog")
 	s.check(s.evalString(`String(document.activeElement && document.activeElement.hasAttribute('data-bulk-open'))`) == "true", "focus did not return to Delete selected")
+}
+
+// bulkListCapAndPhoneSelectAll selects every row on the page at the desktop
+// width and checks that the dialog lists at most the cap and then names the
+// rest. At the phone width it checks that the visible select-all control picks
+// every row and is at least 24px square.
+func (s *smoke) bulkListCapAndPhoneSelectAll() {
+	s.t.Helper()
+	const meta = `document.querySelector('[data-bulk-delete]')`
+	const open = `document.querySelector('[data-bulk-open]')`
+	startWidth := s.evalString(`String(window.innerWidth)`)
+	startHeight := s.evalString(`String(window.innerHeight)`)
+
+	s.setWidth(1280, 800)
+	s.run("bulk select all at desktop width", chromedp.Click(".table-admin thead input[data-bulk-select-all]", chromedp.NodeVisible))
+	rows := s.evalString(`String(document.querySelectorAll('[data-bulk-pk]').length)`)
+	s.run("bulk open with every row", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	limit := s.evalString(meta + `.getAttribute('data-bulk-limit') || ''`)
+	listed := s.evalString(`String(document.querySelectorAll('[data-bulk-list] li').length)`)
+	s.check(listed == "11", "the dialog lists %s items for %s rows, want the cap of %s and one more line", listed, rows, limit)
+	more := strings.ReplaceAll(s.evalString(meta+`.getAttribute('data-msg-more-many') || ''`), "{count}", fmt.Sprint(atoi(rows)-atoi(limit)))
+	s.check(s.evalString(`document.querySelector('[data-bulk-list] li:last-child').textContent`) == more, "the last line of the dialog is not %q", more)
+	s.run("bulk cancel after cap", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
+
+	s.setWidth(390, 844)
+	const phoneAll = "[data-bulk-bar] label input[data-bulk-select-all]"
+	s.run("bulk phone select all clears the page", chromedp.Click(phoneAll, chromedp.NodeVisible))
+	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-pk]:checked').length)`) == "0", "the phone select-all control did not clear every row from a full selection")
+	s.run("bulk phone select all picks the page", chromedp.Click(phoneAll, chromedp.NodeVisible))
+	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-pk]:not(:checked)').length)`) == "0", "the phone select-all control did not pick every row")
+	s.check(s.evalString(`String(document.querySelector('[data-bulk-open]').disabled)`) == "false", "Delete selected is disabled after the phone select-all")
+	s.check(s.evalString(`(function () { var r = document.querySelector('[data-bulk-bar] label').getBoundingClientRect(); return String(r.width >= 24 && r.height >= 24 && r.right <= window.innerWidth); })()`) == "true", "the phone select-all control is under 24px or outside the viewport")
+	s.check(s.evalString(`String(document.querySelector('[data-bulk-bar] label').offsetParent !== null)`) == "true", "the phone select-all control is not visible")
+	s.setWidth(atoi(startWidth), atoi(startHeight))
+	s.check(s.eval(`!!`+open), "the Delete selected button is missing after the width change")
+}
+
+// atoi reads a whole number the page or the browser reported.
+func atoi(value string) int {
+	var n int
+	fmt.Sscan(value, &n)
+	return n
+}
+
+// setWidth sets the emulated viewport size.
+func (s *smoke) setWidth(width, height int) {
+	s.t.Helper()
+	s.run(fmt.Sprintf("viewport %dx%d", width, height), chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
+		_, err := chromedp.Call(c, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{
+			Width: int64(width), Height: int64(height), DeviceScaleFactor: 1,
+		})
+		return err
+	}))
 }
 
 const confirmText = `document.querySelector('[data-bulk-confirm]').textContent`
@@ -833,6 +903,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.bulkConfirmFollowsCount()
 	s.visit("admin changelist bulk bar", "/admin/smoke_note/")
 	s.bulkBarFollowsSelection()
+	s.bulkListCapAndPhoneSelectAll()
 	s.adminNavToggle()
 	s.visit("admin change form", "/admin/smoke_note/1/")
 	s.adminMarkdownPreview()

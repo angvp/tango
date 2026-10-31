@@ -45,11 +45,11 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       <button type="submit" name="density" value="compact" aria-pressed="{{.Compact}}" class="density-option {{if .Compact}}density-option-on{{else}}density-option-off{{end}}">{{.T "admin.density.compact" "Compact"}}</button>
     </form>
     {{if .Rows}}
-    {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.confirm_title" "Delete {count} selected %s?" .Plural}}" data-msg-confirm-one="{{.T "admin.bulk.confirm_one" "Delete 1 %s" .Singular}}" data-msg-confirm-many="{{.T "admin.bulk.confirm_many" "Delete {count} %s" .Plural}}">
-    <div class="flex items-center gap-3 border-b border-line-subtle px-5 py-3" data-bulk-bar hidden>
-      <button type="button" class="btn-danger" data-bulk-open disabled aria-describedby="bulk-reason">{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
-      <span id="bulk-reason" class="sr-only">{{.T "admin.bulk.select_first" "Select at least one row to delete."}}</span>
-      <span class="text-sm text-ink-muted" data-bulk-count aria-live="polite"></span>
+    {{if .BulkDelete}}<div data-bulk-delete data-bulk-limit="10" data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-none="{{.T "admin.bulk.select_first" "Select rows to delete them."}}" data-msg-title-one="{{.T "admin.bulk.title_one" "Delete 1 %s?" .Singular}}" data-msg-title-many="{{.T "admin.bulk.title_many" "Delete {count} %s?" .Plural}}" data-msg-confirm-one="{{.T "admin.bulk.confirm_one" "Delete 1 %s" .Singular}}" data-msg-confirm-many="{{.T "admin.bulk.confirm_many" "Delete {count} %s" .Plural}}" data-msg-more-one="{{.T "admin.bulk.more_one" "and 1 more"}}" data-msg-more-many="{{.T "admin.bulk.more_many" "and {count} more"}}">
+    <div class="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line-subtle px-5 py-3" data-bulk-bar hidden>
+      <button type="button" class="btn-danger" data-bulk-open aria-describedby="bulk-count">{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
+      <span id="bulk-count" class="text-sm text-ink-muted" data-bulk-count aria-live="polite">{{.T "admin.bulk.select_first" "Select rows to delete them."}}</span>
+      <label class="inline-flex min-h-6 min-w-6 items-center gap-2 text-sm text-ink md:hidden"><input type="checkbox" data-bulk-select-all class="size-4">{{.T "admin.bulk.select_page" "Select all on this page"}}</label>
     </div>
     <dialog class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-line bg-surface p-0 text-ink shadow-lg backdrop:bg-scrim/60" data-bulk-dialog aria-labelledby="bulk-title">
       <form method="post" action="{{.BasePath}}delete-selected/" class="p-5" data-bulk-form>
@@ -68,7 +68,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     <div class="table-wrap">
       <table class="table-admin {{if .Compact}}table-compact{{else}}table-comfortable{{end}}">
         <caption class="sr-only">{{.Heading}}</caption>
-        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col"{{if .Numeric}} class="cell-num"{{end}}>{{.Label}}</th>{{end}}<th scope="col" class="cell-actions">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
+        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all class="max-md:hidden" aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col"{{if .Numeric}} class="cell-num"{{end}}>{{.Label}}</th>{{end}}<th scope="col" class="cell-actions">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
           {{if $.BulkDelete}}<td data-bulk-cell hidden><input type="checkbox" data-bulk-pk="{{.PK}}" data-bulk-identity="{{.Identity}}" aria-label="{{$.T "admin.bulk.select_row" "Select %s" .Identity}}"></td>{{end}}

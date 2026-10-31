@@ -2377,6 +2377,10 @@ html, body{
   display:flex;
 }
 
+.inline-flex{
+  display:inline-flex;
+}
+
 .table{
   display:table;
 }
@@ -2387,6 +2391,11 @@ html, body{
 
 .hidden{
   display:none;
+}
+
+.size-4{
+  width:1rem;
+  height:1rem;
 }
 
 .h-4{
@@ -2409,6 +2418,10 @@ html, body{
   min-height:10rem;
 }
 
+.min-h-6{
+  min-height:1.5rem;
+}
+
 .w-4{
   width:1rem;
 }
@@ -2427,6 +2440,10 @@ html, body{
 
 .w-full{
   width:100%;
+}
+
+.min-w-6{
+  min-width:1.5rem;
 }
 
 .min-w-\[200px\]{
@@ -2487,6 +2504,15 @@ html, body{
 
 .gap-3{
   gap:0.75rem;
+}
+
+.gap-x-5{
+  -moz-column-gap:1.25rem;
+       column-gap:1.25rem;
+}
+
+.gap-y-2{
+  row-gap:0.5rem;
 }
 
 .space-y-6 > :not([hidden]) ~ :not([hidden]){
@@ -13526,6 +13552,18 @@ html, body{
 .hover\:bg-danger-bg:hover{
   --tw-bg-opacity:1;
   background-color:rgb(var(--danger-bg) / var(--tw-bg-opacity, 1));
+}
+
+@media not all and (min-width: 768px){
+  .max-md\:hidden{
+    display:none;
+  }
+}
+
+@media (min-width: 768px){
+  .md\:hidden{
+    display:none;
+  }
 }
 
 .\[\&_ul\]\:space-y-1 ul > :not([hidden]) ~ :not([hidden]){

@@ -230,6 +230,9 @@ func TestBulkDeleteRowMissingAtTheReReadRejectsWithoutDeletingOrLogging(t *testi
 	if !productExists(t, sqlDB, first) || !productExists(t, sqlDB, second) {
 		t.Errorf("a row that existed was deleted although the action was rejected")
 	}
+	if !strings.Contains(response.Body.String(), "Nothing was deleted. One selected crud product no longer exists.") {
+		t.Errorf("the rejection page lacks the plain message: %.400s", response.Body.String())
+	}
 	if strings.Contains(logs.String(), admin.EventBulkDelete) {
 		t.Errorf("a rejected action logged a deletion event: %s", logs.String())
 	}

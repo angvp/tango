@@ -17,7 +17,7 @@
 
   function setup(root) {
     var boxes = Array.prototype.slice.call(root.querySelectorAll("[data-bulk-pk]"));
-    var selectAll = root.querySelector("[data-bulk-select-all]");
+    var selectAlls = Array.prototype.slice.call(root.querySelectorAll("[data-bulk-select-all]"));
     var bar = root.querySelector("[data-bulk-bar]");
     var counter = root.querySelector("[data-bulk-count]");
     var open = root.querySelector("[data-bulk-open]");
@@ -28,6 +28,7 @@
     var count = root.querySelector("[data-bulk-form-count]");
     var cancel = root.querySelector("[data-bulk-cancel]");
     var confirm = root.querySelector("[data-bulk-confirm]");
+    var limit = parseInt(root.getAttribute("data-bulk-limit"), 10);
     if (!boxes.length || !bar || !dialog || !form || typeof dialog.showModal !== "function") {
       return;
     }
@@ -35,6 +36,7 @@
     root.querySelectorAll("[data-bulk-cell]").forEach(function (cell) {
       cell.hidden = false;
     });
+    bar.hidden = false;
 
     function checked() {
       return boxes.filter(function (box) {
@@ -44,48 +46,58 @@
 
     function refresh() {
       var picked = checked().length;
-      bar.hidden = picked === 0;
       open.disabled = picked === 0;
-      counter.textContent = picked === 0 ? "" : text(root, "selected", { count: picked });
-      if (selectAll) {
+      if (picked === 0) {
+        counter.textContent = root.getAttribute("data-msg-none") || "";
+        open.setAttribute("aria-describedby", counter.id);
+      } else {
+        counter.textContent = text(root, "selected", { count: picked });
+        open.removeAttribute("aria-describedby");
+      }
+      selectAlls.forEach(function (selectAll) {
         selectAll.checked = picked === boxes.length;
         selectAll.indeterminate = picked > 0 && picked < boxes.length;
-      }
+      });
     }
 
     boxes.forEach(function (box) {
       box.addEventListener("change", refresh);
     });
-    if (selectAll) {
+    selectAlls.forEach(function (selectAll) {
       selectAll.addEventListener("change", function () {
         boxes.forEach(function (box) {
           box.checked = selectAll.checked;
         });
         refresh();
       });
-    }
+    });
 
     open.addEventListener("click", function () {
       var picked = checked();
-      if (picked.length === 0) {
-        return;
-      }
       form.querySelectorAll('input[name="pk"]').forEach(function (input) {
         input.remove();
       });
       list.textContent = "";
-      picked.forEach(function (box) {
+      picked.forEach(function (box, index) {
         var input = document.createElement("input");
         input.type = "hidden";
         input.name = "pk";
         input.value = box.getAttribute("data-bulk-pk");
         form.appendChild(input);
-        var item = document.createElement("li");
-        item.textContent = box.getAttribute("data-bulk-identity");
-        list.appendChild(item);
+        if (index < limit) {
+          var item = document.createElement("li");
+          item.textContent = box.getAttribute("data-bulk-identity");
+          list.appendChild(item);
+        }
       });
+      if (picked.length > limit) {
+        var more = document.createElement("li");
+        var rest = picked.length - limit;
+        more.textContent = rest === 1 ? text(root, "more-one") : text(root, "more-many", { count: rest });
+        list.appendChild(more);
+      }
       count.value = String(picked.length);
-      title.textContent = text(root, "title", { count: picked.length });
+      title.textContent = picked.length === 1 ? text(root, "title-one") : text(root, "title-many", { count: picked.length });
       confirm.textContent = picked.length === 1
         ? root.getAttribute("data-msg-confirm-one") || ""
         : text(root, "confirm-many", { count: picked.length });

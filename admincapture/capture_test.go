@@ -273,7 +273,7 @@ var signedInShots = []shot{
 			chromedp.Submit("#field-Title"),
 		}
 	}},
-	{name: "bulk-bar-selected", ready: "[data-bulk-count]:not(:empty)", steps: func(b string) []chromedp.Action[chromedp.Void] {
+	{name: "bulk-bar-selected", ready: "[data-bulk-open]:not([disabled])", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{
 			visit(b, "/admin/capture_book/"),
 			chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible),

@@ -154,17 +154,49 @@ func TestBulkDeleteScriptAssetIsServed(t *testing.T) {
 	}
 }
 
-func TestBulkDeleteButtonNamesItsReasonForAssistiveTech(t *testing.T) {
+func TestBulkDeleteBarNamesItsReasonOnTheButton(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	seedProduct(t, sqlDB, "Widget", 3)
 	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
-	match := regexp.MustCompile(`<button[^>]*data-bulk-open[^>]*aria-describedby="([^"]+)"|<button[^>]*aria-describedby="([^"]+)"[^>]*data-bulk-open`).FindStringSubmatch(body)
-	if match == nil {
-		t.Fatal("the Delete selected button has no aria-describedby")
+
+	button := regexp.MustCompile(`<button[^>]*data-bulk-open[^>]*>`).FindString(body)
+	if !strings.Contains(button, `aria-describedby="bulk-count"`) {
+		t.Fatalf("the Delete selected button is not described by the count slot: %s", button)
 	}
-	id := match[1] + match[2]
-	reason := regexp.MustCompile(`id="` + id + `"[^>]*>([^<]*)<`).FindStringSubmatch(body)
-	if reason == nil || reason[1] != "Select at least one row to delete." {
-		t.Fatalf("reason element %q does not carry the disabled reason: %v", id, reason)
+	reason := regexp.MustCompile(`id="bulk-count"[^>]*>([^<]*)<`).FindStringSubmatch(body)
+	if reason == nil || reason[1] != "Select rows to delete them." {
+		t.Fatalf("the count slot does not carry the visible reason: %v", reason)
+	}
+}
+
+func TestBulkDeleteDialogCopyNamesTheCountAndTheCascade(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	seedProduct(t, sqlDB, "Widget", 3)
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	for _, want := range []string{
+		`data-msg-title-one="Delete 1 crud product?"`,
+		`data-msg-title-many="Delete {count} crud products?"`,
+		`data-msg-confirm-one="Delete 1 crud product"`,
+		`data-msg-confirm-many="Delete {count} crud products"`,
+		`Rows that reference these rows are deleted with them. This action cannot be undone.`,
+		`data-bulk-limit="10"`,
+		`data-msg-more-one="and 1 more"`,
+		`data-msg-more-many="and {count} more"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dialog lacks %q", want)
+		}
+	}
+}
+
+func TestBulkDeleteSelectAllHasAVisiblePhoneControl(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	seedProduct(t, sqlDB, "Widget", 3)
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	if got := strings.Count(body, `data-bulk-select-all`); got != 2 {
+		t.Fatalf("select-all controls = %d, want 2 (table header and phone bar)", got)
+	}
+	if !strings.Contains(body, `Select all on this page`) {
+		t.Errorf("the phone select-all control has no visible label")
 	}
 }
