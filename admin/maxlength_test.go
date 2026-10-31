@@ -125,10 +125,26 @@ func TestEditRefusesAnOverLongValueAndLeavesTheRow(t *testing.T) {
 func TestOverLongMessageIsTranslatable(t *testing.T) {
 	handler, _ := buildHeadlineAdmin(t, admin.WithMiddleware(adminI18NMiddleware()))
 	i18n.RegisterCatalog(adminI18NLocale, map[string]string{
-		"admin.error.too_long": "Usa como máximo %d caracteres. Escribiste %d.",
+		"admin.error.max_length": "Usa como máximo %d caracteres. Escribiste %d.",
 	})
 	resp := doRequest(t, handler, http.MethodPost, headlineBasePath+"new/", url.Values{"Title": {"demasiado"}})
 	if body := resp.Body.String(); !strings.Contains(body, "Usa como máximo 5 caracteres. Escribiste 9.") {
 		t.Fatalf("message not translated:\n%s", body)
+	}
+}
+
+// The released key keeps its v0.7.0 contract, so a host value for it is not
+// read by the admin: the English fallback for the new key shows instead.
+func TestReleasedTooLongKeyIsNoLongerUsed(t *testing.T) {
+	const locale = "zz-admin-released"
+	released := i18n.Middleware(func(*http.Request) string { return locale })
+	handler, _ := buildHeadlineAdmin(t, admin.WithMiddleware(released))
+	i18n.RegisterCatalog(locale, map[string]string{
+		"admin.error.too_long": "Usa como máximo %d caracteres. Escribiste %d.",
+	})
+	resp := doRequest(t, handler, http.MethodPost, headlineBasePath+"new/", url.Values{"Title": {"demasiado"}})
+	body := resp.Body.String()
+	if !strings.Contains(body, "Use at most 5 characters. You entered 9.") || strings.Contains(body, "Usa como") {
+		t.Fatalf("released key still applied:\n%s", body)
 	}
 }

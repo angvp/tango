@@ -419,7 +419,7 @@ func tooLongFieldErrors(ctx context.Context, err error, opts adminregistry.Optio
 	if !errors.As(err, &tooLong) {
 		return nil, false
 	}
-	message := i18n.T(ctx, "admin.error.too_long", "Use at most %d characters. You entered %d.", tooLong.Max, tooLong.Got)
+	message := i18n.T(ctx, "admin.error.max_length", "Use at most %d characters. You entered %d.", tooLong.Max, tooLong.Got)
 	return map[string]string{tooLong.Field: message}, true
 }
 
