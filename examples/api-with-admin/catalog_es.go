@@ -13,7 +13,7 @@ func registerCatalogs() {
 
 var spanishMexico = map[string]string{
 	"admin.button.add_model": "+ Agregar %s",
-	"admin.fk.add_new":       "+ Agregar %s",
+	"admin.fk.add_new":       "Agregar %s",
 	"admin.list.empty_first": "Agrega %s para verlo aquí.",
 }
 
@@ -99,11 +99,12 @@ var spanish = map[string]string{
 	"admin.error.not_staff":                     "Esta cuenta de administración no tiene acceso de personal.",
 	"admin.error.too_long":                      "%s debe tener como máximo %d caracteres (tiene %d)",
 	"admin.error.too_many_login_attempts":       "Desde esta red se hicieron demasiados intentos fallidos de inicio de sesión.",
-	"admin.fk.add_new":                          "+ Crear %s",
+	"admin.fk.add_new":                          "Crear %s",
 	"admin.fk.none_selected":                    "Sin elegir %s",
 	"admin.form.cancel_to":                      "Cancelar y volver a %s",
-	"admin.form.problem_one":                    "Corrija 1 problema para guardar los cambios de %s.",
-	"admin.form.problems":                       "Corrija %d problemas para guardar los cambios de %s.",
+	"admin.form.problem_item":                   "%s: %s",
+	"admin.form.problem_one":                    "Corrige 1 problema para guardar el registro de %s.",
+	"admin.form.problems":                       "Corrige %d problemas para guardar el registro de %s.",
 	"admin.index.empty_body":                    "Registra un modelo en la administración (registry.Admin().Register) para verlo aquí.",
 	"admin.index.empty_title":                   "Aún no hay modelos registrados",
 	"admin.json.apply":                          "Usar este formato",
@@ -124,7 +125,7 @@ var spanish = map[string]string{
 	"admin.layout.title":                        "Administración tanGO",
 	"admin.error.invalid_density":               "Densidad no válida.",
 	"admin.error.csrf_title":                    "Este formulario caducó",
-	"admin.error.foreign_key":                   "El elemento elegido ya no existe. Elija otro y guarde de nuevo.",
+	"admin.error.foreign_key":                   "El elemento elegido ya no existe. Elige otro y guarda de nuevo.",
 	"admin.error.csrf_next":                     "Recarga la página y envía el formulario otra vez.",
 	"admin.error.not_found_title":               "No se encontró esta página",
 	"admin.error.not_found_next":                "Vuelve al inicio del administrador y búscala allí.",

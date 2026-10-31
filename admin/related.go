@@ -66,7 +66,7 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 	sliceType := reflect.SliceOf(relatedMeta.Type)
 	destPtr := reflect.New(sliceType)
 	if err := store.List(ctx, relatedMeta, db.Query{OrderBy: []string{relatedPKField.Name}}, destPtr.Interface()); err != nil {
-		// The form still renders, with only the None choice, so an unrelated
+		// The form still renders, with only the empty choice, so an unrelated
 		// outage on the related table does not hide the whole page.
 		slog.ErrorContext(ctx, "admin: listing related rows for a foreign key select failed", "model", targetName, "error", err)
 		return []SelectOption{noneOption(ctx, currentValue, noun)}, true

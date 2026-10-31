@@ -78,8 +78,10 @@ func (inputWidget) Parse(_ context.Context, f FieldContext, form FieldValues, de
 var checkboxWidgetTemplate = template.Must(template.New("checkboxWidget").Parse(
 	`<div class="checkbox-row">
   <input type="checkbox" id="field-{{.Name}}" name="{{.Name}}" {{if .Checked}}checked{{end}} class="checkbox"` + ariaAttrs + `>
-  <label for="field-{{.Name}}" class="text-sm font-medium text-ink-muted">{{.Label}}</label>
-  {{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
+  <div>
+    <label for="field-{{.Name}}" class="text-sm font-medium text-ink-muted">{{.Label}}</label>
+    {{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
+  </div>
 </div>`))
 
 // checkboxWidget is the built-in bool field: a single checkbox.
@@ -97,12 +99,9 @@ func (checkboxWidget) Parse(_ context.Context, f FieldContext, form FieldValues,
 var selectWidgetTemplate = template.Must(template.New("selectWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
 {{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
-<div class="inline-row flex-wrap">
-  <select id="field-{{.Name}}" name="{{.Name}}" class="input min-w-[10rem] flex-1"` + ariaAttrs + `>
-    {{range .SelectOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Text}}</option>{{end}}
-  </select>
-  {{if .RelatedCreateURL}}<a href="{{.RelatedCreateURL}}" class="btn-secondary whitespace-nowrap">{{.RelatedCreateLabel}}</a>{{end}}
-</div>`))
+<select id="field-{{.Name}}" name="{{.Name}}" class="input"` + ariaAttrs + `>
+  {{range .SelectOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Text}}</option>{{end}}
+</select>`))
 
 // foreignKeySelectWidget is the built-in foreign key field: a <select>
 // populated from every row of the related model. Parsing is
@@ -118,14 +117,12 @@ func (foreignKeySelectWidget) Parse(_ context.Context, f FieldContext, form Fiel
 	return setFieldFromReflectedString(dest, form.Get(f.Name), form.Has(f.Name))
 }
 
-// placesOwnHelp reports whether a built-in widget renders its field's help
-// text itself, between the label and the control.
-func placesOwnHelp(w Widget) bool {
-	switch w.(type) {
-	case inputWidget, checkboxWidget, foreignKeySelectWidget, textareaWidget, readOnlyWidget, jsonWidget, markdownWidget, markdownPreviewWidget:
-		return true
-	}
-	return false
+// printsHelp reports whether a widget's markup already carries its field's
+// help text, by its element id. Checking the markup rather than the widget's
+// type also covers a host widget that delegates to a built-in one, so the
+// help is printed once either way.
+func printsHelp(markup template.HTML, name string) bool {
+	return strings.Contains(string(markup), `id="field-`+name+`-help"`)
 }
 
 // defaultWidgetForField returns tanGO's built-in Widget for field, absent

@@ -56,7 +56,7 @@ func TestFailedSaveWithTwoProblemsShowsASummaryAboveTheFields(t *testing.T) {
 		t.Errorf("summary does not count the problems in words:\n%s", body)
 	}
 	for _, name := range []string{"Count", "Total"} {
-		if !strings.Contains(body, `href="#field-`+name+`" class="underline">`+name+` must be a whole number.</a>`) {
+		if !strings.Contains(body, `<li><a href="#field-`+name+`" class="underline">`+name+`: `+name+` must be a whole number.</a></li>`) {
 			t.Errorf("summary has no link to field %s carrying its message once:\n%s", name, body)
 		}
 	}
@@ -97,7 +97,7 @@ func TestFormHasNoRequiredMarker(t *testing.T) {
 	body := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
 
 	if strings.Contains(body, " required") || strings.Contains(body, "Required") {
-		t.Errorf("no field may be marked required (D58):\n%s", body)
+		t.Errorf("no field may be marked required:\n%s", body)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestForeignKeyAddButtonHasVisibleTargetName(t *testing.T) {
 	handler, _ := buildAuthorPostAdmin(t, admin.Options{Label: "Name", SingularName: "Author"})
 
 	body := doRequest(t, handler, http.MethodGet, "/admin/fk_post/new/", nil).Body.String()
-	if !strings.Contains(body, `Add new author</a>`) {
+	if !strings.Contains(body, `<span aria-hidden="true">+</span> Add new author</a>`) {
 		t.Errorf("add button has no visible name for the target:\n%s", body)
 	}
 	if strings.Contains(body, `aria-label="Add`) {

@@ -284,6 +284,19 @@
     }
   }
 
+  // A failed save with one field problem has no summary to take focus, so the
+  // invalid control takes it. The server marks the control aria-invalid.
+  function focusInvalidControl() {
+    if (document.getElementById("form-summary")) {
+      return;
+    }
+    var invalid = document.querySelector('[aria-invalid="true"]');
+    if (invalid) {
+      invalid.focus();
+    }
+  }
+
   register("json", setupJSON);
   register("markdown", setupMarkdown);
+  focusInvalidControl();
 })();

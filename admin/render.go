@@ -140,15 +140,15 @@ var formTemplate = cloneWithContent(`{{define "content"}}
 <div class="content-body">
   <div class="card max-w-2xl">
     <div class="card-body">
-      {{with .Summary}}<div class="alert-error" role="alert">
+      {{with .Summary}}<div class="alert-error" role="alert" aria-labelledby="form-summary">
         <h2 id="form-summary" class="font-semibold" tabindex="-1" autofocus>{{.Heading}}</h2>
-        {{range .Items}}<p class="mt-1">{{if .Href}}<a href="{{.Href}}" class="underline">{{.Text}}</a>{{else}}{{.Text}}{{end}}</p>{{end}}
+        <ul class="mt-1 list-disc pl-5">{{range .Items}}<li>{{if .Href}}<a href="{{.Href}}" class="underline">{{.Text}}</a>{{else}}{{.Text}}{{end}}</li>{{end}}</ul>
       </div>{{end}}
       <form method="post">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      {{range .Fields}}<div class="field-group">{{.HTML}}{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}{{if .Error}}<p class="field-error" id="field-{{.Name}}-error"{{if not $.Summary}} role="alert"{{end}}>{{.Error}}</p>{{end}}</div>
+      {{range .Fields}}<div class="field-group">{{.HTML}}{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}{{if .Error}}<p class="field-error" id="field-{{.Name}}-error"{{if not $.Summary}} role="alert"{{end}}>{{.Error}}</p>{{end}}{{if .AddHref}}<a href="{{.AddHref}}" class="btn-secondary mt-2 inline-block whitespace-nowrap"><span aria-hidden="true">+</span> {{.AddLabel}}</a>{{end}}</div>
       {{end}}
-        <div class="flex items-center gap-2 pt-2">
+        <div class="flex flex-wrap items-center gap-2 pt-2 whitespace-nowrap">
           <button type="submit" class="btn-primary">{{.T "admin.button.save" "Save"}}</button>
           <a href="../" class="btn-secondary">{{.T "admin.form.cancel_to" "Cancel and return to %s" .ListName}}</a>
         </div>
@@ -246,6 +246,10 @@ type formField struct {
 	// HelpText is set only for a widget that does not print its own help text.
 	HelpText string
 	Error    string
+	// AddHref and AddLabel are the add button of a foreign key field. The form
+	// prints it after the field's error, so the error sits under its select.
+	AddHref  string
+	AddLabel string
 }
 
 type formPageData struct {

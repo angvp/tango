@@ -2441,6 +2441,10 @@ html, body{
   display:block;
 }
 
+.inline-block{
+  display:inline-block;
+}
+
 .inline{
   display:inline;
 }
@@ -2516,10 +2520,6 @@ html, body{
 
 .min-w-6{
   min-width:1.5rem;
-}
-
-.min-w-\[10rem\]{
-  min-width:10rem;
 }
 
 .min-w-\[200px\]{

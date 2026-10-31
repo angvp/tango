@@ -110,8 +110,12 @@ type smokeCode struct {
 type shortCodeWidget struct{}
 
 func (shortCodeWidget) Render(_ context.Context, f admin.FieldContext) template.HTML {
+	invalid := ""
+	if f.Error != "" {
+		invalid = ` aria-invalid="true"`
+	}
 	return template.HTML(`<label for="field-` + f.Name + `" class="field-label">` + template.HTMLEscapeString(f.Label) + `</label>` +
-		`<input id="field-` + f.Name + `" name="` + f.Name + `" value="` + template.HTMLEscapeString(f.Value) + `" class="input">`)
+		`<input id="field-` + f.Name + `" name="` + f.Name + `" value="` + template.HTMLEscapeString(f.Value) + `" class="input"` + invalid + `>`)
 }
 
 func (shortCodeWidget) Parse(_ context.Context, f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
@@ -863,6 +867,17 @@ func (s *smoke) adminFormSummary() {
 	s.check(s.evalString(active) == "form-summary", "focus after a failed save is on %q, want the summary heading", s.evalString(active))
 	s.run("summary link to the first field", chromedp.Click(`.alert-error a[href="#field-Code"]`, chromedp.NodeVisible))
 	s.check(s.evalString(active) == "field-Code", "focus after the summary link is on %q, want the field", s.evalString(active))
+
+	// One problem has no summary, so its control takes focus.
+	s.run("admin create form with one problem",
+		chromedp.Navigate(s.base+"/admin/smoke_code/new/"),
+		chromedp.WaitVisible("#field-Code"),
+		chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible),
+		chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible),
+		chromedp.WaitVisible("#field-Code[aria-invalid]"),
+	)
+	s.check(!s.eval(`!!document.getElementById('form-summary')`), "a single field problem should have no summary")
+	s.check(s.evalString(active) == "field-Code", "focus after one field problem is on %q, want the invalid control", s.evalString(active))
 }
 
 // headerOf returns the Content-Security-Policy the server sends for path.

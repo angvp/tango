@@ -15,9 +15,10 @@ type formSummary struct {
 	Items   []formSummaryItem
 }
 
-// formSummaryItem is one problem. A field problem links to its field and reads
-// as the field's message, which names the field; a problem that belongs to no
-// field is plain text.
+// formSummaryItem is one problem. A field problem links to its field and is
+// prefixed with the field's label, so the link identifies the field even when
+// the message does not name it; a problem that belongs to no field is plain
+// text.
 type formSummaryItem struct {
 	Href string
 	Text string
@@ -33,7 +34,10 @@ func buildFormSummary(ctx context.Context, fields []formField, formError string,
 		if field.Error == "" {
 			continue
 		}
-		items = append(items, formSummaryItem{Href: "#field-" + field.Name, Text: field.Error})
+		items = append(items, formSummaryItem{
+			Href: "#field-" + field.Name,
+			Text: i18n.T(ctx, "admin.form.problem_item", "%s: %s", field.Label, field.Error),
+		})
 	}
 	if formError != "" {
 		items = append(items, formSummaryItem{Text: formError})
