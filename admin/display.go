@@ -115,29 +115,39 @@ func (r listRenderer) cell(row reflect.Value, column string) listCell {
 			return plainCell(relatedLabel(r.ctx, r.store, r.models, r.adminReg, field.ForeignKey, fieldValue.Interface()))
 		}
 	}
-	cell := plainCell(formatFieldValue(fieldValue))
-	cell.Numeric = numericColumn(r.meta, column)
-	return cell
+	return plainCell(formatFieldValue(fieldValue))
 }
 
-// numericColumn reports whether a column shows a plain number, which the
-// changelist aligns to the right. A foreign key shows a label and a host
-// Display function owns its text, so neither is numeric.
-func numericColumn(meta model.ModelMeta, column string) bool {
+// listColumns builds a changelist's headers once per page. A column is numeric
+// when it shows a plain number field. A host Display function owns the text of
+// its column and a foreign key shows a label, so neither is numeric, in the
+// header or in its cells.
+func listColumns(meta model.ModelMeta, opts adminregistry.Options) []listColumn {
+	fields := make(map[string]model.FieldMeta, len(meta.Fields))
 	for _, field := range meta.Fields {
-		if field.Name != column {
-			continue
-		}
-		if field.ForeignKey != "" {
-			return false
-		}
-		switch field.Type.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-			reflect.Float32, reflect.Float64:
-			return true
-		}
+		fields[field.Name] = field
+	}
+	columns := make([]listColumn, len(opts.ListDisplay))
+	for i, name := range opts.ListDisplay {
+		columns[i] = listColumn{Label: listHeader(name, opts), Numeric: isNumericColumn(fields, name, opts)}
+	}
+	return columns
+}
+
+// isNumericColumn reports whether column shows an integer or float field.
+func isNumericColumn(fields map[string]model.FieldMeta, column string, opts adminregistry.Options) bool {
+	if _, ok := opts.Display[column]; ok {
 		return false
+	}
+	field, ok := fields[column]
+	if !ok || field.ForeignKey != "" {
+		return false
+	}
+	switch field.Type.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
 	}
 	return false
 }

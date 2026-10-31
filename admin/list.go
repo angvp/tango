@@ -64,7 +64,8 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			return err
 		}
 
-		rows, err := buildRows(ctx.Context(), store, models, adminReg, destPtr.Elem(), meta, registration.Options)
+		columns := listColumns(meta, registration.Options)
+		rows, err := buildRows(ctx.Context(), store, models, adminReg, destPtr.Elem(), meta, registration.Options, columns)
 		if err != nil {
 			return err
 		}
@@ -75,11 +76,6 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 		}
 
 		params := listParams(q, filters.Params)
-
-		columns := make([]listColumn, len(registration.Options.ListDisplay))
-		for i, name := range registration.Options.ListDisplay {
-			columns[i] = listColumn{Label: listHeader(name, registration.Options), Numeric: numericColumn(meta, name)}
-		}
 
 		data := listPageData{
 			chrome:      chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()),
@@ -109,7 +105,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 	}
 }
 
-func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, sliceValue reflect.Value, meta model.ModelMeta, opts adminregistry.Options) ([]listRow, error) {
+func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, sliceValue reflect.Value, meta model.ModelMeta, opts adminregistry.Options, columns []listColumn) ([]listRow, error) {
 	pkField, err := primaryKeyField(meta)
 	if err != nil {
 		return nil, err
@@ -125,7 +121,8 @@ func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adm
 		}
 		for j, column := range opts.ListDisplay {
 			row.Cells[j] = cells.cell(elem, column)
-			row.Cells[j].Label = listHeader(column, opts)
+			row.Cells[j].Label = columns[j].Label
+			row.Cells[j].Numeric = columns[j].Numeric
 		}
 		first := ""
 		if len(row.Cells) > 0 {

@@ -1,10 +1,13 @@
 package admin_test
 
 import (
+	"context"
 	"net/http"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/angvp/tango/admin"
 )
 
 func changelistWith(t *testing.T, cookies ...*http.Cookie) string {
@@ -99,5 +102,31 @@ func TestChangelistCellsCarryTheirColumnLabelForThePhoneCard(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("changelist cell lacks %s", want)
 		}
+	}
+}
+
+func TestChangelistDisplayColumnIsNotNumericOnHeaderOrCell(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
+		ListDisplay: []string{"Name", "Price"},
+		Display: map[string]admin.DisplayFunc{"Price": func(context.Context, any) admin.Display {
+			return admin.Display{Text: "custom-price"}
+		}},
+	})
+	seedProduct(t, sqlDB, "Alpha", 12.5)
+
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	header := regexp.MustCompile(`<th [^>]*>Price</th>`).FindString(body)
+	if header == "" {
+		t.Fatal("changelist has no Price header")
+	}
+	if hasClassToken(header, "cell-num") {
+		t.Errorf("a Display column header is right-aligned: %s", header)
+	}
+	cell := regexp.MustCompile(`<td[^>]*>(?:<span [^>]*>[^<]*</span>)?custom-price</td>`).FindString(body)
+	if cell == "" {
+		t.Fatal("the Display cell is missing")
+	}
+	if hasClassToken(cell, "cell-num") {
+		t.Errorf("a Display cell is right-aligned: %s", cell)
 	}
 }
