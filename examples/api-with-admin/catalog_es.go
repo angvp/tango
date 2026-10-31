@@ -85,6 +85,7 @@ var spanish = map[string]string{
 	"admin.edit.title":                          "Editar %s",
 	"admin.error.csrf":                          "Este formulario estuvo abierto demasiado tiempo, o se inició sesión de nuevo en otra ventana.",
 	"admin.error.invalid_json":                  "JSON no válido.",
+	"admin.error.back_to_page":                  "Volver a la página",
 	"admin.error.invalid_theme":                 "tema no válido",
 	"admin.error.invalid_value":                 "Valor no válido",
 	"admin.error.json_invalid":                  "JSON no válido",

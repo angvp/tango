@@ -70,7 +70,7 @@ func previewRoutes(modelPath string, store *db.Store, registration ModelRegistra
 	}
 	view := previewView(registration.Model, registration.Options)
 	return tango.URLs{
-		tango.Path(http.MethodPost, modelPath+"_preview/{field}/", requireSession(store, view), hiddenPage),
+		tango.Path(http.MethodPost, modelPath+"_preview/{field}/", requireSession(store, chrome{}, view), hiddenPage),
 	}
 }
 

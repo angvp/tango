@@ -3,6 +3,7 @@ package admin_test
 import (
 	"database/sql"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -104,7 +105,7 @@ var messageTableForbidden = []string{
 	"strconv", "invalid syntax", `field "`, "ParseFloat", "ValueTooLong", "db:",
 	"UNIQUE", "constraint", "FOREIGN KEY", "internal error",
 	"invalid character", "unexpected end", `{"error"`,
-	"INSERT", "SELECT", "sql:", "messageBook",
+	"INSERT", "SELECT", "sql:", "messageBook", "not found", "no such table",
 }
 
 func TestBadInputYieldsFriendlyMessagesOnCreateAndEdit(t *testing.T) {
@@ -186,5 +187,70 @@ func TestSaveWithMissingForeignKeyTargetIsAFormMessage(t *testing.T) {
 		if strings.Contains(body, leak) {
 			t.Fatalf("body leaks %q", leak)
 		}
+	}
+}
+
+// TestErrorStatusesYieldFriendlyPagesInTheMessageTable applies the same
+// forbidden list to the admin's answers for an expired form, a missing row and
+// a refused save with a server failure.
+func TestErrorStatusesYieldFriendlyPagesInTheMessageTable(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		expected string
+		request  func(t *testing.T) *httptest.ResponseRecorder
+	}{
+		{
+			name:     "save with a missing CSRF token",
+			status:   http.StatusForbidden,
+			expected: "Your form expired",
+			request: func(t *testing.T) *httptest.ResponseRecorder {
+				handler, _ := buildMessageBookAdmin(t)
+				request := httptest.NewRequest(http.MethodPost, messageBookBasePath+"new/", strings.NewReader(url.Values{"Title": {"Atlas"}}.Encode()))
+				request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				request.AddCookie(&http.Cookie{Name: "tango_admin_session", Value: testSessionToken})
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, request)
+				return response
+			},
+		},
+		{
+			name:     "open a missing row",
+			status:   http.StatusNotFound,
+			expected: "We could not find that page",
+			request: func(t *testing.T) *httptest.ResponseRecorder {
+				handler, _ := buildMessageBookAdmin(t)
+				return doRequest(t, handler, http.MethodGet, messageBookBasePath+"999/", nil)
+			},
+		},
+		{
+			name:     "save refused by a server failure",
+			status:   http.StatusInternalServerError,
+			expected: "Your changes were not saved.",
+			request: func(t *testing.T) *httptest.ResponseRecorder {
+				handler, sqlDB := buildMessageBookAdmin(t)
+				if _, err := sqlDB.Exec(`DROP TABLE message_book`); err != nil {
+					t.Fatal(err)
+				}
+				return doRequest(t, handler, http.MethodPost, messageBookBasePath+"new/", url.Values{"Title": {"Atlas"}, "Year": {"2024"}, "Price": {"9.5"}, "Notes": {""}})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := tt.request(t)
+			body := response.Body.String()
+			if response.Code != tt.status {
+				t.Fatalf("status = %d, want %d; body %.300s", response.Code, tt.status, body)
+			}
+			if !strings.Contains(body, tt.expected) {
+				t.Fatalf("body lacks %q", tt.expected)
+			}
+			for _, text := range messageTableForbidden {
+				if strings.Contains(body, text) {
+					t.Fatalf("body contains forbidden %q", text)
+				}
+			}
+		})
 	}
 }

@@ -151,7 +151,7 @@ func sessionCookieValue(r *http.Request) string {
 // is a distinct case from "not logged in," and a redirect there would
 // wrongly imply signing in again could help. Only IsStaff is checked here;
 // IsSuperuser has no effect on this decision.
-func requireSession(store *db.Store, next tango.View) tango.View {
+func requireSession(store *db.Store, page chrome, next tango.View) tango.View {
 	return func(ctx *tango.Context) error {
 		token := sessionCookieValue(ctx.Request())
 
@@ -167,6 +167,9 @@ func requireSession(store *db.Store, next tango.View) tango.View {
 		if !user.IsStaff {
 			return forbidden(ctx)
 		}
+		// The navigation lists the models, so it is installed only once the
+		// account is known to be staff.
+		replaceRequestContext(ctx, withChrome(ctx.Context(), page))
 
 		// An outcome is shown on the page a GET renders after the redirect that
 		// set it. Only a GET consumes it: a POST renders no page the person reads.
@@ -185,10 +188,8 @@ func requireSession(store *db.Store, next tango.View) tango.View {
 			}
 		}
 
-		// The layout reads the account from the request context. The
-		// context's request is replaced in place because tango.Context has
-		// no setter and a handler owns its request.
-		*ctx.Request() = *ctx.Request().WithContext(withSignedIn(ctx.Context(), who))
+		// The layout reads the account from the request context.
+		replaceRequestContext(ctx, withSignedIn(ctx.Context(), who))
 
 		return next(ctx)
 	}

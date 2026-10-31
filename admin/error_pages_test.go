@@ -5,15 +5,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/angvp/tango"
 )
 
-// errorPageForbidden is the text no server-failure or access page may show:
-// Go error text, SQL, the framework's own failure body and the JSON envelope
-// the admin used before these pages existed.
+// errorPageForbidden is the text no admin error page may show: Go error text,
+// SQL, the framework's own failure body and a JSON envelope.
 var errorPageForbidden = []string{
 	"internal error", `{"error"`, "no such table",
 	"SELECT", "INSERT", "sql:", "strconv", "invalid syntax", "ParseFloat",
@@ -143,10 +143,10 @@ func TestErrorPagesRenderInTheSharedLayout(t *testing.T) {
 	}
 }
 
-// TestServerFailureShowsTheRequestReferenceAndLogsTheSameOne checks that the
-// page shows the request's reference and nothing technical, and that the log
-// line carries the full error with that same reference.
-func TestServerFailureShowsTheRequestReferenceAndLogsTheSameOne(t *testing.T) {
+// TestServerFailureShowsTheShortReferenceAndLogsItOnTheErrorLine checks that
+// the page shows the first eight characters of the request ID, and that the
+// log line carrying the full error carries the same short reference.
+func TestServerFailureShowsTheShortReferenceAndLogsItOnTheErrorLine(t *testing.T) {
 	handler, sqlDB := buildProductAdmin(t)
 	seedProduct(t, sqlDB, "Widget", 2)
 	if _, err := sqlDB.Exec(`DROP TABLE crud_product`); err != nil {
@@ -162,22 +162,61 @@ func TestServerFailureShowsTheRequestReferenceAndLogsTheSameOne(t *testing.T) {
 	response := httptest.NewRecorder()
 	withReference.ServeHTTP(response, request)
 
-	reference := response.Header().Get("X-Request-ID")
-	if reference == "" {
-		t.Fatal("RequestID did not set X-Request-ID")
+	id := response.Header().Get("X-Request-ID")
+	if len(id) != 32 {
+		t.Fatalf("X-Request-ID = %q, want the 32-character generated ID", id)
 	}
-	if !strings.Contains(response.Body.String(), reference) {
-		t.Fatalf("page does not show the reference %q: %.400s", reference, response.Body.String())
+	body := response.Body.String()
+	shown := referenceOnPage(t, body)
+	if shown != id[:8] {
+		t.Fatalf("page shows reference %q, want the first eight characters %q", shown, id[:8])
 	}
-	if !strings.Contains(logs.String(), "request_id="+reference) {
-		t.Fatalf("log lacks request_id=%s: %s", reference, logs.String())
+	if strings.Contains(body, id) {
+		t.Fatalf("page shows the full request ID: %.400s", body)
 	}
-	if !strings.Contains(logs.String(), "no such table") {
-		t.Fatalf("log lacks the full error text: %s", logs.String())
+	if strings.Contains(body, "no such table") {
+		t.Fatalf("page shows the error text: %.400s", body)
 	}
-	if strings.Contains(response.Body.String(), "no such table") {
-		t.Fatalf("page shows the error text: %.400s", response.Body.String())
+
+	errorLine := lineWith(logs.String(), "no such table")
+	if errorLine == "" {
+		t.Fatalf("no log line carries the full error: %s", logs.String())
 	}
+	if !strings.Contains(errorLine, "request_id="+id) {
+		t.Fatalf("error line lacks request_id=%s: %s", id, errorLine)
+	}
+	if logged := attributeOf(errorLine, "reference"); logged != shown {
+		t.Fatalf("error line reference = %q, page shows %q: %s", logged, shown, errorLine)
+	}
+}
+
+// referenceOnPage returns the reference the server-failure page shows.
+func referenceOnPage(t *testing.T, body string) string {
+	t.Helper()
+	match := regexp.MustCompile(`Reference: ([0-9A-Za-z-]+)`).FindStringSubmatch(body)
+	if match == nil {
+		t.Fatalf("page shows no reference: %.400s", body)
+	}
+	return match[1]
+}
+
+// lineWith returns the first log line containing text.
+func lineWith(logs, text string) string {
+	for _, line := range strings.Split(logs, "\n") {
+		if strings.Contains(line, text) {
+			return line
+		}
+	}
+	return ""
+}
+
+// attributeOf returns the value of key= on a text log line.
+func attributeOf(line, key string) string {
+	match := regexp.MustCompile(key + `=([0-9A-Za-z-]+)`).FindStringSubmatch(line)
+	if match == nil {
+		return ""
+	}
+	return match[1]
 }
 
 // TestServerFailureWithoutRequestIDOmitsTheReference covers a host that runs

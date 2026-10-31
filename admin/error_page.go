@@ -5,61 +5,97 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/i18n"
+	"github.com/angvp/tango/internal/observabilitysafe"
 )
 
-// pageChromeKey carries a page's navigation and branding into the request
-// context, so the helpers that answer a failed request can render the shared
-// layout without the closure of the view that built it.
-type pageChromeKey struct{}
+// chromeKey carries a page's chrome in the request context. htmlPage installs
+// the brand alone, so a failure before the account is known to be staff shows
+// no navigation. requireSession installs the navigation once the account is
+// staff.
+type chromeKey struct{}
 
-// pageChrome is the navigation and branding an HTML page shows.
-type pageChrome struct {
-	nav   []navItem
-	brand Branding
-}
-
-func pageChromeFrom(ctx context.Context) pageChrome {
-	page, _ := ctx.Value(pageChromeKey{}).(pageChrome)
+func chromeFrom(ctx context.Context) chrome {
+	page, _ := ctx.Value(chromeKey{}).(chrome)
 	return page
 }
 
-// htmlPage serves next as an HTML page. A view that fails is answered with the
-// server-failure page, and the detail is logged with the request's reference.
-// Body-size rejections pass through unchanged so the framework still answers
-// them with 413.
-func htmlPage(page pageChrome, next tango.View) tango.View {
+func withChrome(ctx context.Context, page chrome) context.Context {
+	return context.WithValue(ctx, chromeKey{}, page)
+}
+
+// htmlPage serves next as an HTML page. A failed view is answered with the
+// server-failure page. A panic is not recovered here: the admin lets a panic
+// reach the framework, as the host's Display functions rely on.
+func htmlPage(brand chrome, next tango.View) tango.View {
 	return func(ctx *tango.Context) error {
-		*ctx.Request() = *ctx.Request().WithContext(context.WithValue(ctx.Context(), pageChromeKey{}, page))
+		replaceRequestContext(ctx, withChrome(ctx.Context(), brand))
 		return serverFailure(ctx, next(ctx))
 	}
 }
 
-// serverFailure turns a view's error into the server-failure page. Nil and
-// body-size errors are returned unchanged.
+// serverFailure answers a failed view with the server-failure page. The full
+// error is logged with the request's reference, and the page shows only that
+// reference. Nil and body-size errors are returned unchanged, so the framework
+// answers them.
 func serverFailure(ctx *tango.Context, err error) error {
 	var tooLarge *http.MaxBytesError
 	if err == nil || errors.As(err, &tooLarge) {
 		return err
 	}
-	ctx.Logger().LogAttrs(ctx.Context(), slog.LevelError, tango.EventViewError, slog.Any("error", err))
+	reference, hasReference := tango.RequestIDFromContext(ctx.Context())
+	short := shortReference(reference)
+	observabilitysafe.Call(func() {
+		attrs := []slog.Attr{slog.Any("error", err)}
+		if hasReference {
+			attrs = append(attrs, slog.String("reference", short))
+		}
+		ctx.Logger().LogAttrs(ctx.Context(), slog.LevelError, tango.EventViewError, attrs...)
+	})
 
 	text := errorText{
 		Title:    i18n.T(ctx.Context(), "admin.error.server_title", "Something went wrong"),
 		Sentence: i18n.T(ctx.Context(), "admin.error.server_load", "This page could not be loaded."),
 		Next:     i18n.T(ctx.Context(), "admin.error.server_next", "Try again in a few minutes. If it keeps happening, give the reference below to the site administrator."),
-		LinkHref: "/admin/",
-		LinkText: i18n.T(ctx.Context(), "admin.error.home", "Back to the admin home"),
 	}
+	text.LinkHref, text.LinkText = homeLink(ctx)
 	if ctx.Request().Method != http.MethodGet {
 		text.Sentence = i18n.T(ctx.Context(), "admin.error.server_save", "Your changes were not saved.")
 	}
-	if reference, ok := tango.RequestIDFromContext(ctx.Context()); ok {
-		text.ReferenceText = i18n.T(ctx.Context(), "admin.error.reference", "Reference: %s", reference)
+	if hasReference {
+		text.ReferenceText = i18n.T(ctx.Context(), "admin.error.reference", "Reference: %s", short)
 	}
 	return renderErrorPage(ctx, http.StatusInternalServerError, text)
+}
+
+// shortReference is the part of a request ID a person can read back to support:
+// the first eight characters of a hexadecimal ID, which is what RequestID
+// generates, or the first sixteen characters of any other ID.
+func shortReference(id string) string {
+	limit := 16
+	if isHexadecimal(id) {
+		limit = 8
+	}
+	if len(id) > limit {
+		return id[:limit]
+	}
+	return id
+}
+
+func isHexadecimal(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+	return true
 }
 
 // errorText is the copy of one error page: a title, one sentence, a next step
@@ -84,7 +120,7 @@ var errorPageTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
   <div class="inline-row">
     {{template "menuBtn" .}}
-    <div>{{template "breadcrumbs" .}}<h1 class="topbar-title">{{.Title}}</h1></div>
+    <h1 class="topbar-title">{{.Title}}</h1>
   </div>
 </header>
 <div class="content-body">
@@ -101,14 +137,13 @@ var errorPageTemplate = cloneWithContent(`{{define "content"}}
 
 // renderErrorPage writes text as an HTML page in the shared layout with status.
 func renderErrorPage(ctx *tango.Context, status int, text errorText) error {
-	page := pageChromeFrom(ctx.Context())
 	return render(ctx, status, errorPageTemplate, errorPageData{
-		chrome:    chrome{Nav: page.nav, Brand: page.brand}.withContext(ctx.Context()),
+		chrome:    chromeFrom(ctx.Context()).withContext(ctx.Context()),
 		errorText: text,
 	})
 }
 
-// homeLink is the next step on pages a person reaches by following a link.
+// homeLink is the next step on pages that lead back to the admin home.
 func homeLink(ctx *tango.Context) (string, string) {
 	return "/admin/", i18n.T(ctx.Context(), "admin.error.home", "Back to the admin home")
 }
@@ -126,6 +161,7 @@ func notFound(ctx *tango.Context) error {
 }
 
 // methodNotAllowed answers a request whose method the page does not accept.
+// The caller sets the Allow header first.
 func methodNotAllowed(ctx *tango.Context) error {
 	href, linkText := homeLink(ctx)
 	return renderErrorPage(ctx, http.StatusMethodNotAllowed, errorText{
@@ -138,9 +174,13 @@ func methodNotAllowed(ctx *tango.Context) error {
 }
 
 // forbiddenCSRF answers a form whose CSRF check failed. The request is never
-// acted on.
+// acted on. The next step returns to the page the form was posted to, which
+// shows the form again, when that path is an admin path.
 func forbiddenCSRF(ctx *tango.Context) error {
 	href, linkText := homeLink(ctx)
+	if back := safeAdminNext(ctx.Request().URL.Path, ""); back != "" {
+		href, linkText = back, i18n.T(ctx.Context(), "admin.error.back_to_page", "Back to the page")
+	}
 	return renderErrorPage(ctx, http.StatusForbidden, errorText{
 		Title:    i18n.T(ctx.Context(), "admin.error.csrf_title", "Your form expired"),
 		Sentence: i18n.T(ctx.Context(), "admin.error.csrf", "This form was open too long, or you signed in again in another window."),
@@ -150,7 +190,8 @@ func forbiddenCSRF(ctx *tango.Context) error {
 	})
 }
 
-// forbidden answers a signed-in account that lacks staff access.
+// forbidden answers a signed-in account that lacks staff access. It is served
+// before the navigation is installed, so the page shows no model names.
 func forbidden(ctx *tango.Context) error {
 	return renderErrorPage(ctx, http.StatusForbidden, errorText{
 		Title:    i18n.T(ctx.Context(), "admin.error.not_staff_title", "You do not have access"),
@@ -169,4 +210,32 @@ func tooManyLoginAttempts(ctx *tango.Context) error {
 		LinkHref: "/admin/login/",
 		LinkText: i18n.T(ctx.Context(), "admin.error.sign_in", "Sign in"),
 	})
+}
+
+// answeredMethods are the methods an admin page can receive. A page answers
+// each one it does not handle with the HTML 405 page.
+var answeredMethods = []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
+
+// answeredMethodSummary marks a route that exists only to answer a method its
+// page does not handle. The framework page audit matches it to expect a 405.
+const answeredMethodSummary = "Answers a method its page does not handle with the HTML 405 page."
+
+var answeredMethodDoc = tango.Doc(tango.RouteDoc{Hidden: true, Summary: answeredMethodSummary})
+
+// unhandledMethodRoutes routes the methods of answeredMethods that path does not
+// handle to the HTML 405 page. Its Allow header lists the handled methods, and
+// the brand alone is shown, because the request is not yet known to be staff.
+func unhandledMethodRoutes(path string, brand Branding, handled ...string) tango.URLs {
+	allow := strings.Join(handled, ", ")
+	answer := htmlPage(chrome{Brand: brand}, func(ctx *tango.Context) error {
+		ctx.ResponseWriter().Header().Set("Allow", allow)
+		return methodNotAllowed(ctx)
+	})
+	var urls tango.URLs
+	for _, method := range answeredMethods {
+		if !slices.Contains(handled, method) {
+			urls = append(urls, tango.Path(method, path, answer, answeredMethodDoc))
+		}
+	}
+	return urls
 }

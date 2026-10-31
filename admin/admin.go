@@ -73,8 +73,11 @@ func New(store *db.Store, opts ...Option) tango.App {
 		if cfg.dashboard.enabled() {
 			landing = dashboardView(nav, cfg.branding, cfg.dashboard)
 		}
-		page := pageChrome{nav: nav, brand: cfg.branding}
-		index := htmlPage(page, requireSession(store, landing))
+		// Failures before sign-in show the brand alone; the navigation lists the
+		// models and is installed by requireSession once the account is staff.
+		brand := chrome{Brand: cfg.branding}
+		page := chrome{Nav: nav, Brand: cfg.branding}
+		index := htmlPage(brand, requireSession(store, page, landing))
 		routes := tango.URLs{
 			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index"), hiddenPage),
 			// Also match "/admin" (no trailing slash) directly, rather than
@@ -82,13 +85,20 @@ func New(store *db.Store, opts ...Option) tango.App {
 			// and Include's own slash-normalization only applies to prefixes
 			// passed to Include, not to a literal pattern like this one.
 			tango.Path(http.MethodGet, "/admin", index, hiddenPage),
-			tango.Path(http.MethodGet, "/admin/login/", htmlPage(pageChrome{brand: cfg.branding}, loginView(store, limiter, clientKey)), tango.Name("login"), hiddenPage),
-			tango.Path(http.MethodPost, "/admin/login/", htmlPage(pageChrome{brand: cfg.branding}, loginView(store, limiter, clientKey)), hiddenPage),
-			tango.Path(http.MethodPost, "/admin/logout/", htmlPage(pageChrome{brand: cfg.branding}, logoutView(store)), tango.Name("logout"), hiddenPage),
-			tango.Path(http.MethodPost, "/admin/theme/", htmlPage(page, requireSession(store, themeView())), hiddenPage),
-			tango.Path(http.MethodPost, "/admin/messages/dismiss/", htmlPage(page, requireSession(store, dismissView())), hiddenPage),
-			tango.Path(http.MethodPost, densityBasePath, htmlPage(page, requireSession(store, densityView())), hiddenPage),
+			tango.Path(http.MethodGet, "/admin/login/", htmlPage(brand, loginView(store, limiter, clientKey)), tango.Name("login"), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/login/", htmlPage(brand, loginView(store, limiter, clientKey)), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/logout/", htmlPage(brand, logoutView(store)), tango.Name("logout"), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/theme/", htmlPage(brand, requireSession(store, page, themeView())), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/messages/dismiss/", htmlPage(brand, requireSession(store, page, dismissView())), hiddenPage),
+			tango.Path(http.MethodPost, densityBasePath, htmlPage(brand, requireSession(store, page, densityView())), hiddenPage),
 		}
+		routes = append(routes, unhandledMethodRoutes("/admin/", cfg.branding, http.MethodGet)...)
+		routes = append(routes, unhandledMethodRoutes("/admin", cfg.branding, http.MethodGet)...)
+		routes = append(routes, unhandledMethodRoutes("/admin/login/", cfg.branding, http.MethodGet, http.MethodPost)...)
+		routes = append(routes, unhandledMethodRoutes("/admin/logout/", cfg.branding, http.MethodPost)...)
+		routes = append(routes, unhandledMethodRoutes("/admin/theme/", cfg.branding, http.MethodPost)...)
+		routes = append(routes, unhandledMethodRoutes("/admin/messages/dismiss/", cfg.branding, http.MethodPost)...)
+		routes = append(routes, unhandledMethodRoutes(densityBasePath, cfg.branding, http.MethodPost)...)
 		routes = append(routes, assetRoutes()...)
 		for _, registration := range registrations {
 			modelPath := modelAdminPath(registration.Model.Name)
@@ -138,11 +148,12 @@ func (a checkedApp) Checks() []tango.AppCheck {
 }
 
 func modelRoutes(modelPath string, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.URLs {
-	page := pageChrome{nav: nav, brand: brand}
-	list := htmlPage(page, requireSession(store, listView(store, models, adminReg, registration, nav, brand)))
-	create := htmlPage(page, requireSession(store, createView(store, models, adminReg, registration, nav, brand)))
-	edit := htmlPage(page, requireSession(store, editView(store, models, adminReg, registration, nav, brand)))
-	del := htmlPage(page, requireSession(store, deleteView(store, models, adminReg, registration, nav, brand)))
+	brandOnly := chrome{Brand: brand}
+	page := chrome{Nav: nav, Brand: brand}
+	list := htmlPage(brandOnly, requireSession(store, page, listView(store, models, adminReg, registration, nav, brand)))
+	create := htmlPage(brandOnly, requireSession(store, page, createView(store, models, adminReg, registration, nav, brand)))
+	edit := htmlPage(brandOnly, requireSession(store, page, editView(store, models, adminReg, registration, nav, brand)))
+	del := htmlPage(brandOnly, requireSession(store, page, deleteView(store, models, adminReg, registration, nav, brand)))
 
 	urls := tango.URLs{
 		tango.Path(http.MethodGet, modelPath, list, hiddenPage),
@@ -154,8 +165,13 @@ func modelRoutes(modelPath string, store *db.Store, models *model.Registry, admi
 		tango.Path(http.MethodPost, modelPath+"{pk}/delete/", del, hiddenPage),
 	}
 	if registration.Options.BulkDelete {
-		bulk := htmlPage(page, requireSession(store, bulkDeleteView(store, registration, nav, brand)))
+		bulk := htmlPage(brandOnly, requireSession(store, page, bulkDeleteView(store, registration, nav, brand)))
 		urls = append(urls, tango.Path(http.MethodPost, modelPath+"delete-selected/", bulk, hiddenPage))
+		urls = append(urls, unhandledMethodRoutes(modelPath+"delete-selected/", brand, http.MethodPost)...)
 	}
+	urls = append(urls, unhandledMethodRoutes(modelPath, brand, http.MethodGet)...)
+	urls = append(urls, unhandledMethodRoutes(modelPath+"new/", brand, http.MethodGet, http.MethodPost)...)
+	urls = append(urls, unhandledMethodRoutes(modelPath+"{pk}/", brand, http.MethodGet, http.MethodPost)...)
+	urls = append(urls, unhandledMethodRoutes(modelPath+"{pk}/delete/", brand, http.MethodGet, http.MethodPost)...)
 	return append(urls, previewRoutes(modelPath, store, registration)...)
 }

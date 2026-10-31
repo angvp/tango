@@ -1,10 +1,13 @@
 package admin
 
 import (
+	"bytes"
 	"html/template"
+	"log/slog"
 	"net/http"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/internal/observabilitysafe"
 )
 
 const pageSize = 25
@@ -271,5 +274,24 @@ func render(ctx *tango.Context, status int, tmpl *template.Template, data any) e
 	if status/100 == 2 && ctx.Request().Method == http.MethodGet && signedInFrom(ctx.Context()) != nil && hasFlashCookie(ctx.Request()) {
 		clearFlashCookie(ctx.ResponseWriter(), ctx.Request())
 	}
-	return ctx.HTML(status, tmpl, "layout", data)
+	return writeHTML(ctx, status, tmpl, data)
+}
+
+// writeHTML executes the layout before any header is written, so a template
+// failure is returned to the caller, which can still answer the request. Once
+// the header is written a failed write is only logged: returning it would make
+// the framework write a second response.
+func writeHTML(ctx *tango.Context, status int, tmpl *template.Template, data any) error {
+	var page bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&page, "layout", data); err != nil {
+		return err
+	}
+	ctx.ResponseWriter().Header().Set("Content-Type", "text/html; charset=utf-8")
+	ctx.ResponseWriter().WriteHeader(status)
+	if _, err := page.WriteTo(ctx.ResponseWriter()); err != nil {
+		observabilitysafe.Call(func() {
+			ctx.Logger().LogAttrs(ctx.Context(), slog.LevelWarn, "tango.admin.response_write_failed", slog.Any("error", err))
+		})
+	}
+	return nil
 }

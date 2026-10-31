@@ -137,16 +137,19 @@ func TestBulkDeleteRejectsAMalformedFormBodyBeforeDeleting(t *testing.T) {
 	}
 }
 
-// The route accepts POST only, so a GET is expected to get a 404 from the
-// router and no row may be deleted by it.
+// The route accepts POST only, so a GET is answered by the HTML 405 page that
+// lists POST in Allow, and no row may be deleted by it.
 func TestBulkDeleteRefusesTheWrongMethodWithoutDeleting(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	id := seedProduct(t, sqlDB, "A", 1)
 
 	response := doRequest(t, handler, http.MethodGet, bulkDeletePath, bulkForm(1, id))
 
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404 from the router; body %q", response.Code, response.Body.String())
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405; body %q", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get("Allow"); got != "POST" {
+		t.Fatalf("Allow = %q, want POST", got)
 	}
 	if !productExists(t, sqlDB, id) {
 		t.Errorf("row deleted by a GET")
