@@ -3,10 +3,56 @@ package admin_test
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
+
+// paletteText matches one palette text-colour utility among the utilities of an
+// @apply line or a class attribute. A variant prefix (hover:text-ink) does not
+// count: the resting colour is what must be named.
+var paletteText = regexp.MustCompile(`(?:^|\s)text-(?:ink|ink-muted|ink-faint|accent-fg|success-fg|danger-fg|warning-fg|neutral-fg|danger-solid-fg|sidebar-fg|sidebar-strong|sidebar-muted)(?:\s|$)`)
+
+// componentApply matches a single-class rule of the Tailwind source and captures
+// the class and its @apply utilities.
+var componentApply = regexp.MustCompile(`(?m)^\s*\.([a-z][a-z0-9-]*)\s*\{\s*@apply ([^;}]*);`)
+
+// componentsWithText returns the component classes whose @apply names a
+// palette text colour, read from the Tailwind source the stylesheet is built from.
+func componentsWithText(t *testing.T) map[string]bool {
+	t.Helper()
+	src, err := os.ReadFile("tailwind/admin.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	named := map[string]bool{}
+	seen := 0
+	for _, m := range componentApply.FindAllStringSubmatch(string(src), -1) {
+		seen++
+		named[m[1]] = paletteText.MatchString(m[2])
+	}
+	if seen == 0 {
+		t.Fatal("no component rule found in tailwind/admin.css")
+	}
+	return named
+}
+
+// namesPaletteText reports whether one class attribute carries a palette text
+// colour, directly or through a component whose @apply does. Classes are
+// compared whole, so stat-value-num is never mistaken for stat-value.
+func namesPaletteText(classes string, components map[string]bool) bool {
+	if paletteText.MatchString(classes) {
+		return true
+	}
+	for _, c := range strings.Fields(classes) {
+		if components[c] {
+			return true
+		}
+	}
+	return false
+}
 
 // classAttr matches each class="..." attribute in rendered HTML.
 var classAttr = regexp.MustCompile(`class="([^"]*)"`)
@@ -51,10 +97,22 @@ func TestChangelistAndDeleteUseTokenClasses(t *testing.T) {
 	id := seedBook(t, sqlDB, "Live Title", true, author)
 
 	list := doRequest(t, handler, "GET", flBookPath, nil).Body.String()
-	for _, want := range []string{`btn-ghost text-danger-fg hover:bg-danger-bg`, `field-caption`} {
-		if !strings.Contains(list, want) {
-			t.Errorf("changelist lacks %q", want)
+	if !strings.Contains(list, `btn-ghost text-danger-fg hover:bg-danger-bg`) {
+		t.Error("changelist lacks the danger ghost button classes")
+	}
+	components := componentsWithText(t)
+	captions := 0
+	for _, m := range classAttr.FindAllStringSubmatch(list, -1) {
+		if !slices.Contains(strings.Fields(m[1]), "field-caption") {
+			continue
 		}
+		captions++
+		if !namesPaletteText(m[1], components) {
+			t.Errorf("field caption class %q applies no palette text colour", m[1])
+		}
+	}
+	if captions == 0 {
+		t.Error("changelist has no field-caption element")
 	}
 
 	del := doRequest(t, handler, "GET", fmt.Sprintf("%s%d/delete/", flBookPath, id), nil).Body.String()

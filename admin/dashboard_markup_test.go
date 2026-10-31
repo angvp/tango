@@ -63,8 +63,10 @@ func TestDashboardTextColoursComeFromTheAdminPaletteWithNoDecoration(t *testing.
 		t.Fatal("no dashboard page")
 	}
 	page := body[start : strings.LastIndex(body, "</section>")+len("</section>")]
+	components := componentsWithText(t)
 	for _, tag := range regexp.MustCompile(`<(?:dt|dd|h2|h3|p)\b[^>]*>`).FindAllString(page, -1) {
-		if !regexp.MustCompile(`text-(ink|ink-muted|ink-faint|success-fg|danger-fg)\b|\b(stat-label|stat-value|section-title|section-label|text-hint|panel-note(-muted|-tail)?)\b`).MatchString(tag) {
+		m := classAttr.FindStringSubmatch(tag)
+		if m == nil || !namesPaletteText(m[1], components) {
 			t.Errorf("%s names no palette text colour", tag)
 		}
 	}
