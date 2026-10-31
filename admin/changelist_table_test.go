@@ -130,3 +130,36 @@ func TestChangelistDisplayColumnIsNotNumericOnHeaderOrCell(t *testing.T) {
 		t.Errorf("a Display cell is right-aligned: %s", cell)
 	}
 }
+
+func TestChangelistActionsHeaderAndCellsShareOneAlignment(t *testing.T) {
+	body := changelistWith(t)
+	header := regexp.MustCompile(`<th [^>]*>Actions</th>`).FindString(body)
+	if !hasClassToken(header, "cell-actions") {
+		t.Errorf("Actions header lacks the cell-actions class: %s", header)
+	}
+	cell := regexp.MustCompile(`<td class="[^"]*cell-actions[^"]*">`).FindString(body)
+	if cell == "" {
+		t.Error("no Actions cell carries the cell-actions class")
+	}
+}
+
+func TestChangelistCardCanDropItsChromeOnAPhone(t *testing.T) {
+	body := changelistWith(t)
+	if !hasClassToken(body, "changelist-card") {
+		t.Error("the changelist card lacks the changelist-card class")
+	}
+}
+
+func TestChangelistBulkCheckboxNamesItsRow(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, admin.Options{
+		ListDisplay: []string{"Name", "Price"},
+		Search:      []string{"Name"},
+		Ordering:    []string{"Name"},
+		BulkDelete:  true,
+	})
+	seedProduct(t, sqlDB, "Notes on Type", 12.5)
+	body := getWithCookies(t, handler, crudBasePath, &http.Cookie{Name: "tango_admin_session", Value: testSessionToken}).Body.String()
+	if !strings.Contains(body, `aria-label="Select Notes on Type"`) {
+		t.Error("the bulk checkbox has no accessible name naming its row")
+	}
+}

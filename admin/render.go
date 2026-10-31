@@ -20,7 +20,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
 </header>
 <div class="content-body">
   {{if .Deleted}}<div class="alert-success" role="status">{{if eq .Deleted 1}}{{.T "admin.bulk.deleted_one" "Deleted 1 row."}}{{else}}{{.T "admin.bulk.deleted_many" "Deleted %d rows." .Deleted}}{{end}}</div>{{end}}
-  <div class="card">
+  <div class="card changelist-card">
     <div class="card-header">
       <form method="get" class="flex flex-wrap items-end gap-3 w-full">
         <div class="flex flex-col gap-1 flex-1 min-w-[200px]">
@@ -66,12 +66,12 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     <div class="table-wrap">
       <table class="table-admin {{if .Compact}}table-compact{{else}}table-comfortable{{end}}">
         <caption class="sr-only">{{.ModelName}}</caption>
-        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col"{{if .Numeric}} class="cell-num"{{end}}>{{.Label}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
+        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col"{{if .Numeric}} class="cell-num"{{end}}>{{.Label}}</th>{{end}}<th scope="col" class="cell-actions">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
           {{if $.BulkDelete}}<td data-bulk-cell hidden><input type="checkbox" data-bulk-pk="{{.PK}}" data-bulk-identity="{{.Identity}}" aria-label="{{$.T "admin.bulk.select_row" "Select %s" .Identity}}"></td>{{end}}
           {{range .Cells}}<td{{if .Numeric}} class="cell-num"{{end}}><span class="cell-label">{{.Label}}</span>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
-          <td class="text-right">
+          <td class="cell-actions">
             <div class="table-actions">
               <a href="{{$.BasePath}}{{.PK}}/" class="btn-ghost" aria-label="{{$.T "admin.list.edit_row" "Edit %s" .Identity}}">{{$.T "admin.button.edit" "Edit"}}</a>
               <a href="{{$.BasePath}}{{.PK}}/delete/" class="btn-ghost text-danger-fg hover:bg-danger-bg" aria-label="{{$.T "admin.list.delete_row" "Delete %s" .Identity}}">{{$.T "admin.button.delete" "Delete"}}</a>

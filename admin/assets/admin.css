@@ -1698,6 +1698,10 @@ html, body{
   font-variant-numeric:var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
 }
 
+.table-admin .cell-actions{
+  text-align:right;
+}
+
 .table-compact thead th, .table-compact tbody td{
   padding-top:0.5rem;
   padding-bottom:0.5rem;
@@ -1828,6 +1832,15 @@ html, body{
     --tw-border-opacity:1;
     border-color:rgb(var(--line-subtle) / var(--tw-border-opacity, 1));
     padding-top:0.75rem;
+  }
+
+  .changelist-card{
+    border-radius:0px;
+    border-width:0px;
+    background-color:transparent;
+    --tw-shadow:0 0 #0000;
+    --tw-shadow-colored:0 0 #0000;
+    box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   }
 }
 
@@ -7971,10 +7984,6 @@ html, body{
 
 .pt-2{
   padding-top:0.5rem;
-}
-
-.text-right{
-  text-align:right;
 }
 
 .font-mono{

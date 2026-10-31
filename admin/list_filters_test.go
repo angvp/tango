@@ -323,7 +323,7 @@ func TestChangelistControlsAreLabelledForAssistiveTech(t *testing.T) {
 		`<select id="filter-author_id" name="filter_author_id"`,
 		`<caption class="sr-only">flBook</caption>`,
 		`<th scope="col">Title</th>`,
-		`<th scope="col" class="text-right">Actions</th>`,
+		`<th scope="col" class="cell-actions">Actions</th>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("changelist should contain %q:\n%s", want, body)

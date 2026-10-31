@@ -84,6 +84,7 @@
   .table-admin tbody tr:last-child td { @apply border-b-0; }
   .table-actions { @apply flex items-center justify-end gap-1; }
   .table-admin .cell-num { @apply text-right tabular-nums; }
+  .table-admin .cell-actions { @apply text-right; }
   .table-compact thead th, .table-compact tbody td { @apply py-2; }
   .density-option { @apply rounded-full px-2.5 py-1 text-xs font-medium; }
   .density-option-on { @apply bg-accent font-semibold text-accent-fg; }
@@ -101,6 +102,7 @@
     .table-admin tbody td .cell-label { @apply block text-xs font-semibold uppercase tracking-wider text-ink-faint; }
     .table-admin .cell-num { @apply text-left; }
     .table-admin tbody td:last-child { @apply mt-2 pt-3 border-t border-line-subtle; }
+    .changelist-card { @apply rounded-none border-0 bg-transparent shadow-none; }
   }
 
   .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
