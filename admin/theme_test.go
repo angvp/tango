@@ -106,6 +106,7 @@ var declaredPairs = []pair{
 	{"ink-faint", "header", 4.5, "header meta text"},
 	{"accent", "header", 3, "header action boundary"},
 	{"ring", "header", 3, "focus ring on the header"},
+	{"ring", "success-bg", 3, "focus ring on the Dismiss control inside the status notice"},
 }
 
 func TestDeclaredTokenPairsMeetWCAGInBothThemes(t *testing.T) {
