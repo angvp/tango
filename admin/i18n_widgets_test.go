@@ -136,16 +136,15 @@ func TestJSONWidgetTranslatesItsLabelsAndScriptMessages(t *testing.T) {
 		"admin.json.tab_formatted":  "Con formato",
 		"admin.json.apply":          "Usar este formato",
 		"admin.json.status_nothing": "Nada que formatear.",
-		"admin.json.status_invalid": "JSON no válido.",
-		"admin.json.view_invalid":   "JSON no válido: {error}",
+		"admin.error.json_invalid":  "JSON no válido. Revisa que las comas, las comillas y los corchetes estén bien.",
 		"admin.json.status_applied": "Formato aplicado.",
 	})
 	handler := buildI18NNoteAdmin(t, admin.JSON(), resolveTo("zz-json"))
 	page := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
 	for _, want := range []string{
 		"vista de Body", ">Editar</button>", ">Con formato</button>", ">Usar este formato</button>",
-		`data-msg-nothing="Nada que formatear."`, `data-msg-invalid="JSON no válido."`,
-		`data-msg-invalid-detail="JSON no válido: {error}"`, `data-msg-applied="Formato aplicado."`,
+		`data-msg-nothing="Nada que formatear."`,
+		`data-msg-invalid-detail="JSON no válido. Revisa que las comas, las comillas y los corchetes estén bien."`, `data-msg-applied="Formato aplicado."`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page missing %q:\n%s", want, page)
@@ -157,19 +156,19 @@ func TestJSONFieldErrorTranslates(t *testing.T) {
 	i18ntest.Isolate(t)
 	i18n.RegisterCatalog("zz-json-err", map[string]string{
 		"admin.error.json_invalid":  "JSON no válido",
-		"admin.error.json_position": "JSON no válido (en el carácter %d)",
+		"admin.error.json_position": "JSON no válido en el carácter %d. Revisa que las comas, las comillas y los corchetes estén bien.",
 	})
 	handler := buildI18NNoteAdmin(t, admin.JSON(), resolveTo("zz-json-err"))
 	post := func(body string) string {
 		return doRequest(t, handler, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}, "Body": {body}}).Body.String()
 	}
-	if got := post(`{"a": }`); !strings.Contains(got, "JSON no válido (en el carácter 7)") {
+	if got := post(`{"a": }`); !strings.Contains(got, "JSON no válido en el carácter 7. Revisa que las comas, las comillas y los corchetes estén bien.") {
 		t.Errorf("syntax error not translated:\n%s", got)
 	}
 
 	english := buildI18NNoteAdmin(t, admin.JSON(), nil)
 	got := doRequest(t, english, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}, "Body": {`{"a": }`}}).Body.String()
-	if !strings.Contains(got, "This is not valid JSON (problem at character 7).") {
+	if !strings.Contains(got, "This is not valid JSON at character 7. Check that commas, quotes and brackets are in place.") {
 		t.Errorf("English message changed:\n%s", got)
 	}
 }

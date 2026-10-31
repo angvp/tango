@@ -12,15 +12,15 @@ import (
 
 // jsonWidgetTemplate is a plain multi-line text control inside an Edit
 // panel, plus a Formatted panel and the tab list that switches between
-// them. The tab list, the Formatted panel and the apply button start hidden
-// and the shared widget script reveals them, so without JavaScript the
-// field is an ordinary textarea. The leading newline after <textarea> is
+// them. The tab list and the apply button start hidden; the shared widget
+// script reveals the tabs and hides the inactive panel, so without JavaScript
+// both panels show stacked. The leading newline after <textarea> is
 // dropped by the HTML parser, so a value that itself starts with a newline
 // survives the round trip.
 var jsonWidgetTemplate = template.Must(template.New("jsonWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
 {{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
-<div class="json-widget" data-tango-widget="json"{{if .Text.Active}} data-msg-nothing="{{.Text.T "admin.json.status_nothing" "Nothing to format."}}" data-msg-invalid="{{.Text.T "admin.json.status_invalid" "Not valid JSON."}}" data-msg-invalid-detail="{{.Text.T "admin.json.view_invalid" "Not valid JSON: {error}"}}" data-msg-applied="{{.Text.T "admin.json.status_applied" "Formatting applied."}}"{{end}}>
+<div class="json-widget" data-tango-widget="json" data-msg-invalid-detail="{{.InvalidText}}"{{if .Text.Active}} data-msg-nothing="{{.Text.T "admin.json.status_nothing" "Nothing to format."}}" data-msg-applied="{{.Text.T "admin.json.status_applied" "Formatting applied."}}"{{end}}>
   <div class="widget-tabs" role="tablist" aria-label="{{.Text.T "admin.widget.view_label" "%s view" .Label}}" data-widget-tabs hidden>
     <button type="button" role="tab" id="field-{{.Name}}-tab-edit" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-edit" data-tab="edit">{{.Text.T "admin.json.tab_edit" "Edit"}}</button>
     <button type="button" role="tab" id="field-{{.Name}}-tab-view" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-view" tabindex="-1" data-tab="view">{{.Text.T "admin.json.tab_formatted" "Formatted"}}</button>
@@ -29,18 +29,19 @@ var jsonWidgetTemplate = template.Must(template.New("jsonWidget").Parse(
     <textarea id="field-{{.Name}}" name="{{.Name}}" class="input json-input" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off"` + ariaAttrs + `>
 {{.Value}}</textarea>
   </div>
-  <div id="field-{{.Name}}-panel-view" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-view" class="widget-panel" hidden>
+  <div id="field-{{.Name}}-panel-view" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-view" class="widget-panel">
     <pre class="json-formatted" data-json-formatted></pre>
     <button type="button" class="btn-secondary" data-json-apply hidden>{{.Text.T "admin.json.apply" "Use this formatting"}}</button>
   </div>
-  <p data-json-status aria-live="polite"></p>
+  <p class="hint-small" data-json-status aria-live="polite"></p>
   <script src="{{.ScriptURL}}" defer></script>
 </div>`))
 
 type jsonWidgetData struct {
 	FieldContext
-	Text      widgetText
-	ScriptURL string
+	Text        widgetText
+	ScriptURL   string
+	InvalidText string
 }
 
 // jsonWidget edits a string or text field as JSON text. Parse checks syntax
@@ -55,7 +56,13 @@ type jsonWidget struct{}
 func JSON() Widget { return jsonWidget{} }
 
 func (jsonWidget) Render(ctx context.Context, f FieldContext) template.HTML {
-	return renderWidgetTemplate(jsonWidgetTemplate, jsonWidgetData{FieldContext: f, Text: newWidgetText(ctx), ScriptURL: widgetsAsset.URL})
+	text := newWidgetText(ctx)
+	return renderWidgetTemplate(jsonWidgetTemplate, jsonWidgetData{
+		FieldContext: f,
+		Text:         text,
+		ScriptURL:    widgetsAsset.URL,
+		InvalidText:  text.T("admin.error.json_invalid", notValidJSON),
+	})
 }
 
 // Parse stores the submitted text before checking it, so that an invalid
@@ -74,9 +81,16 @@ func (jsonWidget) Parse(_ context.Context, f FieldContext, form FieldValues, des
 	return checkJSONSyntax(raw)
 }
 
-// notValidJSON is the message for JSON text that fails to parse. The decoder's
-// own text is never shown: it quotes the document and reads as Go.
-const notValidJSON = "This is not valid JSON."
+// jsonHint is the next step for every syntax problem. It names the three
+// characters a broken document is most often missing or has in the wrong
+// place, without claiming which one it is.
+const jsonHint = "Check that commas, quotes and brackets are in place."
+
+// notValidJSON is the sentence for JSON text that does not parse, without a
+// position. The database refusal and the widget's script both use it, so
+// every surface says the same thing. The decoder's own text is never shown:
+// it quotes the document and reads as Go.
+const notValidJSON = "This is not valid JSON. " + jsonHint
 
 // checkJSONSyntax returns nil when raw is one complete JSON value, else a
 // FieldError naming the first syntax problem and, when Go's decoder reports
@@ -89,9 +103,10 @@ func checkJSONSyntax(raw string) error {
 	}
 	var syntax *json.SyntaxError
 	if !errors.As(err, &syntax) {
-		return FieldError{Message: notValidJSON, text: &localizedText{key: "admin.error.json_invalid", fallback: notValidJSON}}
+		const fallback = notValidJSON
+		return FieldError{Message: fallback, text: &localizedText{key: "admin.error.json_invalid", fallback: fallback}}
 	}
-	const fallback = "This is not valid JSON (problem at character %d)."
+	const fallback = "This is not valid JSON at character %d. " + jsonHint
 	args := []any{characterPosition(raw, syntax.Offset)}
 	return FieldError{
 		Message: fmt.Sprintf(fallback, args...),

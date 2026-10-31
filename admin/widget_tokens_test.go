@@ -18,7 +18,7 @@ var rawColourClass = regexp.MustCompile(`(?:^|[\s:"])(?:bg|text|border|ring|divi
 // markdownPreviewCanvasClass is the class list of the Markdown preview iframe.
 // It is the one raw colour a widget keeps: bg-white is a fixed light canvas in
 // both themes (D8), documented in markdown.go.
-const markdownPreviewCanvasClass = `class="w-full min-h-40 mt-2 rounded border border-line-strong bg-white"`
+const markdownPreviewCanvasClass = `class="markdown-preview-frame w-full min-h-40 mt-2 rounded border border-line-strong bg-white"`
 
 // widgetSourceFiles are the files this ticket owns. Dashboard, layout, login
 // and the render helpers belong to other tickets.

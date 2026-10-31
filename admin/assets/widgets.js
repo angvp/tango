@@ -36,8 +36,12 @@
     });
   }
 
-  function showStatus(element, message) {
+  // showStatus sets a status line's text. invalid switches it to the field
+  // error style, so a problem reads as one and not as a hint.
+  function showStatus(element, message, invalid) {
     element.textContent = message;
+    element.classList.toggle("field-error", invalid);
+    element.classList.toggle("hint-small", !invalid);
   }
 
   // setupTabs wires an ARIA tab list: click, Left/Right/Home/End to move
@@ -93,13 +97,22 @@
       });
     });
 
+    // Without this, every panel stays visible until the first tab is clicked.
+    // The tab the markup marks selected is shown, and the others are hidden.
+    var initial = tabs.filter(function (tab) {
+      return tab.getAttribute("aria-selected") === "true";
+    })[0];
+    if (initial) {
+      select(initial.getAttribute("data-tab"), false);
+    }
     tablist.hidden = false;
     return function (name) {
       select(name, false);
     };
   }
 
-  // formatJSON returns the indented form of text, or the parse error.
+  // formatJSON returns the indented form of text, or {invalid: true}. The
+  // parser's own message is not used: it quotes part of the document.
   function formatJSON(text) {
     if (text.trim() === "") {
       return { empty: true };
@@ -107,7 +120,7 @@
     try {
       return { text: JSON.stringify(JSON.parse(text), null, 2) };
     } catch (err) {
-      return { error: err.message };
+      return { invalid: true };
     }
   }
 
@@ -125,23 +138,23 @@
     }
     var formatted = "";
 
+    // One message, in the status line: the server sends the sentence in
+    // data-msg-invalid-detail, and the Formatted box stays empty. The line
+    // takes the field error style while the text is invalid.
     function showFormatted() {
       var result = formatJSON(textarea.value);
       formatted = "";
       apply.hidden = true;
-      view.removeAttribute("data-invalid");
+      view.textContent = "";
       if (result.empty) {
-        view.textContent = "";
-        showStatus(status, msg(root, "nothing", "Nothing to format."));
-      } else if (result.error) {
-        view.setAttribute("data-invalid", "");
-        view.textContent = msg(root, "invalid-detail", "Not valid JSON: {error}", { error: result.error });
-        showStatus(status, msg(root, "invalid", "Not valid JSON."));
+        showStatus(status, msg(root, "nothing", "Nothing to format."), false);
+      } else if (result.invalid) {
+        showStatus(status, msg(root, "invalid-detail", ""), true);
       } else {
         formatted = result.text;
         view.textContent = result.text;
         apply.hidden = result.text === textarea.value;
-        showStatus(status, "");
+        showStatus(status, "", false);
       }
     }
 
@@ -154,7 +167,7 @@
       textarea.value = formatted;
       select("edit");
       textarea.focus();
-      showStatus(status, msg(root, "applied", "Formatting applied."));
+      showStatus(status, msg(root, "applied", "Formatting applied."), false);
     });
   }
 
@@ -209,11 +222,11 @@
   function requestPreview(textarea, frame, status, current) {
     var token = csrfToken(textarea);
     if (!token) {
-      showStatus(status, msg(textarea, "preview-unavailable", "Preview unavailable. Reload the page and try again."));
+      showStatus(status, msg(textarea, "preview-unavailable", "Preview unavailable. Reload the page and try again."), true);
       return;
     }
     var ticket = current.next();
-    showStatus(status, msg(textarea, "preview-rendering", "Rendering preview..."));
+    showStatus(status, msg(textarea, "preview-rendering", "Rendering preview..."), false);
     fetch(textarea.getAttribute("data-preview-url"), {
       method: "POST",
       credentials: "same-origin",
@@ -233,11 +246,11 @@
           return;
         }
         frame.srcdoc = html;
-        showStatus(status, "");
+        showStatus(status, "", false);
       })
       .catch(function (err) {
         if (current.is(ticket)) {
-          showStatus(status, err.message);
+          showStatus(status, err.message, true);
         }
       });
   }

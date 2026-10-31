@@ -90,10 +90,11 @@ func strictReferencePolicy() tango.CSP {
 
 // smokeNote is the one model the admin lists, edits and previews.
 type smokeNote struct {
-	ID     int64 `tango:"pk"`
-	Title  string
-	Body   string
-	Pinned bool
+	ID      int64 `tango:"pk"`
+	Title   string
+	Body    string
+	Pinned  bool
+	Payload string `tango:"json"`
 }
 
 // smokeCode has two text fields that shortCodeWidget bounds, so a save with
@@ -181,13 +182,13 @@ func composedSite(t *testing.T) http.Handler {
 	}
 	// The second title is one unbroken word, wider than a phone screen, so a
 	// table that does not wrap its cells is caught by the phone check.
-	if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body, pinned) VALUES (1, 'Hello', 'Body', FALSE), (2, 'Unbrokenphonecheckvalue0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ', 'Body', TRUE)`); err != nil {
+	if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body, pinned, payload) VALUES (1, 'Hello', 'Body', FALSE, ''), (2, 'Unbrokenphonecheckvalue0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ', 'Body', TRUE, '')`); err != nil {
 		t.Fatalf("seed note: %v", err)
 	}
 	// More rows than one page, so the changelist shows its pagination at the
 	// phone width.
 	for id := 3; id <= 28; id++ {
-		if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body, pinned) VALUES ($1, $2, 'Body', FALSE)`, id, fmt.Sprintf("Note %02d", id)); err != nil {
+		if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body, pinned, payload) VALUES ($1, $2, 'Body', FALSE, '')`, id, fmt.Sprintf("Note %02d", id)); err != nil {
 			t.Fatalf("seed note %d: %v", id, err)
 		}
 	}
@@ -853,6 +854,66 @@ func (s *smoke) adminMarkdownPreview() {
 	}
 }
 
+// inactivePanelsHidden checks that the script hid the panel of each widget's
+// tab that is not selected, so only the Edit and Write panels show.
+func (s *smoke) inactivePanelsHidden() {
+	s.t.Helper()
+	s.check(s.eval(`document.getElementById('field-Payload-panel-view').hidden === true`), "the JSON Formatted panel is visible before any tab is chosen")
+	s.check(s.eval(`document.getElementById('field-Body-panel-preview').hidden === true`), "the Markdown Preview panel is visible before any tab is chosen")
+	s.check(s.eval(`document.getElementById('field-Payload-panel-edit').hidden === false`), "the JSON Edit panel is hidden")
+}
+
+// adminWidgetTabs types an invalid document into the JSON field with the
+// keyboard, opens its Formatted tab with Enter, and checks the one message the
+// status line shows. The message must be the plain sentence and must not
+// repeat any part of the document: the browser's own parse message quotes it.
+func (s *smoke) adminWidgetTabs() {
+	s.t.Helper()
+	const document = `{"secret": oops}`
+	s.check(s.eval(`(document.getElementById('field-Payload').focus(), true)`), "the JSON field is not in the page")
+	s.run("admin json type an invalid document", chromedp.KeyEvent(document))
+	s.check(s.evalString(`document.getElementById('field-Payload').value`) == document, "typed text did not reach the JSON field")
+	s.check(s.eval(`(document.getElementById('field-Payload-tab-view').focus(), true)`), "the Formatted tab is not in the page")
+	s.run("admin json open the Formatted tab with Enter", chromedp.KeyEvent(kb.Enter))
+
+	const status = `document.querySelector('[data-json-status]').textContent`
+	const sentence = "This is not valid JSON. Check that commas, quotes and brackets are in place."
+	s.check(s.evalString(status) == sentence, "the status line shows %q, want %q", s.evalString(status), sentence)
+	s.check(s.eval(`document.querySelector('[data-json-status]').classList.contains('field-error')`), "the invalid status is not in the field error style")
+	s.check(s.evalString(`document.querySelector('[data-json-formatted]').textContent`) == "", "the Formatted box holds text for an invalid document")
+	for _, leaked := range []string{"secret", "oops"} {
+		s.check(!strings.Contains(s.evalString(status), leaked), "the status line quotes %q", leaked)
+	}
+	s.tabKeyboard("field-Payload-tab-edit", "field-Payload-tab-view")
+	s.tabKeyboard("field-Body-tab-write", "field-Body-tab-preview")
+}
+
+// tabKeyboard checks the tab keyboard model on one tab list, starting from its
+// first tab: End moves to the last tab, Home back to the first, and the arrow
+// keys step between them, wrapping at either end.
+func (s *smoke) tabKeyboard(first, last string) {
+	s.t.Helper()
+	s.check(s.eval(`(document.getElementById('`+first+`').focus(), true)`), "tab %q is not in the page", first)
+	s.keyMove(kb.ArrowLeft, last)
+	s.keyMove(kb.ArrowRight, first)
+	s.keyMove(kb.End, last)
+	s.keyMove(kb.Home, first)
+	s.keyMove(kb.ArrowRight, last)
+	s.keyMove(kb.ArrowLeft, first)
+}
+
+// keyMove presses key on the focused tab and checks where focus lands: on the
+// want tab, which is the only selected tab, with its panel shown.
+func (s *smoke) keyMove(key, want string) {
+	s.t.Helper()
+	s.run("press a key on a tab", chromedp.KeyEvent(key))
+	const active = `document.activeElement ? document.activeElement.id : ''`
+	s.check(s.evalString(active) == want, "after one key focus is on %q, want %q", s.evalString(active), want)
+	selected := s.evalString(`document.getElementById('` + want + `').getAttribute('aria-selected')`)
+	s.check(selected == "true", "tab %q is aria-selected %q after the key, want true", want, selected)
+	s.check(s.eval(`!document.getElementById(document.getElementById('`+want+`').getAttribute('aria-controls')).hidden`), "the panel of tab %q is hidden after the key", want)
+}
+
 // adminFormSummary saves a create form with two problems and checks that focus
 // moves to the summary heading, then that its link moves focus to the field.
 func (s *smoke) adminFormSummary() {
@@ -973,7 +1034,9 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.bulkListCapAndPhoneSelectAll()
 	s.adminNavToggle()
 	s.visit("admin change form", "/admin/smoke_note/1/")
+	s.inactivePanelsHidden()
 	s.adminMarkdownPreview()
+	s.adminWidgetTabs()
 	s.visit("admin create form", "/admin/smoke_code/new/")
 	s.adminFormSummary()
 

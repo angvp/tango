@@ -105,7 +105,7 @@ func TestCancelNamesItsDestination(t *testing.T) {
 	handler := buildNoteAdmin(t, admin.Options{PluralName: "Notes"})
 	body := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
 
-	if !strings.Contains(body, `href="../" class="btn-secondary">Cancel and return to notes</a>`) {
+	if !strings.Contains(body, `href="../" class="btn-secondary max-sm:w-full max-sm:whitespace-normal max-sm:text-center">Cancel and return to notes</a>`) {
 		t.Errorf("cancel does not name the list it returns to:\n%s", body)
 	}
 }

@@ -64,15 +64,15 @@ func TestJSONWidgetRendersAPlainTextareaWithHooksAndNoInlineScript(t *testing.T)
 	body := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
 
 	for _, want := range []string{
-		`<div class="json-widget" data-tango-widget="json">`,
+		`<div class="json-widget" data-tango-widget="json" data-msg-invalid-detail="This is not valid JSON. Check that commas, quotes and brackets are in place.">`,
 		`<div class="widget-tabs" role="tablist" aria-label="Body view" data-widget-tabs hidden>`,
 		`<button type="button" role="tab" id="field-Body-tab-edit" class="widget-tab" aria-selected="true" aria-controls="field-Body-panel-edit" data-tab="edit">Edit</button>`,
 		`<button type="button" role="tab" id="field-Body-tab-view" class="widget-tab" aria-selected="false" aria-controls="field-Body-panel-view" tabindex="-1" data-tab="view">Formatted</button>`,
 		`<div id="field-Body-panel-edit" role="tabpanel" aria-labelledby="field-Body-tab-edit" class="widget-panel">`,
-		`<div id="field-Body-panel-view" role="tabpanel" aria-labelledby="field-Body-tab-view" class="widget-panel" hidden>`,
+		`<div id="field-Body-panel-view" role="tabpanel" aria-labelledby="field-Body-tab-view" class="widget-panel">`,
 		`<pre class="json-formatted" data-json-formatted></pre>`,
 		`<button type="button" class="btn-secondary" data-json-apply hidden>Use this formatting</button>`,
-		`<p data-json-status aria-live="polite"></p>`,
+		`<p class="hint-small" data-json-status aria-live="polite"></p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q in:\n%s", want, body)
@@ -119,6 +119,36 @@ func TestJSONWidgetEmptyValueIsSavedWithoutParsing(t *testing.T) {
 	}
 }
 
+// fieldErrorParagraph returns the text of the error paragraph for field, so an
+// assertion can read what the message says without matching the textarea,
+// which re-renders the submitted document on purpose.
+func fieldErrorParagraph(t *testing.T, body, field string) string {
+	t.Helper()
+	open := `<p class="field-error" id="field-` + field + `-error"`
+	start := strings.Index(body, open)
+	if start < 0 {
+		t.Fatalf("no error paragraph for %s:\n%s", field, body)
+	}
+	rest := body[start:]
+	end := strings.Index(rest, "</p>")
+	if end < 0 {
+		t.Fatalf("unterminated error paragraph for %s:\n%s", field, body)
+	}
+	text := rest[:end]
+	return text[strings.Index(text, ">")+1:]
+}
+
+func TestJSONWidgetServerErrorNeverQuotesTheDocumentGuard(t *testing.T) {
+	handler, _ := buildJSONNoteAdmin(t)
+	resp := doRequest(t, handler, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}, "Body": {`{"secret": oops}`}})
+	message := fieldErrorParagraph(t, resp.Body.String(), "Body")
+	for _, leaked := range []string{"secret", "oops", "{"} {
+		if strings.Contains(message, leaked) {
+			t.Errorf("error paragraph %q quotes the document (%q)", message, leaked)
+		}
+	}
+}
+
 func TestJSONWidgetRefusesInvalidJSONAndKeepsTheSubmittedText(t *testing.T) {
 	handler, sqlDB := buildJSONNoteAdmin(t)
 	submitted := `{"a": 1,}`
@@ -130,7 +160,7 @@ func TestJSONWidgetRefusesInvalidJSONAndKeepsTheSubmittedText(t *testing.T) {
 	if got := submittedJSONBody(t, body); got != submitted {
 		t.Errorf("re-rendered text = %q, want the exact submitted %q", got, submitted)
 	}
-	if !strings.Contains(body, `<p class="field-error" id="field-Body-error" role="alert">This is not valid JSON (problem at character 9).</p>`) {
+	if !strings.Contains(body, `<p class="field-error" id="field-Body-error" role="alert">This is not valid JSON at character 9. Check that commas, quotes and brackets are in place.</p>`) {
 		t.Errorf("readable error with offset missing:\n%s", body)
 	}
 	if !strings.Contains(body, `aria-invalid="true" aria-describedby="field-Body-error"`) {
@@ -189,6 +219,34 @@ func TestJSONWidgetCarriesTheFieldHelpAndErrorTogether(t *testing.T) {
 	body := doRequest(t, handler, http.MethodPost, noteBasePath+"new/", url.Values{"Body": {"{"}}).Body.String()
 	if !strings.Contains(body, `aria-invalid="true" aria-describedby="field-Body-help field-Body-error"`) {
 		t.Errorf("textarea should be described by help then error:\n%s", body)
+	}
+}
+
+// The script shows the same sentence the server gives, so the markup carries it
+// whether or not a catalog is in use.
+func TestJSONWidgetCarriesTheInvalidSentenceForTheScript(t *testing.T) {
+	handler, _ := buildJSONNoteAdmin(t)
+	body := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
+	want := `data-msg-invalid-detail="This is not valid JSON. Check that commas, quotes and brackets are in place."`
+	if !strings.Contains(body, want) {
+		t.Errorf("markup missing %q:\n%s", want, body)
+	}
+}
+
+// Without the shared script the tab list stays hidden, and both panels stay
+// visible, stacked. The script hides the inactive panel when it runs.
+func TestJSONWidgetWithoutScriptLeavesEveryPanelVisible(t *testing.T) {
+	handler, _ := buildJSONNoteAdmin(t)
+	body := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
+	for _, want := range []string{
+		`<div class="widget-tabs" role="tablist" aria-label="Body view" data-widget-tabs hidden>`,
+		`<div id="field-Body-panel-edit" role="tabpanel" aria-labelledby="field-Body-tab-edit" class="widget-panel">`,
+		`<div id="field-Body-panel-view" role="tabpanel" aria-labelledby="field-Body-tab-view" class="widget-panel">`,
+		`<button type="button" class="btn-secondary" data-json-apply hidden>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("markup missing %q:\n%s", want, body)
+		}
 	}
 }
 

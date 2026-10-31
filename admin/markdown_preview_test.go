@@ -330,7 +330,7 @@ func previewWidgetMarkup(t *testing.T, body string) string {
 	return body[start : end+closing+len("</iframe>")]
 }
 
-func TestPreviewWidgetRendersHiddenControlsAndASandboxedFrame(t *testing.T) {
+func TestPreviewWidgetKeepsEveryPanelVisibleWithoutScript(t *testing.T) {
 	handler := markdownPreviewHandler(t, neverCalled(t))
 	page := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
 	widget := previewWidgetMarkup(t, page)
@@ -341,7 +341,7 @@ func TestPreviewWidgetRendersHiddenControlsAndASandboxedFrame(t *testing.T) {
 		`<button type="button" role="tab" id="field-Body-tab-write" class="widget-tab" aria-selected="true" aria-controls="field-Body-panel-write" data-tab="write">Write</button>`,
 		`<button type="button" role="tab" id="field-Body-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-Body-panel-preview" tabindex="-1" data-tab="preview">Preview</button>`,
 		`<div id="field-Body-panel-write" role="tabpanel" aria-labelledby="field-Body-tab-write" class="widget-panel">`,
-		`<div id="field-Body-panel-preview" role="tabpanel" aria-labelledby="field-Body-tab-preview" class="widget-panel" hidden>`,
+		`<div id="field-Body-panel-preview" role="tabpanel" aria-labelledby="field-Body-tab-preview" class="widget-panel">`,
 		`<p id="field-Body-preview-status" aria-live="polite"`,
 		`<iframe id="field-Body-preview" title="Preview of Body" sandbox="" referrerpolicy="no-referrer"`,
 	} {

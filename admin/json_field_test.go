@@ -66,7 +66,7 @@ func TestJSONFieldDefaultsToTheJSONWidgetWithoutConfiguration(t *testing.T) {
 	body := doRequest(t, handler, http.MethodGet, jsonDocumentBasePath+"new/", nil).Body.String()
 
 	for _, want := range []string{
-		`<div class="json-widget" data-tango-widget="json">`,
+		`<div class="json-widget" data-tango-widget="json" data-msg-invalid-detail="This is not valid JSON. Check that commas, quotes and brackets are in place.">`,
 		`<button type="button" role="tab" id="field-Doc-tab-view" class="widget-tab" aria-selected="false" aria-controls="field-Doc-panel-view" tabindex="-1" data-tab="view">Formatted</button>`,
 		`<textarea id="field-Doc" name="Doc" class="input json-input"`,
 	} {
@@ -117,7 +117,7 @@ func TestCreateRefusesInvalidJSONThroughATextareaOverride(t *testing.T) {
 	if resp.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422:\n%s", resp.Code, body)
 	}
-	if !strings.Contains(body, `<p class="field-error" id="field-Doc-error" role="alert">This is not valid JSON.</p>`) {
+	if !strings.Contains(body, `<p class="field-error" id="field-Doc-error" role="alert">This is not valid JSON. Check that commas, quotes and brackets are in place.</p>`) {
 		t.Errorf("no field error beside Doc:\n%s", body)
 	}
 	if !strings.Contains(body, `value="keep title"`) {
@@ -145,7 +145,7 @@ func TestEditRefusesInvalidJSONThroughATextareaOverrideAndKeepsTheRow(t *testing
 	if resp.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422:\n%s", resp.Code, body)
 	}
-	if !strings.Contains(body, `<p class="field-error" id="field-Doc-error" role="alert">This is not valid JSON.</p>`) {
+	if !strings.Contains(body, `<p class="field-error" id="field-Doc-error" role="alert">This is not valid JSON. Check that commas, quotes and brackets are in place.</p>`) {
 		t.Errorf("no field error beside Doc:\n%s", body)
 	}
 	var title, doc string

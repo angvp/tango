@@ -149,8 +149,8 @@ var formTemplate = cloneWithContent(`{{define "content"}}
       {{range .Fields}}<div class="field-group">{{.HTML}}{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}{{if .Error}}<p class="field-error" id="field-{{.Name}}-error"{{if not $.Summary}} role="alert"{{end}}>{{.Error}}</p>{{end}}{{if .AddHref}}<a href="{{.AddHref}}" class="btn-secondary mt-2 inline-block whitespace-nowrap"><span aria-hidden="true">+</span> {{.AddLabel}}</a>{{end}}</div>
       {{end}}
         <div class="flex flex-wrap items-center gap-2 pt-2 whitespace-nowrap">
-          <button type="submit" class="btn-primary">{{.T "admin.button.save" "Save"}}</button>
-          <a href="../" class="btn-secondary">{{.T "admin.form.cancel_to" "Cancel and return to %s" .ListName}}</a>
+          <button type="submit" class="btn-primary max-sm:w-full">{{.T "admin.button.save" "Save"}}</button>
+          <a href="../" class="btn-secondary max-sm:w-full max-sm:whitespace-normal max-sm:text-center">{{.T "admin.form.cancel_to" "Cancel and return to %s" .ListName}}</a>
         </div>
       ` + widgetScriptTag + `
       </form>

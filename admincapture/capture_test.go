@@ -16,6 +16,7 @@ package admincapture_test
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -78,6 +79,21 @@ type captureDraft struct {
 	Published bool
 }
 
+// captureDocument has a JSON field and a Markdown field with a preview, so the
+// shots show both widgets and their tabs.
+type captureDocument struct {
+	ID      int64 `tango:"pk"`
+	Title   string
+	Body    string
+	Payload string `tango:"json"`
+}
+
+// previewDocument is the capture site's Markdown renderer. The shots only need
+// a heading to show that the preview tab renders the text.
+func previewDocument(_ context.Context, source string) (template.HTML, error) {
+	return template.HTML("<h1>Preview</h1><p>" + template.HTMLEscapeString(source) + "</p>"), nil
+}
+
 // dashboardFeed is what the capture site's status card reports. The server
 // runs in this process, so a shot sets the feed before it visits the page, and
 // each dashboard shot sets every field it depends on.
@@ -121,7 +137,7 @@ type captureTag struct {
 
 func captureApp() tango.App {
 	return tango.NewApp("capture", func(registry *tango.Registry) error {
-		for _, value := range []any{captureBook{}, captureTag{}, captureEntry{}, captureDraft{}, captureNote{}} {
+		for _, value := range []any{captureBook{}, captureTag{}, captureEntry{}, captureDraft{}, captureNote{}, captureDocument{}} {
 			if err := registry.Models().Register(value); err != nil {
 				return err
 			}
@@ -156,6 +172,14 @@ func captureApp() tango.App {
 		}); err != nil {
 			return err
 		}
+		if err := registry.Admin().Register(captureDocument{}, admin.Options{
+			ListDisplay: []string{"Title"},
+			Widgets: map[string]admin.Widget{
+				"Body": admin.Markdown(admin.WithMarkdownPreview(previewDocument)),
+			},
+		}); err != nil {
+			return err
+		}
 		return registry.Admin().Register(captureTag{}, admin.Options{ListDisplay: []string{"Name"}, Search: []string{"Name"}})
 	})
 }
@@ -163,7 +187,7 @@ func captureApp() tango.App {
 func site(t *testing.T) http.Handler {
 	t.Helper()
 	models := model.NewRegistry()
-	for _, value := range []any{admin.AdminUser{}, admin.AdminSession{}, captureBook{}, captureTag{}, captureEntry{}, captureDraft{}, captureNote{}} {
+	for _, value := range []any{admin.AdminUser{}, admin.AdminSession{}, captureBook{}, captureTag{}, captureEntry{}, captureDraft{}, captureNote{}, captureDocument{}} {
 		if err := models.Register(value); err != nil {
 			t.Fatalf("register %T: %v", value, err)
 		}
@@ -204,6 +228,9 @@ func site(t *testing.T) http.Handler {
 	}
 	if _, err := sqlDB.Exec(`INSERT INTO capture_note (id, title, copies, book_id) VALUES (1, 'Margin notes', 2, 3)`); err != nil {
 		t.Fatalf("seed note: %v", err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO capture_document (id, title, body, payload) VALUES (1, 'Field guide', '# Field guide', '{"pages": 80}')`); err != nil {
+		t.Fatalf("seed document: %v", err)
 	}
 	registry, err := tango.BuildRegistry(tango.Config{
 		InstalledApps: []tango.App{
@@ -456,10 +483,50 @@ var signedInShots = []shot{
 	{name: "entry-create-form", ready: "form", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_entry/new/")}
 	}},
+	{name: "widget-json-edit", ready: "#field-Payload", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_document/1/")}
+	}},
+	{name: "widget-json-formatted", ready: "[data-json-status].field-error", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_document/1/"),
+			script(`document.getElementById('field-Payload').value = '{"pages": 80,}'; document.getElementById('field-Payload-tab-view').click();`),
+		}
+	}},
+	{name: "widget-markdown-write", ready: "#field-Body", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_document/1/")}
+	}},
+	{name: "widget-markdown-preview", ready: "#field-Body-preview[srcdoc]", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_document/1/"),
+			script(`document.getElementById('field-Body-tab-preview').click();`),
+		}
+	}},
+	{name: "widget-json-server-error", ready: ".field-error", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_document/1/"),
+			script(`document.getElementById('field-Payload').value = '{"pages": 80,}'; document.querySelector('form[method=post] button.btn-primary').click();`),
+			chromedp.WaitVisible(".field-error"),
+		}
+	}},
+	// Script execution is off for this shot only; the compact shot below turns it
+	// back on before it runs.
+	{name: "widget-json-no-script", ready: "#field-Payload", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
+				_, err := chromedp.Call(c, emulation.SetScriptExecutionDisabled, emulation.SetScriptExecutionDisabledParams{Value: true})
+				return err
+			}),
+			visit(b, "/admin/capture_document/1/"),
+		}
+	}},
 	// Compact density is the last shot: its cookie outlives this step in the
 	// shared browser, so no later shot may depend on the default density.
 	{name: "changelist-rows-compact", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{
+			chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
+				_, err := chromedp.Call(c, emulation.SetScriptExecutionDisabled, emulation.SetScriptExecutionDisabledParams{Value: false})
+				return err
+			}),
 			chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
 				_, err := chromedp.Call(c, network.SetCookie, network.SetCookieParams{
 					Name: "tango_admin_density", Value: "compact", URL: b + "/admin/",

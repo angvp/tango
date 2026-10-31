@@ -66,11 +66,12 @@
   .input { @apply block w-full rounded-md border border-control-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint shadow-sm focus:border-ring; }
   .json-input { @apply font-mono text-xs; }
   .widget-tabs { @apply flex gap-1 border-b border-line-strong mb-2; }
-  .widget-tab { @apply px-3 py-1.5 text-sm font-medium text-ink-muted border border-transparent rounded-t-md -mb-px hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring; }
-  .widget-tab[aria-selected="true"] { @apply bg-surface text-ink border-line-strong border-b-surface; }
+  .widget-tab { @apply inline-flex items-center min-h-[2.25rem] px-3 text-sm font-medium text-ink-muted border-b-2 border-transparent -mb-px rounded-t-md transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface; }
+  .widget-tab[aria-selected="true"] { @apply text-ink border-accent; }
   .widget-tabs[hidden], .widget-panel[hidden], [data-json-apply][hidden] { display: none; }
   .json-formatted { @apply block w-full overflow-auto rounded-md border border-control-line bg-surface-sunken px-3 py-2 font-mono text-xs text-ink whitespace-pre; min-height: 10rem; }
-  .json-formatted[data-invalid] { @apply text-danger-fg whitespace-pre-wrap; }
+  .json-formatted:empty { display: none; }
+  .markdown-preview-frame:not([srcdoc]) { display: none; }
   .field-label { @apply block text-sm font-medium text-ink-muted mb-1.5; }
   .field-group { @apply mb-4 last:mb-0; }
   .checkbox-row { @apply flex items-center gap-2.5; }

@@ -63,8 +63,8 @@ func (w markdownPreviewWidget) Preview(ctx context.Context, source string) (temp
 // markdownWidgetTemplate is the editor. A widget with a preview callback
 // puts the textarea and count in a Write panel and adds a Preview tab and
 // panel; a widget without one is exactly the plain textarea and count. The
-// tab list and the Preview panel start hidden and the shared widget script
-// reveals them, so without JavaScript the field is an ordinary textarea.
+// tab list starts hidden; the shared widget script reveals it and hides the
+// inactive panel, so without JavaScript both panels show stacked.
 //
 // The preview iframe is the one deliberate exception to the token rule. Its
 // canvas is a fixed white (bg-white) in both themes, inside a themed frame
@@ -83,9 +83,9 @@ var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
 {{.Value}}</textarea>
 <p id="field-{{.Name}}-count" class="hint-small mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
 </div>
-<div id="field-{{.Name}}-panel-preview" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-preview" class="widget-panel" hidden>
+<div id="field-{{.Name}}-panel-preview" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-preview" class="widget-panel">
   <p id="field-{{.Name}}-preview-status" aria-live="polite" class="hint-small" data-markdown-status></p>
-  <iframe id="field-{{.Name}}-preview" title="{{.Text.T "admin.markdown.preview_title" "Preview of %s" .Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-line-strong bg-white"></iframe>
+  <iframe id="field-{{.Name}}-preview" title="{{.Text.T "admin.markdown.preview_title" "Preview of %s" .Label}}" sandbox="" referrerpolicy="no-referrer" class="markdown-preview-frame w-full min-h-40 mt-2 rounded border border-line-strong bg-white"></iframe>
 </div>{{end}}`))
 
 // markdownWidgetData is what markdownWidgetTemplate renders: the field plus
