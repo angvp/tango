@@ -55,6 +55,19 @@ type captureBook struct {
 	Pages int
 }
 
+// captureEntry is a second model with a boolean the changelist filters on and
+// enough rows to run to a second page. It is separate from captureBook, so the
+// photographs of the books list keep their fixed rows.
+type captureEntry struct {
+	ID        int64 `tango:"pk"`
+	Title     string
+	Published bool
+}
+
+// seededEntries is more than one page of entries, and half of them are
+// published, so a filter leaves a page that still shows its summary.
+const seededEntries = 30
+
 type captureTag struct {
 	ID   int64 `tango:"pk"`
 	Name string
@@ -62,7 +75,7 @@ type captureTag struct {
 
 func captureApp() tango.App {
 	return tango.NewApp("capture", func(registry *tango.Registry) error {
-		for _, value := range []any{captureBook{}, captureTag{}} {
+		for _, value := range []any{captureBook{}, captureTag{}, captureEntry{}} {
 			if err := registry.Models().Register(value); err != nil {
 				return err
 			}
@@ -74,6 +87,13 @@ func captureApp() tango.App {
 		}); err != nil {
 			return err
 		}
+		if err := registry.Admin().Register(captureEntry{}, admin.Options{
+			ListDisplay: []string{"Title", "Published"},
+			Search:      []string{"Title"},
+			Filters:     []string{"Published"},
+		}); err != nil {
+			return err
+		}
 		return registry.Admin().Register(captureTag{}, admin.Options{ListDisplay: []string{"Name"}, Search: []string{"Name"}})
 	})
 }
@@ -81,7 +101,7 @@ func captureApp() tango.App {
 func site(t *testing.T) http.Handler {
 	t.Helper()
 	models := model.NewRegistry()
-	for _, value := range []any{admin.AdminUser{}, admin.AdminSession{}, captureBook{}, captureTag{}} {
+	for _, value := range []any{admin.AdminUser{}, admin.AdminSession{}, captureBook{}, captureTag{}, captureEntry{}} {
 		if err := models.Register(value); err != nil {
 			t.Fatalf("register %T: %v", value, err)
 		}
@@ -95,6 +115,11 @@ func site(t *testing.T) http.Handler {
 	for i := 1; i <= seededBooks; i++ {
 		if _, err := sqlDB.Exec(`INSERT INTO capture_book (id, title, pages) VALUES (?, ?, ?)`, i, fmt.Sprintf("Field notes, volume %d", i), 80+i*17); err != nil {
 			t.Fatalf("seed book: %v", err)
+		}
+	}
+	for i := 1; i <= seededEntries; i++ {
+		if _, err := sqlDB.Exec(`INSERT INTO capture_entry (id, title, published) VALUES (?, ?, ?)`, i, fmt.Sprintf("Entry %02d", i), i%2 == 0); err != nil {
+			t.Fatalf("seed entry: %v", err)
 		}
 	}
 	registry, err := tango.BuildRegistry(tango.Config{
@@ -232,6 +257,12 @@ var signedInShots = []shot{
 	}},
 	{name: "search-one-row", ready: ".content-body", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/?q=volume+14")}
+	}},
+	{name: "entries-filtered", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_entry/?q=Entry&filter_published=yes")}
+	}},
+	{name: "entries-paged", ready: ".pagination-pages", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_entry/?page=2")}
 	}},
 	// Compact density is the last shot: its cookie outlives this step in the
 	// shared browser, so no later shot may depend on the default density.
