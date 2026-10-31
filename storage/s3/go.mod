@@ -3,7 +3,7 @@ module github.com/angvp/tango/storage/s3
 go 1.27.1
 
 require (
-	github.com/angvp/tango v0.0.0
+	github.com/angvp/tango v0.8.0
 	github.com/aws/aws-sdk-go-v2 v1.47.5
 	github.com/aws/aws-sdk-go-v2/config v1.33.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.12
@@ -26,5 +26,3 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.6 // indirect
 )
-
-replace github.com/angvp/tango => ../..
