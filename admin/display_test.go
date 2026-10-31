@@ -86,7 +86,7 @@ func TestListViewEmptyDisplayGivesAnEmptyCell(t *testing.T) {
 	seedProduct(t, sqlDB, "Alpha", 1)
 
 	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
-	if !strings.Contains(body, "<td>Alpha</td><td></td>") {
+	if !strings.Contains(body, `<span class="cell-label">Summary</span></td>`) {
 		t.Fatalf("empty Display should render an empty cell:\n%s", body)
 	}
 }

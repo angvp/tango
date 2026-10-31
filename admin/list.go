@@ -124,6 +124,7 @@ func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adm
 		}
 		for j, column := range opts.ListDisplay {
 			row.Cells[j] = cells.cell(elem, column)
+			row.Cells[j].Label = listHeader(column, opts)
 		}
 		first := ""
 		if len(row.Cells) > 0 {

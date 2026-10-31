@@ -85,6 +85,20 @@
   .table-actions { @apply flex items-center justify-end gap-1; }
   .table-admin .cell-num { @apply text-right tabular-nums; }
   .table-compact thead th, .table-compact tbody td { @apply py-2; }
+  .density-bar { @apply flex flex-wrap items-center gap-2 px-5 py-2 border-b border-line-subtle; }
+  .cell-label { @apply hidden; }
+  @media (min-width: 768px) { .table-wrap { overflow: visible; } }
+  .table-admin thead th { position: sticky; top: 0; z-index: 1; }
+  .table-admin thead th[hidden], .table-admin tbody td[hidden] { display: none; }
+  @media (max-width: 767.98px) {
+    .table-admin, .table-admin tbody { @apply block w-full; }
+    .table-admin thead { @apply sr-only; }
+    .table-admin tbody tr { @apply block mb-3 p-4 rounded-card border border-line bg-surface; }
+    .table-admin tbody td { @apply block px-0 py-1.5 border-0 text-left; overflow-wrap: anywhere; }
+    .table-admin tbody td .cell-label { @apply block text-xs font-semibold uppercase tracking-wider text-ink-faint; }
+    .table-admin .cell-num { @apply text-left; }
+    .table-admin tbody td:last-child { @apply mt-2 pt-3 border-t border-line-subtle; }
+  }
 
   .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
   .badge-true { @apply badge bg-success-bg text-success-fg; }

@@ -27,6 +27,9 @@ type listCell struct {
 	Href    string
 	Badge   string
 	Numeric bool
+	// Label is the column header the cell shows beside its value in a phone
+	// card.
+	Label string
 }
 
 // plainCell is a cell holding an ordinary formatted field value.

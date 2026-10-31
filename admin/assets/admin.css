@@ -1703,6 +1703,105 @@ html, body{
   padding-bottom:0.5rem;
 }
 
+.density-bar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:0.5rem;
+  border-bottom-width:1px;
+  --tw-border-opacity:1;
+  border-color:rgb(var(--line-subtle) / var(--tw-border-opacity, 1));
+  padding-left:1.25rem;
+  padding-right:1.25rem;
+  padding-top:0.5rem;
+  padding-bottom:0.5rem;
+}
+
+.cell-label{
+  display:none;
+}
+
+@media (min-width: 768px) {
+  .table-wrap {
+    overflow: visible;
+  }
+}
+
+.table-admin thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.table-admin thead th[hidden], .table-admin tbody td[hidden] {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .table-admin, .table-admin tbody{
+    display:block;
+    width:100%;
+  }
+
+  .table-admin thead{
+    position:absolute;
+    width:1px;
+    height:1px;
+    padding:0;
+    margin:-1px;
+    overflow:hidden;
+    clip:rect(0, 0, 0, 0);
+    white-space:nowrap;
+    border-width:0;
+  }
+
+  .table-admin tbody tr{
+    margin-bottom:0.75rem;
+    display:block;
+    border-radius:18px;
+    border-width:1px;
+    --tw-border-opacity:1;
+    border-color:rgb(var(--line) / var(--tw-border-opacity, 1));
+    --tw-bg-opacity:1;
+    background-color:rgb(var(--surface) / var(--tw-bg-opacity, 1));
+    padding:1rem;
+  }
+
+  .table-admin tbody td{
+    display:block;
+    border-width:0px;
+    padding-left:0px;
+    padding-right:0px;
+    padding-top:0.375rem;
+    padding-bottom:0.375rem;
+    text-align:left;
+    overflow-wrap: anywhere;
+  }
+
+  .table-admin tbody td .cell-label{
+    display:block;
+    font-size:0.75rem;
+    line-height:1rem;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    --tw-text-opacity:1;
+    color:rgb(var(--ink-faint) / var(--tw-text-opacity, 1));
+  }
+
+  .table-admin .cell-num{
+    text-align:left;
+  }
+
+  .table-admin tbody td:last-child{
+    margin-top:0.5rem;
+    border-top-width:1px;
+    --tw-border-opacity:1;
+    border-color:rgb(var(--line-subtle) / var(--tw-border-opacity, 1));
+    padding-top:0.75rem;
+  }
+}
+
 .badge{
   display:inline-flex;
   align-items:center;

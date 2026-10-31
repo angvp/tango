@@ -3,6 +3,7 @@ package admin_test
 import (
 	"net/http"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -55,7 +56,44 @@ func TestChangelistNumericColumnsAreRightAlignedWithTabularFigures(t *testing.T)
 	if !hasClassToken(regexp.MustCompile(`<th [^>]*>Price</th>`).FindString(body), "cell-num") {
 		t.Error("Price header lacks the cell-num class")
 	}
-	if !hasClassToken(regexp.MustCompile(`<td [^>]*>12\.5</td>`).FindString(body), "cell-num") {
+	if !hasClassToken(regexp.MustCompile(`<td [^>]*>(?:<span [^>]*>[^<]*</span>)?12\.5</td>`).FindString(body), "cell-num") {
 		t.Error("Price cell lacks the cell-num class")
+	}
+}
+
+func TestChangelistOffersDensityChoicesWithThePressedStateInText(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		cookies []*http.Cookie
+		pressed string
+	}{
+		{name: "default pressed is comfortable", pressed: "comfortable"},
+		{name: "compact cookie presses compact", cookies: []*http.Cookie{{Name: "tango_admin_density", Value: "compact"}}, pressed: "compact"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			body := changelistWith(t, tt.cookies...)
+			if !strings.Contains(body, `action="/admin/density/"`) {
+				t.Fatal("changelist has no density form posting to /admin/density/")
+			}
+			for _, density := range []string{"comfortable", "compact"} {
+				pressed := map[bool]string{true: "true", false: "false"}[density == tt.pressed]
+				button := regexp.MustCompile(`<button [^>]*name="density" value="` + density + `"[^>]*>`).FindString(body)
+				if button == "" {
+					t.Fatalf("no density button for %s", density)
+				}
+				if !strings.Contains(button, `aria-pressed="`+pressed+`"`) {
+					t.Errorf("density button %s is not aria-pressed=%s: %s", density, pressed, button)
+				}
+			}
+		})
+	}
+}
+
+func TestChangelistCellsCarryTheirColumnLabelForThePhoneCard(t *testing.T) {
+	body := changelistWith(t)
+	for _, want := range []string{`<span class="cell-label">Name</span>`, `<span class="cell-label">Price</span>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("changelist cell lacks %s", want)
+		}
 	}
 }

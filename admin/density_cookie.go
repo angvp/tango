@@ -1,6 +1,10 @@
 package admin
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/angvp/tango/internal/security"
+)
 
 // densityCookieName holds the changelist density, comfortable or compact.
 const densityCookieName = "tango_admin_density"
@@ -19,4 +23,16 @@ func densityFromRequest(r *http.Request) string {
 		return densityCompact
 	}
 	return densityComfortable
+}
+
+func setDensityCookie(w http.ResponseWriter, r *http.Request, density string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     densityCookieName,
+		Value:    density,
+		Path:     "/admin/",
+		MaxAge:   themeCookieMaxAge,
+		HttpOnly: true,
+		Secure:   security.IsHTTPS(r),
+		SameSite: http.SameSiteLaxMode,
+	})
 }

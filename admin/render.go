@@ -36,6 +36,13 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
       </form>
     </div>
+    <form method="post" action="/admin/density/" class="density-bar">
+      <input type="hidden" name="csrf_token" value="{{.SignedIn.CSRFToken}}">
+      <input type="hidden" name="next" value="{{.ReturnTo}}">
+      <span class="field-caption">{{.T "admin.density.label" "Row density"}}</span>
+      <button type="submit" name="density" value="comfortable" class="btn-ghost" aria-pressed="{{if eq .Density "compact"}}false{{else}}true{{end}}">{{.T "admin.density.comfortable" "Comfortable"}}</button>
+      <button type="submit" name="density" value="compact" class="btn-ghost" aria-pressed="{{if eq .Density "compact"}}true{{else}}false{{end}}">{{.T "admin.density.compact" "Compact"}}</button>
+    </form>
     {{if .Rows}}
     {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.modal_title" "Delete {count} selected rows?"}}">
     <div class="flex items-center gap-3 border-b border-line-subtle px-5 py-3" data-bulk-bar hidden>
@@ -63,7 +70,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         <tbody>
         {{range .Rows}}<tr>
           {{if $.BulkDelete}}<td data-bulk-cell hidden><input type="checkbox" data-bulk-pk="{{.PK}}" data-bulk-identity="{{.Identity}}" aria-label="{{$.T "admin.bulk.select_row" "Select %s" .Identity}}"></td>{{end}}
-          {{range .Cells}}<td{{if .Numeric}} class="cell-num"{{end}}>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
+          {{range .Cells}}<td{{if .Numeric}} class="cell-num"{{end}}><span class="cell-label">{{.Label}}</span>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
           <td class="text-right">
             <div class="table-actions">
               <a href="{{$.BasePath}}{{.PK}}/" class="btn-ghost" aria-label="{{$.T "admin.list.edit_row" "Edit %s" .Identity}}">{{$.T "admin.button.edit" "Edit"}}</a>
