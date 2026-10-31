@@ -132,6 +132,16 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// sessionCookieValue returns the admin session token a request carries, or ""
+// when there is none.
+func sessionCookieValue(r *http.Request) string {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
 // requireSession wraps next so it only runs for a request carrying a valid,
 // unexpired session for an active, staff AdminUser. An unauthenticated
 // request (missing, invalid, expired, or deactivated-account session)
@@ -143,10 +153,7 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 // IsSuperuser has no effect on this decision.
 func requireSession(store *db.Store, next tango.View) tango.View {
 	return func(ctx *tango.Context) error {
-		var token string
-		if cookie, err := ctx.Request().Cookie(sessionCookieName); err == nil {
-			token = cookie.Value
-		}
+		token := sessionCookieValue(ctx.Request())
 
 		user, ok, err := sessionUser(ctx.Context(), store, token)
 		if err != nil {

@@ -33,11 +33,11 @@ func sessionCSRFToken(sessionToken string) string {
 // (which requireSession already guarantees cannot happen for a request
 // that reached a protected view).
 func csrfTokenFromRequest(r *http.Request) string {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil {
+	token := sessionCookieValue(r)
+	if token == "" {
 		return ""
 	}
-	return sessionCSRFToken(cookie.Value)
+	return sessionCSRFToken(token)
 }
 
 // verifySessionCSRF reports whether ctx's submitted csrf_token form value

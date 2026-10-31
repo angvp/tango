@@ -133,6 +133,25 @@ func openFlash(sessionToken, value string) (key string, args []string, ok bool) 
 	return payload.Key, payload.Args, true
 }
 
+// eventOutcomeNotCarried is logged when a committed write's outcome cannot be
+// carried to the next page. The write itself has succeeded and the redirect
+// proceeds; only the announcement is lost.
+const eventOutcomeNotCarried = "admin outcome not carried"
+
+// errOutcomeTooLong reports a sealed outcome larger than flashMaxLength. The
+// decoder would reject such a value, so it is never written.
+var errOutcomeTooLong = errors.New("tango admin: outcome is too long to carry in a cookie")
+
+// setOutcome sets the outcome for the request's session before a redirect that
+// follows a committed write. A failure is logged with the outcome's key and the
+// redirect still proceeds: the write has succeeded, so an error page would
+// misreport it.
+func setOutcome(ctx *tango.Context, key string, args ...string) {
+	if err := setFlash(ctx.ResponseWriter(), ctx.Request(), sessionCookieValue(ctx.Request()), key, args...); err != nil {
+		ctx.Logger().Error(eventOutcomeNotCarried, "outcome", key, "error", err)
+	}
+}
+
 // setFlash stores an outcome for the session about to be redirected. The key
 // must be catalogued and take exactly the given arguments.
 func setFlash(w http.ResponseWriter, r *http.Request, sessionToken, key string, args ...string) error {
@@ -146,6 +165,9 @@ func setFlash(w http.ResponseWriter, r *http.Request, sessionToken, key string, 
 	value, err := sealFlashAt(sessionToken, key, time.Now(), args...)
 	if err != nil {
 		return err
+	}
+	if len(value) > flashMaxLength {
+		return errOutcomeTooLong
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     flashCookieName,
@@ -208,17 +230,6 @@ func flashText(ctx context.Context, key string, args []string) string {
 		values[0] = count
 	}
 	return i18n.T(ctx, key, outcome.fallback, values...)
-}
-
-// sessionTokenOf returns the session token a request carries, or "" when
-// none is present. requireSession guarantees one for every view that writes
-// an outcome.
-func sessionTokenOf(r *http.Request) string {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil {
-		return ""
-	}
-	return cookie.Value
 }
 
 // statusNotice is the outcome the status region shows, with the form that

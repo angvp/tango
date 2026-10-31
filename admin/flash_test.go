@@ -1,6 +1,7 @@
 package admin_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -424,5 +425,45 @@ func TestAnErroringPageLeavesTheOutcomeForTheNextPage(t *testing.T) {
 	next := signedRequest(handler, http.MethodGet, crudBasePath, testSessionToken, nil, flash)
 	if !strings.Contains(next.Body.String(), "2 crud products deleted") {
 		t.Fatal("the next page did not show the outcome the 404 left in place")
+	}
+}
+
+func TestAnOutcomeThatCannotBeCarriedStillRedirectsAndIsLogged(t *testing.T) {
+	var logs bytes.Buffer
+	restore := captureDefaultLog(&logs)
+	defer restore()
+
+	options := bulkProductOptions()
+	options.SingularName = strings.Repeat("very long noun ", 200)
+	handler, sqlDB := buildProductAdminWithOptions(t, options)
+	row := seedProduct(t, sqlDB, "Edit me", 2)
+	other := seedProduct(t, sqlDB, "Bulk me", 3)
+	another := seedProduct(t, sqlDB, "Bulk me too", 4)
+
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		form   url.Values
+	}{
+		{"create", http.MethodPost, crudBasePath + "new/", url.Values{"Name": {"New"}, "Price": {"3"}}},
+		{"save", http.MethodPost, crudBasePath + strconv.FormatInt(row, 10) + "/", url.Values{"Name": {"Edited"}, "Price": {"2"}}},
+		{"delete", http.MethodPost, crudBasePath + strconv.FormatInt(other, 10) + "/delete/", url.Values{}},
+		{"bulk delete", http.MethodPost, bulkDeletePath, bulkForm(1, another)},
+	}
+	for _, tc := range cases {
+		response := signedRequest(handler, tc.method, tc.path, testSessionToken, tc.form)
+		if response.Code != http.StatusFound {
+			t.Errorf("%s: status = %d, want a redirect after the committed write", tc.name, response.Code)
+		}
+		if flashSetBy(response) != nil {
+			t.Errorf("%s: an oversized outcome was set", tc.name)
+		}
+	}
+	if !strings.Contains(logs.String(), "admin outcome not carried") {
+		t.Fatalf("the dropped outcome was not logged: %s", logs.String())
+	}
+	if countProducts(t, sqlDB) != 2 {
+		t.Fatalf("product count = %d, want 2 (create, then the delete and bulk delete remove two of three)", countProducts(t, sqlDB))
 	}
 }
