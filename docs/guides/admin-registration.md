@@ -26,6 +26,7 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 - **`Display`** — computed changelist cells, keyed by a `ListDisplay` name. See [Computed changelist cells](#computed-changelist-cells-with-display).
 - **`Ordering`** — the static default order the list page's rows are shown in (not interactive/click-to-sort). Prefix a field with `-` for descending, e.g. `"-CreatedAt"`.
 - **`Filters`** — boolean and foreign key fields shown as filter selects above the list. A boolean offers Any, Yes and No. A foreign key offers Any plus the related rows, labelled as the related model's `Label` and ordered by primary key, as in the foreign key select. A foreign key whose related model has more than 100 rows offers no choices and says why, but still filters by a primary key given in the URL. Registration rejects any other kind of field. See [Changelist filters](#changelist-filters).
+- **`SingularName` and `PluralName`** — the noun for one row and for several rows in messages and confirmations, such as "Delete this book". Unset, the humanized Go name of the model is used.
 
 ## Adding the admin app
 
@@ -107,7 +108,7 @@ Once registered, a model at `/admin/<table>/` gets:
 - `GET`/`POST /admin/<table>/{pk}/` — edit.
 - `GET`/`POST /admin/<table>/{pk}/delete/` — delete confirmation.
 
-Every one of these requires an authenticated session; an unauthenticated request redirects to `/admin/login/` instead of the old `401`. `GET /admin/` (and `/admin`, without the trailing slash) redirects to the first registered model, sorted alphabetically by name — there's no separate "admin home" page to build. With nothing registered yet, it renders a minimal empty state instead of 404ing.
+Every one of these requires an authenticated session; an unauthenticated request redirects to `/admin/login/` instead of the old `401`. `GET /admin/` (and `/admin`, without the trailing slash) redirects to the first registered model, sorted alphabetically by name, unless the app sets `admin.WithDashboard` (see the [admin dashboard guide](admin-dashboard.md)). With nothing registered yet, it renders a minimal empty state instead of 404ing.
 
 All of it runs against the same table your migrations created — there's no separate admin-specific schema (aside from `AdminUser`/`AdminSession` themselves, which are ordinary migrated tables too).
 
@@ -130,11 +131,11 @@ Both `Post` and `Author` now show up in the sidebar, and `/admin/` redirects to 
 
 ## Foreign key quick-create
 
-For a field tagged as a foreign key, the admin renders a `<select>` populated from the related model. If that related model is also registered with the admin, tanGO shows a small `+` link next to the select. Clicking it opens the related model's create page, then returns to the original form after save with the newly-created object already selected.
+For a field tagged as a foreign key, the admin renders a `<select>` populated from the related model. If that related model is also registered with the admin, tanGO shows an "Add new author" link, with a `+` before it, next to the select. Clicking it opens the related model's create page, then returns to the original form after save with the newly-created object already selected.
 
 The select starts with a "No author selected" choice, because a foreign key at its zero value is unset (stored as NULL). The choice is the English text of `admin.fk.none_selected` ("No %s selected", filled with the related model's singular display name), so a host catalog can word it. A row whose foreign key is unset shows the choice selected on edit, and an em dash in the changelist rather than `0`. The built-in select has no required-foreign-key mode: tanGO has no required/optional distinction for foreign keys, so every one offers that choice.
 
-For example, if `Book.AuthorID` is tagged `tango:"fk=Author"` and both `Book` and `Author` are admin-registered, the `Book` form gets a `+` beside the `Author` select. This is intentionally create-only: there is no edit link for the selected related object, no delete/remove action, no autocomplete, no many-to-many editing, and no inline formset support.
+For example, if `Book.AuthorID` is tagged `tango:"fk=Author"` and both `Book` and `Author` are admin-registered, the `Book` form gets an "Add new author" link beside the `Author` select. This is intentionally create-only: there is no edit link for the selected related object, no delete/remove action, no autocomplete, no many-to-many editing, and no inline formset support.
 
 This is a full-page navigation, not a popup. Any unsaved changes in the parent form are lost when you click `+`; save the parent object first if you need to preserve those values. That trade-off is deliberate so the feature stays small and predictable.
 
@@ -250,7 +251,7 @@ type Widget interface {
 
 `FieldContext` carries what a widget needs — field name, label, help text, the field's error message after a failed save (`Error`), current value, maximum length (`MaxLength`, `0` when unbounded), read-only flag, and (for a foreign key field) the related model's select options plus an optional related-object create URL — and is passed to *both* `Render` and `Parse`, so a widget can derive its own submitted form key(s) from `FieldContext.Name` identically on both sides. A simple widget reads `form.Get(f.Name)`; a widget needing more than one HTML input for its one Go field (a date/time picker split into separate controls, say) derives extra names from `f.Name` — e.g. `f.Name + "_date"` and `f.Name + "_time"` — using the same derivation in `Render` and `Parse` so the two never drift apart.
 
-A widget reports a problem with its own field by returning `admin.FieldError{Message: ...}` from `Parse`, directly, wrapped with `%w`, or inside `errors.Join`. Admin collects every `FieldError` from every field, re-renders the form with a 422, shows each message beside its field and marks that field's built-in control `aria-invalid="true"` with `aria-describedby` pointing at the help text and error. Any other `Parse` error stays a single form-level error. A custom widget can read `FieldContext.Error` and `FieldContext.DescribedBy()` to do the same in its own markup.
+A widget reports a problem with its own field by returning `admin.FieldError{Message: ...}` from `Parse`, directly, wrapped with `%w`, or inside `errors.Join`. Admin collects every `FieldError` from every field, re-renders the form with a 422, shows each message beside its field and marks that field's built-in control `aria-invalid="true"` with `aria-describedby` pointing at the help text and error. Any other `Parse` error is shown beside its own field as a generic message, such as `Invalid value`, and the error's own text is never shown. A custom widget can read `FieldContext.Error` and `FieldContext.DescribedBy()` to do the same in its own markup.
 
 Set a widget per field via `Options.Widgets`:
 
@@ -262,11 +263,11 @@ registry.Admin().Register(Post{}, admin.Options{
 })
 ```
 
-Without an entry, a field gets the default widget for its Go type, with one exception: a field declared `tango:"json"` (see [models and tags](models-and-tags.md)) defaults to `admin.JSON()`. An explicit `Options.Widgets` entry for that field always wins, so `admin.Textarea()` there gives a plain textarea. A `ReadOnly` field stays the generic readonly input whatever its tag or widget, and the changelist is unchanged. Because a plain-text override skips the JSON widget's own check, a save refused by the store for invalid JSON still re-renders the form with `Not valid JSON.` (translation key `admin.error.invalid_json`) beside the field, keeps the text as typed and stores nothing.
+Without an entry, a field gets the default widget for its Go type, with one exception: a field declared `tango:"json"` (see [models and tags](models-and-tags.md)) defaults to `admin.JSON()`. An explicit `Options.Widgets` entry for that field always wins, so `admin.Textarea()` there gives a plain textarea. A `ReadOnly` field stays the generic readonly input whatever its tag or widget, and the changelist is unchanged. Because a plain-text override skips the JSON widget's own check, a save refused by the store for invalid JSON still re-renders the form with `This is not valid JSON. Check that commas, quotes and brackets are in place.` (translation key `admin.error.invalid_json`) beside the field, keeps the text as typed and stores nothing.
 
 A widget's `Render` output may include its own `<link>`/`<script>` tags for CSS/JS it needs — typically served via its owning app's own `embed.FS` route (see [reusable apps](reusable-apps.md)), the same convention any app already uses for static assets. There's no shared deduplication mechanism, so that output must be **idempotent**: safe to emit once per rendered instance of the widget, since the same widget used on multiple fields will render its tags more than once. `examples/reusable-greetings`'s `Greeting.Name` field uses a real custom widget shipped by a reusable app this way — see its `greetings/widget.go`.
 
-A `Parse` error that is not an `admin.FieldError` surfaces as a single generic form-level error string. Return `admin.FieldError` to show the message beside the field instead.
+A `Parse` error that is not an `admin.FieldError` is shown beside its own field as a generic message, such as `Invalid value`, and the error's own text is never shown. Return `admin.FieldError` to show your own message beside the field.
 
 ## JSON fields
 
@@ -280,10 +281,10 @@ registry.Admin().Register(Profile{}, admin.Options{
 
 An explicit entry for a `tango:"json"` field replaces the default, and the store still refuses invalid JSON on save. A `ReadOnly` field renders as the generic readonly input.
 
-- **Validation on save.** The value must be one complete JSON document, checked by Go's decoder. A refused save keeps the exact text the person typed, re-renders it in the textarea, and shows a readable error beside the field, for example `Invalid JSON: invalid character '}' looking for beginning of object key string (at character 9)`. The position is in characters, counted from 1, when Go's decoder reports one. The textarea is `aria-invalid` and described by the error, and nothing is stored.
+- **Validation on save.** The value must be one complete JSON document, checked by Go's decoder. A refused save keeps the exact text the person typed, re-renders it in the textarea, and shows a readable error beside the field, for example `This is not valid JSON at character 9. Check that commas, quotes and brackets are in place.` The position is in characters, counted from 1, and appears only when Go's decoder reports one. The decoder's own message is never shown. The textarea is `aria-invalid` and described by the error, and nothing is stored.
 - **Stored exactly as submitted.** There is no canonicalization: spacing, key order and a trailing newline are saved as typed. The widget does not check structure or a schema.
 - **Empty is not parsed.** An empty value is saved as the empty string, with the field's normal empty and required behaviour and no extra rule from the widget.
-- **Formatted tab.** Browser-side, the field has two tabs, **Edit** and **Formatted**. **Formatted** shows `JSON.stringify(JSON.parse(text), null, 2)` of the current text; it is a view and never changes what you will save. Invalid input shows the parse message there instead. When the formatting differs from the text, **Use this formatting** copies it into the textarea and returns to **Edit**. The tabs appear only when the shared script runs; they follow the ARIA tabs pattern, with Left, Right, Home and End moving between them.
+- **Formatted tab.** Browser-side, the field has two tabs, **Edit** and **Formatted**. **Formatted** shows `JSON.stringify(JSON.parse(text), null, 2)` of the current text; it is a view and never changes what you will save. Invalid input leaves that box empty, and the status line shows the sentence for invalid JSON instead. When the formatting differs from the text, **Use this formatting** copies it into the textarea and returns to **Edit**. The tabs appear only when the shared script runs; they follow the ARIA tabs pattern, with Left, Right, Home and End moving between them.
 - **Without JavaScript** the field is an ordinary monospace textarea, and server validation is the only check.
 - **Type.** Use it on a `string` or `text` field. On any other Go kind the save reports a form-level error naming the field.
 
@@ -369,7 +370,7 @@ The admin's colours are semantic tokens, not fixed palette colours, and the admi
 
 The admin's stylesheet is precompiled and ships with the admin. Widgets can rely on the token utilities above, for the `text-`, `bg-`, `border-` and `ring-` prefixes, including their opacity variants such as `text-ink/60` and `bg-surface/50`. The opacity variants use Tailwind's default opacity steps, from `/0` to `/100`. Other Tailwind utilities are not part of this contract: the stylesheet contains them only for the admin's own templates, and a release may change them. A widget that needs other styling ships its own stylesheet, served from a content-hashed URL.
 
-A widget that hard-codes light colours stays light inside a dark admin; fixing it is the widget's job, as there is no theming hook. Branding's `LogoURL` is shown as is, so use a logo that reads on the dark sidebar, which looks the same in both themes apart from a slightly deeper shade in dark.
+A widget that hard-codes light colours stays light inside a dark admin; fixing it is the widget's job, as there is no theming hook. Branding's `LogoURL` is shown as is, so use a logo that reads on both sidebars: the light sidebar in the light theme and the dark sidebar in the dark theme.
 
 The Markdown field's preview is deliberately a white canvas in both themes. It is an isolated, sandboxed page, so it shows what your renderer produced and is not a promise that the text matches your public site, whose styling and dark-mode behaviour are yours to own.
 
@@ -393,7 +394,7 @@ Automated tests pin the admin's structural markup: labels, `aria-invalid` and `a
 - **Keyboard.** Every control works without a mouse: filter selects, Search, and the **Edit**/**Formatted** and **Write**/**Preview** tabs (Left, Right, Home and End move between tabs). After a refused save, the error appears beside its field.
 - **Screen reader.** A field with help text or an error reads its label, then the help text and the error. The search box and each filter announce their labels. The table announces its caption and column headers. The Markdown character count and the preview status are announced as they change.
 - **Contrast.** Text, help text, errors and focus rings stay readable against their backgrounds. Check the pages as you actually deploy them, with your own styles and widgets in place.
-- **Responsive layout.** At a narrow width the filters wrap, the table scrolls rather than breaking the page, and the form controls stay usable.
+- **Responsive layout.** Below 768px the filters wrap, each changelist row becomes a card, and the form controls stay usable.
 - **JSON Formatted tab.** On a JSON field, **Formatted** shows valid JSON indented and invalid text with a visible error, and never changes the textarea unless you choose **Use this formatting**. With JavaScript off, the field is a plain textarea and the server still refuses invalid JSON.
 - **Markdown Preview.** With a preview renderer set, **Preview** shows the rendered text in a frame that runs no script, loads nothing and cannot navigate the admin page. A renderer error shows in the Preview tab and never changes the text.
 
@@ -408,4 +409,4 @@ Known limits:
 
 ## Stability
 
-`Widget`, the `Options` fields this section and the one above describe, the built-in widgets, and `Branding` are **best-effort**: they are [not covered](../compatibility.md#what-is-not-covered) by tanGO's compatibility promise. Admin's internals are still expected to evolve, so this surface may change in any minor release without a Deprecation window; the changelog still lists every change.
+`Widget`, the `Options` fields this section and the one above describe, the built-in widgets other than `admin.JSON()` and `admin.Markdown(...)`, and `Branding` are **best-effort**: they are [not covered](../compatibility.md#what-is-not-covered) by tanGO's compatibility promise. Admin's internals are still expected to evolve, so this surface may change in any minor release without a Deprecation window; the changelog still lists every change.
