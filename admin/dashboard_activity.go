@@ -70,14 +70,14 @@ const activityCardSource = `{{define "activityCard"}}
 <section class="card" data-dashboard="activity" data-state="{{.Activity.State}}">
   <div class="card-header">
     <h2 class="section-title">{{.T "admin.dashboard.activity.title" "Activity"}}</h2>
-    {{if eq .Activity.State "ready"}}<p class="hint-text"><span data-activity="scope">{{.Activity.Snapshot.Scope}}</span> &middot; <span data-activity="window">{{.T "admin.dashboard.activity.window" "Window since %s, %s" .Activity.SinceLabel .Activity.WindowLabel}}</span></p>{{end}}
+    {{if eq .Activity.State "ready"}}<p class="hint-text"><span>{{.Activity.Snapshot.Scope}}</span> &middot; <span>{{.T "admin.dashboard.activity.window" "Window since %s, %s" .Activity.SinceLabel .Activity.WindowLabel}}</span></p>{{end}}
   </div>
   {{if eq .Activity.State "unavailable"}}{{template "cardUnavailable" .}}
   {{else if eq .Activity.State "not-configured"}}{{template "cardNotConfigured" .}}
   {{else}}
   <h3 class="section-label">{{.T "admin.dashboard.activity.requests" "Requests"}}</h3>
   {{if .Activity.HasRequests}}
-  <dl class="row-list" data-activity="requests">
+  <dl class="row-list">
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.total" "Total"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Total}}</dd></div>
     <div class="stat-row"><dt class="stat-label">2xx</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Class2xx}}</dd></div>
     <div class="stat-row"><dt class="stat-label">3xx</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Class3xx}}</dd></div>
@@ -85,7 +85,7 @@ const activityCardSource = `{{define "activityCard"}}
     <div class="stat-row"><dt class="stat-label">5xx</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Class5xx}}</dd></div>
   </dl>
   <h3 class="section-label">{{.T "admin.dashboard.activity.latency" "Latency"}}</h3>
-  <dl class="row-list" data-activity="latency">
+  <dl class="row-list">
     <div class="stat-row"><dt class="stat-label">p50</dt><dd class="stat-value stat-value-num">{{.Activity.P50}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
     <div class="stat-row"><dt class="stat-label">p95</dt><dd class="stat-value stat-value-num">{{.Activity.P95}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
     <div class="stat-row"><dt class="stat-label">p99</dt><dd class="stat-value stat-value-num">{{.Activity.P99}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
@@ -96,7 +96,7 @@ const activityCardSource = `{{define "activityCard"}}
   <div class="border-t border-line-subtle"></div>
   <h3 class="section-label">{{.T "admin.dashboard.activity.jobs" "Job runs"}}</h3>
   {{if .Activity.HasJobs}}
-  <dl class="row-list pb-2" data-activity="jobs">
+  <dl class="row-list pb-2">
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.success" "success"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Success}}</dd></div>
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.error" "error"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Error}}</dd></div>
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.panic" "panic"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Panic}}</dd></div>
