@@ -79,6 +79,14 @@ The CI job **admin stylesheet freshness** runs the `--check` form with the pinne
 
 The CI job **browser CSP smoke** runs `browsersmoke`, a separate Go module, in Chrome as the runner image provides it. It loads the accounts pages, the admin login, dashboard, changelist, change form, navigation toggle and Markdown preview, and the Swagger UI page. It fails on any CSP violation, browser security-log entry or cross-origin request it observes, and it checks each page's `Content-Security-Policy` header against its expected value, including the Swagger UI page's relaxed one. Chrome's version is not pinned in this repository. The job prints the version it ran with, so a failure can be matched to a browser build.
 
+`admincapture`, also a separate Go module, photographs the admin pages in light and dark at a desktop and a phone width. It is opt-in and not part of any gate: CI only runs `go vet` on it. To take the photographs, run from `admincapture/` with an output directory outside the repository:
+
+```sh
+TANGO_CAPTURE_DIR=/path/outside/the/repo go test -run TestCaptureAdminPages -count=1 -v ./...
+```
+
+`checklist.md` in that directory lists each page, theme and width with whether it was captured. A page that cannot be photographed fails the test.
+
 Before a release that changes how served objects are displayed, check the sandbox policy that `storage.Serve` sends by default (`sandbox; default-src 'none'`). Serve an uploaded PDF inline through a route whose `ServeOptions` list `application/pdf` in `InlineTypes`, open it in each browser the release names as supported, and confirm it displays. If a browser does not display it, state in the release notes which route needs `SkipSandboxPolicy`.
 
 ## After the tag

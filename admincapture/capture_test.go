@@ -42,6 +42,11 @@ const (
 	adminPassword = "secret"
 	stepTimeout   = 30 * time.Second
 	settleTime    = 300 * time.Millisecond
+
+	// seededBooks fills the changelist past a phone screen yet stays within one
+	// page of the admin, so the photographs show a populated list without
+	// pagination controls.
+	seededBooks = 14
 )
 
 type captureBook struct {
@@ -87,7 +92,7 @@ func site(t *testing.T) http.Handler {
 	if err := admin.CreateAccount(context.Background(), store, adminUser, adminPassword); err != nil {
 		t.Fatalf("seed admin account: %v", err)
 	}
-	for i := 1; i <= 14; i++ {
+	for i := 1; i <= seededBooks; i++ {
 		if _, err := sqlDB.Exec(`INSERT INTO capture_book (id, title, pages) VALUES (?, ?, ?)`, i, fmt.Sprintf("Field notes, volume %d", i), 80+i*17); err != nil {
 			t.Fatalf("seed book: %v", err)
 		}
@@ -187,7 +192,7 @@ var signedInShots = []shot{
 	{name: "create-form", ready: "form", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/new/")}
 	}},
-	{name: "create-form-failed-save", ready: "form", steps: func(b string) []chromedp.Action[chromedp.Void] {
+	{name: "create-form-failed-save", ready: ".alert-error", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{
 			visit(b, "/admin/capture_book/new/"),
 			chromedp.WaitVisible("#field-Pages"),
@@ -318,7 +323,7 @@ func captureCombination(t *testing.T, binary, base, outDir, theme string, vp vie
 			entry.captured = "yes"
 		}
 		if entry.captured != "yes" {
-			t.Logf("%s %s %s: %s", name, theme, vp.name, entry.notes)
+			t.Errorf("%s %s %s: not captured: %s", name, theme, vp.name, entry.notes)
 		}
 		rows = append(rows, entry)
 	}

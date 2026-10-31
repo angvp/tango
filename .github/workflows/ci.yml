@@ -143,6 +143,20 @@ jobs:
           go vet ./...
           go test -count=1 -v ./...
 
+  # admincapture is its own Go module, so the test job's ./... skips it. Its
+  # photographs are opt-in and need a browser, so CI only vets that it compiles.
+  capture-vet:
+    name: admincapture vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+      - name: go vet admincapture
+        working-directory: admincapture
+        run: go vet ./...
+
   test:
     name: test (${{ matrix.dialect }})
     runs-on: ubuntu-latest
