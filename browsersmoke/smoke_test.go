@@ -534,6 +534,45 @@ const rowActionsInViewport = `(function () {
 	});
 })()`
 
+// bulkConfirmFollowsCount selects one changelist row and then a second, opens
+// the bulk dialog each time, and checks that its confirm button reads the
+// singular message for one row and the plural message for two. Each dialog is
+// cancelled, so no row is deleted.
+func (s *smoke) bulkConfirmFollowsCount() {
+	s.t.Helper()
+	s.run("bulk select first row", chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible))
+	s.run("bulk open with one row", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	one := s.evalString(confirmText)
+	oneWant := s.evalString(`document.querySelector('[data-bulk-delete]').getAttribute('data-msg-confirm-one') || ''`)
+	s.run("bulk cancel with one row", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
+
+	s.run("bulk select second row", chromedp.Click(".table-admin tbody tr:nth-child(2) input[data-bulk-pk]", chromedp.NodeVisible))
+	s.run("bulk open with two rows", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	many := s.evalString(confirmText)
+	manyWant := strings.ReplaceAll(s.evalString(`document.querySelector('[data-bulk-delete]').getAttribute('data-msg-confirm-many') || ''`), "{count}", "2")
+	s.run("bulk cancel with two rows", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
+
+	if oneWant == "" || manyWant == "" {
+		s.t.Fatal("the bulk dialog carries no confirm message: bulk.js or its data-msg attributes are missing")
+	}
+	s.check(one == oneWant, "the bulk confirm button read %q with one row selected, want %q", one, oneWant)
+	s.check(many == manyWant, "the bulk confirm button read %q with two rows selected, want %q", many, manyWant)
+}
+
+const confirmText = `document.querySelector('[data-bulk-confirm]').textContent`
+
+// evalString evaluates expr and returns its string value.
+func (s *smoke) evalString(expr string) string {
+	s.t.Helper()
+	ctx, cancel := context.WithTimeout(s.ctx, stepTimeout)
+	defer cancel()
+	value, err := chromedp.Run(ctx, chromedp.Evaluate[string](expr))
+	if err != nil {
+		s.t.Fatalf("evaluate %q: %v", expr, err)
+	}
+	return value
+}
+
 // previewHeading reads the first heading of the preview frame from the DOM.
 // The frame is sandboxed without allow-scripts, so the test reads it through
 // the DevTools DOM domain rather than from script.
@@ -748,6 +787,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.visit("admin dashboard", "/admin/")
 	s.visit("admin changelist", "/admin/smoke_note/")
 	s.phoneChangelist()
+	s.bulkConfirmFollowsCount()
 	s.adminNavToggle()
 	s.visit("admin change form", "/admin/smoke_note/1/")
 	s.adminMarkdownPreview()
