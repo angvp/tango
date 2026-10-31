@@ -217,7 +217,7 @@ var signedInShots = []shot{
 	{name: "create-form", ready: "form", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/new/")}
 	}},
-	{name: "create-form-failed-save", ready: ".alert-error", steps: func(b string) []chromedp.Action[chromedp.Void] {
+	{name: "create-form-failed-save", ready: ".field-error", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{
 			visit(b, "/admin/capture_book/new/"),
 			chromedp.WaitVisible("#field-Pages"),
