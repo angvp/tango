@@ -43,6 +43,10 @@ The accounts package renders no styled pages, so the theme does not reach outsid
 - **A stored `system` value.** Storing three values makes the cookie a record of a default. Deleting the cookie as the meaning of System keeps "no override" as the single state. Rejected.
 - **A themed Markdown preview.** Following the theme would make the preview resemble the host's rendering only by accident, and its content is host-written HTML that admin does not control. Rejected; the preview stays a fixed light, isolated surface.
 
+## Later decision
+
+The colour values in this record are superseded by [0065](0065-the-admin-redesign-adopts-a-component-layer-framework-owned-plain-language-messages-and-a-strict-csp-compatible-look.md). The token structure and the system-preference-plus-cookie selection described here remain in force.
+
 ## Consequences
 
 - The palette table is the one place a colour changes. Changing a value updates the CSS, the Tailwind map and the contrast tests together. The contrast tests check every declared token pair in both themes: at least 4.5:1 for normal text, and at least 3:1 for large text and required UI components such as the focus ring and input borders. They prove the declared pairs. They do not prove every rendered host widget.
