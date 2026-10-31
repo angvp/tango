@@ -323,6 +323,11 @@ var signedInShots = []shot{
 		pending.Pending = []string{"0002_add_year", "0003_add_price"}
 		return []chromedp.Action[chromedp.Void]{setDashboardFeed(pending, nil), visit(b, "/admin/")}
 	}},
+	{name: "dashboard-badge-tracking-missing", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		missing := reachableStatus()
+		missing.TrackingTable = admin.TrackingTableMissing
+		return []chromedp.Action[chromedp.Void]{setDashboardFeed(missing, nil), visit(b, "/admin/")}
+	}},
 	{name: "dashboard-alert-warning", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{setDashboardFeed(admin.DashboardStatus{}, context.DeadlineExceeded), visit(b, "/admin/")}
 	}},
