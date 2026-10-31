@@ -1142,10 +1142,12 @@ func (s *smoke) adminFormSummary() {
 	s.run("summary link to the first field", chromedp.Click(`.alert-error a[href="#field-Code"]`, chromedp.NodeVisible))
 	s.check(s.evalString(active) == "field-Code", "focus after the summary link is on %q, want the field", s.evalString(active))
 
-	// One problem has no summary, so its control takes focus.
+	// One problem has no summary, so its control takes focus. The first wait
+	// skips the invalid control of the page this step navigates away from, so
+	// the form it fills is the fresh one.
 	s.run("admin create form with one problem",
 		chromedp.Navigate(s.base+"/admin/smoke_code/new/"),
-		chromedp.WaitVisible("#field-Code"),
+		chromedp.WaitVisible("#field-Code:not([aria-invalid])"),
 		chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible),
 		chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible),
 		chromedp.WaitVisible("#field-Code[aria-invalid]"),
