@@ -85,7 +85,7 @@ Before a release that changes how served objects are displayed, check the sandbo
 
 ## v0.8.0 release preparation
 
-v0.8.0 ships Milestone 64 (the security headers middleware and the strict-policy admin) and Milestone 65 (the admin redesign) together. Both are unreleased on the development line. Nothing in this section tags, pushes or publishes a release. The maintainer decides when v0.8.0 is cut, and the steps below are to be completed before that decision.
+v0.8.0 ships two bodies of unreleased work together: the security headers middleware with the strict-policy admin, and the admin redesign. Both are unreleased on the development line. Nothing in this section tags, pushes or publishes a release. The maintainer decides when v0.8.0 is cut, and the steps below are to be completed before that decision.
 
 Pre-tag items, to be done by the maintainer:
 
@@ -94,7 +94,7 @@ Pre-tag items, to be done by the maintainer:
   - the phone changelist as cards, and the drawer's focus behaviour.
 - **First GitHub runs.** The CI jobs **admin stylesheet freshness** and **browser CSP smoke** have not yet run on the redesign's commits. Each must pass on the release commit, and the browser CSP smoke job's printed Chrome version is recorded with the release notes.
 - **Firefox and Safari.** Check the admin in both browsers, in both themes. The admin uses no polyfills, so a failure there is a real failure.
-- **Changelog.** The `[Unreleased]` section of `CHANGELOG.md` is renamed to the version and its date by the maintainer at release. The Release job refuses a tag without that dated section. The M64 and M65 entries carry the upgrade notes for the `admin.Widget` signature, the `admin.*` message keys and the inline PDF sandbox.
+- **Changelog.** The `[Unreleased]` section of `CHANGELOG.md` is renamed to the version and its date by the maintainer at release. The Release job refuses a tag without that dated section. The security headers and admin redesign entries carry the upgrade notes for the `admin.Widget` signature, the `admin.*` message keys and the inline PDF sandbox.
 - **Website copy.** `tango-web` changes only after the release exists. Website copy claims released behaviour only, so none of it is updated before the tag.
 
 Known limits to state in the release notes:

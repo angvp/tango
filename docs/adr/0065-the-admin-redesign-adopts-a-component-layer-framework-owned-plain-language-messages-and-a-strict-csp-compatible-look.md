@@ -1,6 +1,6 @@
 # The admin redesign adopts a component layer, framework-owned plain-language messages and a strict-CSP-compatible look
 
-Status: Accepted. Implemented on the unreleased v0.8.0 line, together with Milestone 64. Not released.
+Status: Accepted. Implemented on the unreleased v0.8.0 line, together with the security headers work. Not released.
 
 Builds on [0062](0062-admin-theme-is-semantic-colour-tokens-selected-by-system-preference-with-a-cookie-override.md), and revises its colour values.
 
