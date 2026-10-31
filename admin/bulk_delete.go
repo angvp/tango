@@ -172,7 +172,7 @@ func rejectBulk(ctx *tango.Context, nav []navItem, brand Branding, meta model.Mo
 	section := sectionName(meta, opts)
 	current := i18n.T(ctx.Context(), "admin.bulk.delete_selected", "Delete selected")
 	return render(ctx, http.StatusBadRequest, bulkRejectedTemplate, bulkRejectedPageData{
-		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: section, Href: basePath}, crumb{Label: current}).withPageTitle(current),
+		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: section, Href: basePath}, crumb{Label: current}).withPageTitle(i18n.T(ctx.Context(), "admin.bulk.rejected_title", "Nothing was deleted")),
 		Title:    section,
 		Message:  i18n.T(ctx.Context(), key, fallback, args...),
 		Plural:   pluralNoun(meta, opts),

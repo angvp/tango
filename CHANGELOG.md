@@ -91,6 +91,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **A foreign key field is labelled with a capitalized name when its target model has a lowercase Go type name.** The admin form and its failed-save summary showed the target's name with a lowercase first word, such as "capture Book"; it now reads "Capture Book".
 
+- **A rejected bulk delete is titled with its outcome, and the admin's model index has a page title.** The rejection page's browser tab title reads "Nothing was deleted · tanGO Admin" instead of "Delete selected · tanGO Admin". The empty model index at `/admin/` reads "Models · tanGO Admin".
+
+  **Catalog impact:** `admin.bulk.rejected_title` ("Nothing was deleted", Spanish "No se eliminó nada") is the same key and wording as at v0.7.0, where it was the rejection page heading; this branch had removed it. `admin.index.title` ("Models", Spanish "Modelos") is a new key, absent at v0.7.0.
+
 ## [0.7.0] - 2026-10-25
 
 ### Added

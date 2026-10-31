@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/i18n"
 )
 
 // indexView backs the admin's root ("/admin/"), so visiting the admin
@@ -21,7 +22,7 @@ func indexView(nav []navItem, brand Branding) tango.View {
 		}
 
 		return render(ctx, http.StatusOK, indexTemplate, indexPageData{
-			chrome: chrome{Nav: nav, Brand: brand}.withContext(ctx.Context()),
+			chrome: chrome{Nav: nav, Brand: brand}.withContext(ctx.Context()).withPageTitle(i18n.T(ctx.Context(), "admin.index.title", "Models")),
 		})
 	}
 }

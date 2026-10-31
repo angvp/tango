@@ -18,6 +18,8 @@ var spanishMexico = map[string]string{
 }
 
 var spanish = map[string]string{
+	"admin.bulk.rejected_title":                 "No se eliminó nada",
+	"admin.index.title":                         "Modelos",
 	"admin.boolean.no":                          "No",
 	"admin.boolean.yes":                         "Sí",
 	"admin.bulk.back_to":                        "Volver a %s",

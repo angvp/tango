@@ -79,6 +79,43 @@ func TestErrorPagesTitleTheirHeading(t *testing.T) {
 	}
 }
 
+func documentTitle(t *testing.T, body string) string {
+	t.Helper()
+	titles := findAll(parseShell(t, body), func(n *html.Node) bool { return n.Data == "title" })
+	if len(titles) != 1 {
+		t.Fatalf("%d title elements, want 1", len(titles))
+	}
+	return textOf(titles[0])
+}
+
+func TestBulkRejectedPageTitleStatesTheOutcome(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	seedProduct(t, sqlDB, "Widget", 2)
+
+	response := doRequest(t, handler, http.MethodPost, bulkDeletePath, bulkFormOf(0))
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+	if got, want := documentTitle(t, response.Body.String()), "Nothing was deleted · tanGO Admin"; got != want {
+		t.Errorf("title = %q, want %q", got, want)
+	}
+}
+
+func TestEmptyModelIndexHasAPageTitle(t *testing.T) {
+	handler, _ := buildLoginTestHandler(t)
+	cookie := loginAndGetSessionCookie(t, handler, "admin", "correct-password")
+	request := httptest.NewRequest(http.MethodGet, "/admin/", nil)
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	if got, want := documentTitle(t, response.Body.String()), "Models · tanGO Admin"; got != want {
+		t.Errorf("title = %q, want %q", got, want)
+	}
+}
+
 func TestEveryAdminPageHasItsDocumentStructure(t *testing.T) {
 	titles := map[string]string{}
 	for name, body := range shellPages(t) {
