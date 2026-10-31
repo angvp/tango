@@ -30,6 +30,7 @@ import (
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/kb"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
@@ -315,6 +316,57 @@ func visit(base, path string) chromedp.Action[chromedp.Void] {
 	return chromedp.Navigate(base + path)
 }
 
+// tabUntil presses Tab with the keyboard until the selector's element holds
+// focus. It fails loudly when the element is never reached, so a control that
+// cannot take keyboard focus cannot produce a shot of the wrong state.
+func tabUntil(selector string) chromedp.Action[chromedp.Void] {
+	return pressUntil(kb.Tab, selector)
+}
+
+// focusState reports whether the selector's element holds focus, and describes
+// the element that does, so a failed walk can say where focus went.
+type focusState struct {
+	Hit  bool   `json:"hit"`
+	Desc string `json:"desc"`
+}
+
+// pressUntil presses key until the selector's element holds focus, with the
+// same loud failure as tabUntil. It moves through a widget's roving tab stops
+// with the arrow keys the way a keyboard user does. Every failure carries the
+// last focused elements, so a stuck walk and a missed wait read differently.
+func pressUntil(key, selector string, opts ...chromedp.KeyOption) chromedp.Action[chromedp.Void] {
+	return chromedp.Func(func(ctx context.Context, target *chromedp.Target) error {
+		const maxPresses = 200
+		const trailLength = 10
+		probe := fmt.Sprintf(`(function () {
+			var e = document.activeElement;
+			if (e === null) { return {hit: false, desc: "none"}; }
+			return {hit: e.matches(%q), desc: e.tagName + "#" + e.id + "." + e.getAttribute("class")};
+		})()`, selector)
+		var trail []string
+		fail := func(err error) error {
+			return fmt.Errorf("%w; recent focus: %s", err, strings.Join(trail, " > "))
+		}
+		for i := 0; i < maxPresses; i++ {
+			state, err := chromedp.Evaluate[focusState](probe)(ctx, target)
+			if err != nil {
+				return fail(err)
+			}
+			trail = append(trail, state.Desc)
+			if len(trail) > trailLength {
+				trail = trail[len(trail)-trailLength:]
+			}
+			if state.Hit {
+				return nil
+			}
+			if _, err := chromedp.KeyEvent(key, opts...)(ctx, target); err != nil {
+				return fail(err)
+			}
+		}
+		return fail(fmt.Errorf("keyboard focus did not reach %s within %d presses", selector, maxPresses))
+	})
+}
+
 // signedInShots are taken after sign-in; the login page is taken before.
 var signedInShots = []shot{
 	{name: "changelist-rows", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {
@@ -378,7 +430,13 @@ var signedInShots = []shot{
 		return []chromedp.Action[chromedp.Void]{setDashboardFeed(missing, nil), visit(b, "/admin/")}
 	}},
 	{name: "dashboard-alert-warning", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
-		return []chromedp.Action[chromedp.Void]{setDashboardFeed(admin.DashboardStatus{}, context.DeadlineExceeded), visit(b, "/admin/")}
+		// The injected failure is reset once the warning page has loaded, so no
+		// later /admin/ load in the shared process fails its status card.
+		return []chromedp.Action[chromedp.Void]{
+			setDashboardFeed(admin.DashboardStatus{}, context.DeadlineExceeded),
+			visit(b, "/admin/"),
+			setDashboardFeed(reachableStatus(), nil),
+		}
 	}},
 	{name: "filter-no-match", ready: ".content-body", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_draft/?filter_published=yes")}
@@ -507,6 +565,50 @@ var signedInShots = []shot{
 			script(`document.getElementById('field-Payload').value = '{"pages": 80,}'; document.querySelector('form[method=post] button.btn-primary').click();`),
 			chromedp.WaitVisible(".field-error"),
 		}
+	}},
+	// Keyboard focus shots. Each reaches its control by real Tab presses from the
+	// top of the page, so the ring shown is the one a keyboard user sees.
+	{name: "focus-nav-link", desktopOnly: true, ready: ".sidebar-link:focus-visible", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/"), tabUntil(".sidebar-link")}
+	}},
+	// Below md the sidebar is a drawer whose links are not in the Tab order while
+	// it is closed. A keyboard user opens it with the menu button, then tabs in.
+	{name: "focus-nav-link-phone", phoneOnly: true, ready: ".sidebar-link:focus-visible", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/"),
+			tabUntil(".menu-btn"),
+			chromedp.KeyEvent(kb.Enter),
+			tabUntil(".sidebar-link"),
+		}
+	}},
+	{name: "focus-text-input", ready: "input[name=q]:focus-visible", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/"), tabUntil("input[name=q]")}
+	}},
+	{name: "focus-primary-button", desktopOnly: true, ready: "form .btn-primary:focus-visible", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/1/"), tabUntil("form .btn-primary")}
+	}},
+	{name: "focus-select", desktopOnly: true, ready: "select#field-BookID:focus-visible", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_note/new/"), tabUntil("select#field-BookID")}
+	}},
+	{name: "focus-widget-tab", desktopOnly: true, ready: "#field-Payload-tab-view:focus-visible", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		// The tabs are a roving set: Tab reaches the selected tab, and the arrow key
+		// moves to the next one.
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_document/1/"),
+			tabUntil("#field-Payload-tab-edit"),
+			pressUntil(kb.ArrowRight, "#field-Payload-tab-view"),
+		}
+	}},
+	{name: "focus-bulk-bar", desktopOnly: true, ready: "[data-bulk-open]:focus-visible", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_book/"),
+			chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible),
+			// The bar sits above the table, so Shift+Tab walks back from the row to it.
+			pressUntil(kb.Tab, "[data-bulk-open]", chromedp.KeyModifiers(chromedp.ModifierShift)),
+		}
+	}},
+	{name: "focus-row-action", desktopOnly: true, ready: ".table-admin tbody tr:nth-child(1) a:focus-visible", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/"), tabUntil(".table-admin tbody tr:nth-child(1) a")}
 	}},
 	// Script execution is off for this shot only; the compact shot below turns it
 	// back on before it runs.
@@ -665,6 +767,10 @@ func captureCombination(t *testing.T, binary, base, outDir, theme string, vp vie
 	for _, s := range signedInShots {
 		if s.phoneOnly && !vp.mobile {
 			rows = append(rows, row{page: s.name, theme: theme, width: vp.name, captured: "n/a", notes: "the drawer exists only below the md breakpoint"})
+			continue
+		}
+		if s.desktopOnly && vp.mobile {
+			rows = append(rows, row{page: s.name, theme: theme, width: vp.name, captured: "n/a", notes: "this focus shot is taken at the desktop width only"})
 			continue
 		}
 		take(s.name, s.ready, s.steps(base)...)
