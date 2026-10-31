@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/angvp/tango"
+	"golang.org/x/net/html"
 )
 
 // errorPageForbidden is the text no admin error page may show: Go error text,
@@ -41,6 +42,10 @@ func assertHTMLErrorPage(t *testing.T, response *httptest.ResponseRecorder, stat
 		if strings.Contains(body, leak) {
 			t.Fatalf("body leaks %q: %.400s", leak, body)
 		}
+	}
+	titles := findAll(parseShell(t, body), func(n *html.Node) bool { return n.Data == "title" })
+	if want := title + " · tanGO Admin"; len(titles) != 1 || textOf(titles[0]) != want {
+		t.Fatalf("document title = %d elements, want %q", len(titles), want)
 	}
 }
 

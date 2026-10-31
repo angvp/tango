@@ -138,7 +138,7 @@ var errorPageTemplate = cloneWithContent(`{{define "content"}}
 // renderErrorPage writes text as an HTML page in the shared layout with status.
 func renderErrorPage(ctx *tango.Context, status int, text errorText) error {
 	return render(ctx, status, errorPageTemplate, errorPageData{
-		chrome:    chromeFrom(ctx.Context()).withContext(ctx.Context()),
+		chrome:    chromeFrom(ctx.Context()).withContext(ctx.Context()).withPageTitle(text.Title),
 		errorText: text,
 	})
 }

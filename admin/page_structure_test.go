@@ -2,6 +2,8 @@ package admin_test
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -42,6 +44,39 @@ func headingLevels(doc *html.Node) []int {
 		}
 	})
 	return levels
+}
+
+// TestErrorPagesTitleTheirHeading checks that each error page's document title
+// is its own heading followed by the admin name, and that no two error pages
+// share a title.
+func TestErrorPagesTitleTheirHeading(t *testing.T) {
+	handler, sqlDB := buildProductAdmin(t)
+	seedProduct(t, sqlDB, "Widget", 2)
+	forbiddenHandler, forbiddenDB := buildProductAdmin(t)
+	if _, err := forbiddenDB.Exec(`UPDATE admin_user SET is_staff = $1 WHERE username = $2`, false, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	pages := map[string]*httptest.ResponseRecorder{
+		"not found":          doRequest(t, handler, http.MethodGet, crudBasePath+"999999/", nil),
+		"method not allowed": doRequest(t, handler, http.MethodPut, crudBasePath, nil),
+		"forbidden":          doRequest(t, forbiddenHandler, http.MethodGet, crudBasePath, nil),
+	}
+	seen := map[string]string{}
+	for name, response := range pages {
+		doc := parseShell(t, response.Body.String())
+		titles := findAll(doc, func(n *html.Node) bool { return n.Data == "title" })
+		headings := findAll(doc, func(n *html.Node) bool { return n.Data == "h1" })
+		if len(titles) != 1 || len(headings) != 1 {
+			t.Fatalf("%s: %d titles and %d h1 elements, want 1 each", name, len(titles), len(headings))
+		}
+		if got, want := textOf(titles[0]), textOf(headings[0])+" · tanGO Admin"; got != want {
+			t.Errorf("%s: title = %q, want %q", name, got, want)
+		}
+		if other, dup := seen[textOf(titles[0])]; dup {
+			t.Errorf("%s: title %q is also the title of %s", name, textOf(titles[0]), other)
+		}
+		seen[textOf(titles[0])] = name
+	}
 }
 
 func TestEveryAdminPageHasItsDocumentStructure(t *testing.T) {
