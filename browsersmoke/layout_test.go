@@ -180,7 +180,6 @@ func (s *smoke) layout() layoutReport {
 // page's audit row. The row's result is derived from the same conditions the
 // checks test, so the table and the failures cannot disagree.
 func (s *smoke) checkLayout(page, viewport string, r layoutReport) auditRow {
-	s.t.Helper()
 	name := viewport + " " + page
 	scrolls := r.ScrollWidth > r.ClientWidth
 	s.check(!scrolls, "%s scrolls horizontally: scrollWidth %d > clientWidth %d", name, r.ScrollWidth, r.ClientWidth)
