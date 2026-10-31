@@ -77,17 +77,17 @@ func TestDashboardTextColoursComeFromTheAdminPaletteWithNoDecoration(t *testing.
 	}
 }
 
-// The status dot takes its colour from the status family, so every database
-// state reads from a token and none from a raw green, red or grey.
-func TestDashboardStatusDotsUseStatusTokens(t *testing.T) {
+// A database state is a badge: the variant class carries its colour from the
+// status family, and the state word inside the badge carries its meaning.
+func TestDashboardStatusBadgesCarryTextAndStatusTokens(t *testing.T) {
 	cases := []struct {
 		name  string
 		state admin.DatabaseState
 		want  string
 	}{
-		{"reachable", admin.DatabaseReachable, "status-dot-success"},
-		{"unreachable", admin.DatabaseUnreachable, "status-dot-danger"},
-		{"unknown", admin.DatabaseUnknown, "status-dot-neutral"},
+		{"reachable", admin.DatabaseReachable, `<span class="badge-success">Reachable</span>`},
+		{"unreachable", admin.DatabaseUnreachable, `<span class="badge-danger">Unreachable</span>`},
+		{"unknown", admin.DatabaseUnknown, `<span class="badge-neutral">Unknown</span>`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -97,14 +97,37 @@ func TestDashboardStatusDotsUseStatusTokens(t *testing.T) {
 				},
 			}))
 			body := getIndex(t, handler).Body.String()
-			field := regexp.MustCompile(`<dd [^>]*data-field="database"`).FindString(body)
+			field := regexp.MustCompile(`(?s)<dd [^>]*data-field="database">.*?</dd>`).FindString(body)
 			if field == "" {
 				t.Fatal("no database field on the dashboard")
 			}
 			if !strings.Contains(field, tc.want) {
-				t.Errorf("database dot %q lacks %s", field, tc.want)
+				t.Errorf("database field %q lacks the badge %s", field, tc.want)
 			}
 		})
+	}
+}
+
+// A card that cannot report its state says so in an alert: a warning when the
+// source failed, a neutral note when nothing is configured. The alert carries
+// the words, so colour is not the only signal.
+func TestDashboardCardStatesAreTextAlerts(t *testing.T) {
+	failing := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{
+		Status: func(context.Context) (admin.DashboardStatus, error) {
+			return admin.DashboardStatus{}, context.DeadlineExceeded
+		},
+	}))
+	body := getIndex(t, failing).Body.String()
+	section := regexp.MustCompile(`(?s)<section class="card" data-dashboard="status"[^>]*>.*?</section>`).FindString(body)
+	if !strings.Contains(section, `class="alert-warning"`) || !strings.Contains(section, "Unavailable") {
+		t.Errorf("unavailable status card lacks a warning alert with its text:\n%s", section)
+	}
+
+	unconfigured := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{Activity: stubSource{}}))
+	body = getIndex(t, unconfigured).Body.String()
+	section = regexp.MustCompile(`(?s)<section class="card" data-dashboard="status"[^>]*>.*?</section>`).FindString(body)
+	if !strings.Contains(section, `class="alert-neutral"`) || !strings.Contains(section, "Not configured") {
+		t.Errorf("unconfigured status card lacks a neutral alert with its text:\n%s", section)
 	}
 }
 
@@ -137,5 +160,23 @@ func TestDashboardRowsUseTheNamedRowComponent(t *testing.T) {
 	}
 	if strings.Contains(body, "sm:grid-cols-[14rem_1fr]") {
 		t.Error("rows still carry the copied utility string")
+	}
+}
+
+// Pending migrations are a warning state, so the count is a warning badge with
+// its words, and the names stay in the list beside it.
+func TestDashboardPendingMigrationsAreAWarningBadge(t *testing.T) {
+	handler := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{
+		Status: func(context.Context) (admin.DashboardStatus, error) {
+			return admin.DashboardStatus{Database: admin.DatabaseReachable, TrackingTable: admin.TrackingTablePresent, Pending: []string{"0002_add_year", "0003_add_price"}}, nil
+		},
+	}))
+	body := getIndex(t, handler).Body.String()
+	field := regexp.MustCompile(`(?s)<dd [^>]*data-field="pending">.*?</dd>`).FindString(body)
+	if !strings.Contains(field, `<span class="badge-warning">2 pending</span>`) {
+		t.Errorf("pending field %q lacks the warning badge", field)
+	}
+	if !strings.Contains(field, "0002_add_year") {
+		t.Errorf("pending field %q lost the migration names", field)
 	}
 }

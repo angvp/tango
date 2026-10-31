@@ -98,9 +98,17 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     </div>
     {{else}}
     <div class="empty-state">
-      <p class="empty-state-title">{{.T "admin.list.empty_title" "No %s yet" .Plural}}</p>
-      <p class="empty-state-body">{{if .SearchQuery}}{{.T "admin.list.empty_no_match" "No %s match “%s”." .Plural .SearchQuery}}{{else if .Criteria}}{{.T "admin.list.empty_no_filter_match" "No %s match the selected filters." .Plural}}{{else}}{{.T "admin.list.empty_first" "Add the first %s to see it here." .Singular}}{{end}}</p>
-      {{if not .Criteria}}<a href="{{.BasePath}}new/" class="btn-primary mt-3">{{.T "admin.button.add_model" "+ Add %s" .Singular}}</a>{{end}}
+      {{if .SearchQuery}}
+      <p class="empty-state-title">{{.T "admin.list.empty_no_match" "No %s match “%s”." .Plural .SearchQuery}}</p>
+      <a href="{{.ClearSearchHref}}" class="btn-secondary mt-3">{{.T "admin.list.clear_search" "Clear search"}}</a>
+      {{else if .Criteria}}
+      <p class="empty-state-title">{{.T "admin.list.empty_no_filter_match" "No %s match the selected filters." .Plural}}</p>
+      <a href="{{.ClearFiltersHref}}" class="btn-secondary mt-3">{{.T "admin.list.clear_filters" "Clear filters"}}</a>
+      {{else}}
+      <p class="empty-state-title">{{.T "admin.list.empty_title" "No %s yet." .Plural}}</p>
+      <p class="empty-state-body">{{.T "admin.list.empty_first" "Add the first %s to see it here." .Singular}}</p>
+      <a href="{{.BasePath}}new/" class="btn-primary mt-3">{{.T "admin.button.add_model" "+ Add %s" .Singular}}</a>
+      {{end}}
     </div>
     {{end}}
   </div>

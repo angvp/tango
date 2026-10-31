@@ -21,7 +21,7 @@ func TestDashboardUsesNamedComponentsForRepeatedChains(t *testing.T) {
 			t.Errorf("dashboard markup carries %q instead of a named component", banned)
 		}
 	}
-	for _, want := range []string{"row-list", "hint-text", "status-dot-success"} {
+	for _, want := range []string{"row-list", "hint-text", "badge-success"} {
 		if !hasClassToken(body, want) {
 			t.Errorf("dashboard markup lacks the %s class", want)
 		}
