@@ -178,6 +178,8 @@ return storage.Serve(ctx.ResponseWriter(), ctx.Request(), objects, doc.Key, stor
 
 `Serve` performs no authorization: the key is not a secret to rely on, so check access first. It answers `GET` and `HEAD` with a single `Range`, `If-None-Match`, `If-Modified-Since` and `If-Range`, `ETag`, `Last-Modified`, `Accept-Ranges` and `X-Content-Type-Options: nosniff`, always with the type sniffed at upload, never one the client declared.
 
+Every object response also carries `Content-Security-Policy: sandbox; default-src 'none'`. A browser that displays the object inline then treats it as a sandboxed document with no script, no subresources and no framing, so an uploaded file cannot run in your site's origin even if it is active content. The header is sent by default. To omit it for one route, set `ServeOptions.SkipSandboxPolicy` to `true`; the response is otherwise unchanged. Set it only for an object whose inline display needs the policy left out, and keep the route's authorization and `InlineTypes` in place.
+
 A download is an **attachment** by default. Inline display happens only for a type you list in `InlineTypes`, and HTML, SVG, XML and script types are always attachments, so a stored file cannot run in your site's origin. `Cache-Control` defaults to `private, no-store`; set `ServeOptions.CacheControl` to change it. A missing and an invalid key give the same `404`. `Serve` returns an error only for an unexpected store failure, without writing a response; return it from your View so the framework answers `500`.
 
 ## What tanGO does not do

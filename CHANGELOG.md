@@ -4,6 +4,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Changed
+
+- **`storage.Serve` sends a sandbox Content-Security-Policy on every object response.** Each GET and HEAD response for a stored object, including ranged and conditional responses, now carries `Content-Security-Policy: sandbox; default-src 'none'`. A browser that shows the object inline then runs it in an opaque origin with no script and no subresources, so an uploaded file cannot run script in your application's origin. Error responses from `Serve` (a missing key, a method other than GET or HEAD) carry no policy. **Upgrade note:** existing served objects now send this header, which changes how a browser displays an inline object, most visibly a PDF. Set `storage.ServeOptions{SkipSandboxPolicy: true}` on a route that must keep the previous behavior. Nothing else in the response changes. See the [uploads guide](docs/guides/uploads.md#delivering-a-file).
+
 ## [0.7.0] - 2026-10-25
 
 ### Added

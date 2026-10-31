@@ -16,6 +16,11 @@ import (
 // defaultCacheControl keeps an authorized download out of shared caches.
 const defaultCacheControl = "private, no-store"
 
+// sandboxPolicy is the Content-Security-Policy on every served object: a
+// browser that shows the object inline runs it in a unique opaque origin
+// with no script, no subresources and no framing of the application.
+const sandboxPolicy = "sandbox; default-src 'none'"
+
 // ServeOptions shape one response from Serve.
 type ServeOptions struct {
 	// Filename is the name offered to the browser in Content-Disposition. It
@@ -31,6 +36,11 @@ type ServeOptions struct {
 	InlineTypes []string
 	// CacheControl replaces the default "private, no-store".
 	CacheControl string
+	// SkipSandboxPolicy omits the default Content-Security-Policy that sandboxes
+	// a served object. Set it only when the object is trusted to run its own
+	// active content, or when a browser must render it outside the sandbox.
+	// Nothing else in the response changes.
+	SkipSandboxPolicy bool
 }
 
 // Serve writes the object at key to w for a GET or HEAD request. The host
@@ -90,7 +100,7 @@ func Serve(w http.ResponseWriter, r *http.Request, store Store, key string, opts
 	if errors.Is(err, ErrNotFound) {
 		// Deleted between Stat and Open: answer as if it never existed, with
 		// none of the object's headers.
-		for _, name := range []string{"Content-Length", "Content-Disposition", "Content-Type", "ETag", "Last-Modified", "Accept-Ranges"} {
+		for _, name := range []string{"Content-Length", "Content-Disposition", "Content-Type", "ETag", "Last-Modified", "Accept-Ranges", "Content-Security-Policy"} {
 			w.Header().Del(name)
 		}
 		writeError(w, http.StatusNotFound, "not found")
@@ -113,6 +123,9 @@ func setObjectHeaders(h http.Header, info Info, opts ServeOptions) {
 	}
 	h.Set("Content-Type", contentType)
 	h.Set("X-Content-Type-Options", "nosniff")
+	if !opts.SkipSandboxPolicy {
+		h.Set("Content-Security-Policy", sandboxPolicy)
+	}
 	h.Set("Accept-Ranges", "bytes")
 	h.Set("ETag", info.ETag)
 	h.Set("Last-Modified", info.ModTime.UTC().Format(http.TimeFormat))
