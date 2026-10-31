@@ -38,6 +38,33 @@ jobs:
           lycheeVersion: v0.24.2
           args: --offline --include-fragments --no-progress './**/*.md'
 
+  # The admin stylesheet is generated, not hand-written: admin/assets/admin.css
+  # must be what the pinned Tailwind CLI produces from admin/tailwind. The CLI is
+  # the standalone v3.4.19 binary. It is checked against the release's published
+  # SHA-256 before it is made executable, and a mismatch fails the job.
+  admin-css:
+    name: admin stylesheet freshness
+    runs-on: ubuntu-latest
+    env:
+      TAILWIND_VERSION: v3.4.19
+      TAILWIND_LINUX_X64_SHA256: 4af3198c015616ea7d6617974ec3d70d987ecc00c1ca8463b0a30fd65cc7c06e
+    steps:
+      - uses: actions/checkout@v7
+      - name: fetch the pinned Tailwind CLI
+        run: |
+          set -eu
+          dir="$RUNNER_TEMP/tailwind"
+          mkdir -p "$dir"
+          curl -sSfL -o "$dir/tailwindcss" \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          if ! echo "${TAILWIND_LINUX_X64_SHA256}  $dir/tailwindcss" | sha256sum -c -; then
+            echo "tailwindcss does not match the ${TAILWIND_VERSION} release checksum; refusing to run it" >&2
+            exit 1
+          fi
+          chmod +x "$dir/tailwindcss"
+      - name: admin stylesheet matches its sources
+        run: scripts/admin-css.sh "$RUNNER_TEMP/tailwind/tailwindcss" --check
+
   # cache/redis and cache/memcache are their own Go modules, so the
   # test job's ./... skips them. Each runs the cachetest conformance suite
   # against the pinned server versions it claims to support.
@@ -91,6 +118,30 @@ jobs:
         run: |
           go vet ./...
           go test -count=1 ./...
+
+  # browsersmoke is its own Go module, so the test job's ./... skips it. It loads
+  # the admin, accounts and Swagger UI pages in the runner's Chrome under their
+  # Content-Security-Policy and fails on any violation. TANGO_REQUIRE_BROWSER
+  # makes a missing browser a failure, not a skip. The chromedp version is pinned
+  # in browsersmoke/go.mod; the Chrome build is whatever the runner image ships,
+  # so the job records it.
+  browser-smoke:
+    name: browser CSP smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+      - name: record the browser version
+        run: google-chrome --version
+      - name: go test browsersmoke
+        working-directory: browsersmoke
+        env:
+          TANGO_REQUIRE_BROWSER: "1"
+        run: |
+          go vet ./...
+          go test -count=1 -v ./...
 
   test:
     name: test (${{ matrix.dialect }})
