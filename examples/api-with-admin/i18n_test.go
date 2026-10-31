@@ -277,10 +277,12 @@ func unwalkedKey(key string) bool {
 	// Exact keys: a prefix would exempt keys added later without anyone
 	// deciding they are unreachable. The pending keys need a migration the
 	// example never has; the combined and empty-model states need data the
-	// example does not seed.
+	// example does not seed. The delete refusal needs a delete the store
+	// cannot cascade; this example's store cascades, so deleting an author
+	// that a post names removes both rows instead of refusing.
 	for _, exact := range []string{
 		"admin.dashboard.status.pending", "admin.dashboard.status.pending_one", "admin.dashboard.status.pending_many",
-		"admin.list.empty_title", "admin.list.empty_no_match_filtered",
+		"admin.delete.refused", "admin.list.empty_title", "admin.list.empty_no_match_filtered",
 	} {
 		if key == exact {
 			return true
