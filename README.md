@@ -98,6 +98,7 @@ curl http://localhost:8000/greetings/World/
   - [`board`](examples/board): the tutorial's finished application, deployable as a container.
 - **[Versioning and compatibility](docs/compatibility.md)** — what each release promises not to break, deprecations, and the [changelog](CHANGELOG.md).
 - **[Limitations](docs/limitations.md)** — non-goals, security boundaries, and dialect differences.
+- **[Upgrading](docs/upgrading.md)** — what a host application changes for the next release.
 
 ## Contributing
 

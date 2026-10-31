@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+Host upgrade notes for the next release are in [docs/upgrading.md](docs/upgrading.md).
+
 ### Added
 
 - **Security headers and a typed Content-Security-Policy.** `tango.SecurityHeaders` is opt-in middleware that sets a Content-Security-Policy and the companion headers `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options`, and sets `Strict-Transport-Security` over TLS when `tango.WithHSTS` is given. Installed with no options it applies the strict baseline, `tango.StrictCSP()`. A policy is a `tango.CSP` built from `tango.Source` values (`Self`, `None`, `Host`, `Scheme`, `Data`, `Blob`, `NonceSource`, and `UnsafeInlineStyle` for `style-src`), so there is no raw-string policy. Installs at several tiers (global, group, route, admin) compose as the guide describes: the innermost install's policy is the one sent. `tango.CSPNonce` and `tango.NonceAttr` give a template the request's nonce. `admin.ContentSecurityPolicy()` is the policy the admin's pages satisfy, composed with `admin.WithMiddleware`. `swaggerui.WithContentSecurityPolicy` serves the Swagger UI page under an application's policy, and `swaggerui.New` takes these options, so a call with no arguments is unchanged. The new API has no effect until an application installs it. See the [content security policy guide](docs/guides/content-security-policy.md).
