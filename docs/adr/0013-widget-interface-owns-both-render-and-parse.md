@@ -1,5 +1,7 @@
 # Widget interface owns both render and parse, not render-only
 
+**Amendment:** `Widget`'s methods now take the request's `context.Context` as their first argument: `Render(ctx, FieldContext)` and `Parse(ctx, FieldContext, FieldValues, reflect.Value)`. A widget translates its own messages through that context. The signature in the code block below is the original one. The record of the admin redesign that made this change is kept in the project's planning records rather than in this directory, so see the Unreleased entry in the [CHANGELOG](../../CHANGELOG.md#unreleased).
+
 Admin needed a contract for customizing how one admin form field looks and behaves. The simplest option was render-only — a `Widget` only produces HTML, while parsing the submitted value stays on the existing generic, Go-kind-driven `setFieldFromString`. We rejected that in favor of giving `Widget` both responsibilities:
 
 ```go

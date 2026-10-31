@@ -1,5 +1,7 @@
 # Admin widgets extend through optional interfaces, and admin owns one derived preview route
 
+**Amendment:** `Render` and `Parse` now receive the request's `context.Context` as their first argument, so the sentence below that says `Parse` receives no request context, and the rejected alternative of passing a context to `Parse`, no longer hold. The change is in the Unreleased entry of the [CHANGELOG](../../CHANGELOG.md#unreleased); the preview route decision is unchanged.
+
 A widget is the admin's seam for one field's control, and M50 needed two things a `Widget` could not provide without breaking every existing widget: a validation message that appears beside its own field, and a preview of a field's submitted text. Both are added as optional interfaces, and the `Widget` interface itself does not change.
 
 A `Parse` may return `admin.FieldError{Message}` directly or inside an `errors.Join`. Admin extracts every such error, renders it beside the field it names with `aria-invalid="true"` and an `aria-describedby` reference, and keeps any other error as a form-level message as before. A preview is a `PreviewWidget`, a narrow interface with one method, `Preview(ctx, source)`. Admin type-asserts a field's widget for it. Only the Markdown widget built with a callback implements it, so a widget without one has no preview and no route.

@@ -18,7 +18,7 @@ New records take the next free number here. This directory is the single, public
 | [0010](0010-cascade-delete-is-application-level-not-a-db-constraint.md) | Cascade delete happens in `Store.Delete`, not via the database's `ON DELETE CASCADE` | Accepted |
 | [0011](0011-fk-target-validated-after-registration-not-at-register-time.md) | A foreign key's target model is validated after every app registers, not when the referencing model registers | Accepted |
 | [0012](0012-fk-referential-integrity-check-is-a-non-transactional-preflight.md) | FK referential-integrity check is a non-transactional preflight, and treats zero as unset | Accepted; amended by 0038 |
-| [0013](0013-widget-interface-owns-both-render-and-parse.md) | Widget interface owns both render and parse, not render-only | Accepted |
+| [0013](0013-widget-interface-owns-both-render-and-parse.md) | Widget interface owns both render and parse, not render-only | Accepted; amended by the `admin.Widget` request-context change ([CHANGELOG, Unreleased](../../CHANGELOG.md#unreleased)) |
 | [0014](0014-admin-extensibility-ships-best-effort-not-stable.md) | Admin extensibility ships best-effort, not as a stable contract | Accepted |
 | [0015](0015-context-html-buffers-before-writing.md) | `Context.HTML` buffers a template render before writing, and admin's own renderer is unified onto it | Accepted |
 | [0016](0016-quick-create-stays-small-accepts-unsaved-data-loss.md) | Quick-create accepts unsaved-parent-form data loss and ships a narrow, internal preselect convention rather than a general feature | Accepted |
@@ -62,7 +62,7 @@ New records take the next free number here. This directory is the single, public
 | [0054](0054-cloud-storage-adapters-are-separate-go-modules.md) | Cloud storage adapters are separate Go modules | Accepted |
 | [0055](0055-the-cache-is-an-explicit-bytes-store-with-a-fail-open-fetchjson.md) | The cache is an explicit bytes store with a fail-open `FetchJSON` | Accepted |
 | [0056](0056-remote-cache-adapters-are-separate-go-modules-with-pinned-clients.md) | Remote cache adapters are separate Go modules with pinned clients | Accepted |
-| [0057](0057-admin-widgets-extend-through-optional-interfaces-and-one-derived-preview-route.md) | Admin widgets extend through optional interfaces, and admin owns one derived preview route | Accepted |
+| [0057](0057-admin-widgets-extend-through-optional-interfaces-and-one-derived-preview-route.md) | Admin widgets extend through optional interfaces, and admin owns one derived preview route | Accepted; amended by the `admin.Widget` request-context change ([CHANGELOG, Unreleased](../../CHANGELOG.md#unreleased)) |
 | [0058](0058-markdown-rendering-and-sanitization-belong-to-the-host-and-previews-are-sandboxed.md) | Markdown rendering and sanitization belong to the host, and the admin preview is a sandboxed document | Accepted |
 | [0059](0059-json-fields-are-declared-by-tag-stored-as-exact-text-and-validated-when-the-model-is-written.md) | JSON fields are declared by tag, stored as exact text and validated when the model is written | Accepted |
 | [0061](0061-activity-numbers-have-a-read-side-separate-from-recorder-and-an-opt-in-bounded-window.md) | Activity numbers have a read side separate from Recorder, and an opt-in bounded in-memory Window | Accepted |
