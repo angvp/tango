@@ -13,8 +13,9 @@ import (
 // charge.
 const themeCookieName = "tango_admin_theme"
 
-// themeCookieMaxAge keeps an explicit choice for one year, in seconds.
-const themeCookieMaxAge = 365 * 24 * 60 * 60
+// adminCookieMaxAge keeps an explicit theme or density choice for one year, in
+// seconds.
+const adminCookieMaxAge = 365 * 24 * 60 * 60
 
 const (
 	themeLight  = "light"
@@ -81,11 +82,17 @@ func themeFromRequest(r *http.Request) string {
 }
 
 func setThemeCookie(w http.ResponseWriter, r *http.Request, theme string) {
+	setAdminCookie(w, r, themeCookieName, theme)
+}
+
+// setAdminCookie stores an explicit admin choice for one year, scoped to the
+// admin and readable by the server only.
+func setAdminCookie(w http.ResponseWriter, r *http.Request, name, value string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     themeCookieName,
-		Value:    theme,
-		Path:     "/admin/",
-		MaxAge:   themeCookieMaxAge,
+		Name:     name,
+		Value:    value,
+		Path:     adminRootPath,
+		MaxAge:   adminCookieMaxAge,
 		HttpOnly: true,
 		Secure:   security.IsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
@@ -96,7 +103,7 @@ func clearThemeCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     themeCookieName,
 		Value:    "",
-		Path:     "/admin/",
+		Path:     adminRootPath,
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
