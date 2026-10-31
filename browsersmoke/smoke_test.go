@@ -565,6 +565,123 @@ func (s *smoke) adminNavToggle() {
 	}))
 }
 
+// tabGroups names the changelist region that holds the focused element, or
+// "body" when focus has fallen to the page.
+const tabGroups = `(function () {
+	var el = document.activeElement;
+	if (!el || el === document.body) return 'body';
+	var regions = [
+		['nav', '#sidebar'],
+		['search', '#list-search'],
+		['filter', 'select[name="filter_pinned"]'],
+		['bulk', '[data-bulk-bar]'],
+		['row', '.table-admin tbody']
+	];
+	for (var i = 0; i < regions.length; i++) {
+		if (el.closest(regions[i][1])) return regions[i][0];
+	}
+	return 'other';
+})()`
+
+const activeDescription = `document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : ''`
+
+// tabPresses bounds the Tab walk through the changelist. It covers the
+// navigation, the toolbar and the first rows.
+const tabPresses = 40
+
+// press sends one key to the focused element and fails the run if the browser
+// refuses it.
+func (s *smoke) press(key string, opts ...chromedp.KeyOption) {
+	s.t.Helper()
+	if err := s.do(chromedp.KeyEvent(key, opts...)); err != nil {
+		s.t.Fatalf("press %q: %v", key, err)
+	}
+}
+
+// selectFirstRow checks the first row's checkbox by script, so the bulk bar
+// appears and the focus starting point stays on the page's first control.
+const selectFirstRow = `(document.querySelector('.table-admin tbody input[data-bulk-pk]').click(), true)`
+
+// changelistTabOrder walks Tab through the changelist at desktop width. Focus
+// must reach the navigation, the search, the filter, the bulk bar and the row
+// controls in that order, and must never fall to the page body.
+func (s *smoke) changelistTabOrder() {
+	s.t.Helper()
+	s.setWidth(1440, 900)
+	s.visit("changelist tab order", "/admin/smoke_note/")
+	s.check(s.eval(selectFirstRow), "the first row's checkbox could not be selected")
+
+	var sequence []string
+	first := map[string]int{}
+	for i := 0; i < tabPresses; i++ {
+		s.press(kb.Tab)
+		group := s.evalString(tabGroups)
+		sequence = append(sequence, group)
+		if _, seen := first[group]; !seen {
+			first[group] = i
+		}
+	}
+	if _, lost := first["body"]; lost {
+		s.t.Errorf("focus fell to the page body during Tab: %v", sequence)
+	}
+	last := -1
+	for _, group := range []string{"nav", "search", "filter", "bulk", "row"} {
+		at, reached := first[group]
+		if !reached {
+			s.t.Errorf("Tab never reached the %s region: %v", group, sequence)
+			continue
+		}
+		s.check(at > last, "the %s region is reached before the region ahead of it: %v", group, sequence)
+		last = at
+	}
+}
+
+// bulkDialogKeyboard opens the bulk dialog from its trigger with Enter, then
+// closes it with Escape. Focus must enter the dialog, and the close must
+// return focus to the trigger. Nothing is deleted.
+func (s *smoke) bulkDialogKeyboard() {
+	s.t.Helper()
+	s.setWidth(1440, 900)
+	s.visit("bulk dialog keyboard", "/admin/smoke_note/")
+	s.check(s.eval(selectFirstRow), "the first row's checkbox could not be selected")
+	s.check(s.eval(`(document.querySelector('[data-bulk-open]').focus(), true)`), "the bulk trigger could not take focus")
+	s.run("bulk open from keyboard", chromedp.KeyEvent(kb.Enter))
+	const dialog = `document.querySelector('[data-bulk-dialog]')`
+	s.check(s.eval(dialog+`.open`), "Enter on the bulk trigger did not open the dialog")
+	s.check(s.eval(dialog+`.contains(document.activeElement)`), "focus is not inside the bulk dialog after it opened; focus is on %s", s.evalString(activeDescription))
+	s.run("bulk close with Escape", chromedp.KeyEvent(kb.Escape))
+	s.check(!s.eval(dialog+`.open`), "Escape did not close the bulk dialog")
+	s.check(s.eval(`document.activeElement === document.querySelector('[data-bulk-open]')`), "focus did not return to the bulk trigger after Escape; focus is on %s", s.evalString(activeDescription))
+}
+
+// phoneDrawerKeyboard opens the phone drawer from the menu button with Enter
+// and walks Tab around it. Focus must stay inside the drawer, Shift+Tab from
+// its first control must wrap to its last, and Escape must close it and return
+// focus to the menu button.
+func (s *smoke) phoneDrawerKeyboard() {
+	s.t.Helper()
+	s.setWidth(mobileWidth, mobileHeight)
+	s.visit("phone drawer keyboard", "/admin/smoke_note/")
+	s.check(s.eval(`(document.querySelector('.menu-btn').focus(), true)`), "the menu button could not take focus")
+	s.run("drawer open from keyboard", chromedp.KeyEvent(kb.Enter))
+	s.expectOpen()
+
+	const controls = `Array.prototype.slice.call(document.getElementById('sidebar').querySelectorAll('a[href], button:not([disabled]), input:not([disabled])'))`
+	count := atoi(s.evalString(`String(` + controls + `.length)`))
+	for i := 0; i < count+2; i++ {
+		s.press(kb.Tab)
+		s.check(s.eval(`document.getElementById('sidebar').contains(document.activeElement)`), "Tab press %d left the drawer; focus is on %s", i+1, s.evalString(activeDescription))
+	}
+
+	s.check(s.eval(`(`+controls+`[0].focus(), true)`), "the drawer has no first control to focus")
+	s.press(kb.Tab, chromedp.KeyModifiers(chromedp.ModifierShift))
+	s.check(s.eval(`(function () { var c = `+controls+`; return document.activeElement === c[c.length - 1]; })()`), "Shift+Tab from the first drawer control did not wrap to the last; focus is on %s", s.evalString(activeDescription))
+
+	s.run("drawer close with Escape", chromedp.KeyEvent(kb.Escape))
+	s.expectClosed("Escape after Tab")
+	s.setWidth(mobileWidth, mobileHeight)
+}
+
 // phoneChangelist checks the changelist at the phone width: the page does not
 // scroll sideways, the table does not scroll inside its wrapper, and every
 // row's Edit and Delete link sits inside the viewport.
@@ -1033,6 +1150,9 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.bulkBarFollowsSelection()
 	s.bulkListCapAndPhoneSelectAll()
 	s.adminNavToggle()
+	s.changelistTabOrder()
+	s.bulkDialogKeyboard()
+	s.phoneDrawerKeyboard()
 	s.visit("admin change form", "/admin/smoke_note/1/")
 	s.inactivePanelsHidden()
 	s.adminMarkdownPreview()
