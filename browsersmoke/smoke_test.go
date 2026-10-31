@@ -797,12 +797,17 @@ func (s *smoke) bulkListCapAndPhoneSelectAll() {
 	s.check(listed == "11", "the dialog lists %s items for %s rows, want the cap of %s and one more line", listed, rows, limit)
 	more := strings.ReplaceAll(s.evalString(meta+`.getAttribute('data-msg-more-many') || ''`), "{count}", fmt.Sprint(atoi(rows)-atoi(limit)))
 	s.check(s.evalString(`document.querySelector('[data-bulk-list] li:last-child').textContent`) == more, "the last line of the dialog is not %q", more)
+	wantTitleMany := strings.ReplaceAll(s.evalString(meta+`.getAttribute('data-msg-title-many') || ''`), "{count}", rows)
+	s.check(s.evalString(`document.querySelector('[data-bulk-title]').textContent`) == wantTitleMany, "the dialog title is not the plural count copy %q", wantTitleMany)
 	s.run("bulk cancel after cap", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
 
 	s.setWidth(390, 844)
 	const phoneAll = "[data-bulk-bar] label input[data-bulk-select-all]"
 	s.run("bulk phone select all clears the page", chromedp.Click(phoneAll, chromedp.NodeVisible))
 	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-pk]:checked').length)`) == "0", "the phone select-all control did not clear every row from a full selection")
+	none := s.evalString(meta + `.getAttribute('data-msg-none') || ''`)
+	s.check(s.evalString(`document.querySelector('[data-bulk-count]').textContent`) == none, "after clearing every row the count slot did not return to the reason %q", none)
+	s.check(s.evalString("String("+open+".disabled)") == "true", "Delete selected is enabled after clearing every row")
 	s.run("bulk phone select all picks the page", chromedp.Click(phoneAll, chromedp.NodeVisible))
 	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-pk]:not(:checked)').length)`) == "0", "the phone select-all control did not pick every row")
 	s.check(s.evalString(`String(document.querySelector('[data-bulk-open]').disabled)`) == "false", "Delete selected is disabled after the phone select-all")
