@@ -2,6 +2,8 @@
 
 Status: Accepted. Implemented on the unreleased v0.8.0 line, together with the security headers work. Not released.
 
+Superseded in part by [the compatibility contract](../compatibility.md): the Consequences statement that the admin's CSS and class names stay outside the Covered API still holds, except for the semantic colour token utilities that `docs/compatibility.md` lists as covered under Colour. Component class names, raw palette colours, palette values and every token name not listed there stay outside the Covered API. `docs/compatibility.md` is the authoritative contract.
+
 Builds on [0062](0062-admin-theme-is-semantic-colour-tokens-selected-by-system-preference-with-a-cookie-override.md), and revises its colour values.
 
 ## Context
