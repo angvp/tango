@@ -13,6 +13,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24
 	github.com/traefik/yaegi v0.16.1
 	golang.org/x/crypto v0.58.0
+	golang.org/x/net v0.61.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
 	modernc.org/sqlite v1.61.0
