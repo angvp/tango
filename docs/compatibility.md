@@ -1,6 +1,7 @@
 # Versioning and compatibility
 
 This page says what a tanGO release promises not to break, and how a change that does break something is announced. It applies from v0.1.0 on. Upgrade notes for the next release are in [upgrading](upgrading.md).
+
 ## What a version number means
 
 - **Patch releases (`0.1.x`)** never intentionally break the Covered API. Upgrading within a minor version is always safe.
