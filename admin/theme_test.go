@@ -107,6 +107,7 @@ func TestDeclaredTokenPairsMeetWCAGInBothThemes(t *testing.T) {
 var darkPairs = []pair{
 	{"selection-bg", "surface", 3, "selection fill against cards"},
 	{"selection-bg", "surface-sunken", 3, "selection fill against the page"},
+	{"selection-bg", "surface-hover", 3, "selection fill against hovered rows"},
 }
 
 func TestDarkSelectionStandsOutFromDarkSurfaces(t *testing.T) {
