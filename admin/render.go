@@ -19,7 +19,6 @@ var listTemplate = cloneWithContent(`{{define "content"}}
   <a href="{{.BasePath}}new/" class="btn-primary">{{.T "admin.button.add_model" "+ Add %s" .Singular}}</a>
 </header>
 <div class="content-body">
-  {{if .Deleted}}<div class="alert-success" role="status">{{if eq .Deleted 1}}{{.T "admin.bulk.outcome_one" "1 %s deleted" .Singular}}{{else}}{{.T "admin.bulk.outcome_many" "%d %s deleted" .Deleted .Plural}}{{end}}</div>{{end}}
   <div class="card changelist-card">
     <div class="card-header">
       <form method="get" class="flex flex-wrap items-end gap-3 w-full">
@@ -212,9 +211,6 @@ type listPageData struct {
 	NextHref    string
 	BulkDelete  bool
 	ReturnTo    string
-	// Deleted is the row count of a bulk delete the previous request
-	// completed, or 0 when there is none to announce.
-	Deleted int
 }
 
 type formField struct {

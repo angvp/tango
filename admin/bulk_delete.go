@@ -28,7 +28,6 @@ const (
 	bulkPKField       = "pk"
 	bulkCountField    = "count"
 	bulkReturnToField = "return_to"
-	bulkDeletedParam  = "deleted"
 )
 
 var errBulkKeyMissing = errors.New("tango admin: a selected row does not exist")
@@ -259,8 +258,20 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration, nav []navIt
 		}
 		ctx.Logger().Info(EventBulkDelete, "model", meta.Name, "selected_count", len(keys), "username", username)
 
-		target := bulkReturnURL(form.Get(bulkReturnToField), basePath, registration)
-		target.Set(bulkDeletedParam, strconv.Itoa(len(keys)))
-		return ctx.Redirect(basePath + "?" + target.Encode())
+		if len(keys) == 1 {
+			if err := setFlash(ctx.ResponseWriter(), ctx.Request(), sessionTokenOf(ctx.Request()), "admin.bulk.outcome_one", displayNoun(meta, registration.Options)); err != nil {
+				return err
+			}
+		} else {
+			if err := setFlash(ctx.ResponseWriter(), ctx.Request(), sessionTokenOf(ctx.Request()), "admin.bulk.outcome_many", strconv.Itoa(len(keys)), pluralNoun(meta, registration.Options)); err != nil {
+				return err
+			}
+		}
+
+		location := basePath
+		if query := bulkReturnURL(form.Get(bulkReturnToField), basePath, registration).Encode(); query != "" {
+			location += "?" + query
+		}
+		return ctx.Redirect(location)
 	}
 }

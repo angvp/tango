@@ -7,6 +7,8 @@ import "context"
 type signedIn struct {
 	Username  string
 	CSRFToken string
+	// Notice is the outcome the status region shows on this page, or nil.
+	Notice *statusNotice
 }
 
 type signedInKey struct{}

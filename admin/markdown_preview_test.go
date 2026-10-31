@@ -342,7 +342,7 @@ func TestPreviewWidgetRendersHiddenControlsAndASandboxedFrame(t *testing.T) {
 		`<button type="button" role="tab" id="field-Body-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-Body-panel-preview" tabindex="-1" data-tab="preview">Preview</button>`,
 		`<div id="field-Body-panel-write" role="tabpanel" aria-labelledby="field-Body-tab-write" class="widget-panel">`,
 		`<div id="field-Body-panel-preview" role="tabpanel" aria-labelledby="field-Body-tab-preview" class="widget-panel" hidden>`,
-		`<p id="field-Body-preview-status" role="status"`,
+		`<p id="field-Body-preview-status" aria-live="polite"`,
 		`<iframe id="field-Body-preview" title="Preview of Body" sandbox="" referrerpolicy="no-referrer"`,
 	} {
 		if !strings.Contains(widget, want) {

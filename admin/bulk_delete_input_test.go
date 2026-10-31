@@ -161,30 +161,32 @@ func TestBulkDeleteLogsOneEventWithoutKeysOrValues(t *testing.T) {
 	}
 }
 
+// The outcome travels in the flash cookie, not the redirect, so the expected
+// targets carry no deleted count. The validated return_to is unchanged.
 func TestBulkDeleteRedirectKeepsAValidatedReturnTo(t *testing.T) {
 	cases := []struct {
 		name     string
 		returnTo string
 		want     string
 	}{
-		{"none", "", "/admin/crud_product/?deleted=2"},
-		{"search and page", "/admin/crud_product/?q=a%26b&page=3", "/admin/crud_product/?deleted=2&page=3&q=a%26b"},
-		{"other model", "/admin/other/?page=2", "/admin/crud_product/?deleted=2"},
-		{"absolute url", "https://evil.example/admin/crud_product/", "/admin/crud_product/?deleted=2"},
-		{"scheme relative", "//evil.example/admin/crud_product/", "/admin/crud_product/?deleted=2"},
-		{"unknown parameter", "/admin/crud_product/?next=http://evil.example", "/admin/crud_product/?deleted=2"},
-		{"repeated page", "/admin/crud_product/?page=1&page=2", "/admin/crud_product/?deleted=2"},
-		{"zero page", "/admin/crud_product/?page=0", "/admin/crud_product/?deleted=2"},
-		{"non numeric page", "/admin/crud_product/?page=x", "/admin/crud_product/?deleted=2"},
-		{"preexisting deleted", "/admin/crud_product/?deleted=9", "/admin/crud_product/?deleted=2"},
-		{"fragment", "/admin/crud_product/?page=2#x", "/admin/crud_product/?deleted=2"},
-		{"empty fragment", "/admin/crud_product/?page=2#", "/admin/crud_product/?deleted=2"},
-		{"backslash", "/admin/crud_product/?q=a\\b", "/admin/crud_product/?deleted=2"},
-		{"control character", "/admin/crud_product/?q=a\x01b", "/admin/crud_product/?deleted=2"},
-		{"signed page", "/admin/crud_product/?page=%2B2", "/admin/crud_product/?deleted=2"},
-		{"malformed query", "/admin/crud_product/?q=%zz", "/admin/crud_product/?deleted=2"},
-		{"encoded round trip", "/admin/crud_product/?q=a%2Bb+%23%25%C3%A9", "/admin/crud_product/?deleted=2&q=a%2Bb+%23%25%C3%A9"},
-		{"extra path", "/admin/crud_product/new/", "/admin/crud_product/?deleted=2"},
+		{"none", "", "/admin/crud_product/"},
+		{"search and page", "/admin/crud_product/?q=a%26b&page=3", "/admin/crud_product/?page=3&q=a%26b"},
+		{"other model", "/admin/other/?page=2", "/admin/crud_product/"},
+		{"absolute url", "https://evil.example/admin/crud_product/", "/admin/crud_product/"},
+		{"scheme relative", "//evil.example/admin/crud_product/", "/admin/crud_product/"},
+		{"unknown parameter", "/admin/crud_product/?next=http://evil.example", "/admin/crud_product/"},
+		{"repeated page", "/admin/crud_product/?page=1&page=2", "/admin/crud_product/"},
+		{"zero page", "/admin/crud_product/?page=0", "/admin/crud_product/"},
+		{"non numeric page", "/admin/crud_product/?page=x", "/admin/crud_product/"},
+		{"preexisting deleted", "/admin/crud_product/?deleted=9", "/admin/crud_product/"},
+		{"fragment", "/admin/crud_product/?page=2#x", "/admin/crud_product/"},
+		{"empty fragment", "/admin/crud_product/?page=2#", "/admin/crud_product/"},
+		{"backslash", "/admin/crud_product/?q=a\\b", "/admin/crud_product/"},
+		{"control character", "/admin/crud_product/?q=a\x01b", "/admin/crud_product/"},
+		{"signed page", "/admin/crud_product/?page=%2B2", "/admin/crud_product/"},
+		{"malformed query", "/admin/crud_product/?q=%zz", "/admin/crud_product/"},
+		{"encoded round trip", "/admin/crud_product/?q=a%2Bb+%23%25%C3%A9", "/admin/crud_product/?q=a%2Bb+%23%25%C3%A9"},
+		{"extra path", "/admin/crud_product/new/", "/admin/crud_product/"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -233,10 +235,15 @@ func TestBulkDeleteReturnToKeepsRegisteredFilters(t *testing.T) {
 		t.Errorf("path = %q", got.Path)
 	}
 	query := got.Query()
-	for key, want := range map[string]string{"filter_published": "true", "q": "T", "page": "1", "deleted": "2"} {
+	for key, want := range map[string]string{"filter_published": "true", "q": "T", "page": "1"} {
 		if query.Get(key) != want {
 			t.Errorf("%s = %q, want %q (Location %q)", key, query.Get(key), want, got.String())
 		}
+	}
+	// The outcome travels in the flash cookie, so the redirect carries no
+	// deleted count; the registered filters and search still round-trip.
+	if _, carried := query["deleted"]; carried {
+		t.Errorf("redirect carries a deleted count: %q", got.String())
 	}
 }
 

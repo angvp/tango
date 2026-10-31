@@ -108,6 +108,9 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				})
 			}
 
+			if err := setFlash(ctx.ResponseWriter(), ctx.Request(), sessionTokenOf(ctx.Request()), "admin.outcome.saved", displayNoun(meta, registration.Options)); err != nil {
+				return err
+			}
 			return ctx.Redirect(basePath)
 
 		default:

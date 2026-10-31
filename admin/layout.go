@@ -64,6 +64,18 @@ func (c chrome) SignedIn() *signedIn {
 	return signedInFrom(c.ctx)
 }
 
+// Notice is the outcome the status region shows, or nil when the page has none
+// or was not served inside a session.
+func (c chrome) Notice() *statusNotice {
+	if c.ctx == nil {
+		return nil
+	}
+	if who := signedInFrom(c.ctx); who != nil {
+		return who.Notice
+	}
+	return nil
+}
+
 // Lang is the registered locale of the catalog the request selected, or "en"
 // when none was, for the page's lang attribute.
 func (c chrome) Lang() string {
@@ -134,6 +146,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
   </div>
 </aside>
 <main id="main" class="content">
+<div id="admin-status" class="status-region" role="status">{{with .Notice}}<div class="alert-success status-message"><p class="status-text">{{.Text}}</p><form method="post" action="/admin/messages/dismiss/" class="status-dismiss"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="next" value="{{.Next}}"><button type="submit" class="btn-secondary">{{.Dismiss}}</button></form></div>{{end}}</div>
 {{block "content" .}}{{end}}
 </main>
 </div>

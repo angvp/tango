@@ -73,6 +73,9 @@ func deleteView(store *db.Store, models *model.Registry, adminReg *adminregistry
 				}
 				return err
 			}
+			if err := setFlash(ctx.ResponseWriter(), ctx.Request(), sessionTokenOf(ctx.Request()), "admin.outcome.deleted", displayNoun(meta, registration.Options)); err != nil {
+				return err
+			}
 
 			return ctx.Redirect(basePath)
 

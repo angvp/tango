@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"reflect"
 	"strconv"
 
@@ -106,7 +105,6 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			NextHref:         pageHref(params, page+1),
 			BulkDelete:       registration.Options.BulkDelete,
 			ReturnTo:         basePath + pageHref(params, page),
-			Deleted:          bulkDeletedCount(ctx.Request().URL.Query()),
 		}
 
 		return render(ctx, http.StatusOK, listTemplate, data)
@@ -141,20 +139,6 @@ func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adm
 	}
 
 	return rows, nil
-}
-
-// bulkDeletedCount is the row count a bulk delete redirect announces: one
-// canonical positive integer no larger than a page, else 0 for no banner.
-func bulkDeletedCount(query url.Values) int {
-	values := query[bulkDeletedParam]
-	if len(values) != 1 {
-		return 0
-	}
-	n, err := strconv.Atoi(values[0])
-	if err != nil || n < 1 || n > pageSize || strconv.Itoa(n) != values[0] {
-		return 0
-	}
-	return n
 }
 
 func parsePage(raw string) int {

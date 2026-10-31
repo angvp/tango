@@ -161,13 +161,27 @@ func requireSession(store *db.Store, next tango.View) tango.View {
 			return forbidden(ctx)
 		}
 
+		// An outcome is shown on the page a GET renders after the redirect that
+		// set it. Only a GET consumes it: a POST renders no page the person reads.
+		who := signedIn{
+			Username:  user.Username,
+			CSRFToken: csrfTokenFromRequest(ctx.Request()),
+		}
+		if ctx.Request().Method == http.MethodGet {
+			if text := takeFlash(ctx.Context(), ctx.ResponseWriter(), ctx.Request(), token); text != "" {
+				who.Notice = &statusNotice{
+					Text:      text,
+					Dismiss:   i18n.T(ctx.Context(), "admin.status.dismiss", "Dismiss"),
+					Next:      ctx.Request().URL.RequestURI(),
+					CSRFToken: who.CSRFToken,
+				}
+			}
+		}
+
 		// The layout reads the account from the request context. The
 		// context's request is replaced in place because tango.Context has
 		// no setter and a handler owns its request.
-		*ctx.Request() = *ctx.Request().WithContext(withSignedIn(ctx.Context(), signedIn{
-			Username:  user.Username,
-			CSRFToken: csrfTokenFromRequest(ctx.Request()),
-		}))
+		*ctx.Request() = *ctx.Request().WithContext(withSignedIn(ctx.Context(), who))
 
 		return next(ctx)
 	}

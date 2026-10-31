@@ -69,6 +69,9 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 				})
 			}
 
+			if err := setFlash(ctx.ResponseWriter(), ctx.Request(), sessionTokenOf(ctx.Request()), "admin.outcome.created", displayNoun(meta, registration.Options)); err != nil {
+				return err
+			}
 			target := basePath
 			if next := ctx.Query("next"); next != "" {
 				target = safeAdminNext(next, basePath)

@@ -83,7 +83,7 @@ var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
 <p id="field-{{.Name}}-count" class="hint-small mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
 </div>
 <div id="field-{{.Name}}-panel-preview" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-preview" class="widget-panel" hidden>
-  <p id="field-{{.Name}}-preview-status" role="status" class="hint-small" data-markdown-status></p>
+  <p id="field-{{.Name}}-preview-status" aria-live="polite" class="hint-small" data-markdown-status></p>
   <iframe id="field-{{.Name}}-preview" title="{{.Text.T "admin.markdown.preview_title" "Preview of %s" .Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-line-strong bg-white"></iframe>
 </div>{{end}}`))
 

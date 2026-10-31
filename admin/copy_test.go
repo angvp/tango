@@ -11,19 +11,18 @@ import (
 	"github.com/angvp/tango/i18n/i18ntest"
 )
 
+// The outcome is a flash message, so the count wording is read from the page
+// after a real bulk delete, not from a query parameter.
 func TestBulkOutcomeReadsAsAPlainCount(t *testing.T) {
-	handler, _ := buildMessageBookAdmin(t)
-	for _, tt := range []struct{ query, want string }{
-		{"?deleted=3", "3 books deleted"},
-		{"?deleted=1", "1 book deleted"},
-	} {
-		body := doRequest(t, handler, http.MethodGet, messageBookBasePath+tt.query, nil).Body.String()
-		if !strings.Contains(body, tt.want) {
-			t.Fatalf("list %s lacks %q", tt.query, tt.want)
-		}
-		if strings.Contains(body, "rows") {
-			t.Fatalf("list %s still says rows", tt.query)
-		}
+	handler, sqlDB := buildMessageBookAdmin(t)
+	ids := []int64{seedMessageBook(t, sqlDB, "Alpha"), seedMessageBook(t, sqlDB, "Beta"), seedMessageBook(t, sqlDB, "Gamma")}
+	posted := signedRequest(handler, http.MethodPost, messageBookBasePath+"delete-selected/", testSessionToken, bulkForm(3, ids...))
+	list := signedRequest(handler, http.MethodGet, messageBookBasePath, testSessionToken, nil, flashSetBy(posted))
+	if !strings.Contains(list.Body.String(), "3 books deleted") {
+		t.Fatalf("list lacks %q", "3 books deleted")
+	}
+	if strings.Contains(list.Body.String(), "rows") {
+		t.Fatal("list still says rows")
 	}
 }
 

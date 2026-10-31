@@ -31,7 +31,7 @@ var jsonWidgetTemplate = template.Must(template.New("jsonWidget").Parse(
     <pre class="json-formatted" data-json-formatted></pre>
     <button type="button" class="btn-secondary" data-json-apply hidden>{{.Text.T "admin.json.apply" "Use this formatting"}}</button>
   </div>
-  <p data-json-status role="status"></p>
+  <p data-json-status aria-live="polite"></p>
   <script src="{{.ScriptURL}}" defer></script>
 </div>`))
 

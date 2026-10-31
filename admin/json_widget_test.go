@@ -72,7 +72,7 @@ func TestJSONWidgetRendersAPlainTextareaWithHooksAndNoInlineScript(t *testing.T)
 		`<div id="field-Body-panel-view" role="tabpanel" aria-labelledby="field-Body-tab-view" class="widget-panel" hidden>`,
 		`<pre class="json-formatted" data-json-formatted></pre>`,
 		`<button type="button" class="btn-secondary" data-json-apply hidden>Use this formatting</button>`,
-		`<p data-json-status role="status"></p>`,
+		`<p data-json-status aria-live="polite"></p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q in:\n%s", want, body)

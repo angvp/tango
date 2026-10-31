@@ -85,6 +85,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 			tango.Path(http.MethodPost, "/admin/login/", loginView(store, limiter, clientKey), hiddenPage),
 			tango.Path(http.MethodPost, "/admin/logout/", logoutView(store), tango.Name("logout"), hiddenPage),
 			tango.Path(http.MethodPost, "/admin/theme/", requireSession(store, themeView()), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/messages/dismiss/", requireSession(store, dismissView()), hiddenPage),
 			tango.Path(http.MethodPost, densityBasePath, requireSession(store, densityView()), hiddenPage),
 		}
 		routes = append(routes, assetRoutes()...)

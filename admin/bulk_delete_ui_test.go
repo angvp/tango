@@ -118,41 +118,18 @@ func TestBulkDeleteListClampsAPastTheEndPageInReturnTo(t *testing.T) {
 	}
 }
 
-func TestBulkDeleteBannerShowsOnlyForAValidCount(t *testing.T) {
+// The outcome is no longer read from a query parameter, so a deleted
+// parameter on the list URL announces nothing. The announcement itself is
+// covered by the flash tests.
+func TestBulkDeleteListIgnoresADeletedQueryParameter(t *testing.T) {
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	seedProduct(t, sqlDB, "Widget", 3)
-	banner := regexp.MustCompile(`role="status"`)
-
-	for query, want := range map[string]string{
-		"deleted=1":           "1 crud product deleted",
-		"deleted=2":           "2 crud products deleted",
-		"deleted=25":          "25 crud products deleted",
-		"deleted=0":           "",
-		"deleted=26":          "",
-		"deleted=-1":          "",
-		"deleted=abc":         "",
-		"deleted=02":          "",
-		"deleted=2&deleted=3": "",
-	} {
+	banner := regexp.MustCompile(`role="alert"|alert-success`)
+	for _, query := range []string{"deleted=1", "deleted=2", "deleted=25", "deleted=0"} {
 		body := doRequest(t, handler, http.MethodGet, crudBasePath+"?"+query, nil).Body.String()
-		if want == "" {
-			if banner.MatchString(body) {
-				t.Errorf("%s: banner shown", query)
-			}
-			continue
+		if banner.MatchString(body) {
+			t.Errorf("%s: an outcome banner was shown from the query", query)
 		}
-		if !strings.Contains(body, want) {
-			t.Errorf("%s: banner %q missing", query, want)
-		}
-	}
-	plain := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
-	if banner.MatchString(plain) {
-		t.Errorf("banner shown without a deleted parameter")
-	}
-	// The banner count is not carried into pagination or return_to links.
-	body := doRequest(t, handler, http.MethodGet, crudBasePath+"?deleted=2", nil).Body.String()
-	if strings.Contains(body, `return_to" value="`+crudBasePath+`?deleted`) {
-		t.Errorf("deleted leaked into return_to")
 	}
 }
 
