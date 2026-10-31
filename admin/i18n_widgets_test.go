@@ -154,20 +154,20 @@ func TestJSONWidgetTranslatesItsLabelsAndScriptMessages(t *testing.T) {
 func TestJSONFieldErrorTranslates(t *testing.T) {
 	i18ntest.Isolate(t)
 	i18n.RegisterCatalog("zz-json-err", map[string]string{
-		"admin.error.json_invalid": "JSON no válido",
-		"admin.error.json_syntax":  "JSON no válido: %s (en el carácter %d)",
+		"admin.error.json_invalid":  "JSON no válido",
+		"admin.error.json_position": "JSON no válido (en el carácter %d)",
 	})
 	handler := buildI18NNoteAdmin(t, admin.JSON(), resolveTo("zz-json-err"))
 	post := func(body string) string {
 		return doRequest(t, handler, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}, "Body": {body}}).Body.String()
 	}
-	if got := post(`{"a": }`); !strings.Contains(got, "JSON no válido: invalid character &#39;}&#39; looking for beginning of value (en el carácter 7)") {
+	if got := post(`{"a": }`); !strings.Contains(got, "JSON no válido (en el carácter 7)") {
 		t.Errorf("syntax error not translated:\n%s", got)
 	}
 
 	english := buildI18NNoteAdmin(t, admin.JSON(), nil)
 	got := doRequest(t, english, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}, "Body": {`{"a": }`}}).Body.String()
-	if !strings.Contains(got, "Invalid JSON: invalid character") || !strings.Contains(got, "(at character 7)") {
+	if !strings.Contains(got, "This is not valid JSON (problem at character 7).") {
 		t.Errorf("English message changed:\n%s", got)
 	}
 }

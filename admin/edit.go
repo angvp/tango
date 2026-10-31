@@ -68,14 +68,17 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			}
 			instancePtr := reflect.New(meta.Type)
 			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, ctx.Request().PostForm, existingPtr.Elem()); err != nil {
-				fieldErrors, formError := parseFailure(err)
+				var refused *formFieldErrors
+				if !errors.As(err, &refused) {
+					return err
+				}
 				formOpts := formOptionsFromRequest(ctx)
-				formOpts.FieldErrors = fieldErrors
+				formOpts.FieldErrors = refused.messages
+				formOpts.Submitted = ctx.Request().PostForm
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
 					chrome:    rc,
 					Title:     title,
-					Error:     formError,
 					Fields:    fields,
 					CSRFToken: csrfTokenFromRequest(ctx.Request()),
 				})

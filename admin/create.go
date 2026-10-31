@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"errors"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -35,14 +36,17 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 
 			instancePtr := reflect.New(meta.Type)
 			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, ctx.Request().PostForm, reflect.Value{}); err != nil {
-				fieldErrors, formError := parseFailure(err)
+				var refused *formFieldErrors
+				if !errors.As(err, &refused) {
+					return err
+				}
 				formOpts := formOptionsFromRequest(ctx)
-				formOpts.FieldErrors = fieldErrors
+				formOpts.FieldErrors = refused.messages
+				formOpts.Submitted = ctx.Request().PostForm
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
 					chrome:    createChrome,
 					Title:     title,
-					Error:     formError,
 					Fields:    fields,
 					CSRFToken: csrfTokenFromRequest(ctx.Request()),
 				})

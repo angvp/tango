@@ -120,6 +120,9 @@ type formContextOptions struct {
 	PreselectValue string
 	// FieldErrors maps a field's Go name to the message shown beside it.
 	FieldErrors map[string]string
+	// Submitted is the form a refused save was sent with. When set, each
+	// editable field shows what was typed rather than the stored value.
+	Submitted FieldValues
 }
 
 func buildFieldContext(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, opts adminregistry.Options, instance reflect.Value, formOpts formContextOptions) (FieldContext, bool) {
@@ -142,6 +145,13 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 		fc.Value = formatFieldValue(fieldValue)
 		if field.Type.Kind() == reflect.Bool {
 			fc.Checked = fieldValue.Bool()
+		}
+	}
+	if formOpts.Submitted != nil && !fc.ReadOnly {
+		if field.Type.Kind() == reflect.Bool {
+			fc.Checked = formOpts.Submitted.Has(field.Name)
+		} else if formOpts.Submitted.Has(field.Name) {
+			fc.Value = formOpts.Submitted.Get(field.Name)
 		}
 	}
 	if formOpts.PreselectField == field.Name {
@@ -255,14 +265,10 @@ func populateFromForm(ctx context.Context, store *db.Store, models *model.Regist
 		widget := widgetForField(field, opts, fc, fkResolved)
 
 		if err := widget.Parse(fc, form, fieldValue); err != nil {
-			messages := fieldErrorMessages(ctx, err)
-			if len(messages) == 0 {
-				return fmt.Errorf("field %q: %w", field.Name, err)
-			}
 			if fieldErrors == nil {
 				fieldErrors = map[string]string{}
 			}
-			fieldErrors[field.Name] = strings.Join(messages, " ")
+			fieldErrors[field.Name] = parseErrorMessage(ctx, fc, err)
 		}
 	}
 
@@ -285,7 +291,7 @@ func setFieldFromString(fieldValue reflect.Value, fieldType reflect.Type, raw st
 		}
 		v, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			return err
+			return valueParseError{kind: fieldType.Kind(), err: err}
 		}
 		fieldValue.SetInt(v)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -295,7 +301,7 @@ func setFieldFromString(fieldValue reflect.Value, fieldType reflect.Type, raw st
 		}
 		v, err := strconv.ParseUint(raw, 10, 64)
 		if err != nil {
-			return err
+			return valueParseError{kind: fieldType.Kind(), err: err}
 		}
 		fieldValue.SetUint(v)
 	case reflect.Float32, reflect.Float64:
@@ -305,7 +311,7 @@ func setFieldFromString(fieldValue reflect.Value, fieldType reflect.Type, raw st
 		}
 		v, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
-			return err
+			return valueParseError{kind: fieldType.Kind(), err: err}
 		}
 		fieldValue.SetFloat(v)
 	case reflect.Struct:
@@ -315,7 +321,7 @@ func setFieldFromString(fieldValue reflect.Value, fieldType reflect.Type, raw st
 		}
 		v, err := time.Parse(dateTimeLayout, raw)
 		if err != nil {
-			return err
+			return valueParseError{kind: fieldType.Kind(), err: err}
 		}
 		fieldValue.Set(reflect.ValueOf(v))
 	default:
@@ -419,6 +425,6 @@ func invalidJSONFieldErrors(ctx context.Context, err error) (map[string]string, 
 	if !errors.As(err, &invalid) {
 		return nil, false
 	}
-	message := i18n.T(ctx, "admin.error.invalid_json", "Not valid JSON.")
+	message := i18n.T(ctx, "admin.error.invalid_json", notValidJSON)
 	return map[string]string{invalid.Field: message}, true
 }

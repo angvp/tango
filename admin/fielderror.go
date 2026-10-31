@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -90,12 +91,36 @@ func (e *formFieldErrors) Error() string {
 	return strings.Join(parts, "; ")
 }
 
-// parseFailure splits a populateFromForm error into per-field messages and,
-// for any other error, the form-level message.
-func parseFailure(err error) (fieldErrors map[string]string, formError string) {
-	var collected *formFieldErrors
-	if errors.As(err, &collected) {
-		return collected.messages, ""
+// valueParseError is what a built-in parser returns when a submitted value
+// does not read as its field's Go type. kind names the type, so the message
+// beside the field says what the field needs.
+type valueParseError struct {
+	kind reflect.Kind
+	err  error
+}
+
+func (e valueParseError) Error() string { return e.err.Error() }
+func (e valueParseError) Unwrap() error { return e.err }
+
+// parseErrorMessage is the message beside a field whose submitted value a
+// widget refused. A FieldError keeps its own wording, a value of the wrong
+// type gets the plain form for that type, and any other error gets a generic
+// message. The error text itself is never shown.
+func parseErrorMessage(ctx context.Context, f FieldContext, err error) string {
+	if messages := fieldErrorMessages(ctx, err); len(messages) > 0 {
+		return strings.Join(messages, " ")
 	}
-	return nil, err.Error()
+	var parseErr valueParseError
+	if errors.As(err, &parseErr) {
+		switch parseErr.kind {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return i18n.T(ctx, "admin.error.not_whole_number", "%s must be a whole number.", f.Label)
+		case reflect.Float32, reflect.Float64:
+			return i18n.T(ctx, "admin.error.not_number", "%s must be a number.", f.Label)
+		case reflect.Struct:
+			return i18n.T(ctx, "admin.error.not_date_time", "%s must be a date and time.", f.Label)
+		}
+	}
+	return i18n.T(ctx, "admin.error.invalid_value", "Invalid value")
 }

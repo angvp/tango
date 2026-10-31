@@ -97,17 +97,23 @@ func TestFieldErrorsInsideErrorsJoinAreAllShownAndAcrossFields(t *testing.T) {
 	}
 }
 
-func TestPlainParseErrorStaysAFormLevelError(t *testing.T) {
+// TestPlainParseErrorIsAFieldMessageWithoutItsText covers a custom widget
+// whose Parse returns an error that is not a FieldError: the message goes
+// beside its field, and the error text (which may be Go text) never shows.
+func TestPlainParseErrorIsAFieldMessageWithoutItsText(t *testing.T) {
 	handler := buildNoteAdmin(t, admin.Options{Widgets: map[string]admin.Widget{
 		"Body": failingWidget{err: errors.New("boom")},
 	}})
 	resp := doRequest(t, handler, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}})
 	body := resp.Body.String()
-	if resp.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `<div class="alert-error">field &#34;Body&#34;: boom</div>`) {
+	if resp.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d, body:\n%s", resp.Code, body)
 	}
-	if strings.Contains(body, `<p class="field-error"`) {
-		t.Errorf("a plain error became a field error:\n%s", body)
+	if !strings.Contains(body, `<p class="field-error" id="field-Body-error" role="alert">Invalid value</p>`) {
+		t.Errorf("no field message beside Body:\n%s", body)
+	}
+	if strings.Contains(body, "boom") || strings.Contains(body, `<div class="alert-error">`) {
+		t.Errorf("the error text or a form banner leaked:\n%s", body)
 	}
 }
 

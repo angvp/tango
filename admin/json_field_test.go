@@ -117,7 +117,7 @@ func TestCreateRefusesInvalidJSONThroughATextareaOverride(t *testing.T) {
 	if resp.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422:\n%s", resp.Code, body)
 	}
-	if !strings.Contains(body, `<p class="field-error" id="field-Doc-error" role="alert">Not valid JSON.</p>`) {
+	if !strings.Contains(body, `<p class="field-error" id="field-Doc-error" role="alert">This is not valid JSON.</p>`) {
 		t.Errorf("no field error beside Doc:\n%s", body)
 	}
 	if !strings.Contains(body, `value="keep title"`) {
@@ -145,7 +145,7 @@ func TestEditRefusesInvalidJSONThroughATextareaOverrideAndKeepsTheRow(t *testing
 	if resp.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422:\n%s", resp.Code, body)
 	}
-	if !strings.Contains(body, `<p class="field-error" id="field-Doc-error" role="alert">Not valid JSON.</p>`) {
+	if !strings.Contains(body, `<p class="field-error" id="field-Doc-error" role="alert">This is not valid JSON.</p>`) {
 		t.Errorf("no field error beside Doc:\n%s", body)
 	}
 	var title, doc string

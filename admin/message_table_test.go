@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
@@ -14,11 +16,12 @@ import (
 // messageBook carries one field of each kind the admin reports on: a unique
 // title with a length limit, a number, a decimal and a JSON document.
 type messageBook struct {
-	ID    int64  `tango:"pk"`
-	Title string `tango:"unique,varchar=12"`
-	Year  int64
-	Price float64
-	Notes string `tango:"json"`
+	ID        int64  `tango:"pk"`
+	Title     string `tango:"unique,varchar=12"`
+	Year      int64
+	Price     float64
+	Notes     string `tango:"json"`
+	Published time.Time
 }
 
 const messageBookBasePath = "/admin/message_book/"
@@ -54,34 +57,9 @@ func buildMessageBookAdmin(t *testing.T) (http.Handler, *sql.DB) {
 	return handler, sqlDB
 }
 
-func seedMessageBook(t *testing.T, sqlDB *sql.DB, title string) {
+func seedMessageBook(t *testing.T, sqlDB *sql.DB, title string) int64 {
 	t.Helper()
-	if _, err := sqlDB.Exec(`INSERT INTO message_book (title, year, price, notes) VALUES ($1, $2, $3, $4)`, title, 1999, 1.5, ""); err != nil {
-		t.Fatalf("seed message book: %v", err)
-	}
-}
-
-func TestCreateViewDuplicateUniqueValueIsAFieldErrorNotAServerError(t *testing.T) {
-	handler, sqlDB := buildMessageBookAdmin(t)
-	seedMessageBook(t, sqlDB, "Dune")
-
-	response := doRequest(t, handler, http.MethodPost, messageBookBasePath+"new/", url.Values{
-		"Title": {"Dune"},
-		"Year":  {"2024"},
-		"Price": {"9.5"},
-		"Notes": {""},
-	})
-
-	if response.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want 422; body %.300s", response.Code, response.Body.String())
-	}
-	body := response.Body.String()
-	if !strings.Contains(body, "Another book already uses this title") {
-		t.Fatalf("body lacks the field message for the duplicate title: %s", body)
-	}
-	if !strings.Contains(body, `value="2024"`) || !strings.Contains(body, `value="9.5"`) {
-		t.Fatalf("the failed save did not keep the other submitted values: %.300s", body)
-	}
+	return insertReturningID(t, sqlDB, `INSERT INTO message_book (title, year, price, notes, published) VALUES ($1, $2, $3, $4, $5) RETURNING id`, title, 1999, 1.5, "", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
 }
 
 // TestCreateViewUnattributableUniqueViolationIsAFormMessageNotAServerError
@@ -114,6 +92,70 @@ func TestCreateViewUnattributableUniqueViolationIsAFormMessageNotAServerError(t 
 	for _, leak := range []string{"UNIQUE", "constraint", "message_book.year", "internal error"} {
 		if strings.Contains(body, leak) {
 			t.Fatalf("body leaks %q: %.300s", leak, body)
+		}
+	}
+}
+
+// messageTableForbidden lists text that must never reach a user-error page:
+// Go error text, SQL, decoder output and the server-failure wording.
+var messageTableForbidden = []string{
+	"strconv", "invalid syntax", `field "`, "ParseFloat", "ValueTooLong", "db:",
+	"UNIQUE", "constraint", "FOREIGN KEY", "internal error",
+	"invalid character", "unexpected end", `{"error"`,
+}
+
+func TestBadInputYieldsFriendlyMessagesOnCreateAndEdit(t *testing.T) {
+	type row struct {
+		name     string
+		form     url.Values
+		expected string
+		keeps    []string
+	}
+	base := func(overrides url.Values) url.Values {
+		form := url.Values{"Title": {"Atlas"}, "Year": {"2024"}, "Price": {"9.5"}, "Notes": {""}, "Published": {"2024-05-01T10:30"}}
+		for key, values := range overrides {
+			form[key] = values
+		}
+		return form
+	}
+	rows := []row{
+		{name: "year is not a number", form: base(url.Values{"Year": {"abc"}}), expected: "Year must be a whole number.", keeps: []string{`value="abc"`, `value="9.5"`, `value="Atlas"`}},
+		{name: "price is not a number", form: base(url.Values{"Price": {"x"}}), expected: "Price must be a number.", keeps: []string{`value="x"`, `value="2024"`}},
+		{name: "published is not a date", form: base(url.Values{"Published": {"someday"}}), expected: "Published must be a date and time.", keeps: []string{`value="someday"`}},
+		{name: "title is too long", form: base(url.Values{"Title": {"A very long title"}}), expected: "Title must be at most 12 characters", keeps: []string{`value="2024"`}},
+		{name: "notes is not JSON", form: base(url.Values{"Notes": {"{"}}), expected: "This is not valid JSON", keeps: []string{`value="2024"`}},
+		{name: "title already used", form: base(url.Values{"Title": {"Dune"}}), expected: "Another book already uses this title.", keeps: []string{`value="2024"`, `value="9.5"`}},
+	}
+	for _, tt := range rows {
+		for _, mode := range []string{"create", "edit"} {
+			t.Run(mode+" "+tt.name, func(t *testing.T) {
+				handler, sqlDB := buildMessageBookAdmin(t)
+				seedMessageBook(t, sqlDB, "Dune")
+				target := messageBookBasePath + "new/"
+				if mode == "edit" {
+					id := seedMessageBook(t, sqlDB, "Emma")
+					target = messageBookBasePath + strconv.FormatInt(id, 10) + "/"
+				}
+				response := doRequest(t, handler, http.MethodPost, target, tt.form)
+
+				body := response.Body.String()
+				if response.Code != http.StatusUnprocessableEntity {
+					t.Fatalf("status = %d, want 422; body %.300s", response.Code, body)
+				}
+				if !strings.Contains(body, tt.expected) {
+					t.Fatalf("body lacks %q", tt.expected)
+				}
+				for _, text := range messageTableForbidden {
+					if strings.Contains(body, text) {
+						t.Fatalf("body contains forbidden %q", text)
+					}
+				}
+				for _, text := range tt.keeps {
+					if !strings.Contains(body, text) {
+						t.Fatalf("body lost submitted value %q", text)
+					}
+				}
+			})
 		}
 	}
 }

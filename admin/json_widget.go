@@ -72,6 +72,10 @@ func (jsonWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) er
 	return checkJSONSyntax(raw)
 }
 
+// notValidJSON is the message for JSON text that fails to parse. The decoder's
+// own text is never shown: it quotes the document and reads as Go.
+const notValidJSON = "This is not valid JSON."
+
 // checkJSONSyntax returns nil when raw is one complete JSON value, else a
 // FieldError naming the first syntax problem and, when Go's decoder reports
 // one, its position in characters.
@@ -83,13 +87,13 @@ func checkJSONSyntax(raw string) error {
 	}
 	var syntax *json.SyntaxError
 	if !errors.As(err, &syntax) {
-		return FieldError{Message: "Invalid JSON", text: &localizedText{key: "admin.error.json_invalid", fallback: "Invalid JSON"}}
+		return FieldError{Message: notValidJSON, text: &localizedText{key: "admin.error.json_invalid", fallback: notValidJSON}}
 	}
-	const fallback = "Invalid JSON: %s (at character %d)"
-	args := []any{syntax.Error(), characterPosition(raw, syntax.Offset)}
+	const fallback = "This is not valid JSON (problem at character %d)."
+	args := []any{characterPosition(raw, syntax.Offset)}
 	return FieldError{
 		Message: fmt.Sprintf(fallback, args...),
-		text:    &localizedText{key: "admin.error.json_syntax", fallback: fallback, args: args},
+		text:    &localizedText{key: "admin.error.json_position", fallback: fallback, args: args},
 	}
 }
 

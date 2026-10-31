@@ -130,7 +130,7 @@ func TestJSONWidgetRefusesInvalidJSONAndKeepsTheSubmittedText(t *testing.T) {
 	if got := submittedJSONBody(t, body); got != submitted {
 		t.Errorf("re-rendered text = %q, want the exact submitted %q", got, submitted)
 	}
-	if !strings.Contains(body, `<p class="field-error" id="field-Body-error" role="alert">Invalid JSON: invalid character &#39;}&#39; looking for beginning of object key string (at character 9)</p>`) {
+	if !strings.Contains(body, `<p class="field-error" id="field-Body-error" role="alert">This is not valid JSON (problem at character 9).</p>`) {
 		t.Errorf("readable error with offset missing:\n%s", body)
 	}
 	if !strings.Contains(body, `aria-invalid="true" aria-describedby="field-Body-error"`) {
