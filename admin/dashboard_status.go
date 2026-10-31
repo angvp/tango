@@ -29,8 +29,8 @@ func loadStatusCard(logger *slog.Logger, ctx context.Context, provider func(cont
 const statusCardSource = `{{define "statusCard"}}
 <section class="card" data-dashboard="status" data-state="{{.Status.State}}">
   <div class="card-header"><h2 class="section-title">{{.T "admin.dashboard.status.title" "System"}}</h2></div>
-  {{if eq .Status.State "unavailable"}}<p class="alert-warning">{{.T "admin.dashboard.unavailable" "Unavailable"}}</p>
-  {{else if eq .Status.State "not-configured"}}<p class="alert-neutral">{{.T "admin.dashboard.not_configured" "Not configured"}}</p>
+  {{if eq .Status.State "unavailable"}}<div class="card-body pb-0"><p class="alert-warning">{{.T "admin.dashboard.unavailable" "Unavailable"}}</p></div>
+  {{else if eq .Status.State "not-configured"}}<div class="card-body pb-0"><p class="alert-neutral">{{.T "admin.dashboard.not_configured" "Not configured"}}</p></div>
   {{else}}<dl class="row-list">
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.status.database" "Database"}}</dt><dd class="stat-value" data-field="database">{{if eq .Status.Status.Database "reachable"}}<span class="badge-success">{{.T "admin.dashboard.status.reachable" "Reachable"}}</span>{{else if eq .Status.Status.Database "unreachable"}}<span class="badge-danger">{{.T "admin.dashboard.status.unreachable" "Unreachable"}}</span>{{else}}<span class="badge-neutral">{{.T "admin.dashboard.status.unknown" "Unknown"}}</span>{{end}}</dd></div>
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.status.dialect" "Dialect"}}</dt><dd class="stat-value" data-field="dialect">{{if .Status.Status.Dialect}}{{.Status.Status.Dialect}}{{else}}{{.T "admin.dashboard.status.not_reported" "Not reported"}}{{end}}</dd></div>

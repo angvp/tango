@@ -123,11 +123,28 @@ func TestDashboardCardStatesAreTextAlerts(t *testing.T) {
 		t.Errorf("unavailable status card lacks a warning alert with its text:\n%s", section)
 	}
 
+	failingActivity := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{Activity: stubSource{err: context.DeadlineExceeded}}))
+	body = getIndex(t, failingActivity).Body.String()
+	activity := regexp.MustCompile(`(?s)<section class="card" data-dashboard="activity"[^>]*>.*?</section>`).FindString(body)
+	if !strings.Contains(activity, `class="alert-warning"`) || !strings.Contains(activity, "Unavailable") {
+		t.Errorf("unavailable activity card lacks a warning alert with its text:\n%s", activity)
+	}
+
 	unconfigured := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{Activity: stubSource{}}))
 	body = getIndex(t, unconfigured).Body.String()
 	section = regexp.MustCompile(`(?s)<section class="card" data-dashboard="status"[^>]*>.*?</section>`).FindString(body)
 	if !strings.Contains(section, `class="alert-neutral"`) || !strings.Contains(section, "Not configured") {
 		t.Errorf("unconfigured status card lacks a neutral alert with its text:\n%s", section)
+	}
+	noActivity := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{
+		Status: func(context.Context) (admin.DashboardStatus, error) {
+			return admin.DashboardStatus{Database: admin.DatabaseReachable, TrackingTable: admin.TrackingTablePresent}, nil
+		},
+	}))
+	body = getIndex(t, noActivity).Body.String()
+	activity = regexp.MustCompile(`(?s)<section class="card" data-dashboard="activity"[^>]*>.*?</section>`).FindString(body)
+	if !strings.Contains(activity, `class="alert-neutral"`) || !strings.Contains(activity, "Not configured") {
+		t.Errorf("unconfigured activity card lacks a neutral alert with its text:\n%s", activity)
 	}
 }
 

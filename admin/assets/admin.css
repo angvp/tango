@@ -2261,28 +2261,6 @@ html, body{
   color:rgb(var(--ink-faint) / var(--tw-text-opacity, 1));
 }
 
-.panel-note{
-  padding-left:1.25rem;
-  padding-right:1.25rem;
-  padding-top:1rem;
-  padding-bottom:1rem;
-  font-size:0.875rem;
-  line-height:1.25rem;
-  --tw-text-opacity:1;
-  color:rgb(var(--ink-faint) / var(--tw-text-opacity, 1));
-}
-
-.panel-note-muted{
-  padding-left:1.25rem;
-  padding-right:1.25rem;
-  padding-top:1rem;
-  padding-bottom:1rem;
-  font-size:0.875rem;
-  line-height:1.25rem;
-  --tw-text-opacity:1;
-  color:rgb(var(--ink-muted) / var(--tw-text-opacity, 1));
-}
-
 .panel-note-tail{
   padding-left:1.25rem;
   padding-right:1.25rem;
@@ -8094,6 +8072,10 @@ html, body{
 .py-3{
   padding-top:0.75rem;
   padding-bottom:0.75rem;
+}
+
+.pb-0{
+  padding-bottom:0px;
 }
 
 .pb-2{
