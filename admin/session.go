@@ -168,7 +168,7 @@ func requireSession(store *db.Store, next tango.View) tango.View {
 			CSRFToken: csrfTokenFromRequest(ctx.Request()),
 		}
 		if ctx.Request().Method == http.MethodGet {
-			if text := takeFlash(ctx.Context(), ctx.ResponseWriter(), ctx.Request(), token); text != "" {
+			if text := readFlash(ctx.Context(), ctx.Request(), token); text != "" {
 				who.Notice = &statusNotice{
 					Text:      text,
 					Dismiss:   i18n.T(ctx.Context(), "admin.status.dismiss", "Dismiss"),

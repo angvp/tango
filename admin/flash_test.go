@@ -406,3 +406,23 @@ func TestAnOutcomeOutsideItsLifetimeIsIgnored(t *testing.T) {
 		}
 	}
 }
+
+func TestAnErroringPageLeavesTheOutcomeForTheNextPage(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	first := seedProduct(t, sqlDB, "A", 1)
+	second := seedProduct(t, sqlDB, "B", 2)
+	flash := mustFlash(t, signedRequest(handler, http.MethodPost, bulkDeletePath, testSessionToken, bulkForm(2, first, second)))
+
+	missing := signedRequest(handler, http.MethodGet, crudBasePath+"999999/", testSessionToken, nil, flash)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("missing row = %d, want %d", missing.Code, http.StatusNotFound)
+	}
+	if flashClearedBy(missing) {
+		t.Fatal("a 404 expired the outcome before any page showed it")
+	}
+
+	next := signedRequest(handler, http.MethodGet, crudBasePath, testSessionToken, nil, flash)
+	if !strings.Contains(next.Body.String(), "2 crud products deleted") {
+		t.Fatal("the next page did not show the outcome the 404 left in place")
+	}
+}

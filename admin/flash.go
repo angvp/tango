@@ -173,15 +173,21 @@ func clearFlashCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// takeFlash expires the flash cookie and returns the outcome text it carried
-// for sessionToken, or "" when it carried none that is genuine. The cookie
-// is expired whether or not its value verifies.
-func takeFlash(ctx context.Context, w http.ResponseWriter, r *http.Request, sessionToken string) string {
+// hasFlashCookie reports whether the request carries a flash cookie at all,
+// genuine or not; a page that renders expires whichever it finds.
+func hasFlashCookie(r *http.Request) bool {
+	_, err := r.Cookie(flashCookieName)
+	return err == nil
+}
+
+// readFlash returns the outcome text the request's flash cookie carries for
+// sessionToken, or "" when it carries none that is genuine. It does not expire
+// the cookie: that happens when a page that shows the outcome renders.
+func readFlash(ctx context.Context, r *http.Request, sessionToken string) string {
 	cookie, err := r.Cookie(flashCookieName)
 	if err != nil {
 		return ""
 	}
-	clearFlashCookie(w, r)
 	key, args, ok := openFlash(sessionToken, cookie.Value)
 	if !ok {
 		return ""

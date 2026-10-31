@@ -264,6 +264,12 @@ type bulkRejectedPageData struct {
 }
 
 func render(ctx *tango.Context, status int, tmpl *template.Template, data any) error {
+	// A successful GET that shows the signed-in layout has displayed any outcome
+	// the request carried, so the cookie is expired by that response. Any other
+	// response leaves it for the next page.
+	if status/100 == 2 && ctx.Request().Method == http.MethodGet && signedInFrom(ctx.Context()) != nil && hasFlashCookie(ctx.Request()) {
+		clearFlashCookie(ctx.ResponseWriter(), ctx.Request())
+	}
 	return ctx.HTML(status, tmpl, "layout", data)
 }
 
