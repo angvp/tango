@@ -1,6 +1,6 @@
 # The admin redesign adopts a component layer, framework-owned plain-language messages and a strict-CSP-compatible look
 
-Status: Accepted. Implemented on the unreleased v0.8.0 line, together with the security headers work. Not released.
+Status: Accepted and released in v0.8.0, together with the security headers work.
 
 Superseded in part by [the compatibility contract](../compatibility.md): the Consequences statement that the admin's CSS and class names stay outside the Covered API still holds, except for the semantic colour token utilities that `docs/compatibility.md` lists as covered under Colour. Component class names, raw palette colours, palette values and every token name not listed there stay outside the Covered API. `docs/compatibility.md` is the authoritative contract.
 

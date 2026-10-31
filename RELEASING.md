@@ -90,7 +90,7 @@ Pre-tag items, to be done by the maintainer:
 - **Browser eyeball check.** Run the [admin theme check](#admin-theme-check) against v0.8.0 in light and dark, at desktop and phone width. Add these two items to that check:
   - an uploaded PDF and an uploaded image served inline through a route whose `ServeOptions` list the type in `InlineTypes`, under the sandbox policy `storage.Serve` now sends by default (see [the sandbox check](#admin-stylesheet-and-browser-checks));
   - the phone changelist as cards, and the drawer's focus behaviour.
-- **First GitHub runs.** The CI jobs **admin stylesheet freshness** and **browser CSP smoke** have not yet run on the redesign's commits. Each must pass on the release commit, and the browser CSP smoke job's printed Chrome version is recorded with the release notes.
+- **GitHub runs on the release commit.** The CI jobs **admin stylesheet freshness** and **browser CSP smoke** have run green on `develop` commits. Both must also pass on the release commit, and the browser CSP smoke job's printed Chrome version is recorded with the release notes.
 - **Firefox and Safari.** Check the admin in both browsers, in both themes. The admin uses no polyfills, so a failure there is a real failure.
 - **Changelog.** The `[Unreleased]` section of `CHANGELOG.md` is renamed to the version and its date by the maintainer at release. The Release job refuses a tag without that dated section. The security headers and admin redesign entries carry the upgrade notes for the `admin.Widget` signature, the `admin.*` message keys and the inline PDF sandbox.
 - **Website copy.** `tango-web` changes only after the release exists. Website copy claims released behaviour only, so none of it is updated before the tag.

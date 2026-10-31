@@ -1,6 +1,6 @@
 # Upgrading
 
-This page lists what a host application changes when it moves to the next release of tanGO. Each section names a change, what it affects and what to do about it. The full list of changes is in the unreleased section of the [changelog](../CHANGELOG.md).
+This page lists what a host application changes when it upgrades from v0.7.0 to v0.8.0. Each section names a change, what it affects and what to do about it. The full list of changes is in the v0.8.0 section of the [changelog](../CHANGELOG.md).
 
 ## admin.Widget takes the request context
 

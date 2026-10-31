@@ -1,6 +1,6 @@
 # Admin widgets extend through optional interfaces, and admin owns one derived preview route
 
-**Amendment:** `Render` and `Parse` now receive the request's `context.Context` as their first argument, so the sentence below that says `Parse` receives no request context, and the rejected alternative of passing a context to `Parse`, no longer hold. The change is in the Unreleased entry of the [CHANGELOG](../../CHANGELOG.md#unreleased); the preview route decision is unchanged.
+**Amendment:** `Render` and `Parse` now receive the request's `context.Context` as their first argument, so the sentence below that says `Parse` receives no request context, and the rejected alternative of passing a context to `Parse`, no longer hold. The change is in the v0.8.0 entry of the [CHANGELOG](../../CHANGELOG.md#080---2026-10-31); the preview route decision is unchanged.
 
 A widget is the admin's seam for one field's control, and M50 needed two things a `Widget` could not provide without breaking every existing widget: a validation message that appears beside its own field, and a preview of a field's submitted text. Both are added as optional interfaces, and the `Widget` interface itself does not change.
 

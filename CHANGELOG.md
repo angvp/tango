@@ -4,7 +4,9 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
-Host upgrade notes for the next release are in [docs/upgrading.md](docs/upgrading.md).
+## [0.8.0] - 2026-10-31
+
+Host upgrade notes for v0.8.0, upgrading from v0.7.0, are in [docs/upgrading.md](docs/upgrading.md).
 
 ### Added
 
@@ -14,7 +16,7 @@ Host upgrade notes for the next release are in [docs/upgrading.md](docs/upgradin
 
 - **The strict baseline restricts form submissions to the application's own origin.** `tango.StrictCSP()` now includes `form-action 'self'`, so the Content-Security-Policy sent when no policy option is given gains that directive. The browser refuses a form that posts to another origin under the baseline. An application that posts a form to another origin supplies a policy whose `FormAction` lists that origin.
 
-- **`tango.UnsafeInlineStyle()` is valid only in `style-src`.** `tango.WithContentSecurityPolicy` panics, when the middleware is built, with a message that names the directive, if the source appears in `default-src`, `script-src` or any other directive. Before this change the policy rendered `'unsafe-inline'` in that directive.
+- **`tango.UnsafeInlineStyle()` is valid only in `style-src`.** `tango.WithContentSecurityPolicy` panics, when the middleware is built, with a message that names the directive, if the source appears in `default-src`, `script-src` or any other directive. Before this change the policy rendered `'unsafe-inline'` in that directive. **Upgrade note:** a policy that names `UnsafeInlineStyle()` outside `StyleSrc` now panics when the middleware is built. Move the source into `StyleSrc`.
 
 - **The admin phone drawer opens and closes without animation when the operating system asks for reduced motion.** The drawer's slide is replaced by an immediate change under `prefers-reduced-motion: reduce`.
 
@@ -26,9 +28,9 @@ Host upgrade notes for the next release are in [docs/upgrading.md](docs/upgradin
 
 - **The admin's create and edit forms explain a failed save.** A save with more than one problem shows a summary above the first field, headed with the count ("Fix 2 problems to save this book.") and listing each problem as a link to its field. Each link is the field's label followed by its message. Focus moves to the summary when the page renders; a save with one field problem moves focus to that field instead, and the summary is shown for one problem only when it is not tied to a field. Built-in widgets print each field's help text between its label and its control. A host widget keeps the help text beneath its control, unless its own markup prints it. The empty foreign key choice reads "No author selected", the add button beside a foreign key names the target in visible text ("Add new author") after a "+" that is hidden from assistive technology, and Cancel names the list it returns to.
 
-- **Admin outcomes appear in a status region on every page.** After a create, save, delete or bulk delete, the next admin page shows the outcome in one `role="status"` region above the content, with a Dismiss control. The outcome is carried in a cookie signed with a key derived from the admin session, so it cannot be forged and is shown only to the session that set it. The page that shows the outcome expires the cookie in the browser; the server also stops accepting a copy of it 300 seconds after it was set. A copy taken before that time is still accepted until then. The bulk delete redirect no longer carries a `deleted` query parameter.
+- **Admin outcomes appear in a status region on every page.** After a create, save, delete or bulk delete, the next admin page shows the outcome in one `role="status"` region above the content, with a Dismiss control. The outcome is carried in a cookie signed with a key derived from the admin session, so it cannot be forged and is shown only to the session that set it. The page that shows the outcome expires the cookie in the browser; the server also stops accepting a copy of it 300 seconds after it was set. A copy taken before that time is still accepted until then. The bulk delete redirect no longer carries a `deleted` query parameter. **Upgrade note:** a host that read that parameter must read the status region's outcome instead.
 
-- **Admin save errors name the field and keep what you typed.** A value that is not a number, a date or valid JSON shows a plain message beside its field, and the other values in the form stay as submitted. A duplicate unique value returns 422 with a message beside the field, where it returned a server error before. A foreign key that no longer exists, and a delete the database refuses because other rows still use the row, show a plain message instead of a server error. The raw parser and database text is never shown. Messages come from `admin.*` keys with English fallbacks, so a host catalog overrides one key at a time. The sidebar, headings, breadcrumbs and messages name a model with its display noun (`admin.Options` `SingularName` and `PluralName`), not its Go type name. The style guide is `admin/MESSAGE_STYLE.md`.
+- **Admin save errors name the field and keep what you typed.** A value that is not a number, a date or valid JSON shows a plain message beside its field, and the other values in the form stay as submitted. A duplicate unique value returns 422 with a message beside the field, where it returned a server error before. **Upgrade note:** a programmatic caller that treated a duplicate-value save as a 500 must expect 422. A foreign key that no longer exists, and a delete the database refuses because other rows still use the row, show a plain message instead of a server error. The raw parser and database text is never shown. Messages come from `admin.*` keys with English fallbacks, so a host catalog overrides one key at a time. The sidebar, headings, breadcrumbs and messages name a model with its display noun (`admin.Options` `SingularName` and `PluralName`), not its Go type name. The style guide is `admin/MESSAGE_STYLE.md`.
 
 - **The JSON and Markdown widgets show their editors without script, and hide what is empty.** Without JavaScript the Formatted panel of the JSON field and the Preview panel of a Markdown field are visible, stacked under the editor. The Formatted box and the Preview frame stay hidden until they have content, so the editor is the only visible control. With the script, the tabs show and the inactive panel is hidden as before.
 
@@ -483,7 +485,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/angvp/tango/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/angvp/tango/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/angvp/tango/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/angvp/tango/compare/v0.4.0...v0.5.0
