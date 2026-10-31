@@ -60,7 +60,7 @@ Visit `http://localhost:8000/admin/post/` — you'll be redirected to `/admin/lo
 - A **create** page (a plain HTML form derived from the model's fields, with humanized labels — `CreatedAt` shows as "Created At").
 - An **edit** page per row, and a **delete** confirmation page.
 
-All of it comes styled with tanGO's default admin theme out of the box — a dark sidebar listing every registered model, light content cards, no CSS to write yourself — and runs against the exact same table `tango migrate` created in part 2; there's no separate admin-specific schema. Visit `http://localhost:8000/admin/` (no model name needed) and it redirects you to whichever model sorts first alphabetically.
+All of it comes styled with tanGO's default admin theme out of the box — a sidebar listing every registered model, content cards, a light or dark theme that follows the browser, no CSS to write yourself — and runs against the exact same table `tango migrate` created in part 2; there's no separate admin-specific schema. Visit `http://localhost:8000/admin/` (no model name needed) and it redirects you to whichever model sorts first alphabetically.
 
 ## Look at the data from the shell
 

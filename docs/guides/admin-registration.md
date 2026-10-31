@@ -132,7 +132,7 @@ Both `Post` and `Author` now show up in the sidebar, and `/admin/` redirects to 
 
 For a field tagged as a foreign key, the admin renders a `<select>` populated from the related model. If that related model is also registered with the admin, tanGO shows a small `+` link next to the select. Clicking it opens the related model's create page, then returns to the original form after save with the newly-created object already selected.
 
-The select starts with a "— None —" choice, because a foreign key at its zero value is unset (stored as NULL). A row whose foreign key is unset shows the choice selected on edit, and an em dash in the changelist rather than `0`. The built-in select has no required-foreign-key mode: tanGO has no required/optional distinction for foreign keys, so every one offers "None".
+The select starts with a "No author selected" choice, because a foreign key at its zero value is unset (stored as NULL). The choice is the English text of `admin.fk.none_selected` ("No %s selected", filled with the related model's singular display name), so a host catalog can word it. A row whose foreign key is unset shows the choice selected on edit, and an em dash in the changelist rather than `0`. The built-in select has no required-foreign-key mode: tanGO has no required/optional distinction for foreign keys, so every one offers that choice.
 
 For example, if `Book.AuthorID` is tagged `tango:"fk=Author"` and both `Book` and `Author` are admin-registered, the `Book` form gets a `+` beside the `Author` select. This is intentionally create-only: there is no edit link for the selected related object, no delete/remove action, no autocomplete, no many-to-many editing, and no inline formset support.
 
@@ -223,7 +223,7 @@ Beyond `ListDisplay`/`Search`/`Ordering`/`Label`, `admin.Options` has four more 
 - **`Labels`** — override a field's humanized default label, on forms and as its changelist column header. A field with no `Labels` entry keeps its default, so a registration only changes when it opts in. A synthetic `Display` column must have an entry.
 - **`HelpText`** — descriptive text shown below a field on the create and edit forms. The built-in controls reference it with `aria-describedby`.
 - **`ReadOnly`** — fields that render as a read-only text input (focusable and copyable, but never submitted). On edit, a read-only field keeps its existing stored value no matter what the submitted form contains for it; on create, it stays at its Go zero value. Submitted data for a read-only field is always ignored, never parsed — this is true regardless of any `Widgets` entry for that field, since read-only rendering bypasses the field's widget entirely.
-- **Bounded strings** (`tango:"varchar=n"`) render `<input type="text" maxlength="n">`. Browsers count `maxlength` in UTF-16 units, so the server stays the authority: a create or edit whose value has more than `n` characters (runes) re-renders the form with `Title must be at most 5 characters (got 6)` beside the field, keeps everything else the person typed, and stores nothing. The message is the translatable key `admin.error.too_long` (arguments: the label, the limit, the length). Bare strings and `text` render as they always did, with no textarea; use `admin.Textarea()` for a multi-line field.
+- **Bounded strings** (`tango:"varchar=n"`) render `<input type="text" maxlength="n">`. Browsers count `maxlength` in UTF-16 units, so the server stays the authority: a create or edit whose value has more than `n` characters (runes) re-renders the form with `Use at most 5 characters. You entered 6.` beside the field, keeps everything else the person typed, and stores nothing. The message is the translatable key `admin.error.max_length` (arguments: the limit, the length; English fallback "Use at most %d characters. You entered %d."). Bare strings and `text` render as they always did, with no textarea; use `admin.Textarea()` for a multi-line field.
 - **`FieldOrder`** — render fields in this order; fields not listed keep their default order, appended after the ordered ones.
 
 ```go
@@ -266,7 +266,7 @@ Without an entry, a field gets the default widget for its Go type, with one exce
 
 A widget's `Render` output may include its own `<link>`/`<script>` tags for CSS/JS it needs — typically served via its owning app's own `embed.FS` route (see [reusable apps](reusable-apps.md)), the same convention any app already uses for static assets. There's no shared deduplication mechanism, so that output must be **idempotent**: safe to emit once per rendered instance of the widget, since the same widget used on multiple fields will render its tags more than once. `examples/reusable-greetings`'s `Greeting.Name` field uses a real custom widget shipped by a reusable app this way — see its `greetings/widget.go`.
 
-A `Parse` failure surfaces exactly like a built-in widget's parse failure would: a generic form-level error string, not a per-field inline error — that's a real admin-UX feature, but a separate one this doesn't provide yet.
+A `Parse` error that is not an `admin.FieldError` surfaces as a single generic form-level error string. Return `admin.FieldError` to show the message beside the field instead.
 
 ## JSON fields
 
@@ -399,7 +399,12 @@ Automated tests pin the admin's structural markup: labels, `aria-invalid` and `a
 
 Recorded pass: on 2026-10-10 the maintainer checked the JSON **Formatted** and Markdown **Preview** tabs by hand in a browser against the `spa-accounts` example; they behaved as described. Repeat the checklist for your own deployment.
 
-Known limits: the sidebar toggle, skip link and `<main>` landmark are separate follow-ups.
+Known limits:
+
+- **Display nouns are not translated.** `SingularName` and `PluralName` on `admin.Options` are plain strings, so a host's translation of a model's name is written as a literal string in the registration, not as a catalog key. The count and outcome messages around them are translatable.
+- **Outcome messages are expired by display, not consumed.** The response that shows an outcome expires its cookie. The server keeps no record of used cookies, so a copy of the cookie is accepted again until its 300-second expiry, within the same session.
+- **Browsers.** The Chrome smoke covers Chromium only. Firefox and Safari have not been verified.
+- **Forced colours.** Windows high-contrast (forced colours) mode has not been verified.
 
 ## Stability
 
