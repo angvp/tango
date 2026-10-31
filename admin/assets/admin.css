@@ -2025,6 +2025,19 @@ html, body{
   gap:0.75rem;
 }
 
+.status-region:not(:empty){
+  padding-left:1rem;
+  padding-right:1rem;
+  padding-top:1rem;
+}
+
+@media (min-width: 640px){
+  .status-region:not(:empty){
+    padding-left:1.5rem;
+    padding-right:1.5rem;
+  }
+}
+
 .field-help{
   margin-top:0.25rem;
   font-size:0.875rem;
