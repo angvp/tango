@@ -97,7 +97,6 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			Criteria:         hasCriteria(q, filters),
 			FilterActive:     len(filters.Params) > 0,
 			Empty:            len(rows) == 0,
-			Page:             page,
 			TotalPages:       totalPages,
 			TotalCount:       total,
 			PageLinks:        withPageHrefs(paginationLinks(page, totalPages), params),

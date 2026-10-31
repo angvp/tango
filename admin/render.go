@@ -227,7 +227,6 @@ type listPageData struct {
 	// Empty reports that no row matched. The toolbar's clear links are then
 	// the empty state's own actions, so the toolbar omits them.
 	Empty      bool
-	Page       int
 	TotalPages int
 	TotalCount int
 	PageLinks  []pageLink

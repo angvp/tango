@@ -12,15 +12,6 @@ import (
 // unset noun falls back to the humanized Go type name, so the raw Go name
 // never reaches the page.
 
-// fieldLabel is the label the form shows for a field: the host's Labels
-// entry when it has one, else the humanized Go name.
-func fieldLabel(opts adminregistry.Options, name string) string {
-	if label, ok := opts.Labels[name]; ok {
-		return label
-	}
-	return humanizeFieldName(name)
-}
-
 // displayNoun is the noun for one row of the model, as a sentence uses it.
 func displayNoun(meta model.ModelMeta, opts adminregistry.Options) string {
 	if opts.SingularName != "" {
