@@ -801,6 +801,20 @@ func (s *smoke) bulkListCapAndPhoneSelectAll() {
 	s.check(s.evalString(`document.querySelector('[data-bulk-title]').textContent`) == wantTitleMany, "the dialog title is not the plural count copy %q", wantTitleMany)
 	s.run("bulk cancel after cap", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
 
+	s.run("bulk clear every row", chromedp.Click(".table-admin thead input[data-bulk-select-all]", chromedp.NodeVisible))
+	for i := 1; i <= atoi(limit)+1; i++ {
+		s.run(fmt.Sprintf("bulk pick row %d", i), chromedp.Click(fmt.Sprintf(".table-admin tbody tr:nth-child(%d) input[data-bulk-pk]", i), chromedp.NodeVisible))
+	}
+	s.run("bulk open one over the cap", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-list] li').length)`) == "11", "the dialog with one row past the cap did not list the cap and one more line")
+	oneMore := s.evalString(meta + `.getAttribute('data-msg-more-one') || ''`)
+	s.check(s.evalString(`document.querySelector('[data-bulk-list] li:last-child').textContent`) == oneMore, "the last line for one row past the cap is not %q", oneMore)
+	titleOver := strings.ReplaceAll(s.evalString(meta+`.getAttribute('data-msg-title-many') || ''`), "{count}", fmt.Sprint(atoi(limit)+1))
+	s.check(s.evalString(`document.querySelector('[data-bulk-title]').textContent`) == titleOver, "the dialog title for one row past the cap is not %q", titleOver)
+	s.run("bulk cancel one over the cap", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
+	s.run("bulk select the page again", chromedp.Click(".table-admin thead input[data-bulk-select-all]", chromedp.NodeVisible))
+	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-pk]:not(:checked)').length)`) == "0", "the desktop select-all did not pick every row after the one-over-cap case")
+
 	s.setWidth(390, 844)
 	const phoneAll = "[data-bulk-bar] label input[data-bulk-select-all]"
 	s.run("bulk phone select all clears the page", chromedp.Click(phoneAll, chromedp.NodeVisible))
