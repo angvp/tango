@@ -608,6 +608,26 @@ func (a *framePageAudit) submitErrorStates() {
 	a.postErrorState("/accounts/register/", url.Values{"email": {"not-an-email"}, "password": {"x"}})
 	a.postErrorState("/accounts/password-reset/", url.Values{"email": {"not-an-email"}})
 	a.postBulkRejection()
+	a.visitErrorPages()
+}
+
+// visitErrorPages requests the admin's HTML error pages under the admin
+// session: a missing row, and a form posted without its CSRF token.
+func (a *framePageAudit) visitErrorPages() {
+	a.visitErrorPage("GET /admin/csp_page_note/{pk}/ (missing row)", http.MethodGet, "/admin/csp_page_note/999999/", "", nil, http.StatusNotFound)
+	a.visitErrorPage("POST /admin/csp_page_note/new/ (expired form)", http.MethodPost, "/admin/csp_page_note/new/", url.Values{"Body": {"x"}}.Encode(), map[string]string{"Content-Type": "application/x-www-form-urlencoded"}, http.StatusForbidden)
+}
+
+// visitErrorPage checks an error response's status and scans its markup. The
+// route walk's visit expects a 200, so an error page is requested here.
+func (a *framePageAudit) visitErrorPage(page, method, path, body string, headers map[string]string, status int) {
+	a.t.Helper()
+	response := a.request(method, path, body, headers, []*http.Cookie{a.session})
+	a.checkPolicyHeader(page, path, response)
+	if response.Code != status {
+		a.t.Errorf("%s: status = %d, want %d", page, response.Code, status)
+	}
+	a.scan(page, path, response.Body.String())
 }
 
 // postBulkRejection posts an empty bulk selection with the changelist's

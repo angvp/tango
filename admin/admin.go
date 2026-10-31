@@ -73,7 +73,8 @@ func New(store *db.Store, opts ...Option) tango.App {
 		if cfg.dashboard.enabled() {
 			landing = dashboardView(nav, cfg.branding, cfg.dashboard)
 		}
-		index := requireSession(store, landing)
+		page := pageChrome{nav: nav, brand: cfg.branding}
+		index := htmlPage(page, requireSession(store, landing))
 		routes := tango.URLs{
 			tango.Path(http.MethodGet, "/admin/", index, tango.Name("index"), hiddenPage),
 			// Also match "/admin" (no trailing slash) directly, rather than
@@ -81,12 +82,12 @@ func New(store *db.Store, opts ...Option) tango.App {
 			// and Include's own slash-normalization only applies to prefixes
 			// passed to Include, not to a literal pattern like this one.
 			tango.Path(http.MethodGet, "/admin", index, hiddenPage),
-			tango.Path(http.MethodGet, "/admin/login/", loginView(store, limiter, clientKey), tango.Name("login"), hiddenPage),
-			tango.Path(http.MethodPost, "/admin/login/", loginView(store, limiter, clientKey), hiddenPage),
-			tango.Path(http.MethodPost, "/admin/logout/", logoutView(store), tango.Name("logout"), hiddenPage),
-			tango.Path(http.MethodPost, "/admin/theme/", requireSession(store, themeView()), hiddenPage),
-			tango.Path(http.MethodPost, "/admin/messages/dismiss/", requireSession(store, dismissView()), hiddenPage),
-			tango.Path(http.MethodPost, densityBasePath, requireSession(store, densityView()), hiddenPage),
+			tango.Path(http.MethodGet, "/admin/login/", htmlPage(pageChrome{brand: cfg.branding}, loginView(store, limiter, clientKey)), tango.Name("login"), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/login/", htmlPage(pageChrome{brand: cfg.branding}, loginView(store, limiter, clientKey)), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/logout/", htmlPage(pageChrome{brand: cfg.branding}, logoutView(store)), tango.Name("logout"), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/theme/", htmlPage(page, requireSession(store, themeView())), hiddenPage),
+			tango.Path(http.MethodPost, "/admin/messages/dismiss/", htmlPage(page, requireSession(store, dismissView())), hiddenPage),
+			tango.Path(http.MethodPost, densityBasePath, htmlPage(page, requireSession(store, densityView())), hiddenPage),
 		}
 		routes = append(routes, assetRoutes()...)
 		for _, registration := range registrations {
@@ -137,10 +138,11 @@ func (a checkedApp) Checks() []tango.AppCheck {
 }
 
 func modelRoutes(modelPath string, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.URLs {
-	list := requireSession(store, listView(store, models, adminReg, registration, nav, brand))
-	create := requireSession(store, createView(store, models, adminReg, registration, nav, brand))
-	edit := requireSession(store, editView(store, models, adminReg, registration, nav, brand))
-	del := requireSession(store, deleteView(store, models, adminReg, registration, nav, brand))
+	page := pageChrome{nav: nav, brand: brand}
+	list := htmlPage(page, requireSession(store, listView(store, models, adminReg, registration, nav, brand)))
+	create := htmlPage(page, requireSession(store, createView(store, models, adminReg, registration, nav, brand)))
+	edit := htmlPage(page, requireSession(store, editView(store, models, adminReg, registration, nav, brand)))
+	del := htmlPage(page, requireSession(store, deleteView(store, models, adminReg, registration, nav, brand)))
 
 	urls := tango.URLs{
 		tango.Path(http.MethodGet, modelPath, list, hiddenPage),
@@ -152,7 +154,7 @@ func modelRoutes(modelPath string, store *db.Store, models *model.Registry, admi
 		tango.Path(http.MethodPost, modelPath+"{pk}/delete/", del, hiddenPage),
 	}
 	if registration.Options.BulkDelete {
-		bulk := requireSession(store, bulkDeleteView(store, registration, nav, brand))
+		bulk := htmlPage(page, requireSession(store, bulkDeleteView(store, registration, nav, brand)))
 		urls = append(urls, tango.Path(http.MethodPost, modelPath+"delete-selected/", bulk, hiddenPage))
 	}
 	return append(urls, previewRoutes(modelPath, store, registration)...)

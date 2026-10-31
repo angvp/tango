@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/angvp/tango"
-	"github.com/angvp/tango/i18n"
 )
 
 const pageSize = 25
@@ -273,12 +272,4 @@ func render(ctx *tango.Context, status int, tmpl *template.Template, data any) e
 		clearFlashCookie(ctx.ResponseWriter(), ctx.Request())
 	}
 	return ctx.HTML(status, tmpl, "layout", data)
-}
-
-func notFound(ctx *tango.Context) error {
-	return ctx.JSON(http.StatusNotFound, map[string]string{"error": i18n.T(ctx.Context(), "admin.error.not_found", "not found")})
-}
-
-func methodNotAllowed(ctx *tango.Context) error {
-	return ctx.JSON(http.StatusMethodNotAllowed, map[string]string{"error": i18n.T(ctx.Context(), "admin.error.method_not_allowed", "method not allowed")})
 }

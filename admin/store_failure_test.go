@@ -31,8 +31,13 @@ func TestEveryCRUDViewAnswersA500WithoutLeakingWhenTheModelsTableIsGone(t *testi
 			if response.Code != http.StatusInternalServerError {
 				t.Fatalf("%s %s = %d, want 500; body %.200s", tt.method, tt.path, response.Code, response.Body.String())
 			}
+			if got := response.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
+				t.Fatalf("500 Content-Type = %q, want text/html", got)
+			}
+			// The sidebar links the model's own admin path, which holds the
+			// table's name, so the table name is not a leak to check for.
 			body := strings.ToLower(response.Body.String())
-			for _, leak := range []string{"no such table", "does not exist", "select ", "crud_product"} {
+			for _, leak := range []string{"no such table", "does not exist", "select "} {
 				if strings.Contains(body, leak) {
 					t.Fatalf("the 500 leaked %q: %.200s", leak, response.Body.String())
 				}

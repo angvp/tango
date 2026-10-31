@@ -1,11 +1,7 @@
 package admin
 
 import (
-	"net/http"
 	"time"
-
-	"github.com/angvp/tango"
-	"github.com/angvp/tango/i18n"
 )
 
 // loginRateLimitAttempts and loginRateLimitWindow bound how many failed
@@ -18,10 +14,3 @@ const (
 	loginRateLimitAttempts = 5
 	loginRateLimitWindow   = time.Minute
 )
-
-// tooManyLoginAttempts writes a generic 429 response for a throttled
-// login attempt.
-func tooManyLoginAttempts(ctx *tango.Context) error {
-	ctx.ResponseWriter().Header().Set("Retry-After", "60")
-	return ctx.JSON(http.StatusTooManyRequests, map[string]string{"error": i18n.T(ctx.Context(), "admin.error.too_many_login_attempts", "too many login attempts, try again later")})
-}

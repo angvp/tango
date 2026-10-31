@@ -193,13 +193,3 @@ func requireSession(store *db.Store, next tango.View) tango.View {
 		return next(ctx)
 	}
 }
-
-// forbidden writes a plain 403 Forbidden response for an authenticated,
-// active account that lacks staff access.
-func forbidden(ctx *tango.Context) error {
-	w := ctx.ResponseWriter()
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusForbidden)
-	_, err := w.Write([]byte(i18n.T(ctx.Context(), "admin.error.not_staff", "403 Forbidden: this admin account does not have staff access.") + "\n"))
-	return err
-}
