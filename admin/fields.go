@@ -106,7 +106,7 @@ func contains(names []string, name string) bool {
 // stored row on edit, or the zero reflect.Value on create). This is the
 // single source of FieldContext for both rendering (buildFormFields) and
 // parsing (populateFromForm), so a Widget's Render and Parse always see
-// the same shape, per the Widget interface's own contract.
+// the same FieldContext, so a widget derives its form keys from Name on both sides.
 //
 // The second return value reports whether a foreign key field's related
 // model resolved to a registered model at all (always true for a
@@ -243,8 +243,7 @@ func formatFieldValue(v reflect.Value) string {
 // at its Go zero value, since existing is invalid. Every other field's
 // Widget.Parse receives the same FieldContext buildFormFields would have
 // rendered it with (built from existing, so an edit's Parse sees the row's
-// current values, matching what the form was actually rendered from) —
-// not just a bare field name — per the Widget interface's own contract.
+// current values, the values the form was rendered from), not a bare field name.
 func populateFromForm(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, dest reflect.Value, meta model.ModelMeta, opts adminregistry.Options, form FieldValues, existing reflect.Value) error {
 	var fieldErrors map[string]string
 	for _, field := range meta.Fields {

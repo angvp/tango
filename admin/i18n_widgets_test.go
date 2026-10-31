@@ -259,3 +259,31 @@ func TestHostWidgetMessagesNegotiateFromAcceptLanguage(t *testing.T) {
 		t.Errorf("Accept-Language not negotiated into the widget:\n%s", response.Body.String())
 	}
 }
+
+// A single host key overrides only its own message: every other widget text
+// keeps its English fallback, because the catalog does not carry it.
+func TestOneHostKeyOverridesOnlyItsOwnWidgetMessage(t *testing.T) {
+	i18ntest.Isolate(t)
+	i18n.RegisterCatalog("zz-one-key", map[string]string{"admin.markdown.tab_preview": "Vista previa"})
+	handler := buildI18NNoteAdmin(t, admin.Markdown(admin.WithMarkdownPreview(previewHTML)), resolveTo("zz-one-key"))
+	page := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
+	if !strings.Contains(page, ">Vista previa</button>") {
+		t.Errorf("host wording for the overridden key missing:\n%s", page)
+	}
+	if !strings.Contains(page, ">Write</button>") {
+		t.Errorf("a key the catalog lacks lost its English text:\n%s", page)
+	}
+	if strings.Contains(page, ">Preview</button>") {
+		t.Errorf("the overridden English text is still rendered:\n%s", page)
+	}
+}
+
+func TestHostWidgetParseFailureFallsBackToEnglishWithoutAHostKey(t *testing.T) {
+	i18ntest.Isolate(t)
+	i18n.RegisterCatalog("zz-note-parse", map[string]string{"notes.body_hint": "Escribe una nota corta"})
+	handler := buildI18NNoteAdmin(t, hostNoteWidget{}, resolveTo("zz-note-parse"))
+	rejected := doRequest(t, handler, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}, "Body": {"x"}})
+	if rejected.Code != http.StatusUnprocessableEntity || !strings.Contains(rejected.Body.String(), "Too short") {
+		t.Errorf("English Parse message missing (status %d):\n%s", rejected.Code, rejected.Body.String())
+	}
+}
