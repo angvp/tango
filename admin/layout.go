@@ -154,7 +154,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
     </form>{{end}}
   </div>
 </aside>
-<main id="main" class="content">
+<main id="main" tabindex="-1" class="content">
 <div id="admin-status" class="status-region" role="status">{{with .Notice}}<div class="alert-success status-message"><p class="status-text">{{.Text}}</p><form method="post" action="/admin/messages/dismiss/" class="status-dismiss"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="next" value="{{.Next}}"><button type="submit" class="btn-secondary">{{.Dismiss}}</button></form></div>{{end}}</div>
 {{block "content" .}}{{end}}
 </main>

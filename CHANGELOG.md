@@ -97,6 +97,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
   **Catalog impact:** `admin.bulk.rejected_title` ("Nothing was deleted", Spanish "No se eliminó nada") is the same key and wording as at v0.7.0, where it was the rejection page heading; this branch had removed it. `admin.index.title` ("Models", Spanish "Modelos") is a new key, absent at v0.7.0.
 
+- **Dismissing the admin status notice leaves keyboard focus in the page content.** Enter on the notice's Dismiss control reloads the page, and focus previously fell to the page body. The reloaded page now focuses its content region.
+
+  **Catalog impact:** none. No translation key was added or changed.
+
 ## [0.7.0] - 2026-10-25
 
 ### Added

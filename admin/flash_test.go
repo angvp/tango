@@ -342,8 +342,8 @@ func TestDismissHidesTheOutcomeAndItDoesNotReturn(t *testing.T) {
 	}
 
 	dismissed := signedRequest(handler, http.MethodPost, "/admin/messages/dismiss/", testSessionToken, url.Values{"next": {crudBasePath}})
-	if dismissed.Code != http.StatusFound || dismissed.Header().Get("Location") != crudBasePath {
-		t.Fatalf("dismiss = %d to %q, want a redirect to the list", dismissed.Code, dismissed.Header().Get("Location"))
+	if dismissed.Code != http.StatusFound || dismissed.Header().Get("Location") != crudBasePath+"#main" {
+		t.Fatalf("dismiss = %d to %q, want a redirect to the list's content region", dismissed.Code, dismissed.Header().Get("Location"))
 	}
 	after := signedRequest(handler, http.MethodGet, crudBasePath, testSessionToken, nil).Body.String()
 	if strings.Contains(after, "crud products deleted") || strings.Contains(after, "messages/dismiss") {

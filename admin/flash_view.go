@@ -23,6 +23,6 @@ func dismissView() tango.View {
 			return forbiddenCSRF(ctx)
 		}
 		clearFlashCookie(ctx.ResponseWriter(), ctx.Request())
-		return ctx.Redirect(safeAdminNext(ctx.Request().PostFormValue("next"), adminRootPath))
+		return ctx.Redirect(withContentFocus(safeAdminNext(ctx.Request().PostFormValue("next"), adminRootPath)))
 	}
 }

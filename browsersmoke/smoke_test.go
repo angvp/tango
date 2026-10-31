@@ -20,6 +20,8 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -586,6 +588,12 @@ const tabGroups = `(function () {
 
 const activeDescription = `document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : ''`
 
+// activeLabel names the focused control by its accessible label when it has
+// one, so the Tab walk can tell two links of the same kind apart.
+const activeLabel = `(function () { var el = document.activeElement; if (!el || el === document.body) return ''; return el.getAttribute('aria-label') || el.id || el.tagName; })()`
+
+const activeIsSubmit = `!!document.activeElement && document.activeElement.type === 'submit'`
+
 // tabPresses bounds the Tab walk through the changelist. It covers the
 // navigation, the toolbar and the first rows.
 const tabPresses = 40
@@ -612,12 +620,13 @@ func (s *smoke) changelistTabOrder() {
 	s.visit("changelist tab order", "/admin/smoke_note/")
 	s.check(s.eval(selectFirstRow), "the first row's checkbox could not be selected")
 
-	var sequence []string
+	var sequence, labels []string
 	first := map[string]int{}
 	for i := 0; i < tabPresses; i++ {
 		s.press(kb.Tab)
 		group := s.evalString(tabGroups)
 		sequence = append(sequence, group)
+		labels = append(labels, s.evalString(activeLabel))
 		if _, seen := first[group]; !seen {
 			first[group] = i
 		}
@@ -635,6 +644,49 @@ func (s *smoke) changelistTabOrder() {
 		s.check(at > last, "the %s region is reached before the region ahead of it: %v", group, sequence)
 		last = at
 	}
+	for _, action := range []string{`.table-actions a:nth-of-type(1)`, `.table-actions a:nth-of-type(2)`} {
+		want := s.evalString(`document.querySelector('.table-admin tbody ` + action + `').getAttribute('aria-label')`)
+		s.check(slices.Contains(labels, want), "Tab never reached the first row's control %q within %d presses: %v", want, tabPresses, labels)
+	}
+}
+
+// searchAndFilterKeyboard runs a search and then a filter from the keyboard
+// alone. Each result is checked against the page it changes: the search
+// narrows the rows to those containing the first row's identity, and the
+// filter puts its chosen value in the URL and keeps it selected after the
+// reload.
+func (s *smoke) searchAndFilterKeyboard() {
+	s.t.Helper()
+	s.setWidth(1440, 900)
+	s.visit("changelist keyboard search", "/admin/smoke_note/")
+	identity := s.evalString(`document.querySelector('.table-actions a').getAttribute('aria-label').replace(/^Edit /, '')`)
+	expected := s.evalString(`String(Array.from(document.querySelectorAll('.table-admin tbody tr')).filter(function (r) { return r.textContent.indexOf(` + strconv.Quote(identity) + `) >= 0; }).length)`)
+	s.run("type a search and press Enter",
+		chromedp.Focus("#list-search", chromedp.NodeVisible),
+		chromedp.SendKeys("#list-search", identity),
+		chromedp.KeyEvent(kb.Enter),
+	)
+	s.check(s.waitUntil(stepTimeout, `new URLSearchParams(location.search).get('q') === `+strconv.Quote(identity)), "the search did not submit the typed query")
+	rows := s.evalString(`String(document.querySelectorAll('.table-admin tbody tr').length)`)
+	s.check(rows == expected, "search for %q shows %s rows, want the %s that contain it", identity, rows, expected)
+
+	s.visit("changelist keyboard filter", "/admin/smoke_note/")
+	const filter = `select[name="filter_pinned"]`
+	options := s.evalString(`Array.from(document.querySelector('` + filter + `').options).map(function (o) { return o.value; }).join('|')`)
+	s.check(len(strings.Split(options, "|")) >= 2, "the pinned filter has no value to choose: %q", options)
+	chosen := strings.Split(options, "|")[1]
+	s.check(chosen != "", "the first filter value after Any is empty: %q", options)
+	s.run("focus the search and Tab to the filter", chromedp.Focus("#list-search", chromedp.NodeVisible))
+	s.press(kb.Tab)
+	s.check(s.eval(`!!document.activeElement && document.activeElement.matches('`+filter+`')`), "Tab from the search did not reach the filter: focus is %q", s.evalString(describeActive))
+	s.press(chosen[:1])
+	s.check(s.evalString(`document.querySelector('`+filter+`').value`) == chosen, "the keyboard did not change the filter to %q: value is %q", chosen, s.evalString(`document.querySelector('`+filter+`').value`))
+	for i := 0; i < 10 && !s.eval(activeIsSubmit); i++ {
+		s.press(kb.Tab)
+	}
+	s.run("submit the filter with the keyboard", chromedp.KeyEvent(kb.Enter))
+	s.check(s.waitUntil(stepTimeout, `new URLSearchParams(location.search).get('filter_pinned') === `+strconv.Quote(chosen)), "the filter did not apply %q", chosen)
+	s.check(s.evalString(`document.querySelector('`+filter+`').value`) == chosen, "the filter is not %q after the reload", chosen)
 }
 
 // bulkDialogKeyboard opens the bulk dialog from its trigger with Enter, then
@@ -1102,6 +1154,73 @@ func (s *smoke) adminFormSummary() {
 	s.check(s.evalString(active) == "field-Code", "focus after one field problem is on %q, want the invalid control", s.evalString(active))
 }
 
+// describeActive names the focused control by id, or save for the submit
+// button, and is empty when focus is on the page body.
+const describeActive = `(function (e) { if (!e || e === document.body) return ''; return e.id || (e.type === 'submit' ? 'save' : e.tagName); })(document.activeElement)`
+
+// createOrder lists the create form's keyboard path in DOM order, ending at the
+// first submit button.
+const createOrder = `(function () {
+	var out = [];
+	var els = document.getElementById('field-Code').form.querySelectorAll('input:not([type=hidden]),select,textarea,button,a[href]');
+	for (var i = 0; i < els.length; i++) {
+		var e = els[i];
+		if (e.disabled || e.getClientRects().length === 0) continue;
+		out.push(e.id || (e.type === 'submit' ? 'save' : e.tagName));
+		if (e.type === 'submit') break;
+	}
+	return out.join('|');
+})()`
+
+// focusRingShown reports whether the focused control is focus-visible and
+// carries the 4px ring that the focus style paints.
+const focusRingShown = `(function () { var e = document.activeElement; return !!e && e.matches(':focus-visible') && /0px 0px 0px 4px/.test(getComputedStyle(e).boxShadow); })()`
+
+// createFormKeyboard walks Tab through the create form to Save in DOM order,
+// with a visible focus ring on each control, types a valid record and saves it
+// with Enter. The save returns to the changelist with a status notice, which is
+// then dismissed from the keyboard.
+func (s *smoke) createFormKeyboard() {
+	s.t.Helper()
+	s.visit("admin create form keyboard", "/admin/smoke_code/new/")
+	order := strings.Split(s.evalString(createOrder), "|")
+	s.check(len(order) >= 3 && order[len(order)-1] == "save", "the create form's keyboard path does not end at Save: %v", order)
+	for i := 0; i < dismissPresses && s.evalString(describeActive) != "field-Code"; i++ {
+		s.press(kb.Tab)
+	}
+	s.check(s.evalString(describeActive) == "field-Code", "Tab never reached the first field of the create form within %d presses", dismissPresses)
+	for i, want := range order {
+		got := s.evalString(describeActive)
+		s.check(got == want, "Tab step %d reached %q, want %q in DOM order: %v", i, got, want, order)
+		s.check(s.eval(focusRingShown), "the focused control %q shows no focus ring: box-shadow %q", want, s.evalString(`getComputedStyle(document.activeElement).boxShadow`))
+		if want == "field-Code" || want == "field-Label" {
+			s.run("type a valid value into "+want, chromedp.SendKeys("#"+want, "ok"))
+		}
+		if i < len(order)-1 {
+			s.press(kb.Tab)
+		}
+	}
+
+	s.run("save the create form with Enter", chromedp.KeyEvent(kb.Enter))
+	s.check(s.waitUntil(stepTimeout, `location.pathname === '/admin/smoke_code/'`), "Enter on Save did not return to the changelist")
+	s.check(s.waitUntil(stepTimeout, `!!document.querySelector('#admin-status .status-dismiss button')`), "the saved record shows no status notice with a Dismiss control")
+
+	for i := 0; i < dismissPresses; i++ {
+		if s.eval(`!!document.activeElement && !!document.activeElement.form && document.activeElement.form.classList.contains('status-dismiss')`) {
+			break
+		}
+		s.press(kb.Tab)
+	}
+	s.check(s.eval(`!!document.activeElement && !!document.activeElement.form && document.activeElement.form.classList.contains('status-dismiss')`), "Tab never reached the status notice's Dismiss control within %d presses", dismissPresses)
+	s.run("dismiss the notice with Enter", chromedp.KeyEvent(kb.Enter))
+	s.check(s.waitUntil(stepTimeout, `!document.querySelector('#admin-status .status-dismiss')`), "Enter on Dismiss left the notice on the page")
+	s.check(s.evalString(`document.activeElement ? document.activeElement.id : ''`) == "main", "after the notice was dismissed focus is on %q, want the content region", s.evalString(describeActive))
+}
+
+// dismissPresses bounds the Tab walk from the top of the changelist to the
+// status notice's Dismiss control.
+const dismissPresses = 80
+
 // headerOf returns the Content-Security-Policy the server sends for path.
 func headerOf(t *testing.T, server *httptest.Server, path string) string {
 	t.Helper()
@@ -1186,6 +1305,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.bulkListCapAndPhoneSelectAll()
 	s.adminNavToggle()
 	s.changelistTabOrder()
+	s.searchAndFilterKeyboard()
 	s.bulkDialogKeyboard()
 	s.phoneDrawerKeyboard()
 	s.visit("admin change form", "/admin/smoke_note/1/")
@@ -1194,6 +1314,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.adminWidgetTabs()
 	s.visit("admin create form", "/admin/smoke_code/new/")
 	s.adminFormSummary()
+	s.createFormKeyboard()
 
 	s.visit("swagger ui", "/docs/")
 	rendered := s.waitUntil(swaggerTimeout, `!!document.querySelector('.swagger-ui')`)
