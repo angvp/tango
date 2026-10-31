@@ -44,7 +44,7 @@ var palette = []themeToken{
 	{Name: "accent-fg", Light: rgb{255, 255, 255}, Dark: rgb{11, 31, 63}},
 	{Name: "accent-ui", Light: rgb{1, 59, 138}, Dark: rgb{1, 170, 222}},
 	{Name: "ring", Light: rgb{1, 59, 138}, Dark: rgb{1, 170, 222}},
-	{Name: "selection-bg", Light: rgb{190, 226, 244}, Dark: rgb{1, 59, 138}},
+	{Name: "selection-bg", Light: rgb{190, 226, 244}, Dark: rgb{14, 116, 144}},
 	{Name: "selection-fg", Light: rgb{11, 31, 63}, Dark: rgb{232, 246, 252}},
 
 	// Destructive button.

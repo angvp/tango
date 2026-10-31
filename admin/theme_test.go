@@ -101,6 +101,23 @@ func TestDeclaredTokenPairsMeetWCAGInBothThemes(t *testing.T) {
 	}
 }
 
+// darkPairs are the pairs whose promise holds on dark surfaces only: the
+// selection fill has to stand out from the page it is painted over, which the
+// pale light-theme selection does not need to do by luminance alone.
+var darkPairs = []pair{
+	{"selection-bg", "surface", 3, "selection fill against cards"},
+	{"selection-bg", "surface-sunken", 3, "selection fill against the page"},
+}
+
+func TestDarkSelectionStandsOutFromDarkSurfaces(t *testing.T) {
+	for _, p := range darkPairs {
+		got := contrast(tokenValue(t, p.fg, true), tokenValue(t, p.bg, true))
+		if got < p.min {
+			t.Errorf("dark: %s on %s (%s) = %.2f:1, want at least %.1f:1", p.fg, p.bg, p.note, got, p.min)
+		}
+	}
+}
+
 func TestEveryTokenHasBothThemes(t *testing.T) {
 	seen := map[string]bool{}
 	for _, tok := range palette {
@@ -129,9 +146,9 @@ func TestLayoutLoadsTheStylesheetBeforeTheBody(t *testing.T) {
 	}
 }
 
-// The brand roles of the redesign (decisions D29 to D31): navy carries the
-// action, focus and selection on light surfaces; cyan does the same on dark
-// surfaces with an ink label, and is never text or focus on light.
+// Brand roles: navy carries the action, focus and selection on light surfaces;
+// cyan does the same on dark surfaces with an ink label, and is never text or
+// focus on light. Navy is never drawn on a dark surface.
 func TestPaletteCarriesTheBrandRoles(t *testing.T) {
 	navy, cyan, ink := rgb{1, 59, 138}, rgb{1, 170, 222}, rgb{11, 31, 63}
 	want := []struct {
@@ -157,9 +174,14 @@ func TestPaletteCarriesTheBrandRoles(t *testing.T) {
 			t.Errorf("dark=%v token %s = %v, want %v", w.dark, w.name, got, w.value)
 		}
 	}
-	for _, name := range []string{"accent", "accent-hover", "accent-ui", "ring", "selection-fg", "ink", "ink-muted", "ink-faint"} {
+	for _, name := range []string{"accent", "accent-hover", "accent-ui", "ring", "selection-bg", "selection-fg", "ink", "ink-muted", "ink-faint", "surface", "surface-sunken", "surface-hover"} {
 		if tokenValue(t, name, false) == cyan {
 			t.Errorf("light token %s is cyan; cyan is a decorative fill on light surfaces", name)
+		}
+	}
+	for _, name := range []string{"selection-bg", "surface", "surface-sunken", "surface-hover", "sidebar"} {
+		if tokenValue(t, name, true) == navy {
+			t.Errorf("dark token %s is navy; navy is never used on dark surfaces", name)
 		}
 	}
 }
