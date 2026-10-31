@@ -57,17 +57,17 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       </form>
     </dialog>{{end}}
     <div class="table-wrap">
-      <table class="table-admin">
+      <table class="table-admin {{if eq .Density "compact"}}table-compact{{else}}table-comfortable{{end}}">
         <caption class="sr-only">{{.ModelName}}</caption>
-        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col">{{.}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
+        <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col"{{if .Numeric}} class="cell-num"{{end}}>{{.Label}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
           {{if $.BulkDelete}}<td data-bulk-cell hidden><input type="checkbox" data-bulk-pk="{{.PK}}" data-bulk-identity="{{.Identity}}" aria-label="{{$.T "admin.bulk.select_row" "Select %s" .Identity}}"></td>{{end}}
-          {{range .Cells}}<td>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
+          {{range .Cells}}<td{{if .Numeric}} class="cell-num"{{end}}>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
           <td class="text-right">
             <div class="table-actions">
-              <a href="{{$.BasePath}}{{.PK}}/" class="btn-ghost">{{$.T "admin.button.edit" "Edit"}}</a>
-              <a href="{{$.BasePath}}{{.PK}}/delete/" class="btn-ghost text-danger-fg hover:bg-danger-bg">{{$.T "admin.button.delete" "Delete"}}</a>
+              <a href="{{$.BasePath}}{{.PK}}/" class="btn-ghost" aria-label="{{$.T "admin.list.edit_row" "Edit %s" .Identity}}">{{$.T "admin.button.edit" "Edit"}}</a>
+              <a href="{{$.BasePath}}{{.PK}}/delete/" class="btn-ghost text-danger-fg hover:bg-danger-bg" aria-label="{{$.T "admin.list.delete_row" "Delete %s" .Identity}}">{{$.T "admin.button.delete" "Delete"}}</a>
             </div>
           </td>
         </tr>{{end}}
@@ -160,11 +160,18 @@ type listRow struct {
 	Cells    []listCell
 }
 
+// listColumn is one changelist header. Numeric columns are right-aligned.
+type listColumn struct {
+	Label   string
+	Numeric bool
+}
+
 type listPageData struct {
 	chrome
 	ModelName   string
 	BasePath    string
-	Columns     []string
+	Columns     []listColumn
+	Density     string
 	Rows        []listRow
 	SearchQuery string
 	Filters     []filterControl

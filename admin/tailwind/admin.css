@@ -83,6 +83,8 @@
   .table-admin tbody tr { @apply hover:bg-surface-sunken/80 transition-colors; }
   .table-admin tbody tr:last-child td { @apply border-b-0; }
   .table-actions { @apply flex items-center justify-end gap-1; }
+  .table-admin .cell-num { @apply text-right tabular-nums; }
+  .table-compact thead th, .table-compact tbody td { @apply py-2; }
 
   .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
   .badge-true { @apply badge bg-success-bg text-success-fg; }

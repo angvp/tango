@@ -199,7 +199,7 @@ func TestChangelistOfAJSONModelIsUnchanged(t *testing.T) {
 	if strings.Contains(body, "json-widget") || strings.Contains(body, "data-json-formatted") {
 		t.Errorf("the changelist rendered JSON widget markup:\n%s", body)
 	}
-	if want := fmt.Sprintf(`<a href="%s%d/" class="btn-ghost">Edit</a>`, jsonDocumentBasePath, id); !strings.Contains(body, want) {
+	if want := fmt.Sprintf(`<a href="%s%d/" class="btn-ghost" aria-label="Edit 1">Edit</a>`, jsonDocumentBasePath, id); !strings.Contains(body, want) {
 		t.Errorf("the row is missing from the changelist; want %s in:\n%s", want, body)
 	}
 }

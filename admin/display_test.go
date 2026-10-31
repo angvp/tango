@@ -199,7 +199,7 @@ func TestLabelsOverrideARegisteredFieldHeaderOnlyWhenSet(t *testing.T) {
 	if !strings.Contains(body, `<th scope="col">Product name</th>`) {
 		t.Fatalf("Labels did not override the Name header:\n%s", body)
 	}
-	if !strings.Contains(body, `<th scope="col">Price</th>`) {
+	if !strings.Contains(body, `<th scope="col" class="cell-num">Price</th>`) {
 		t.Fatalf("a field without a Labels entry lost its default header:\n%s", body)
 	}
 }

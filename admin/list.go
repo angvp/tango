@@ -76,9 +76,9 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 
 		params := listParams(q, filters.Params)
 
-		columns := make([]string, len(registration.Options.ListDisplay))
+		columns := make([]listColumn, len(registration.Options.ListDisplay))
 		for i, name := range registration.Options.ListDisplay {
-			columns[i] = listHeader(name, registration.Options)
+			columns[i] = listColumn{Label: listHeader(name, registration.Options), Numeric: numericColumn(meta, name)}
 		}
 
 		data := listPageData{
@@ -86,6 +86,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			ModelName:   meta.Name,
 			BasePath:    basePath,
 			Columns:     columns,
+			Density:     densityFromRequest(ctx.Request()),
 			Rows:        rows,
 			SearchQuery: q,
 			Filters:     filters.Controls,

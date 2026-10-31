@@ -23,9 +23,10 @@ type Display = adminregistry.Display
 // listCell is one rendered changelist cell. Badge marks a plain boolean
 // value ("yes" or "no") for the badge styling; Href makes the cell a link.
 type listCell struct {
-	Text  string
-	Href  string
-	Badge string
+	Text    string
+	Href    string
+	Badge   string
+	Numeric bool
 }
 
 // plainCell is a cell holding an ordinary formatted field value.
@@ -111,7 +112,31 @@ func (r listRenderer) cell(row reflect.Value, column string) listCell {
 			return plainCell(relatedLabel(r.ctx, r.store, r.models, r.adminReg, field.ForeignKey, fieldValue.Interface()))
 		}
 	}
-	return plainCell(formatFieldValue(fieldValue))
+	cell := plainCell(formatFieldValue(fieldValue))
+	cell.Numeric = numericColumn(r.meta, column)
+	return cell
+}
+
+// numericColumn reports whether a column shows a plain number, which the
+// changelist aligns to the right. A foreign key shows a label and a host
+// Display function owns its text, so neither is numeric.
+func numericColumn(meta model.ModelMeta, column string) bool {
+	for _, field := range meta.Fields {
+		if field.Name != column {
+			continue
+		}
+		if field.ForeignKey != "" {
+			return false
+		}
+		switch field.Type.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64:
+			return true
+		}
+		return false
+	}
+	return false
 }
 
 // listHeader is a column's header: its Labels entry when the host set one,
