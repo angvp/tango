@@ -20,7 +20,7 @@ var spanishMexico = map[string]string{
 var spanish = map[string]string{
 	"admin.boolean.no":                      "No",
 	"admin.boolean.yes":                     "Sí",
-	"admin.bulk.back":                       "Volver a la lista",
+	"admin.bulk.back_to":                    "Volver a %s",
 	"admin.bulk.cascade_warning":            "Las filas que hacen referencia a estas filas también se eliminan. Esta acción no se puede deshacer.",
 	"admin.bulk.delete_selected":            "Eliminar selección",
 	"admin.bulk.outcome_many":               "Se eliminaron %d %s.",
@@ -32,8 +32,8 @@ var spanish = map[string]string{
 	"admin.bulk.confirm_title":              "¿Eliminar la selección de {count} %s?",
 	"admin.bulk.confirm_one":                "Eliminar 1 %s",
 	"admin.bulk.confirm_many":               "Eliminar {count} %s",
-	"admin.bulk.rejected_title":             "No se eliminó nada",
 	"admin.bulk.select_all":                 "Seleccionar las %d filas de esta página",
+	"admin.bulk.select_first":               "Seleccione al menos una fila para eliminar.",
 	"admin.bulk.select_row":                 "Seleccionar %s",
 	"admin.bulk.selected":                   "Seleccionados: {count}",
 	"admin.button.add_model":                "+ Añadir %s",

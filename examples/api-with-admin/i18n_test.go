@@ -257,7 +257,7 @@ func unwalkedKey(key string) bool {
 		"admin.list.filter_too_many", "admin.index.empty", "admin.login.invalid",
 		// Data the example does not have: boolean columns, filters, a second
 		// page of rows, an empty model, and traffic recorded by a Window.
-		"admin.boolean.", "admin.bulk.rejected_title", "admin.bulk.back", "admin.list.filter_any", "admin.list.empty_first", "admin.list.empty_no_filter_match", "admin.list.showing", "admin.list.count_one", "admin.list.count_many", "admin.list.filters_applied", "admin.list.filter_pair", "admin.list.clear_filters",
+		"admin.boolean.", "admin.bulk.back_to", "admin.list.filter_any", "admin.list.empty_first", "admin.list.empty_no_filter_match", "admin.list.showing", "admin.list.count_one", "admin.list.count_many", "admin.list.filters_applied", "admin.list.filter_pair", "admin.list.clear_filters",
 		"admin.pagination.", "admin.dashboard.activity.latency", "admin.dashboard.activity.samples",
 		"admin.dashboard.activity.total", "admin.dashboard.status.not_reported",
 	} {

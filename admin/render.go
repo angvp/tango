@@ -47,7 +47,8 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     {{if .Rows}}
     {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.confirm_title" "Delete {count} selected %s?" .Plural}}" data-msg-confirm-one="{{.T "admin.bulk.confirm_one" "Delete 1 %s" .Singular}}" data-msg-confirm-many="{{.T "admin.bulk.confirm_many" "Delete {count} %s" .Plural}}">
     <div class="flex items-center gap-3 border-b border-line-subtle px-5 py-3" data-bulk-bar hidden>
-      <button type="button" class="btn-danger" data-bulk-open disabled>{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
+      <button type="button" class="btn-danger" data-bulk-open disabled aria-describedby="bulk-reason">{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
+      <span id="bulk-reason" class="sr-only">{{.T "admin.bulk.select_first" "Select at least one row to delete."}}</span>
       <span class="text-sm text-ink-muted" data-bulk-count aria-live="polite"></span>
     </div>
     <dialog class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-line bg-surface p-0 text-ink shadow-lg backdrop:bg-scrim/60" data-bulk-dialog aria-labelledby="bulk-title">
@@ -250,7 +251,7 @@ var bulkRejectedTemplate = cloneWithContent(`{{define "content"}}
   <div class="card max-w-lg">
     <div class="card-body">
       <div class="alert-error" role="alert">{{.Message}}</div>
-      <a href="{{.BasePath}}" class="btn-secondary">{{.T "admin.bulk.back" "Back to the list"}}</a>
+      <a href="{{.BasePath}}" class="btn-secondary">{{.T "admin.bulk.back_to" "Back to %s" .Plural}}</a>
     </div>
   </div>
 </div>
@@ -260,6 +261,7 @@ type bulkRejectedPageData struct {
 	chrome
 	Title    string
 	Message  string
+	Plural   string
 	BasePath string
 }
 

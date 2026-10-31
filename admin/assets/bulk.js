@@ -35,7 +35,6 @@
     root.querySelectorAll("[data-bulk-cell]").forEach(function (cell) {
       cell.hidden = false;
     });
-    bar.hidden = false;
 
     function checked() {
       return boxes.filter(function (box) {
@@ -45,6 +44,7 @@
 
     function refresh() {
       var picked = checked().length;
+      bar.hidden = picked === 0;
       open.disabled = picked === 0;
       counter.textContent = picked === 0 ? "" : text(root, "selected", { count: picked });
       if (selectAll) {

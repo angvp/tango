@@ -273,6 +273,24 @@ var signedInShots = []shot{
 			chromedp.Submit("#field-Title"),
 		}
 	}},
+	{name: "bulk-bar-selected", ready: "[data-bulk-count]:not(:empty)", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_book/"),
+			chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible),
+		}
+	}},
+	// The selection names a row that no longer exists, so the server refuses the
+	// whole action and shows the rejection page. The key is rewritten in the page,
+	// the only way a browser can send a stale selection.
+	{name: "bulk-rejection", ready: ".alert-error", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_book/"),
+			chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible),
+			chromedp.Click("[data-bulk-open]", chromedp.NodeVisible),
+			script(`document.querySelectorAll('[data-bulk-form] input[name=pk]').forEach(function (i) { i.value = '999999'; })`),
+			chromedp.Click("[data-bulk-confirm]", chromedp.NodeVisible),
+		}
+	}},
 	// Compact density is the last shot: its cookie outlives this step in the
 	// shared browser, so no later shot may depend on the default density.
 	{name: "changelist-rows-compact", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {

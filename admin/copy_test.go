@@ -151,3 +151,19 @@ func TestNoRawGoTypeNameOnAnyPage(t *testing.T) {
 		}
 	}
 }
+
+func TestBulkRejectionHeadingIsTheSectionAndTheMessageSitsBeneath(t *testing.T) {
+	handler, sqlDB := buildMessageBookAdmin(t)
+	seedMessageBook(t, sqlDB, "Dune")
+
+	body := doRequest(t, handler, http.MethodPost, "/admin/message_book/delete-selected/", bulkForm(1, 999)).Body.String()
+	if !strings.Contains(body, `<h1 class="topbar-title">Books</h1>`) {
+		t.Fatalf("rejection heading is not the section name: %.400s", body)
+	}
+	if strings.Contains(body, `<h1 class="topbar-title">Nothing was deleted`) {
+		t.Fatal("rejection heading repeats the message")
+	}
+	if !strings.Contains(body, `Back to books`) {
+		t.Fatalf("rejection page lacks the plural back link: %.400s", body)
+	}
+}

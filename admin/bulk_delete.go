@@ -15,6 +15,7 @@ import (
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/i18n"
+	"github.com/angvp/tango/internal/adminregistry"
 	"github.com/angvp/tango/model"
 )
 
@@ -167,12 +168,14 @@ func removeBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, fie
 
 // rejectBulk answers a refused bulk delete with an admin page, because the
 // request comes from a form submission a person is looking at.
-func rejectBulk(ctx *tango.Context, nav []navItem, brand Branding, meta model.ModelMeta, section, basePath, key, fallback string, args ...any) error {
-	title := i18n.T(ctx.Context(), "admin.bulk.rejected_title", "Nothing was deleted")
+func rejectBulk(ctx *tango.Context, nav []navItem, brand Branding, meta model.ModelMeta, opts adminregistry.Options, basePath, key, fallback string, args ...any) error {
+	section := sectionName(meta, opts)
+	current := i18n.T(ctx.Context(), "admin.bulk.delete_selected", "Delete selected")
 	return render(ctx, http.StatusBadRequest, bulkRejectedTemplate, bulkRejectedPageData{
-		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: section, Href: basePath}, crumb{Label: title}),
-		Title:    title,
+		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: section, Href: basePath}, crumb{Label: current}),
+		Title:    section,
 		Message:  i18n.T(ctx.Context(), key, fallback, args...),
+		Plural:   pluralNoun(meta, opts),
 		BasePath: basePath,
 	})
 }
@@ -235,11 +238,11 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration, nav []navIt
 		raws := form[bulkPKField]
 		count, countErr := strconv.Atoi(form.Get(bulkCountField))
 		if len(raws) == 0 || len(raws) > pageSize || countErr != nil || count != len(raws) {
-			return rejectBulk(ctx, nav, brand, meta, sectionName(meta, registration.Options), basePath, "admin.error.bulk_invalid", "Nothing was deleted. The selection is not valid.")
+			return rejectBulk(ctx, nav, brand, meta, registration.Options, basePath, "admin.error.bulk_invalid", "Nothing was deleted. The selection is not valid.")
 		}
 		keys, ok := parseBulkKeys(field, raws)
 		if !ok {
-			return rejectBulk(ctx, nav, brand, meta, sectionName(meta, registration.Options), basePath, "admin.error.bulk_invalid", "Nothing was deleted. The selection is not valid.")
+			return rejectBulk(ctx, nav, brand, meta, registration.Options, basePath, "admin.error.bulk_invalid", "Nothing was deleted. The selection is not valid.")
 		}
 
 		err = store.InTx(ctx.Context(), func(tx *db.Store) error {
@@ -247,7 +250,7 @@ func bulkDeleteView(store *db.Store, registration ModelRegistration, nav []navIt
 		})
 		switch {
 		case errors.Is(err, errBulkKeyMissing):
-			return rejectBulk(ctx, nav, brand, meta, sectionName(meta, registration.Options), basePath, "admin.error.bulk_selected_missing", "Nothing was deleted. One selected %s no longer exists.", displayNoun(meta, registration.Options))
+			return rejectBulk(ctx, nav, brand, meta, registration.Options, basePath, "admin.error.bulk_selected_missing", "Nothing was deleted. One selected %s no longer exists.", displayNoun(meta, registration.Options))
 		case err != nil:
 			return err
 		}

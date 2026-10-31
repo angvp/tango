@@ -153,3 +153,18 @@ func TestBulkDeleteScriptAssetIsServed(t *testing.T) {
 		t.Errorf("asset does not open the confirmation dialog")
 	}
 }
+
+func TestBulkDeleteButtonNamesItsReasonForAssistiveTech(t *testing.T) {
+	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
+	seedProduct(t, sqlDB, "Widget", 3)
+	body := doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String()
+	match := regexp.MustCompile(`<button[^>]*data-bulk-open[^>]*aria-describedby="([^"]+)"|<button[^>]*aria-describedby="([^"]+)"[^>]*data-bulk-open`).FindStringSubmatch(body)
+	if match == nil {
+		t.Fatal("the Delete selected button has no aria-describedby")
+	}
+	id := match[1] + match[2]
+	reason := regexp.MustCompile(`id="` + id + `"[^>]*>([^<]*)<`).FindStringSubmatch(body)
+	if reason == nil || reason[1] != "Select at least one row to delete." {
+		t.Fatalf("reason element %q does not carry the disabled reason: %v", id, reason)
+	}
+}

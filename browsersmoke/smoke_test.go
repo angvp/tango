@@ -584,6 +584,24 @@ func (s *smoke) bulkConfirmFollowsCount() {
 	s.check(many == manyWant, "the bulk confirm button read %q with two rows selected, want %q", many, manyWant)
 }
 
+// bulkBarFollowsSelection checks the bar is hidden until a row is picked, that
+// select-all turns indeterminate with one of several rows picked, and that the
+// dialog takes focus on Cancel, closes on Escape and returns focus to the
+// Delete selected button. The dialog is closed without a submit.
+func (s *smoke) bulkBarFollowsSelection() {
+	s.t.Helper()
+	const bar = `document.querySelector('[data-bulk-bar]').hidden`
+	s.check(s.evalString("String("+bar+")") == "true", "the bulk bar is shown with no row selected")
+	s.run("bulk bar select first row", chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible))
+	s.check(s.evalString("String(!"+bar+")") == "true", "the bulk bar stays hidden after a row is picked")
+	s.check(s.evalString(`String(document.querySelector('[data-bulk-select-all]').indeterminate)`) == "true", "select-all is not indeterminate with one of several rows picked")
+	s.run("bulk bar open dialog", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	s.check(s.evalString(`String(document.activeElement && document.activeElement.hasAttribute('data-bulk-cancel'))`) == "true", "the dialog did not open with Cancel focused")
+	s.run("bulk bar escape closes", chromedp.KeyEvent(kb.Escape))
+	s.check(s.evalString(`String(document.querySelector('[data-bulk-dialog]').open)`) == "false", "Escape did not close the dialog")
+	s.check(s.evalString(`String(document.activeElement && document.activeElement.hasAttribute('data-bulk-open'))`) == "true", "focus did not return to Delete selected")
+}
+
 const confirmText = `document.querySelector('[data-bulk-confirm]').textContent`
 
 // evalString evaluates expr and returns its string value.
@@ -813,6 +831,8 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.visit("admin changelist", "/admin/smoke_note/")
 	s.phoneChangelist()
 	s.bulkConfirmFollowsCount()
+	s.visit("admin changelist bulk bar", "/admin/smoke_note/")
+	s.bulkBarFollowsSelection()
 	s.adminNavToggle()
 	s.visit("admin change form", "/admin/smoke_note/1/")
 	s.adminMarkdownPreview()

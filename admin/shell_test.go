@@ -126,7 +126,7 @@ func TestBreadcrumbsLinkTheTrailAndMarkTheCurrentItem(t *testing.T) {
 		{"edit", []crumbLink{model}, "Widget"},
 		{"edit-422", []crumbLink{model}, "Widget"},
 		{"delete", []crumbLink{model, {crudBasePath + "1/", "Widget"}}, "Delete"},
-		{"bulk", []crumbLink{model}, "Nothing was deleted"},
+		{"bulk", []crumbLink{model}, "Delete selected"},
 	}
 	for _, tt := range tests {
 		doc := parseShell(t, pages[tt.page])
