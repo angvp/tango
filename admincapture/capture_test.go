@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,6 +70,36 @@ type captureEntry struct {
 	Published bool
 }
 
+// captureDraft has no published row, so a filter on it matches nothing and the
+// changelist shows its filtered empty state.
+type captureDraft struct {
+	ID        int64 `tango:"pk"`
+	Title     string
+	Published bool
+}
+
+// dashboardFeed is what the capture site's status card reports. The server
+// runs in this process, so a shot sets the feed before it visits the page, and
+// each dashboard shot sets every field it depends on.
+var dashboardFeed struct {
+	sync.Mutex
+	status admin.DashboardStatus
+	err    error
+}
+
+func reachableStatus() admin.DashboardStatus {
+	return admin.DashboardStatus{Database: admin.DatabaseReachable, Dialect: "SQLite", TrackingTable: admin.TrackingTablePresent, Release: "dev"}
+}
+
+func setDashboardFeed(status admin.DashboardStatus, err error) chromedp.Action[chromedp.Void] {
+	return chromedp.Func(func(context.Context, *chromedp.Target) error {
+		dashboardFeed.Lock()
+		defer dashboardFeed.Unlock()
+		dashboardFeed.status, dashboardFeed.err = status, err
+		return nil
+	})
+}
+
 // seededEntries is more than one page of entries, and half of them are
 // published, so a filter leaves a page that still shows its summary.
 const seededEntries = 30
@@ -80,7 +111,7 @@ type captureTag struct {
 
 func captureApp() tango.App {
 	return tango.NewApp("capture", func(registry *tango.Registry) error {
-		for _, value := range []any{captureBook{}, captureTag{}, captureEntry{}} {
+		for _, value := range []any{captureBook{}, captureTag{}, captureEntry{}, captureDraft{}} {
 			if err := registry.Models().Register(value); err != nil {
 				return err
 			}
@@ -99,6 +130,13 @@ func captureApp() tango.App {
 		}); err != nil {
 			return err
 		}
+		if err := registry.Admin().Register(captureDraft{}, admin.Options{
+			ListDisplay: []string{"Title", "Published"},
+			Search:      []string{"Title"},
+			Filters:     []string{"Published"},
+		}); err != nil {
+			return err
+		}
 		return registry.Admin().Register(captureTag{}, admin.Options{ListDisplay: []string{"Name"}, Search: []string{"Name"}})
 	})
 }
@@ -106,7 +144,7 @@ func captureApp() tango.App {
 func site(t *testing.T) http.Handler {
 	t.Helper()
 	models := model.NewRegistry()
-	for _, value := range []any{admin.AdminUser{}, admin.AdminSession{}, captureBook{}, captureTag{}, captureEntry{}} {
+	for _, value := range []any{admin.AdminUser{}, admin.AdminSession{}, captureBook{}, captureTag{}, captureEntry{}, captureDraft{}} {
 		if err := models.Register(value); err != nil {
 			t.Fatalf("register %T: %v", value, err)
 		}
@@ -135,6 +173,11 @@ func site(t *testing.T) http.Handler {
 			t.Fatalf("seed book: %v", err)
 		}
 	}
+	for i := 1; i <= 3; i++ {
+		if _, err := sqlDB.Exec(`INSERT INTO capture_draft (id, title, published) VALUES (?, ?, ?)`, i, fmt.Sprintf("Draft %d", i), false); err != nil {
+			t.Fatalf("seed draft: %v", err)
+		}
+	}
 	for i := 1; i <= seededEntries; i++ {
 		if _, err := sqlDB.Exec(`INSERT INTO capture_entry (id, title, published) VALUES (?, ?, ?)`, i, fmt.Sprintf("Entry %02d", i), i%2 == 0); err != nil {
 			t.Fatalf("seed entry: %v", err)
@@ -146,7 +189,9 @@ func site(t *testing.T) http.Handler {
 			admin.New(store,
 				admin.WithDashboard(admin.DashboardConfig{
 					Status: func(context.Context) (admin.DashboardStatus, error) {
-						return admin.DashboardStatus{Database: admin.DatabaseReachable, Dialect: "SQLite", TrackingTable: admin.TrackingTablePresent, Release: "dev"}, nil
+						dashboardFeed.Lock()
+						defer dashboardFeed.Unlock()
+						return dashboardFeed.status, dashboardFeed.err
 					},
 				}),
 				admin.WithMiddleware(tango.SecurityHeaders(tango.WithContentSecurityPolicy(admin.ContentSecurityPolicy()))),
@@ -259,7 +304,30 @@ var signedInShots = []shot{
 		}
 	}},
 	{name: "dashboard", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
-		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/")}
+		return []chromedp.Action[chromedp.Void]{setDashboardFeed(reachableStatus(), nil), visit(b, "/admin/")}
+	}},
+	// One dashboard shot per badge variant and the warning alert. The neutral
+	// alert needs a site with no status source, which this site does not have.
+	{name: "dashboard-badge-danger", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		unreachable := reachableStatus()
+		unreachable.Database = admin.DatabaseUnreachable
+		return []chromedp.Action[chromedp.Void]{setDashboardFeed(unreachable, nil), visit(b, "/admin/")}
+	}},
+	{name: "dashboard-badge-neutral", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		unknown := reachableStatus()
+		unknown.Database = admin.DatabaseUnknown
+		return []chromedp.Action[chromedp.Void]{setDashboardFeed(unknown, nil), visit(b, "/admin/")}
+	}},
+	{name: "dashboard-badge-warning", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		pending := reachableStatus()
+		pending.Pending = []string{"0002_add_year", "0003_add_price"}
+		return []chromedp.Action[chromedp.Void]{setDashboardFeed(pending, nil), visit(b, "/admin/")}
+	}},
+	{name: "dashboard-alert-warning", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{setDashboardFeed(admin.DashboardStatus{}, context.DeadlineExceeded), visit(b, "/admin/")}
+	}},
+	{name: "filter-no-match", ready: ".content-body", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_draft/?filter_published=yes")}
 	}},
 	{name: "phone-drawer-closed", phoneOnly: true, ready: ".menu-btn", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/")}
