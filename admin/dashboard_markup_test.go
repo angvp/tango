@@ -52,7 +52,8 @@ func TestDashboardUsesTheAdminsCardAndRowStructure(t *testing.T) {
 	}
 }
 
-// Every label and value names its colour from the admin's token palette, so nothing
+// Every label and value names its colour from the admin's token palette,
+// directly or through a named component, so nothing
 // depends on an inherited or browser-default colour, and the page carries no
 // decoration the admin does not use.
 func TestDashboardTextColoursComeFromTheAdminPaletteWithNoDecoration(t *testing.T) {
@@ -63,7 +64,7 @@ func TestDashboardTextColoursComeFromTheAdminPaletteWithNoDecoration(t *testing.
 	}
 	page := body[start : strings.LastIndex(body, "</section>")+len("</section>")]
 	for _, tag := range regexp.MustCompile(`<(?:dt|dd|h2|h3|p)\b[^>]*>`).FindAllString(page, -1) {
-		if !regexp.MustCompile(`text-(ink|ink-muted|ink-faint|success-fg|danger-fg)\b`).MatchString(tag) {
+		if !regexp.MustCompile(`text-(ink|ink-muted|ink-faint|success-fg|danger-fg)\b|\b(stat-label|stat-value|section-title|section-label|text-hint|panel-note(-muted|-tail)?)\b`).MatchString(tag) {
 			t.Errorf("%s names no palette text colour", tag)
 		}
 	}
@@ -116,5 +117,23 @@ func TestDashboardCarriesNoRawColourClasses(t *testing.T) {
 	page := body[start : strings.LastIndex(body, "</section>")+len("</section>")]
 	if raw := rawColourClasses(page); len(raw) > 0 {
 		t.Errorf("dashboard uses raw colour classes: %q", raw)
+	}
+}
+
+// Repeated label/value rows are one named component, not a utility string
+// copied into every row.
+func TestDashboardRowsUseTheNamedRowComponent(t *testing.T) {
+	body := markupBody(t)
+	rows := strings.Count(body, "<dt ")
+	if got := strings.Count(body, `class="stat-row"`); got != rows {
+		t.Errorf("stat-row count = %d, want one per <dt> (%d)", got, rows)
+	}
+	for _, label := range []string{`<dt class="stat-label"`, `<dd class="stat-value`} {
+		if !strings.Contains(body, label) {
+			t.Errorf("rows lack %s", label)
+		}
+	}
+	if strings.Contains(body, "sm:grid-cols-[14rem_1fr]") {
+		t.Error("rows still carry the copied utility string")
 	}
 }

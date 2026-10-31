@@ -51,7 +51,7 @@ func TestChangelistAndDeleteUseTokenClasses(t *testing.T) {
 	id := seedBook(t, sqlDB, "Live Title", true, author)
 
 	list := doRequest(t, handler, "GET", flBookPath, nil).Body.String()
-	for _, want := range []string{`btn-ghost text-danger-fg hover:bg-danger-bg`, `text-xs font-medium text-ink-muted`} {
+	for _, want := range []string{`btn-ghost text-danger-fg hover:bg-danger-bg`, `field-caption`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("changelist lacks %q", want)
 		}

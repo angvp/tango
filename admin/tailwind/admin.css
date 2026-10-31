@@ -90,4 +90,19 @@
   .empty-state { @apply flex flex-col items-center justify-center gap-1 px-5 py-16 text-center; }
   .empty-state-title { @apply text-sm font-medium text-ink-muted; }
   .empty-state-body { @apply text-sm text-ink-faint; }
+
+  .stat-row { @apply flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start; }
+  .stat-label { @apply text-sm text-ink-faint; }
+  .stat-value { @apply text-right text-sm text-ink sm:text-left; }
+  .stat-value-num { @apply tabular-nums; }
+  .row-list { @apply divide-y divide-line-subtle; }
+  .section-title { @apply text-sm font-semibold text-ink; }
+  .section-label { @apply px-5 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-ink-faint; }
+  .panel-note { @apply px-5 py-4 text-sm text-ink-faint; }
+  .panel-note-muted { @apply px-5 py-4 text-sm text-ink-muted; }
+  .panel-note-tail { @apply px-5 pb-4 text-sm text-ink-faint; }
+  .text-hint { @apply text-sm text-ink-faint; }
+  .field-caption { @apply text-xs font-medium text-ink-muted; }
+  .inline-row { @apply flex items-center gap-2; }
+  .theme-option { @apply rounded-md px-2 py-1 text-xs font-medium; }
 }

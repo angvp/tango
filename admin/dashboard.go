@@ -122,7 +122,7 @@ var dashboardTemplate = cloneWithContent(dashboardSource + activityCardSource + 
 
 const dashboardSource = `{{define "content"}}
 <header class="topbar">
-  <div class="flex items-center gap-2">
+  <div class="inline-row">
     {{template "menuBtn" .}}
     <h1 class="topbar-title">{{.T "admin.dashboard.title" "Dashboard"}}</h1>
   </div>

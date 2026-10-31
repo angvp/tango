@@ -69,41 +69,41 @@ func millis(seconds float64) string {
 const activityCardSource = `{{define "activityCard"}}
 <section class="card" data-dashboard="activity" data-state="{{.Activity.State}}">
   <div class="card-header">
-    <h2 class="text-sm font-semibold text-ink">{{.T "admin.dashboard.activity.title" "Activity"}}</h2>
-    {{if eq .Activity.State "ready"}}<p class="text-sm text-ink-faint"><span data-activity="scope">{{.Activity.Snapshot.Scope}}</span> &middot; <span data-activity="window">{{.T "admin.dashboard.activity.window" "Window since %s, %s" .Activity.SinceLabel .Activity.WindowLabel}}</span></p>{{end}}
+    <h2 class="section-title">{{.T "admin.dashboard.activity.title" "Activity"}}</h2>
+    {{if eq .Activity.State "ready"}}<p class="text-hint"><span data-activity="scope">{{.Activity.Snapshot.Scope}}</span> &middot; <span data-activity="window">{{.T "admin.dashboard.activity.window" "Window since %s, %s" .Activity.SinceLabel .Activity.WindowLabel}}</span></p>{{end}}
   </div>
-  {{if eq .Activity.State "unavailable"}}<p class="px-5 py-4 text-sm text-ink-muted">{{.T "admin.dashboard.unavailable" "Unavailable"}}</p>
-  {{else if eq .Activity.State "not-configured"}}<p class="px-5 py-4 text-sm text-ink-faint">{{.T "admin.dashboard.not_configured" "Not configured"}}</p>
+  {{if eq .Activity.State "unavailable"}}<p class="panel-note-muted">{{.T "admin.dashboard.unavailable" "Unavailable"}}</p>
+  {{else if eq .Activity.State "not-configured"}}<p class="panel-note">{{.T "admin.dashboard.not_configured" "Not configured"}}</p>
   {{else}}
-  <h3 class="px-5 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-ink-faint">{{.T "admin.dashboard.activity.requests" "Requests"}}</h3>
+  <h3 class="section-label">{{.T "admin.dashboard.activity.requests" "Requests"}}</h3>
   {{if .Activity.HasRequests}}
-  <dl class="divide-y divide-line-subtle" data-activity="requests">
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">{{.T "admin.dashboard.activity.total" "Total"}}</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Requests.Total}}</dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">2xx</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Requests.Class2xx}}</dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">3xx</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Requests.Class3xx}}</dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">4xx</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Requests.Class4xx}}</dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">5xx</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Requests.Class5xx}}</dd></div>
+  <dl class="row-list" data-activity="requests">
+    <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.total" "Total"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Total}}</dd></div>
+    <div class="stat-row"><dt class="stat-label">2xx</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Class2xx}}</dd></div>
+    <div class="stat-row"><dt class="stat-label">3xx</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Class3xx}}</dd></div>
+    <div class="stat-row"><dt class="stat-label">4xx</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Class4xx}}</dd></div>
+    <div class="stat-row"><dt class="stat-label">5xx</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Requests.Class5xx}}</dd></div>
   </dl>
-  <h3 class="px-5 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-ink-faint">{{.T "admin.dashboard.activity.latency" "Latency"}}</h3>
-  <dl class="divide-y divide-line-subtle" data-activity="latency">
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">p50</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.P50}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">p95</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.P95}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">p99</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.P99}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
+  <h3 class="section-label">{{.T "admin.dashboard.activity.latency" "Latency"}}</h3>
+  <dl class="row-list" data-activity="latency">
+    <div class="stat-row"><dt class="stat-label">p50</dt><dd class="stat-value stat-value-num">{{.Activity.P50}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
+    <div class="stat-row"><dt class="stat-label">p95</dt><dd class="stat-value stat-value-num">{{.Activity.P95}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
+    <div class="stat-row"><dt class="stat-label">p99</dt><dd class="stat-value stat-value-num">{{.Activity.P99}} <span class="text-ink-faint">({{.T "admin.dashboard.activity.samples" "%d samples" .Activity.Snapshot.Requests.Total}})</span></dd></div>
   </dl>
   {{else}}
-  <p class="px-5 pb-4 text-sm text-ink-faint">{{.T "admin.dashboard.activity.no_requests" "No requests yet"}}</p>
+  <p class="panel-note-tail">{{.T "admin.dashboard.activity.no_requests" "No requests yet"}}</p>
   {{end}}
   <div class="border-t border-line-subtle"></div>
-  <h3 class="px-5 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-ink-faint">{{.T "admin.dashboard.activity.jobs" "Job runs"}}</h3>
+  <h3 class="section-label">{{.T "admin.dashboard.activity.jobs" "Job runs"}}</h3>
   {{if .Activity.HasJobs}}
   <dl class="divide-y divide-line-subtle pb-2" data-activity="jobs">
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">{{.T "admin.dashboard.activity.job.success" "success"}}</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Jobs.Success}}</dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">{{.T "admin.dashboard.activity.job.error" "error"}}</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Jobs.Error}}</dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">{{.T "admin.dashboard.activity.job.panic" "panic"}}</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Jobs.Panic}}</dd></div>
-    <div class="flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start"><dt class="text-sm text-ink-faint">{{.T "admin.dashboard.activity.job.canceled" "canceled"}}</dt><dd class="text-right text-sm tabular-nums text-ink sm:text-left">{{.Activity.Snapshot.Jobs.Canceled}}</dd></div>
+    <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.success" "success"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Success}}</dd></div>
+    <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.error" "error"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Error}}</dd></div>
+    <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.panic" "panic"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Panic}}</dd></div>
+    <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.canceled" "canceled"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Canceled}}</dd></div>
   </dl>
   {{else}}
-  <p class="px-5 pb-4 text-sm text-ink-faint">{{.T "admin.dashboard.activity.no_jobs" "No job runs yet"}}</p>
+  <p class="panel-note-tail">{{.T "admin.dashboard.activity.no_jobs" "No job runs yet"}}</p>
   {{end}}
   {{end}}
 </section>

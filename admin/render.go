@@ -12,7 +12,7 @@ const pageSize = 25
 
 var listTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
-  <div class="flex items-center gap-2">
+  <div class="inline-row">
     {{template "menuBtn" .}}
     <h1 class="topbar-title">{{.ModelName}}</h1>
   </div>
@@ -24,12 +24,12 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     <div class="card-header">
       <form method="get" class="flex flex-wrap items-end gap-3 w-full">
         <div class="flex flex-col gap-1 flex-1 min-w-[200px]">
-          <label for="list-search" class="text-xs font-medium text-ink-muted">{{.T "admin.list.search_label" "Search"}}</label>
+          <label for="list-search" class="field-caption">{{.T "admin.list.search_label" "Search"}}</label>
           <input id="list-search" type="text" name="q" value="{{.SearchQuery}}" placeholder="{{.T "admin.list.search_placeholder" "Search %s…" .ModelName}}" class="input">
         </div>
         {{range .Filters}}<div class="flex flex-col gap-1">
-          {{if .Options}}<label for="{{.ID}}" class="text-xs font-medium text-ink-muted">{{.Label}}</label>
-          <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{else}}<span class="text-xs font-medium text-ink-muted">{{.Label}}</span>{{end}}
+          {{if .Options}}<label for="{{.ID}}" class="field-caption">{{.Label}}</label>
+          <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{else}}<span class="field-caption">{{.Label}}</span>{{end}}
           {{if .Applied}}<input type="hidden" name="{{.Key}}" value="{{.AppliedValue}}"><p class="text-xs text-ink-muted">{{.Applied}}</p>{{end}}
           {{if .Message}}<p class="text-xs text-ink-faint">{{.Message}}</p>{{end}}
         </div>{{end}}
@@ -50,7 +50,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         <h2 id="bulk-title" class="text-base font-semibold text-ink" data-bulk-title></h2>
         <ul class="my-3 max-h-48 list-disc overflow-y-auto pl-5 text-sm text-ink-muted" data-bulk-list></ul>
         <p class="mb-5 text-sm text-ink-muted">{{.T "admin.bulk.cascade_warning" "Rows that reference these rows are deleted with them. This action cannot be undone."}}</p>
-        <div class="flex items-center gap-2">
+        <div class="inline-row">
           <button type="submit" class="btn-danger" data-bulk-confirm>{{.T "admin.button.confirm_delete" "Confirm delete"}}</button>
           <button type="button" class="btn-secondary" data-bulk-cancel autofocus>{{.T "admin.button.cancel" "Cancel"}}</button>
         </div>
@@ -107,7 +107,7 @@ var widgetScriptTag = `<script src="` + widgetsAsset.URL + `" defer></script>`
 
 var formTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
-  <div class="flex items-center gap-2">
+  <div class="inline-row">
     {{template "menuBtn" .}}
     <h1 class="topbar-title">{{.Title}}</h1>
   </div>
@@ -133,7 +133,7 @@ var formTemplate = cloneWithContent(`{{define "content"}}
 
 var deleteTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
-  <div class="flex items-center gap-2">
+  <div class="inline-row">
     {{template "menuBtn" .}}
     <h1 class="topbar-title">{{.T "admin.delete.title" "Delete %s" .ModelName}}</h1>
   </div>
@@ -142,7 +142,7 @@ var deleteTemplate = cloneWithContent(`{{define "content"}}
   <div class="card max-w-lg">
     <div class="card-body">
       <p class="text-sm text-ink-muted mb-5">{{.T "admin.delete.confirm_prefix" "Are you sure you want to delete"}} <span class="font-medium text-ink">{{.ModelName}} {{.PK}}</span>? {{.T "admin.delete.confirm_suffix" "This action cannot be undone."}}</p>
-      <form method="post" class="flex items-center gap-2">
+      <form method="post" class="inline-row">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button type="submit" class="btn-danger">{{.T "admin.button.confirm_delete" "Confirm delete"}}</button>
         <a href="../" class="btn-secondary">{{.T "admin.button.cancel" "Cancel"}}</a>
@@ -208,7 +208,7 @@ type deletePageData struct {
 
 var bulkRejectedTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
-  <div class="flex items-center gap-2">
+  <div class="inline-row">
     {{template "menuBtn" .}}
     <h1 class="topbar-title">{{.T "admin.bulk.rejected_title" "Nothing was deleted"}}</h1>
   </div>
