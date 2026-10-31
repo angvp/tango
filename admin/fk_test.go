@@ -96,6 +96,23 @@ func TestCreateViewRendersForeignKeyAsSelectWithRelatedLabel(t *testing.T) {
 	}
 }
 
+func TestCreateViewCapitalizesForeignKeyLabelForLowercaseTargetType(t *testing.T) {
+	handler, _ := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
+
+	response := doRequest(t, handler, http.MethodGet, "/admin/fk_post/new/", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+
+	body := response.Body.String()
+	if !strings.Contains(body, "Fk Author") {
+		t.Fatalf("body does not label the foreign key %q with its capitalized name:\n%s", "Fk Author", body)
+	}
+	if strings.Contains(body, "fk Author") {
+		t.Fatalf("body labels the foreign key with a lowercase first word %q:\n%s", "fk Author", body)
+	}
+}
+
 func TestCreateViewRendersForeignKeyQuickCreateLinkForAdminRegisteredTarget(t *testing.T) {
 	handler, _ := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
 

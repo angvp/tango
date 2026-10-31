@@ -163,7 +163,7 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 	}
 
 	if opts.Labels[field.Name] == "" {
-		fc.Label = humanizeFieldName(field.ForeignKey)
+		fc.Label = capitalizeFirst(humanizeFieldName(field.ForeignKey))
 	}
 	options, ok := relatedSelectOptions(ctx, store, models, adminReg, field.ForeignKey, fc.Value)
 	fc.SelectOptions = options
