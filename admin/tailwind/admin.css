@@ -17,8 +17,8 @@
 
   .skip-link { @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-accent-fg; }
 
-  .sidebar { @apply w-64 shrink-0 bg-sidebar text-sidebar-fg border-r border-line flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full max-md:invisible transition-[transform,visibility] duration-200 ease-out md:relative md:translate-x-0; }
-  .sidebar-open { @apply translate-x-0 max-md:visible shadow-xl; }
+  .sidebar { @apply w-64 shrink-0 bg-sidebar text-sidebar-fg border-r border-line flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full max-md:invisible max-md:[transition:transform_200ms_ease-out,visibility_0s_linear_200ms] md:relative md:translate-x-0; }
+  .sidebar-open { @apply translate-x-0 max-md:visible max-md:[transition:transform_200ms_ease-out,visibility_0s] shadow-xl; }
   .sidebar-backdrop { @apply fixed inset-0 z-30 bg-surface-sunken/80 hidden md:hidden; }
   .sidebar-backdrop-open { @apply block; }
   .menu-btn { @apply md:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-ink-faint hover:bg-surface-hover hover:text-ink -ml-1.5; }

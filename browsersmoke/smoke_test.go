@@ -32,6 +32,7 @@ import (
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/kb"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/accounts"
@@ -434,6 +435,21 @@ func (s *smoke) adminNavToggle() {
 	s.run("admin nav close", chromedp.MouseClickXY(point[0], point[1]))
 	if s.sidebarOpen() {
 		s.t.Fatal("the backdrop did not close the sidebar: nav.js is not running")
+	}
+
+	s.run("admin nav reopen", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	if !s.eval(`document.querySelector('.menu-btn').getAttribute('aria-expanded') === 'true'`) {
+		s.t.Fatal("the open drawer did not set aria-expanded on the menu button")
+	}
+	if !s.eval(`document.activeElement === document.querySelector('#sidebar button[data-admin-nav-close]')`) {
+		s.t.Fatal("focus did not move to the drawer's Close button")
+	}
+	s.run("admin nav escape", chromedp.KeyEvent(kb.Escape))
+	if s.sidebarOpen() {
+		s.t.Fatal("Escape did not close the sidebar")
+	}
+	if !s.eval(`document.activeElement === document.querySelector('.menu-btn')`) {
+		s.t.Fatal("focus did not return to the menu button after Escape")
 	}
 }
 
