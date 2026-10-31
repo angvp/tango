@@ -10,7 +10,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Changed
 
-- **Admin outcomes appear in a status region on every page.** After a create, save, delete or bulk delete, the next admin page shows the outcome in one `role="status"` region above the content, with a Dismiss control. The outcome is carried in a short-lived cookie signed with a key derived from the admin session, so it cannot be forged, is shown only to the session that set it, and is cleared when it is shown. The bulk delete redirect no longer carries a `deleted` query parameter.
+- **Admin outcomes appear in a status region on every page.** After a create, save, delete or bulk delete, the next admin page shows the outcome in one `role="status"` region above the content, with a Dismiss control. The outcome is carried in a cookie signed with a key derived from the admin session, so it cannot be forged and is shown only to the session that set it. The page that shows the outcome expires the cookie in the browser; the server also stops accepting a copy of it 300 seconds after it was set. A copy taken before that time is still accepted until then. The bulk delete redirect no longer carries a `deleted` query parameter.
 
   **Catalog impact:** new `admin.*` keys, covered API: `admin.outcome.created` ("The %s was added.", the singular noun), `admin.outcome.saved` ("The %s was saved.", the singular noun), `admin.outcome.deleted` ("The %s was deleted.", the singular noun), and `admin.status.dismiss` ("Dismiss"). The bulk outcome keys `admin.bulk.outcome_one` and `admin.bulk.outcome_many` now carry the outcome. A host catalog keeps working; a new key's text falls back to English until the host translates it.
 
