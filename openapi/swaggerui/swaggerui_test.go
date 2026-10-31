@@ -110,3 +110,202 @@ func TestVendoredAssetsMatchTheReadme(t *testing.T) {
 		t.Errorf("README.md does not name version %s", swaggerui.Version)
 	}
 }
+
+// policySite serves the UI under an application that installs a
+// SecurityHeaders middleware with app as its policy.
+func policySite(t *testing.T, ui swaggerui.UI, app tango.CSP) http.Handler {
+	t.Helper()
+	view := func(ctx *tango.Context) error { return ctx.JSON(http.StatusOK, map[string]string{}) }
+	config := tango.Config{
+		InstalledApps: []tango.App{
+			tango.NewApp("shop", func(r *tango.Registry) error {
+				return r.Routes().Include("/pets", []tango.Route{tango.Path("GET", "/", view)})
+			}),
+			openapi.New(openapi.Options{UI: ui, Path: "/api/openapi.json"}),
+		},
+		Middleware:      []tango.Middleware{tango.SecurityHeaders(tango.WithContentSecurityPolicy(app))},
+		MiddlewareScope: tango.MiddlewareScopeAll,
+	}
+	registry, err := tango.BuildRegistry(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.RunRegistration(); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := registry.Routes().Handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler
+}
+
+func swaggerTestPolicy() tango.CSP {
+	return tango.CSP{
+		DefaultSrc:     []tango.Source{tango.None()},
+		ScriptSrc:      []tango.Source{tango.Self()},
+		StyleSrc:       []tango.Source{tango.Self()},
+		ImgSrc:         []tango.Source{tango.Self()},
+		FormAction:     []tango.Source{tango.Self()},
+		ObjectSrc:      []tango.Source{tango.None()},
+		BaseURI:        []tango.Source{tango.Self()},
+		FrameAncestors: []tango.Source{tango.None()},
+	}
+}
+
+// The page's route relaxes style-src, extends img-src with data:, and extends
+// connect-src with 'self' so the page can fetch its own document. Nothing else
+// changes.
+// The document and the assets keep the application's header.
+func TestWithContentSecurityPolicyRelaxesOnlyTheUIPageSourcesItNeeds(t *testing.T) {
+	const appHeader = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	const pageHeader = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	h := policySite(t, swaggerui.New(swaggerui.WithContentSecurityPolicy(swaggerTestPolicy())), swaggerTestPolicy())
+
+	page := get(h, "/docs/")
+	if got := page.Header().Get("Content-Security-Policy"); got != pageHeader {
+		t.Errorf("UI page Content-Security-Policy = %q, want %q", got, pageHeader)
+	}
+	if got := page.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Errorf("UI page X-Frame-Options = %q, want DENY", got)
+	}
+	for _, path := range []string{"/api/openapi.json", "/docs/swagger-ui.css", "/docs/init.js"} {
+		if got := get(h, path).Header().Get("Content-Security-Policy"); got != appHeader {
+			t.Errorf("%s Content-Security-Policy = %q, want the application header %q", path, got, appHeader)
+		}
+	}
+}
+
+// The page's img-src is the application's effective img-src with data: added.
+// Without an img-src directive, images fall back to default-src, so the
+// fallback is resolved here rather than replaced with 'self'.
+func TestWithContentSecurityPolicyKeepsTheApplicationImageOriginsAndAddsData(t *testing.T) {
+	tests := []struct {
+		name    string
+		app     tango.CSP
+		wantImg string
+	}{
+		{
+			name: "host origins are kept and data is appended",
+			app: tango.CSP{
+				ImgSrc:         []tango.Source{tango.Self(), tango.Host("images.example.com")},
+				FrameAncestors: []tango.Source{tango.None()},
+			},
+			wantImg: "img-src 'self' images.example.com data:; ",
+		},
+		{
+			name:    "absent img-src falls back to default-src",
+			app:     tango.CSP{DefaultSrc: []tango.Source{tango.Self()}, FrameAncestors: []tango.Source{tango.None()}},
+			wantImg: "img-src 'self' data:; ",
+		},
+		{
+			name:    "default-src none leaves data as the only image source",
+			app:     tango.CSP{DefaultSrc: []tango.Source{tango.None()}, FrameAncestors: []tango.Source{tango.None()}},
+			wantImg: "img-src data:; ",
+		},
+		{
+			name:    "no img-src and no default-src adds no img-src",
+			app:     tango.CSP{FrameAncestors: []tango.Source{tango.None()}},
+			wantImg: "",
+		},
+		{
+			name:    "data already present is not repeated",
+			app:     tango.CSP{ImgSrc: []tango.Source{tango.Self(), tango.Data()}, FrameAncestors: []tango.Source{tango.None()}},
+			wantImg: "img-src 'self' data:; ",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := policySite(t, swaggerui.New(swaggerui.WithContentSecurityPolicy(tt.app)), tt.app)
+			got := get(h, "/docs/").Header().Get("Content-Security-Policy")
+			if tt.wantImg == "" {
+				if strings.Contains(got, "img-src") {
+					t.Fatalf("UI page Content-Security-Policy = %q, want no img-src directive", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tt.wantImg) {
+				t.Fatalf("UI page Content-Security-Policy = %q, want img-src part %q", got, tt.wantImg)
+			}
+		})
+	}
+}
+
+// The page's connect-src is the application's effective connect-src with
+// 'self' added, so the page can fetch its own document. Without a connect-src
+// directive the fallback is default-src, and without either no directive is
+// added.
+func TestWithContentSecurityPolicyKeepsTheApplicationConnectOriginsAndAddsSelf(t *testing.T) {
+	tests := []struct {
+		name        string
+		app         tango.CSP
+		wantConnect string
+	}{
+		{
+			name: "host origins are kept and self is appended",
+			app: tango.CSP{
+				ConnectSrc:     []tango.Source{tango.Host("api.example.com")},
+				FrameAncestors: []tango.Source{tango.None()},
+			},
+			wantConnect: "connect-src api.example.com 'self'; ",
+		},
+		{
+			name:        "absent connect-src falls back to default-src",
+			app:         tango.CSP{DefaultSrc: []tango.Source{tango.Host("api.example.com")}, FrameAncestors: []tango.Source{tango.None()}},
+			wantConnect: "connect-src api.example.com 'self'; ",
+		},
+		{
+			name:        "default-src none leaves self as the only connect source",
+			app:         tango.CSP{DefaultSrc: []tango.Source{tango.None()}, FrameAncestors: []tango.Source{tango.None()}},
+			wantConnect: "connect-src 'self'; ",
+		},
+		{
+			name:        "connect-src none is replaced by self",
+			app:         tango.CSP{ConnectSrc: []tango.Source{tango.None()}, FrameAncestors: []tango.Source{tango.None()}},
+			wantConnect: "connect-src 'self'; ",
+		},
+		{
+			name:        "self already present is not repeated",
+			app:         tango.CSP{ConnectSrc: []tango.Source{tango.Self(), tango.Host("api.example.com")}, FrameAncestors: []tango.Source{tango.None()}},
+			wantConnect: "connect-src 'self' api.example.com; ",
+		},
+		{
+			name:        "no connect-src and no default-src adds no connect-src",
+			app:         tango.CSP{FrameAncestors: []tango.Source{tango.None()}},
+			wantConnect: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := policySite(t, swaggerui.New(swaggerui.WithContentSecurityPolicy(tt.app)), tt.app)
+			got := get(h, "/docs/").Header().Get("Content-Security-Policy")
+			if tt.wantConnect == "" {
+				if strings.Contains(got, "connect-src") {
+					t.Fatalf("UI page Content-Security-Policy = %q, want no connect-src directive", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tt.wantConnect) {
+				t.Fatalf("UI page Content-Security-Policy = %q, want connect-src part %q", got, tt.wantConnect)
+			}
+		})
+	}
+}
+
+// Without the option the UI adds no header of its own, so an application that
+// does not install the middleware sees no change.
+func TestTheUIAddsNoPolicyUnlessTheOptionIsGiven(t *testing.T) {
+	h := site(t, openapi.Options{UI: swaggerui.New(), Path: "/api/openapi.json"})
+	if got := get(h, "/docs/").Header().Get("Content-Security-Policy"); got != "" {
+		t.Errorf("UI page Content-Security-Policy = %q, want none", got)
+	}
+}
+
+// The document's body does not depend on the option.
+func TestTheDocumentBodyIsTheSameWithTheOption(t *testing.T) {
+	plain := site(t, openapi.Options{UI: swaggerui.New(), Path: "/api/openapi.json"})
+	relaxed := policySite(t, swaggerui.New(swaggerui.WithContentSecurityPolicy(swaggerTestPolicy())), swaggerTestPolicy())
+	if a, b := get(plain, "/api/openapi.json").Body.String(), get(relaxed, "/api/openapi.json").Body.String(); a != b {
+		t.Errorf("the document body changed with the option:\nwithout:\n%s\nwith:\n%s", a, b)
+	}
+}

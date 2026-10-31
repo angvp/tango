@@ -18,3 +18,7 @@ standalone preset and source maps are left out.
 3. Update `Version` in `swaggerui.go` and the table above (`shasum -a 256`).
 4. Run `go test ./openapi/...` and open `/docs/` in a browser against an app with a documented route.
 5. Record the version in the changelog.
+
+## Under a Content-Security-Policy
+
+`WithContentSecurityPolicy` serves the page under the application's policy with the three changes Swagger UI needs: `style-src` allows `'unsafe-inline'`, `img-src` allows `data:`, and `connect-src` allows `'self'`. The changes apply to the UI page's route only. See the [content security policy guide](../../docs/guides/content-security-policy.md#swagger-ui).

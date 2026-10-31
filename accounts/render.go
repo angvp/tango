@@ -16,10 +16,10 @@ import (
 // template-override hook (write your own view instead).
 var registerTemplate = template.Must(template.New("register").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.register.title" "Register"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.register.title" "Register"}}</title></head>
 <body>
   <h1>{{.T "accounts.register.heading" "Create an account"}}</h1>
-  {{if .Data.Error}}<p style="color:red">{{.Data.Error}}</p>{{end}}
+  {{if .Data.Error}}<p class="accounts-error" role="alert">{{.Data.Error}}</p>{{end}}
   <form method="post">
     <input type="hidden" name="next" value="{{.Data.Next}}">
     <input type="hidden" name="csrf_token" value="{{.Data.CSRFToken}}">
@@ -41,7 +41,7 @@ var registerTemplate = template.Must(template.New("register").Parse(`<!doctype h
 // is disabled — a clear, deliberate message, never a bare 404.
 var registrationClosedTemplate = template.Must(template.New("registration_closed").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.register.closed_title" "Registration closed"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.register.closed_title" "Registration closed"}}</title></head>
 <body>
   <h1>{{.T "accounts.register.closed" "Registration is currently closed."}}</h1>
 </body>
@@ -58,10 +58,10 @@ type registerPageData struct {
 // registerTemplate is.
 var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.login.title" "Log in"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.login.title" "Log in"}}</title></head>
 <body>
   <h1>{{.T "accounts.login.title" "Log in"}}</h1>
-  {{if .Data.Error}}<p style="color:red">{{.Data.Error}}</p>{{end}}
+  {{if .Data.Error}}<p class="accounts-error" role="alert">{{.Data.Error}}</p>{{end}}
   <form method="post">
     <input type="hidden" name="next" value="{{.Data.Next}}">
     <input type="hidden" name="csrf_token" value="{{.Data.CSRFToken}}">
@@ -91,10 +91,10 @@ type loginPageData struct {
 // to.
 var passwordResetRequestTemplate = template.Must(template.New("password_reset_request").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.reset.title" "Reset your password"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.reset.title" "Reset your password"}}</title></head>
 <body>
   <h1>{{.T "accounts.reset.title" "Reset your password"}}</h1>
-  {{if .Data.Error}}<p style="color:red">{{.Data.Error}}</p>{{end}}
+  {{if .Data.Error}}<p class="accounts-error" role="alert">{{.Data.Error}}</p>{{end}}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{.Data.CSRFToken}}">
     <div>
@@ -111,7 +111,7 @@ var passwordResetRequestTemplate = template.Must(template.New("password_reset_re
 // it never says whether the address has an account.
 var passwordResetSentTemplate = template.Must(template.New("password_reset_sent").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.check_email.title" "Check your email"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.check_email.title" "Check your email"}}</title></head>
 <body>
   <h1>{{.T "accounts.check_email.title" "Check your email"}}</h1>
   <p>{{.T "accounts.reset_sent.body" "If an account exists for that address, we've sent it a link to reset its password. The link works for 1 hour."}}</p>
@@ -123,10 +123,10 @@ var passwordResetSentTemplate = template.Must(template.New("password_reset_sent"
 // back to the same URL, token included.
 var passwordResetConfirmTemplate = template.Must(template.New("password_reset_confirm").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.reset_confirm.title" "Choose a new password"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.reset_confirm.title" "Choose a new password"}}</title></head>
 <body>
   <h1>{{.T "accounts.reset_confirm.title" "Choose a new password"}}</h1>
-  {{if .Data.Error}}<p style="color:red">{{.Data.Error}}</p>{{end}}
+  {{if .Data.Error}}<p class="accounts-error" role="alert">{{.Data.Error}}</p>{{end}}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{.Data.CSRFToken}}">
     <div>
@@ -141,7 +141,7 @@ var passwordResetConfirmTemplate = template.Must(template.New("password_reset_co
 // invalidLinkTemplate answers every unusable emailed link the same way.
 var invalidLinkTemplate = template.Must(template.New("invalid_link").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.invalid_link.title" "Link not valid"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.invalid_link.title" "Link not valid"}}</title></head>
 <body>
   <h1>{{.T "accounts.invalid_link.heading" "This link is not valid"}}</h1>
   <p>{{.T "accounts.invalid_link.body" "It may have expired, been used already, or been replaced by a newer one."}}</p>
@@ -153,7 +153,7 @@ var invalidLinkTemplate = template.Must(template.New("invalid_link").Parse(`<!do
 // verifies nothing.
 var verifyTemplate = template.Must(template.New("verify").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.verify.title" "Confirm your email"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.verify.title" "Confirm your email"}}</title></head>
 <body>
   <h1>{{.T "accounts.verify.title" "Confirm your email"}}</h1>
   <form method="post">
@@ -166,7 +166,7 @@ var verifyTemplate = template.Must(template.New("verify").Parse(`<!doctype html>
 // verifiedTemplate answers a confirmed verification link.
 var verifiedTemplate = template.Must(template.New("verified").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.verified.title" "Email confirmed"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.verified.title" "Email confirmed"}}</title></head>
 <body>
   <h1>{{.T "accounts.verified.heading" "Your email address is confirmed."}}</h1>
 </body>
@@ -175,7 +175,7 @@ var verifiedTemplate = template.Must(template.New("verified").Parse(`<!doctype h
 // verificationSentTemplate answers every resend the same way.
 var verificationSentTemplate = template.Must(template.New("verification_sent").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.check_email.title" "Check your email"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.check_email.title" "Check your email"}}</title></head>
 <body>
   <h1>{{.T "accounts.check_email.title" "Check your email"}}</h1>
   <p>{{.T "accounts.verification_sent.body" "If your address still needs confirming, we've sent a new link. Only the newest link works, for 24 hours."}}</p>
@@ -185,7 +185,7 @@ var verificationSentTemplate = template.Must(template.New("verification_sent").P
 // unverifiedTemplate is RequireVerified's 403 page.
 var unverifiedTemplate = template.Must(template.New("unverified").Parse(`<!doctype html>
 <html{{with .Lang}} lang="{{.}}"{{end}}>
-<head><meta charset="utf-8"><title>{{.T "accounts.verify.title" "Confirm your email"}}</title></head>
+<head><meta charset="utf-8">` + stylesheetLinkTag + `<title>{{.T "accounts.verify.title" "Confirm your email"}}</title></head>
 <body>
   <h1>{{.T "accounts.unverified.heading" "Please confirm your email address"}}</h1>
   <p>{{.T "accounts.unverified.body" "This page needs a confirmed email address. Open the link we emailed you, or ask for a new one."}}</p>
