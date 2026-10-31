@@ -36,12 +36,12 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
       </form>
     </div>
-    <form method="post" action="/admin/density/" class="density-bar">
+    <form method="post" action="{{.DensityPath}}" class="density-bar">
       <input type="hidden" name="csrf_token" value="{{.SignedIn.CSRFToken}}">
       <input type="hidden" name="next" value="{{.ReturnTo}}">
       <span class="field-caption">{{.T "admin.density.label" "Row density"}}</span>
-      <button type="submit" name="density" value="comfortable" class="btn-ghost" aria-pressed="{{if eq .Density "compact"}}false{{else}}true{{end}}">{{.T "admin.density.comfortable" "Comfortable"}}</button>
-      <button type="submit" name="density" value="compact" class="btn-ghost" aria-pressed="{{if eq .Density "compact"}}true{{else}}false{{end}}">{{.T "admin.density.compact" "Compact"}}</button>
+      <button type="submit" name="density" value="comfortable" aria-pressed="{{not .Compact}}" class="density-option {{if .Compact}}density-option-off{{else}}density-option-on{{end}}">{{.T "admin.density.comfortable" "Comfortable"}}</button>
+      <button type="submit" name="density" value="compact" aria-pressed="{{.Compact}}" class="density-option {{if .Compact}}density-option-on{{else}}density-option-off{{end}}">{{.T "admin.density.compact" "Compact"}}</button>
     </form>
     {{if .Rows}}
     {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.modal_title" "Delete {count} selected rows?"}}">
@@ -64,7 +64,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       </form>
     </dialog>{{end}}
     <div class="table-wrap">
-      <table class="table-admin {{if eq .Density "compact"}}table-compact{{else}}table-comfortable{{end}}">
+      <table class="table-admin {{if .Compact}}table-compact{{else}}table-comfortable{{end}}">
         <caption class="sr-only">{{.ModelName}}</caption>
         <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col"{{if .Numeric}} class="cell-num"{{end}}>{{.Label}}</th>{{end}}<th scope="col" class="text-right">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
@@ -178,7 +178,8 @@ type listPageData struct {
 	ModelName   string
 	BasePath    string
 	Columns     []listColumn
-	Density     string
+	Compact     bool
+	DensityPath string
 	Rows        []listRow
 	SearchQuery string
 	Filters     []filterControl

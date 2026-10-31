@@ -1703,6 +1703,35 @@ html, body{
   padding-bottom:0.5rem;
 }
 
+.density-option{
+  border-radius:9999px;
+  padding-left:0.625rem;
+  padding-right:0.625rem;
+  padding-top:0.25rem;
+  padding-bottom:0.25rem;
+  font-size:0.75rem;
+  line-height:1rem;
+  font-weight:500;
+}
+
+.density-option-on{
+  --tw-bg-opacity:1;
+  background-color:rgb(var(--accent) / var(--tw-bg-opacity, 1));
+  font-weight:600;
+  --tw-text-opacity:1;
+  color:rgb(var(--accent-fg) / var(--tw-text-opacity, 1));
+}
+
+.density-option-off{
+  --tw-text-opacity:1;
+  color:rgb(var(--ink-muted) / var(--tw-text-opacity, 1));
+}
+
+.density-option-off:hover{
+  --tw-text-opacity:1;
+  color:rgb(var(--ink) / var(--tw-text-opacity, 1));
+}
+
 .density-bar{
   display:flex;
   flex-wrap:wrap;

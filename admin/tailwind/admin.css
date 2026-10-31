@@ -85,6 +85,9 @@
   .table-actions { @apply flex items-center justify-end gap-1; }
   .table-admin .cell-num { @apply text-right tabular-nums; }
   .table-compact thead th, .table-compact tbody td { @apply py-2; }
+  .density-option { @apply rounded-full px-2.5 py-1 text-xs font-medium; }
+  .density-option-on { @apply bg-accent font-semibold text-accent-fg; }
+  .density-option-off { @apply text-ink-muted hover:text-ink; }
   .density-bar { @apply flex flex-wrap items-center gap-2 px-5 py-2 border-b border-line-subtle; }
   .cell-label { @apply hidden; }
   @media (min-width: 768px) { .table-wrap { overflow: visible; } }

@@ -84,6 +84,10 @@ func TestChangelistOffersDensityChoicesWithThePressedStateInText(t *testing.T) {
 				if !strings.Contains(button, `aria-pressed="`+pressed+`"`) {
 					t.Errorf("density button %s is not aria-pressed=%s: %s", density, pressed, button)
 				}
+				state := map[bool]string{true: "density-option-on", false: "density-option-off"}[density == tt.pressed]
+				if !hasClassToken(button, state) {
+					t.Errorf("density button %s lacks the %s class: %s", density, state, button)
+				}
 			}
 		})
 	}
