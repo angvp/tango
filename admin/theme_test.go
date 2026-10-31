@@ -72,6 +72,8 @@ var declaredPairs = []pair{
 	{"ink", "surface-hover", 4.5, "primary text on hover"},
 	{"danger-fg", "surface", 4.5, "field errors and the delete link"},
 	{"danger-fg", "danger-bg", 4.5, "delete link on hover"},
+	{"danger-fg", "surface-sunken", 4.5, "delete link on the page ground"},
+	{"ring", "danger-bg", 3, "focus ring on the delete link on hover"},
 	{"selection-fg", "selection-bg", 4.5, "selected text"},
 	{"sidebar-strong", "sidebar", 4.5, "brand name and the close control"},
 	{"sidebar-fg", "sidebar-pill-hover", 4.5, "sidebar link on hover"},
