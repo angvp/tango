@@ -45,7 +45,7 @@ The accounts package renders no styled pages, so the theme does not reach outsid
 
 ## Later decision
 
-The colour values in this record are superseded by [0065](0065-the-admin-redesign-adopts-a-component-layer-framework-owned-plain-language-messages-and-a-strict-csp-compatible-look.md). The token structure and the system-preference-plus-cookie selection described here remain in force.
+The colour values in this record are superseded by [0069](0069-the-admin-redesign-adopts-a-component-layer-framework-owned-plain-language-messages-and-a-strict-csp-compatible-look.md). The token structure and the system-preference-plus-cookie selection described here remain in force.
 
 ## Consequences
 
