@@ -12,8 +12,8 @@ import (
 
 // FieldError is a validation failure a Widget's Parse reports for its own
 // field. Admin shows Message beside that field, marks the field's control
-// aria-invalid and re-renders the form with a 422, instead of the generic
-// form-level error any other Parse error produces.
+// aria-invalid and re-renders the form with a 422. Any other Parse error is
+// shown beside its own field as a generic message.
 //
 // Parse may return a FieldError (or a *FieldError) directly, wrapped with
 // fmt.Errorf("%w"), or inside errors.Join; every one found is shown.
