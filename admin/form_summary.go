@@ -57,7 +57,7 @@ func buildFormSummary(ctx context.Context, fields []formField, formError string,
 // the plural noun its cancel link names.
 func formPage(ctx context.Context, page chrome, title string, meta model.ModelMeta, opts adminregistry.Options, fields []formField, formError, csrfToken string) formPageData {
 	return formPageData{
-		chrome:    page,
+		chrome:    page.withPageTitle(title),
 		Title:     title,
 		Fields:    fields,
 		Summary:   buildFormSummary(ctx, fields, formError, displayNoun(meta, opts)),

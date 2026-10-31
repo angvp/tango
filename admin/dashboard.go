@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/observability"
 )
 
@@ -111,7 +112,7 @@ func dashboardView(nav []navItem, brand Branding, cfg DashboardConfig) tango.Vie
 			return methodNotAllowed(ctx)
 		}
 		return render(ctx, http.StatusOK, dashboardTemplate, dashboardPageData{
-			chrome:   chrome{Nav: nav, Brand: brand}.withContext(ctx.Context()),
+			chrome:   chrome{Nav: nav, Brand: brand}.withContext(ctx.Context()).withPageTitle(i18n.T(ctx.Context(), "admin.dashboard.title", "Dashboard")),
 			Activity: loadActivityCard(ctx.Logger(), cfg.Activity),
 			Status:   loadStatusCard(ctx.Logger(), ctx.Context(), cfg.Status),
 		})

@@ -54,7 +54,7 @@ func loginView(store *db.Store, limiter *security.RateLimiter, clientKey func(*h
 			if err != nil {
 				return err
 			}
-			return render(ctx, http.StatusOK, loginTemplate, loginPageData{chrome: chrome{}.withContext(ctx.Context()), Next: safeAdminNext(ctx.Query("next"), ""), CSRFToken: token})
+			return render(ctx, http.StatusOK, loginTemplate, loginPageData{chrome: chrome{}.withContext(ctx.Context()).withPageTitle(i18n.T(ctx.Context(), "admin.login.page_title", "Sign in")), Next: safeAdminNext(ctx.Query("next"), ""), CSRFToken: token})
 
 		case http.MethodPost:
 			if err := ctx.Request().ParseForm(); err != nil {
@@ -86,7 +86,7 @@ func loginView(store *db.Store, limiter *security.RateLimiter, clientKey func(*h
 				return render(ctx, http.StatusUnauthorized, loginTemplate, loginPageData{
 					Next:      next,
 					Username:  username,
-					chrome:    chrome{}.withContext(ctx.Context()),
+					chrome:    chrome{}.withContext(ctx.Context()).withPageTitle(i18n.T(ctx.Context(), "admin.login.page_title", "Sign in")),
 					Error:     i18n.T(ctx.Context(), "admin.login.invalid", "Invalid username or password."),
 					CSRFToken: csrfToken.Value,
 				})

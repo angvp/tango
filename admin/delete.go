@@ -51,7 +51,7 @@ func deleteView(store *db.Store, models *model.Registry, adminReg *adminregistry
 				return err
 			}
 			return render(ctx, http.StatusOK, deleteTemplate, deletePageData{
-				chrome:    rc,
+				chrome:    rc.withPageTitle(i18n.T(ctx.Context(), "admin.delete.title", "Delete this %s", displayNoun(meta, registration.Options))),
 				Singular:  displayNoun(meta, registration.Options),
 				Label:     deleteLabel(label, pk, displayNoun(meta, registration.Options)),
 				CSRFToken: csrfTokenFromRequest(ctx.Request()),
@@ -98,7 +98,7 @@ func deleteRefused(ctx *tango.Context, meta model.ModelMeta, opts adminregistry.
 	noun := displayNoun(meta, opts)
 	title := i18n.T(ctx.Context(), "admin.delete.title", "Delete this %s", noun)
 	return render(ctx, http.StatusConflict, deleteTemplate, deletePageData{
-		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: sectionName(meta, opts), Href: basePath}, crumb{Label: title}),
+		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: sectionName(meta, opts), Href: basePath}, crumb{Label: title}).withPageTitle(title),
 		Singular: noun,
 		Error:    i18n.T(ctx.Context(), "admin.delete.refused", "This %s cannot be deleted because other rows still use it. Remove or change those rows first.", noun),
 	})

@@ -30,11 +30,20 @@ type navItem struct {
 type chrome struct {
 	Nav    []navItem
 	Active string
-	Brand  Branding
+	// PageTitle names the page in the document title, ahead of the admin's
+	// name. A page without one has the admin's name alone.
+	PageTitle string
+	Brand     Branding
 	// Crumbs is the trail above the page title; a page without one renders
 	// no breadcrumb navigation.
 	Crumbs []crumb
 	ctx    context.Context
+}
+
+// withPageTitle returns the chrome with the document title's page name set.
+func (c chrome) withPageTitle(title string) chrome {
+	c.PageTitle = title
+	return c
 }
 
 // crumb is one step of the breadcrumb trail. The current page has no Href
@@ -96,7 +105,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.T "admin.layout.title" "tanGO Admin"}}</title>
+<title>{{with .PageTitle}}{{.}} · {{end}}{{.T "admin.layout.title" "tanGO Admin"}}</title>
 ` + stylesheetLinkTag + `
 
 {{define "menuBtn"}}<button type="button" class="menu-btn" data-admin-nav-open aria-expanded="false" aria-controls="sidebar" aria-label="{{.T "admin.layout.open_menu" "Open menu"}}">

@@ -167,6 +167,7 @@ var spanish = map[string]string{
 	"admin.list.search_label":                   "Buscar",
 	"admin.list.search_placeholder":             "Buscar %s…",
 	"admin.login.invalid":                       "Usuario o contraseña no válidos.",
+	"admin.login.page_title":                    "Iniciar sesión",
 	"admin.login.password":                      "Contraseña",
 	"admin.login.submit":                        "Iniciar sesión",
 	"admin.login.title":                         "Administración tanGO",

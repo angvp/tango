@@ -78,7 +78,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 		params := listParams(q, filters.Params)
 
 		data := listPageData{
-			chrome:           chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()),
+			chrome:           chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withPageTitle(capitalizeFirst(pluralNoun(meta, registration.Options))),
 			Heading:          capitalizeFirst(pluralNoun(meta, registration.Options)),
 			Singular:         displayNoun(meta, registration.Options),
 			Plural:           pluralNoun(meta, registration.Options),
