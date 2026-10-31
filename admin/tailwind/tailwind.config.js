@@ -1,0 +1,61 @@
+/** Tailwind CSS v3 configuration for admin/assets/admin.css. See scripts/admin-css.sh. */
+module.exports = {
+  content: {
+    relative: true,
+    files: ['../*.go', '!../*_test.go', '../assets/*.js'],
+  },
+  theme: {
+    extend: {
+      colors: {
+      'ink': 'rgb(var(--ink) / <alpha-value>)',
+      'ink-muted': 'rgb(var(--ink-muted) / <alpha-value>)',
+      'ink-faint': 'rgb(var(--ink-faint) / <alpha-value>)',
+      'surface': 'rgb(var(--surface) / <alpha-value>)',
+      'surface-sunken': 'rgb(var(--surface-sunken) / <alpha-value>)',
+      'surface-hover': 'rgb(var(--surface-hover) / <alpha-value>)',
+      'line': 'rgb(var(--line) / <alpha-value>)',
+      'line-subtle': 'rgb(var(--line-subtle) / <alpha-value>)',
+      'line-strong': 'rgb(var(--line-strong) / <alpha-value>)',
+      'control-line': 'rgb(var(--control-line) / <alpha-value>)',
+      'accent': 'rgb(var(--accent) / <alpha-value>)',
+      'accent-hover': 'rgb(var(--accent-hover) / <alpha-value>)',
+      'accent-fg': 'rgb(var(--accent-fg) / <alpha-value>)',
+      'accent-ui': 'rgb(var(--accent-ui) / <alpha-value>)',
+      'ring': 'rgb(var(--ring) / <alpha-value>)',
+      'selection-bg': 'rgb(var(--selection-bg) / <alpha-value>)',
+      'selection-fg': 'rgb(var(--selection-fg) / <alpha-value>)',
+      'danger-solid': 'rgb(var(--danger-solid) / <alpha-value>)',
+      'danger-solid-hover': 'rgb(var(--danger-solid-hover) / <alpha-value>)',
+      'danger-solid-fg': 'rgb(var(--danger-solid-fg) / <alpha-value>)',
+      'sidebar': 'rgb(var(--sidebar) / <alpha-value>)',
+      'sidebar-fg': 'rgb(var(--sidebar-fg) / <alpha-value>)',
+      'sidebar-strong': 'rgb(var(--sidebar-strong) / <alpha-value>)',
+      'sidebar-muted': 'rgb(var(--sidebar-muted) / <alpha-value>)',
+      'sidebar-dot': 'rgb(var(--sidebar-dot) / <alpha-value>)',
+      'sidebar-accent': 'rgb(var(--sidebar-accent) / <alpha-value>)',
+      'sidebar-accent-fg': 'rgb(var(--sidebar-accent-fg) / <alpha-value>)',
+      'success-bg': 'rgb(var(--success-bg) / <alpha-value>)',
+      'success-fg': 'rgb(var(--success-fg) / <alpha-value>)',
+      'success-border': 'rgb(var(--success-border) / <alpha-value>)',
+      'danger-bg': 'rgb(var(--danger-bg) / <alpha-value>)',
+      'danger-fg': 'rgb(var(--danger-fg) / <alpha-value>)',
+      'danger-border': 'rgb(var(--danger-border) / <alpha-value>)',
+      'warning-bg': 'rgb(var(--warning-bg) / <alpha-value>)',
+      'warning-fg': 'rgb(var(--warning-fg) / <alpha-value>)',
+      'warning-border': 'rgb(var(--warning-border) / <alpha-value>)',
+      'neutral-bg': 'rgb(var(--neutral-bg) / <alpha-value>)',
+      'neutral-fg': 'rgb(var(--neutral-fg) / <alpha-value>)',
+      'neutral-border': 'rgb(var(--neutral-border) / <alpha-value>)',
+      },
+    },
+  },
+  // Host widgets write the token classes the admin guide documents, and the
+  // content scan cannot see their markup, so every token's colour utilities
+  // are always generated.
+  safelist: [
+    {
+      pattern: /^(text|bg|border|ring)-(ink|surface|line|control-line|accent|ring|selection|danger-solid|sidebar|success|danger|warning|neutral)(-[a-z]+)*$/,
+    },
+  ],
+  plugins: [],
+};

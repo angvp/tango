@@ -109,47 +109,17 @@ func TestEveryTokenHasBothThemes(t *testing.T) {
 	}
 }
 
-func TestThemeCSSIsGeneratedFromThePalette(t *testing.T) {
-	css := themeCSS()
-	for _, tok := range palette {
-		if !strings.Contains(css, "--"+tok.Name+":") {
-			t.Errorf("themeCSS lacks --%s", tok.Name)
-		}
-	}
-	for _, want := range []string{
-		":root{color-scheme:light",
-		"@media (prefers-color-scheme: dark){:root:not([data-theme]){color-scheme:dark",
-		`:root[data-theme="dark"]{color-scheme:dark`,
-		`:root[data-theme="light"]{color-scheme:light`,
-	} {
-		if !strings.Contains(css, want) {
-			t.Errorf("themeCSS lacks %q", want)
-		}
-	}
-}
-
-func TestTailwindConfigMapsEveryTokenToItsVariable(t *testing.T) {
-	cfg := tailwindThemeConfig()
-	for _, tok := range palette {
-		want := "'" + tok.Name + "':'rgb(var(--" + tok.Name + ") / <alpha-value>)'"
-		if !strings.Contains(cfg, want) {
-			t.Errorf("tailwind config lacks %s", want)
-		}
-	}
-}
-
-func TestLayoutEmitsTheThemeBeforeAnyPageContent(t *testing.T) {
+func TestLayoutLoadsTheStylesheetBeforeTheBody(t *testing.T) {
 	var out strings.Builder
 	if err := freshLayout().Execute(&out, chrome{}); err != nil {
 		t.Fatal(err)
 	}
 	html := out.String()
-	for _, want := range []string{"--ink:", "tailwind.config=", "color-scheme:dark"} {
-		if !strings.Contains(html, want) {
-			t.Errorf("layout lacks %q", want)
-		}
+	link := strings.Index(html, stylesheetLinkTag)
+	if link < 0 {
+		t.Fatal("layout does not link the admin stylesheet")
 	}
-	if strings.Index(html, "tailwind.config=") < strings.Index(html, "cdn.tailwindcss.com") {
-		t.Error("the Tailwind config must follow the Play CDN script that defines `tailwind`")
+	if link > strings.Index(html, "<body>") {
+		t.Error("the admin stylesheet must load in the head, before the body")
 	}
 }

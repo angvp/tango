@@ -8,9 +8,12 @@ import (
 	"github.com/angvp/tango/internal/i18nbridge"
 )
 
-// tailwindScriptTag loads Tailwind's Play CDN: no Node/npm build step,
-// JIT-compiled utility classes at runtime.
-const tailwindScriptTag = `<script src="https://cdn.tailwindcss.com"></script>`
+// navScriptTag loads the sidebar script on every admin page.
+var navScriptTag = `<script src="` + navAsset.URL + `" defer></script>`
+
+// stylesheetLinkTag loads the precompiled admin stylesheet every admin page
+// shares.
+var stylesheetLinkTag = `<link rel="stylesheet" href="` + adminStyleAsset.URL + `">`
 
 // navItem is one entry in the admin's sidebar navigation: every registered
 // model, so any admin page can link to any other without a page reload.
@@ -64,107 +67,15 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.T "admin.layout.title" "tanGO Admin"}}</title>
-` + tailwindScriptTag + `
-<script>` + tailwindThemeConfig() + `</script>
-<style>` + themeCSS() + `</style>
-<style type="text/tailwindcss">
-@layer base {
-  html, body { @apply overflow-x-hidden; }
-  ::selection { @apply bg-selection-bg text-selection-fg; }
-  ::-webkit-scrollbar { @apply w-2.5 h-2.5; }
-  ::-webkit-scrollbar-track { @apply bg-transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-line-strong rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-control-line; }
-  :focus-visible { @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-surface; }
-}
-@layer components {
-  .shell { @apply min-h-screen flex bg-surface-sunken text-ink antialiased; }
+` + stylesheetLinkTag + `
 
-  .sidebar { @apply w-64 shrink-0 bg-sidebar text-sidebar-fg border-r border-sidebar-strong/10 flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform duration-200 ease-out md:relative md:translate-x-0; }
-  .sidebar-open { @apply translate-x-0; }
-  .sidebar-backdrop { @apply fixed inset-0 z-30 bg-sidebar/50 hidden md:hidden; }
-  .sidebar-backdrop-open { @apply block; }
-  .menu-btn { @apply md:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-ink-faint hover:bg-surface-hover hover:text-ink -ml-1.5; }
-  .sidebar-brand { @apply flex items-center gap-2.5 px-5 h-16 border-b border-sidebar-strong/10 shrink-0; }
-  .sidebar-brand-mark { @apply flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-accent text-sidebar-accent-fg text-sm font-bold; }
-  .sidebar-brand-text { @apply text-sidebar-strong font-semibold tracking-tight text-[15px]; }
-  .sidebar-section-label { @apply px-3 pt-5 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted; }
-  .sidebar-nav { @apply flex-1 overflow-y-auto px-3 pb-4; }
-  .sidebar-link { @apply flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-sidebar-fg hover:bg-sidebar-strong/5 hover:text-sidebar-strong transition-colors; }
-  .sidebar-link-active { @apply bg-sidebar-accent/15 text-sidebar-strong; }
-  .sidebar-link-dot { @apply h-1.5 w-1.5 shrink-0 rounded-full bg-sidebar-dot group-hover:bg-sidebar-muted; }
-  .sidebar-link-dot-active { @apply bg-sidebar-accent; }
-  .sidebar-footer { @apply px-5 py-4 border-t border-sidebar-strong/10 text-xs text-sidebar-muted shrink-0; }
-  .sidebar-logout { @apply mt-2; }
-  .sidebar-logout-button { @apply text-sidebar-muted underline hover:text-sidebar-strong cursor-pointer; }
-
-  .topbar { @apply sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface/85 backdrop-blur px-4 py-3 sm:h-16 sm:px-6 sm:py-0 min-w-0; }
-  .topbar-title { @apply text-lg font-semibold tracking-tight text-ink; }
-  .topbar-meta { @apply text-sm text-ink-faint hidden sm:block; }
-
-  .content { @apply flex-1 min-w-0 flex flex-col; }
-  .content-body { @apply flex-1 min-w-0 px-4 py-5 sm:px-6 sm:py-6 max-w-5xl w-full mx-auto; }
-
-  .card { @apply bg-surface border border-line rounded-xl shadow-sm; }
-  .card-header { @apply flex flex-wrap items-center justify-between gap-3 border-b border-line-subtle px-5 py-4; }
-  .card-body { @apply p-5; }
-
-  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none; }
-  .btn-primary { @apply btn bg-accent text-accent-fg shadow-sm hover:bg-accent-hover; }
-  .btn-secondary { @apply btn bg-surface text-ink-muted border border-control-line shadow-sm hover:bg-surface-sunken; }
-  .btn-danger { @apply btn bg-danger-solid text-danger-solid-fg shadow-sm hover:bg-danger-solid-hover; }
-  .btn-ghost { @apply btn text-ink-muted hover:bg-surface-hover hover:text-ink px-2.5 py-1.5; }
-
-  .input { @apply block w-full rounded-md border border-control-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint shadow-sm focus:border-ring; }
-  .json-input { @apply font-mono text-xs; }
-  .widget-tabs { @apply flex gap-1 border-b border-line-strong mb-2; }
-  .widget-tab { @apply px-3 py-1.5 text-sm font-medium text-ink-muted border border-transparent rounded-t-md -mb-px hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring; }
-  .widget-tab[aria-selected="true"] { @apply bg-surface text-ink border-line-strong border-b-surface; }
-  .widget-tabs[hidden], .widget-panel[hidden], [data-json-apply][hidden] { display: none; }
-  .json-formatted { @apply block w-full overflow-auto rounded-md border border-control-line bg-surface-sunken px-3 py-2 font-mono text-xs text-ink whitespace-pre; min-height: 10rem; }
-  .json-formatted[data-invalid] { @apply text-danger-fg whitespace-pre-wrap; }
-  .field-label { @apply block text-sm font-medium text-ink-muted mb-1.5; }
-  .field-group { @apply mb-4 last:mb-0; }
-  .checkbox-row { @apply flex items-center gap-2.5; }
-  .checkbox { @apply h-4 w-4 rounded border-control-line text-accent focus:ring-ring; }
-
-  .table-wrap { @apply overflow-x-auto; }
-  .table-admin { @apply w-full text-sm; }
-  .table-admin thead th { @apply text-left text-xs font-semibold uppercase tracking-wider text-ink-faint bg-surface-sunken px-5 py-3 border-b border-line; }
-  .table-admin tbody td { @apply px-5 py-3.5 border-b border-line-subtle text-ink-muted; }
-  .table-admin tbody tr { @apply hover:bg-surface-sunken/80 transition-colors; }
-  .table-admin tbody tr:last-child td { @apply border-b-0; }
-  .table-actions { @apply flex items-center justify-end gap-1; }
-
-  .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
-  .badge-true { @apply badge bg-success-bg text-success-fg; }
-  .badge-false { @apply badge bg-neutral-bg text-neutral-fg; }
-
-  .pagination { @apply flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-5 py-3.5 text-sm text-ink-faint; }
-  .pagination-pages { @apply flex items-center gap-1; }
-  .page-link { @apply inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-md text-sm font-medium text-ink-muted hover:bg-surface-hover hover:text-ink transition-colors; }
-  .page-link-current { @apply bg-accent text-accent-fg hover:bg-accent hover:text-accent-fg; }
-  .page-ellipsis { @apply inline-flex items-center justify-center h-8 px-1 text-sm text-ink-faint; }
-
-  .alert-success { @apply mb-5 rounded-md border border-success-border bg-success-bg px-4 py-3 text-sm text-success-fg; }
-  .alert-error { @apply mb-5 rounded-md border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg; }
-
-  .field-help { @apply mt-1 text-sm text-ink-muted; }
-  .field-error { @apply mt-1 text-sm text-danger-fg; }
-
-  .empty-state { @apply flex flex-col items-center justify-center gap-1 px-5 py-16 text-center; }
-  .empty-state-title { @apply text-sm font-medium text-ink-muted; }
-  .empty-state-body { @apply text-sm text-ink-faint; }
-}
-</style>
-
-{{define "menuBtn"}}<button type="button" class="menu-btn" onclick="tangoAdminNav.open()" aria-label="{{.T "admin.layout.open_menu" "Open menu"}}">
+{{define "menuBtn"}}<button type="button" class="menu-btn" data-admin-nav-open aria-label="{{.T "admin.layout.open_menu" "Open menu"}}">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
 </button>{{end}}
 </head>
 <body>
 <div class="shell">
-<div id="sidebar-backdrop" class="sidebar-backdrop" onclick="tangoAdminNav.close()"></div>
+<div id="sidebar-backdrop" class="sidebar-backdrop" data-admin-nav-close></div>
 <aside id="sidebar" class="sidebar">
   <div class="sidebar-brand">
     {{if .Brand.LogoURL}}<img src="{{.Brand.LogoURL}}" alt="" class="h-7 w-7 rounded-md object-cover">{{else}}<span class="sidebar-brand-mark">t</span>{{end}}
@@ -199,18 +110,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 {{block "content" .}}{{end}}
 </div>
 </div>
-<script>
-  window.tangoAdminNav = {
-    open: function () {
-      document.getElementById("sidebar").classList.add("sidebar-open");
-      document.getElementById("sidebar-backdrop").classList.add("sidebar-backdrop-open");
-    },
-    close: function () {
-      document.getElementById("sidebar").classList.remove("sidebar-open");
-      document.getElementById("sidebar-backdrop").classList.remove("sidebar-backdrop-open");
-    }
-  };
-</script>
+` + navScriptTag + `
 </body>
 </html>
 `))

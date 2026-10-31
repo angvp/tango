@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-func TestBaseLayoutRendersTailwindScript(t *testing.T) {
+func TestBaseLayoutLinksTheAdminStylesheet(t *testing.T) {
 	var buf bytes.Buffer
 	if err := freshLayout().ExecuteTemplate(&buf, "layout", nil); err != nil {
 		t.Fatalf("ExecuteTemplate returned error: %v", err)
 	}
 
-	if !strings.Contains(buf.String(), tailwindScriptTag) {
-		t.Fatalf("layout output does not contain the Tailwind script tag: %s", buf.String())
+	if !strings.Contains(buf.String(), stylesheetLinkTag) {
+		t.Fatalf("layout output does not link the admin stylesheet: %s", buf.String())
 	}
 }
 

@@ -8,7 +8,7 @@ import (
 )
 
 // rawPaletteClass matches a Tailwind utility that names a raw palette colour
-// (slate-500, indigo-600, white) instead of a semantic token from theme.go.
+// (slate-500, indigo-600, white) instead of a semantic token from admin/tailwind/admin.css.
 // Side modifiers (border-b-white) and opacity suffixes (bg-slate-950/50) are
 // part of the match.
 // The class must end at a non-name character, so neutral-bg (a token that
@@ -66,7 +66,7 @@ func TestOwnedAdminTemplatesUseNoRawPaletteClasses(t *testing.T) {
 		}
 		for i, line := range strings.Split(string(src), "\n") {
 			if m := rawPaletteClass.FindString(line); m != "" {
-				t.Errorf("%s:%d uses raw palette class %q; use a semantic token from theme.go", name, i+1, m)
+				t.Errorf("%s:%d uses raw palette class %q; use a semantic token from admin/tailwind/admin.css", name, i+1, m)
 			}
 		}
 	}

@@ -1,9 +1,11 @@
 package admin
 
-import (
-	"fmt"
-	"strings"
-)
+// The palette is the admin's colour table. Nothing in the binary reads it, so it
+// lives with the tests: the contrast tests read it directly, and the stylesheet
+// tests read it through TokenPaletteForTest and compare it with the custom
+// properties in the served admin/assets/admin.css. The colour map is in
+// admin/tailwind/tailwind.config.js, and scripts/admin-css.sh --check fails when
+// the generated stylesheet drifts from it.
 
 // rgb is one sRGB colour as 0-255 channels.
 type rgb [3]uint8
@@ -18,9 +20,6 @@ type themeToken struct {
 	SameInBothThemes bool
 }
 
-// palette is the single source of the admin's colours. The CSS custom
-// properties, the Tailwind colour map and the contrast tests are all
-// generated from it, so a value changes in one place.
 var palette = []themeToken{
 	// Text.
 	{Name: "ink", Light: rgb{15, 23, 42}, Dark: rgb{241, 245, 249}},
@@ -75,48 +74,4 @@ var palette = []themeToken{
 	{Name: "neutral-bg", Light: rgb{241, 245, 249}, Dark: rgb{51, 65, 85}},
 	{Name: "neutral-fg", Light: rgb{71, 85, 105}, Dark: rgb{203, 213, 225}},
 	{Name: "neutral-border", Light: rgb{226, 232, 240}, Dark: rgb{71, 85, 105}},
-}
-
-func (c rgb) channels() string {
-	return fmt.Sprintf("%d %d %d", c[0], c[1], c[2])
-}
-
-// declarations renders the tokens as custom-property declarations for one
-// theme.
-func declarations(dark bool) string {
-	var b strings.Builder
-	for _, tok := range palette {
-		value := tok.Light
-		if dark {
-			value = tok.Dark
-		}
-		fmt.Fprintf(&b, "--%s:%s;", tok.Name, value.channels())
-	}
-	return b.String()
-}
-
-// themeCSS returns the stylesheet that defines every token. Light is the
-// default; the dark values apply when the browser prefers dark and no theme
-// was chosen, or when the chosen theme (data-theme on <html>) is dark.
-func themeCSS() string {
-	dark := declarations(true)
-	return ":root{color-scheme:light;" + declarations(false) + "}" +
-		"@media (prefers-color-scheme: dark){:root:not([data-theme]){color-scheme:dark;" + dark + "}}" +
-		`:root[data-theme="dark"]{color-scheme:dark;` + dark + "}" +
-		`:root[data-theme="light"]{color-scheme:light;` + declarations(false) + "}"
-}
-
-// tailwindThemeConfig returns the script body that maps each token to a
-// Tailwind colour, so bg-surface and text-ink/60 read the custom properties.
-func tailwindThemeConfig() string {
-	var b strings.Builder
-	b.WriteString("tailwind.config={theme:{extend:{colors:{")
-	for i, tok := range palette {
-		if i > 0 {
-			b.WriteString(",")
-		}
-		fmt.Fprintf(&b, "'%s':'rgb(var(--%s) / <alpha-value>)'", tok.Name, tok.Name)
-	}
-	b.WriteString("}}}}")
-	return b.String()
 }

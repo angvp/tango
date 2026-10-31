@@ -10,3 +10,7 @@ func SetPreviewTimeoutForTest(d time.Duration) func() {
 	previewTimeout = d
 	return func() { previewTimeout = previous }
 }
+
+// TokenPaletteForTest exposes the colour tokens so tests in admin_test can
+// check the served stylesheet against them.
+var TokenPaletteForTest = palette

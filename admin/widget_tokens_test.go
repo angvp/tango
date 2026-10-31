@@ -10,8 +10,8 @@ import (
 
 // rawColourClass matches a Tailwind utility that names a palette colour
 // directly (bg-slate-50, text-red-600, hover:bg-red-50, border-white). Such a
-// class ignores the theme, so widgets use the semantic tokens from theme.go
-// instead.
+// class ignores the theme, so widgets use the semantic tokens from
+// admin/tailwind/admin.css instead.
 var rawColourClass = regexp.MustCompile(`(?:^|[\s:"])(?:bg|text|border|ring|divide|outline|placeholder|from|to|via|fill|stroke|accent|caret|shadow)-(?:white|black|slate|gray|zinc|neutral|stone|red|green|emerald|amber|yellow|blue|indigo|sky|rose|orange|violet|purple|teal|cyan|lime|pink|fuchsia)(?:-\d+)?(?:[\s"/]|$)`)
 
 // markdownPreviewCanvasClass is the class list of the Markdown preview iframe.
@@ -71,7 +71,7 @@ func TestWidgetSourcesUseNoRawColourClasses(t *testing.T) {
 			if file == "markdown.go" && strings.Contains(line, markdownPreviewCanvasClass) {
 				continue
 			}
-			t.Errorf("%s:%d uses a raw colour class; use a token from theme.go: %s", file, i+1, strings.TrimSpace(line))
+			t.Errorf("%s:%d uses a raw colour class; use a token from admin/tailwind/admin.css: %s", file, i+1, strings.TrimSpace(line))
 		}
 	}
 }
