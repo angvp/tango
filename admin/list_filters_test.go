@@ -506,3 +506,17 @@ func TestPaginationKeepsItsLandmarkAndMarksTheCurrentPage(t *testing.T) {
 		}
 	}
 }
+
+// A foreign key filter is named by its relation, not by its column, so the
+// control for AuthorID reads "Author".
+func TestForeignKeyFilterIsLabelledByItsRelation(t *testing.T) {
+	handler, _ := buildBookAdmin(t, bookFilterOptions())
+	body := doRequest(t, handler, http.MethodGet, flBookPath, nil).Body.String()
+
+	if strings.Contains(body, "Author ID") {
+		t.Errorf("the foreign key filter is labelled by its column:\n%s", body)
+	}
+	if !strings.Contains(body, ">Author</label>") {
+		t.Errorf("the foreign key filter has no label reading Author:\n%s", body)
+	}
+}
