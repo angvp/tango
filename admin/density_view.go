@@ -28,7 +28,7 @@ func densityView() tango.View {
 		default:
 			return invalidDensity(ctx)
 		}
-		return ctx.Redirect(safeAdminThemeNext(ctx.Request().PostForm.Get("next")))
+		return ctx.Redirect(safeAdminReturnPath(ctx.Request().PostForm.Get("next")))
 	}
 }
 

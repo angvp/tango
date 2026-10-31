@@ -94,3 +94,38 @@ func TestDensityPostRedirectsAnUnsafeNextToTheAdminRoot(t *testing.T) {
 		t.Errorf("redirect = %q, want /admin/", got)
 	}
 }
+
+// The next path is a same-origin admin path. An escaped search or filter value
+// survives the redirect, and every open-redirect shape falls back to /admin/,
+// for the density and the theme endpoints alike.
+func TestSwitchRedirectsKeepEscapedQueriesAndRefuseUnsafeNext(t *testing.T) {
+	tests := []struct {
+		name string
+		next string
+		want string
+	}{
+		{name: "escaped query survives", next: "/admin/crud_product/?q=caf%C3%A9&page=2", want: "/admin/crud_product/?q=caf%C3%A9&page=2"},
+		{name: "escaped space survives", next: "/admin/crud_product/?q=a%20b", want: "/admin/crud_product/?q=a%20b"},
+		{name: "protocol-relative is refused", next: "//evil.example/admin/", want: "/admin/"},
+		{name: "backslash is refused", next: `/\evil.example/`, want: "/admin/"},
+		{name: "encoded backslash is refused", next: "/admin/%5Cevil", want: "/admin/"},
+		{name: "encoded protocol-relative is refused", next: "/%2F%2Fevil.example/", want: "/admin/"},
+		{name: "scheme is refused", next: "https://evil.example/admin/", want: "/admin/"},
+		{name: "encoded control is refused", next: "/admin/%0Aevil", want: "/admin/"},
+		{name: "encoded dot segment is refused", next: "/admin/%2e%2e/login/", want: "/admin/"},
+		{name: "malformed escape is refused", next: "/admin/%zz", want: "/admin/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, _ := buildProductAdmin(t)
+			density := postDensity(t, handler, url.Values{"density": {"compact"}, "next": {tt.next}}, true)
+			if got := density.Header().Get("Location"); got != tt.want {
+				t.Errorf("density redirect = %q, want %q", got, tt.want)
+			}
+			theme := postTheme(t, handler, url.Values{"theme": {"dark"}, "next": {tt.next}})
+			if got := theme.Header().Get("Location"); got != tt.want {
+				t.Errorf("theme redirect = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

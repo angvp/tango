@@ -35,7 +35,7 @@ func themeView() tango.View {
 		default:
 			return invalidTheme(ctx)
 		}
-		return ctx.Redirect(safeAdminThemeNext(ctx.Request().PostForm.Get("next")))
+		return ctx.Redirect(safeAdminReturnPath(ctx.Request().PostForm.Get("next")))
 	}
 }
 
@@ -43,21 +43,23 @@ func invalidTheme(ctx *tango.Context) error {
 	return ctx.JSON(http.StatusBadRequest, map[string]string{"error": i18n.T(ctx.Context(), "admin.error.invalid_theme", "invalid theme")})
 }
 
-// safeAdminThemeNext returns raw when it is a same-origin relative path under
+// safeAdminReturnPath returns raw when it is a same-origin relative path under
 // /admin/ after parsing, otherwise adminRootPath.
-func safeAdminThemeNext(raw string) string {
+func safeAdminReturnPath(raw string) string {
 	if isSafeAdminPath(raw) {
 		return raw
 	}
 	return adminRootPath
 }
 
-// isSafeAdminPath rejects anything that is not a plain relative path under
-// /admin/: empty values, backslashes, percent escapes (encoded or
-// double-encoded), whitespace and control characters, schemes, hosts,
-// protocol-relative forms, and dot segments.
+// isSafeAdminPath accepts a plain relative path under /admin/, including an
+// escaped query such as ?q=caf%C3%A9. It rejects empty values, backslashes
+// (raw or encoded), whitespace and control characters (raw or encoded),
+// schemes, hosts, protocol-relative forms, malformed escapes, a percent sign
+// left after decoding the path (a double-encoded form), and dot or empty
+// segments after decoding.
 func isSafeAdminPath(raw string) bool {
-	if raw == "" || strings.ContainsAny(raw, `\%`) || strings.IndexFunc(raw, isControlOrSpace) >= 0 {
+	if raw == "" || strings.ContainsAny(raw, `\`) || strings.IndexFunc(raw, isControlOrSpace) >= 0 {
 		return false
 	}
 	parsed, err := url.Parse(raw)
@@ -65,6 +67,9 @@ func isSafeAdminPath(raw string) bool {
 		return false
 	}
 	if strings.HasPrefix(raw, "//") || !strings.HasPrefix(parsed.Path, adminRootPath) {
+		return false
+	}
+	if strings.ContainsAny(parsed.Path, `\%`) || strings.IndexFunc(parsed.Path, isControlOrSpace) >= 0 {
 		return false
 	}
 	return hasNormalizedSegments(parsed.Path)
