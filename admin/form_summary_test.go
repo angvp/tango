@@ -56,8 +56,8 @@ func TestFailedSaveWithTwoProblemsShowsASummaryAboveTheFields(t *testing.T) {
 		t.Errorf("summary does not count the problems in words:\n%s", body)
 	}
 	for _, name := range []string{"Count", "Total"} {
-		if !strings.Contains(body, `href="#field-`+name+`"`) {
-			t.Errorf("summary has no link to field %s:\n%s", name, body)
+		if !strings.Contains(body, `href="#field-`+name+`" class="underline">`+name+` must be a whole number.</a>`) {
+			t.Errorf("summary has no link to field %s carrying its message once:\n%s", name, body)
 		}
 	}
 	if got := strings.Count(body, `role="alert"`); got != 1 {

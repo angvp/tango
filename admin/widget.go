@@ -101,7 +101,7 @@ var selectWidgetTemplate = template.Must(template.New("selectWidget").Parse(
   <select id="field-{{.Name}}" name="{{.Name}}" class="input"` + ariaAttrs + `>
     {{range .SelectOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Text}}</option>{{end}}
   </select>
-  {{if .RelatedCreateURL}}<a href="{{.RelatedCreateURL}}" class="btn-secondary">{{.RelatedCreateLabel}}</a>{{end}}
+  {{if .RelatedCreateURL}}<a href="{{.RelatedCreateURL}}" class="btn-secondary whitespace-nowrap">{{.RelatedCreateLabel}}</a>{{end}}
 </div>`))
 
 // foreignKeySelectWidget is the built-in foreign key field: a <select>

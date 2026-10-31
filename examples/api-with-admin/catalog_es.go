@@ -102,7 +102,6 @@ var spanish = map[string]string{
 	"admin.fk.add_new":                          "+ Crear %s",
 	"admin.fk.none_selected":                    "Sin elegir %s",
 	"admin.form.cancel_to":                      "Cancelar y volver a %s",
-	"admin.form.problem_item":                   "%s: %s",
 	"admin.form.problem_one":                    "Corrija 1 problema para guardar los cambios de %s.",
 	"admin.form.problems":                       "Corrija %d problemas para guardar los cambios de %s.",
 	"admin.index.empty_body":                    "Registra un modelo en la administración (registry.Admin().Register) para verlo aquí.",
