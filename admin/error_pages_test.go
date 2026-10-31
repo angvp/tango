@@ -16,10 +16,14 @@ import (
 // errorPageForbidden is the text no admin error page may show: Go error text,
 // SQL, the framework's own failure body and a JSON envelope.
 var errorPageForbidden = []string{
-	"internal error", `{"error"`, "no such table",
+	"internal error", `{"error"`, "no such table", "does not exist", "doesn't exist",
 	"SELECT", "INSERT", "sql:", "strconv", "invalid syntax", "ParseFloat",
 	"constraint", "UNIQUE", "invalid or missing CSRF token",
 }
+
+// driverMissingTableText is the wording each database driver uses for a
+// missing table: SQLite, MySQL and PostgreSQL respectively.
+var driverMissingTableText = []string{"no such table", "doesn't exist", "does not exist"}
 
 // assertHTMLErrorPage checks the shape every admin error page shares: an HTML
 // document in the shared layout, the persistent status region, the literal
@@ -182,13 +186,21 @@ func TestServerFailureShowsTheShortReferenceAndLogsItOnTheErrorLine(t *testing.T
 	if strings.Contains(body, id) {
 		t.Fatalf("page shows the full request ID: %.400s", body)
 	}
-	if strings.Contains(body, "no such table") {
-		t.Fatalf("page shows the error text: %.400s", body)
+	for _, leak := range driverMissingTableText {
+		if strings.Contains(body, leak) {
+			t.Fatalf("page shows the error text %q: %.400s", leak, body)
+		}
 	}
 
-	errorLine := lineWith(logs.String(), "no such table")
-	if errorLine == "" {
-		t.Fatalf("no log line carries the full error: %s", logs.String())
+	// The driver's wording differs per dialect (SQLite "no such table",
+	// MySQL "doesn't exist", PostgreSQL "does not exist"), so the log line is
+	// identified by its event name and matched on the table each message names.
+	errorLine := lineWith(logs.String(), string(tango.EventViewError))
+	if errorLine == "" || !strings.Contains(errorLine, "error=") {
+		t.Fatalf("no view_error log line carries the full error: %s", logs.String())
+	}
+	if !strings.Contains(errorLine, "crud_product") {
+		t.Fatalf("error line does not name the missing table crud_product: %s", errorLine)
 	}
 	if !strings.Contains(errorLine, "request_id="+id) {
 		t.Fatalf("error line lacks request_id=%s: %s", id, errorLine)
