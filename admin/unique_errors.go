@@ -85,5 +85,5 @@ func uniqueViolationKey(err error) string {
 // uniqueFieldMessage is the message beside a field whose value another row
 // already uses.
 func uniqueFieldMessage(ctx context.Context, meta model.ModelMeta, field model.FieldMeta, opts adminregistry.Options) string {
-	return i18n.T(ctx, "admin.error.unique_field", "Another %s already uses this %s.", displayNoun(meta, opts), strings.ToLower(fieldLabel(opts, field.Name)))
+	return i18n.T(ctx, "admin.error.unique_field", "Another %s already uses this value.", displayNoun(meta, opts))
 }

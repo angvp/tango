@@ -123,12 +123,12 @@ func TestBadInputYieldsFriendlyMessagesOnCreateAndEdit(t *testing.T) {
 		return form
 	}
 	rows := []row{
-		{name: "year is not a number", form: base(url.Values{"Year": {"abc"}}), expected: "Year must be a whole number.", keeps: []string{`value="abc"`, `value="9.5"`, `value="Atlas"`}},
-		{name: "price is not a number", form: base(url.Values{"Price": {"x"}}), expected: "Price must be a number.", keeps: []string{`value="x"`, `value="2024"`}},
-		{name: "published is not a date", form: base(url.Values{"Published": {"someday"}}), expected: "Published must be a date and time.", keeps: []string{`value="someday"`}},
-		{name: "title is too long", form: base(url.Values{"Title": {"A very long title"}}), expected: "Title must be at most 12 characters", keeps: []string{`value="2024"`}},
+		{name: "year is not a number", form: base(url.Values{"Year": {"abc"}}), expected: "Enter a whole number.", keeps: []string{`value="abc"`, `value="9.5"`, `value="Atlas"`}},
+		{name: "price is not a number", form: base(url.Values{"Price": {"x"}}), expected: "Enter a number.", keeps: []string{`value="x"`, `value="2024"`}},
+		{name: "published is not a date", form: base(url.Values{"Published": {"someday"}}), expected: "Enter a date and time.", keeps: []string{`value="someday"`}},
+		{name: "title is too long", form: base(url.Values{"Title": {"A very long title"}}), expected: "Use at most 12 characters. You entered 17.", keeps: []string{`value="2024"`}},
 		{name: "notes is not JSON", form: base(url.Values{"Notes": {"{"}}), expected: "This is not valid JSON", keeps: []string{`value="2024"`}},
-		{name: "title already used", form: base(url.Values{"Title": {"Dune"}}), expected: "Another book already uses this title.", keeps: []string{`value="2024"`, `value="9.5"`}},
+		{name: "title already used", form: base(url.Values{"Title": {"Dune"}}), expected: "Another book already uses this value.", keeps: []string{`value="2024"`, `value="9.5"`}},
 	}
 	for _, tt := range rows {
 		for _, mode := range []string{"create", "edit"} {

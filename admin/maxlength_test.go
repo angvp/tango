@@ -92,7 +92,7 @@ func TestCreateAtTheBoundaryStoresAndOneOverIsRefusedKeepingOtherInput(t *testin
 	if resp.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422", resp.Code)
 	}
-	for _, want := range []string{"Title must be at most 5 characters (got 6)", `value="héllo!"`, `value="keep this body"`, `value="and this note"`} {
+	for _, want := range []string{"Use at most 5 characters. You entered 6.", `value="héllo!"`, `value="keep this body"`, `value="and this note"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("response lacks %q:\n%s", want, body)
 		}
@@ -108,7 +108,7 @@ func TestEditRefusesAnOverLongValueAndLeavesTheRow(t *testing.T) {
 
 	resp := doRequest(t, handler, http.MethodPost, fmt.Sprintf("%s%d/", headlineBasePath, id), url.Values{"Title": {"toolong"}, "Body": {"new body"}, "Note": {"n"}})
 	body := resp.Body.String()
-	if resp.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "Title must be at most 5 characters (got 7)") || !strings.Contains(body, `value="new body"`) {
+	if resp.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "Use at most 5 characters. You entered 7.") || !strings.Contains(body, `value="new body"`) {
 		t.Fatalf("status %d, body:\n%s", resp.Code, body)
 	}
 	var title, stored string
@@ -125,10 +125,10 @@ func TestEditRefusesAnOverLongValueAndLeavesTheRow(t *testing.T) {
 func TestOverLongMessageIsTranslatable(t *testing.T) {
 	handler, _ := buildHeadlineAdmin(t, admin.WithMiddleware(adminI18NMiddleware()))
 	i18n.RegisterCatalog(adminI18NLocale, map[string]string{
-		"admin.error.too_long": "%s admite como máximo %d caracteres (hay %d)",
+		"admin.error.too_long": "Usa como máximo %d caracteres. Escribiste %d.",
 	})
 	resp := doRequest(t, handler, http.MethodPost, headlineBasePath+"new/", url.Values{"Title": {"demasiado"}})
-	if body := resp.Body.String(); !strings.Contains(body, "Title admite como máximo 5 caracteres (hay 9)") {
+	if body := resp.Body.String(); !strings.Contains(body, "Usa como máximo 5 caracteres. Escribiste 9.") {
 		t.Fatalf("message not translated:\n%s", body)
 	}
 }

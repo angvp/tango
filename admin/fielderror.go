@@ -115,11 +115,11 @@ func parseErrorMessage(ctx context.Context, f FieldContext, err error) string {
 		switch parseErr.kind {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return i18n.T(ctx, "admin.error.not_whole_number", "%s must be a whole number.", f.Label)
+			return i18n.T(ctx, "admin.error.not_whole_number", "Enter a whole number.")
 		case reflect.Float32, reflect.Float64:
-			return i18n.T(ctx, "admin.error.not_number", "%s must be a number.", f.Label)
+			return i18n.T(ctx, "admin.error.not_number", "Enter a number.")
 		case reflect.Struct:
-			return i18n.T(ctx, "admin.error.not_date_time", "%s must be a date and time.", f.Label)
+			return i18n.T(ctx, "admin.error.not_date_time", "Enter a date and time.")
 		}
 	}
 	return i18n.T(ctx, "admin.error.invalid_value", "Invalid value")
