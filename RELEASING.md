@@ -83,6 +83,27 @@ The CI job **browser CSP smoke** runs `browsersmoke`, a separate Go module, in C
 
 Before a release that changes how served objects are displayed, check the sandbox policy that `storage.Serve` sends by default (`sandbox; default-src 'none'`). Serve an uploaded PDF inline through a route whose `ServeOptions` list `application/pdf` in `InlineTypes`, open it in each browser the release names as supported, and confirm it displays. If a browser does not display it, state in the release notes which route needs `SkipSandboxPolicy`.
 
+## v0.8.0 release preparation
+
+v0.8.0 ships Milestone 64 (the security headers middleware and the strict-policy admin) and Milestone 65 (the admin redesign) together. Both are unreleased on the development line. Nothing in this section tags, pushes or publishes a release. The maintainer decides when v0.8.0 is cut, and the steps below are to be completed before that decision.
+
+Pre-tag items, to be done by the maintainer:
+
+- **Browser eyeball check.** Run the [admin theme check](#admin-theme-check) against v0.8.0 in light and dark, at desktop and phone width. Add these two items to that check:
+  - an uploaded PDF and an uploaded image served inline through a route whose `ServeOptions` list the type in `InlineTypes`, under the sandbox policy `storage.Serve` now sends by default (see [the sandbox check](#admin-stylesheet-and-browser-checks));
+  - the phone changelist as cards, and the drawer's focus behaviour.
+- **First GitHub runs.** The CI jobs **admin stylesheet freshness** and **browser CSP smoke** have not yet run on the redesign's commits. Each must pass on the release commit, and the browser CSP smoke job's printed Chrome version is recorded with the release notes.
+- **Firefox and Safari.** Check the admin in both browsers, in both themes. The admin uses no polyfills, so a failure there is a real failure.
+- **Changelog.** The `[Unreleased]` section of `CHANGELOG.md` is renamed to the version and its date by the maintainer at release. The Release job refuses a tag without that dated section. The M64 and M65 entries carry the upgrade notes for the `admin.Widget` signature, the `admin.*` message keys and the inline PDF sandbox.
+- **Website copy.** `tango-web` changes only after the release exists. Website copy claims released behaviour only, so none of it is updated before the tag.
+
+Known limits to state in the release notes:
+
+- The display nouns (`SingularName` and `PluralName` on `admin.Options`) are plain strings, so they are not translatable.
+- No field is marked Required. The marker waits for the model package to gain required metadata.
+- The outcome cookie is not single-use. It is bound to the session and expires 300 seconds after it was set, and a copy replayed in that window is accepted again.
+- A host custom widget must adapt to the `admin.Widget` signature, which now takes a `context.Context` for `Render` and `Parse`.
+
 ## After the tag
 
 The Release job refuses the tag, creating nothing, unless the tagged commit is on `main`, CI passed on that exact commit, the changelog has a dated section for the version, the version's migration-compat corpus is committed and listed, a patch release has no incompatible change, and the module proxy doesn't already serve the tag from another commit. It then creates the GitHub release and moves the website. Its outcomes:
