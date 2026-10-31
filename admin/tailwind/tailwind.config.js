@@ -4,7 +4,7 @@
 const OPACITY_TOKENS = [
   'ink', 'ink-muted', 'ink-faint',
   'surface', 'surface-sunken', 'surface-hover', 'header',
-  'line','line-subtle', 'line-strong', 'control-line',
+  'line', 'line-subtle', 'line-strong', 'control-line',
   'accent', 'accent-hover', 'accent-fg', 'accent-ui', 'ring', 'selection-bg', 'selection-fg',
   'danger-solid', 'danger-solid-hover', 'danger-solid-fg',
   'sidebar', 'sidebar-fg', 'sidebar-strong', 'sidebar-muted', 'sidebar-dot', 'sidebar-accent', 'sidebar-accent-fg', 'sidebar-pill-hover', 'sidebar-pill-current',
