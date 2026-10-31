@@ -264,6 +264,15 @@ var signedInShots = []shot{
 	{name: "entries-paged", ready: ".pagination-pages", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_entry/?page=2")}
 	}},
+	// A save of the unchanged edit form redirects with the saved outcome, so the
+	// status region carries a message without changing any row.
+	{name: "status-message-after-save", ready: ".status-message", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_book/1/"),
+			chromedp.WaitVisible("#field-Title"),
+			chromedp.Submit("#field-Title"),
+		}
+	}},
 	// Compact density is the last shot: its cookie outlives this step in the
 	// shared browser, so no later shot may depend on the default density.
 	{name: "changelist-rows-compact", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {

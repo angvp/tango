@@ -117,6 +117,7 @@
 
   .alert-success { @apply mb-5 rounded-md border border-success-border bg-success-bg px-4 py-3 text-sm text-success-fg; }
   .alert-error { @apply mb-5 rounded-md border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg; }
+  .status-message { @apply flex flex-wrap items-center justify-between gap-3; }
 
   .field-help { @apply mt-1 text-sm text-ink-muted; }
   .field-error { @apply mt-1 text-sm text-danger-fg; }

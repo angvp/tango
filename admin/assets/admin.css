@@ -2017,6 +2017,14 @@ html, body{
   color:rgb(var(--danger-fg) / var(--tw-text-opacity, 1));
 }
 
+.status-message{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:0.75rem;
+}
+
 .field-help{
   margin-top:0.25rem;
   font-size:0.875rem;
