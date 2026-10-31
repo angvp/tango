@@ -161,7 +161,11 @@ func (s *adminSite) outcomes(header map[string]string) map[string]page {
 	twoProblems := s.submitTo("/admin/post/new/", "/admin/post/new/", url.Values{"Title": {"Nuevo"}, "Body": {"Texto"}, "AuthorID": {"abc"}, "CreatedAt": {"nunca"}}, header)
 	refused := s.submitTo("/admin/post/new/", "/admin/post/new/", url.Values{"Title": {"Nuevo"}, "Body": {"Texto"}, "AuthorID": {"999999"}}, header)
 
-	return map[string]page{"created": created, "saved": saved, "removed": removed, "deleted": deleted, "deleted n": deletedMany, "two problems": twoProblems, "refused": refused}
+	// A bulk delete with an empty selection is refused, and the refusal page
+	// is the one that titles itself with the rejection heading.
+	rejected := s.submitTo("/admin/post/", "/admin/post/delete-selected/", url.Values{"count": {"0"}}, header)
+
+	return map[string]page{"created": created, "saved": saved, "removed": removed, "deleted": deleted, "deleted n": deletedMany, "two problems": twoProblems, "refused": refused, "rejected": rejected}
 }
 
 // seedPost creates a post under the example's author and returns its key.
@@ -259,7 +263,7 @@ func unwalkedKey(key string) bool {
 		"admin.json.", "admin.markdown.", "admin.widget.", "admin.error.", "admin.dashboard.activity.job.",
 		"admin.dashboard.status.unreachable", "admin.dashboard.status.missing",
 		"admin.dashboard.status.unknown", "admin.dashboard.unavailable", "admin.dashboard.not_configured",
-		"admin.list.filter_too_many", "admin.index.empty", "admin.login.invalid",
+		"admin.list.filter_too_many", "admin.index.empty", "admin.index.title", "admin.login.invalid",
 		// Data the example does not have: boolean columns, filters, a second
 		// page of rows, an empty model, and traffic recorded by a Window.
 		"admin.boolean.", "admin.bulk.back_to", "admin.list.filter_any", "admin.list.empty_first", "admin.list.empty_title", "admin.list.empty_no_filter_match", "admin.list.showing", "admin.list.count_one", "admin.list.count_many", "admin.list.filters_applied", "admin.list.filter_pair", "admin.list.clear_filters",
