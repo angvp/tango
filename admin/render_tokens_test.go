@@ -13,7 +13,7 @@ import (
 // paletteText matches one palette text-colour utility among the utilities of an
 // @apply line or a class attribute. A variant prefix (hover:text-ink) does not
 // count: the resting colour is what must be named.
-var paletteText = regexp.MustCompile(`(?:^|\s)text-(?:ink|ink-muted|ink-faint|accent-fg|success-fg|danger-fg|warning-fg|neutral-fg|danger-solid-fg|sidebar-fg|sidebar-strong|sidebar-muted)(?:\s|$)`)
+var paletteText = regexp.MustCompile(`(?:^|\s)text-(?:ink|ink-muted|ink-faint|accent-fg|success-fg|danger-fg|warning-fg|neutral-fg|danger-solid-fg|sidebar-accent-fg|sidebar-fg|sidebar-strong|sidebar-muted)(?:\s|$)`)
 
 // componentApply matches a single-class rule of the Tailwind source and captures
 // the class and its @apply utilities.
@@ -23,20 +23,28 @@ var componentApply = regexp.MustCompile(`(?m)^\s*\.([a-z][a-z0-9-]*)\s*\{\s*@app
 // palette text colour, read from the Tailwind source the stylesheet is built from.
 func componentsWithText(t *testing.T) map[string]bool {
 	t.Helper()
+	named := map[string]bool{}
+	for class, apply := range componentRules(t) {
+		named[class] = paletteText.MatchString(apply)
+	}
+	return named
+}
+
+// componentRules returns each single-class component's @apply utilities.
+func componentRules(t *testing.T) map[string]string {
+	t.Helper()
 	src, err := os.ReadFile("tailwind/admin.css")
 	if err != nil {
 		t.Fatal(err)
 	}
-	named := map[string]bool{}
-	seen := 0
+	rules := map[string]string{}
 	for _, m := range componentApply.FindAllStringSubmatch(string(src), -1) {
-		seen++
-		named[m[1]] = paletteText.MatchString(m[2])
+		rules[m[1]] = m[2]
 	}
-	if seen == 0 {
+	if len(rules) == 0 {
 		t.Fatal("no component rule found in tailwind/admin.css")
 	}
-	return named
+	return rules
 }
 
 // namesPaletteText reports whether one class attribute carries a palette text

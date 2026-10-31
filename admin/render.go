@@ -31,7 +31,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
           {{if .Options}}<label for="{{.ID}}" class="field-caption">{{.Label}}</label>
           <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{else}}<span class="field-caption">{{.Label}}</span>{{end}}
           {{if .Applied}}<input type="hidden" name="{{.Key}}" value="{{.AppliedValue}}"><p class="text-xs text-ink-muted">{{.Applied}}</p>{{end}}
-          {{if .Message}}<p class="text-xs text-ink-faint">{{.Message}}</p>{{end}}
+          {{if .Message}}<p class="hint-small">{{.Message}}</p>{{end}}
         </div>{{end}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
       </form>

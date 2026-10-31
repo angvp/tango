@@ -70,7 +70,7 @@ func TestDashboardTextColoursComeFromTheAdminPaletteWithNoDecoration(t *testing.
 			t.Errorf("%s names no palette text colour", tag)
 		}
 	}
-	for _, banned := range []string{"gradient", "backdrop-", "shadow-lg", "shadow-xl", "rounded-2xl", "rounded-3xl", "text-3xl", "text-4xl", "text-5xl", "dark:"} {
+	for _, banned := range []string{"gradient", "backdrop-", "shadow-lg", "shadow-xl", "rounded-2xl", "rounded-3xl", "rounded-[", "text-3xl", "text-4xl", "text-5xl", "dark:"} {
 		if strings.Contains(page, banned) {
 			t.Errorf("dashboard markup uses %q, which the admin does not", banned)
 		}
@@ -85,9 +85,9 @@ func TestDashboardStatusDotsUseStatusTokens(t *testing.T) {
 		state admin.DatabaseState
 		want  string
 	}{
-		{"reachable", admin.DatabaseReachable, "before:bg-success-fg"},
-		{"unreachable", admin.DatabaseUnreachable, "before:bg-danger-fg"},
-		{"unknown", admin.DatabaseUnknown, "before:bg-neutral-fg"},
+		{"reachable", admin.DatabaseReachable, "status-dot-success"},
+		{"unreachable", admin.DatabaseUnreachable, "status-dot-danger"},
+		{"unknown", admin.DatabaseUnknown, "status-dot-neutral"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

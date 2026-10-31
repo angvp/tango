@@ -70,7 +70,7 @@ const activityCardSource = `{{define "activityCard"}}
 <section class="card" data-dashboard="activity" data-state="{{.Activity.State}}">
   <div class="card-header">
     <h2 class="section-title">{{.T "admin.dashboard.activity.title" "Activity"}}</h2>
-    {{if eq .Activity.State "ready"}}<p class="text-hint"><span data-activity="scope">{{.Activity.Snapshot.Scope}}</span> &middot; <span data-activity="window">{{.T "admin.dashboard.activity.window" "Window since %s, %s" .Activity.SinceLabel .Activity.WindowLabel}}</span></p>{{end}}
+    {{if eq .Activity.State "ready"}}<p class="hint-text"><span data-activity="scope">{{.Activity.Snapshot.Scope}}</span> &middot; <span data-activity="window">{{.T "admin.dashboard.activity.window" "Window since %s, %s" .Activity.SinceLabel .Activity.WindowLabel}}</span></p>{{end}}
   </div>
   {{if eq .Activity.State "unavailable"}}<p class="panel-note-muted">{{.T "admin.dashboard.unavailable" "Unavailable"}}</p>
   {{else if eq .Activity.State "not-configured"}}<p class="panel-note">{{.T "admin.dashboard.not_configured" "Not configured"}}</p>
@@ -96,7 +96,7 @@ const activityCardSource = `{{define "activityCard"}}
   <div class="border-t border-line-subtle"></div>
   <h3 class="section-label">{{.T "admin.dashboard.activity.jobs" "Job runs"}}</h3>
   {{if .Activity.HasJobs}}
-  <dl class="divide-y divide-line-subtle pb-2" data-activity="jobs">
+  <dl class="row-list pb-2" data-activity="jobs">
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.success" "success"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Success}}</dd></div>
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.error" "error"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Error}}</dd></div>
     <div class="stat-row"><dt class="stat-label">{{.T "admin.dashboard.activity.job.panic" "panic"}}</dt><dd class="stat-value stat-value-num">{{.Activity.Snapshot.Jobs.Panic}}</dd></div>

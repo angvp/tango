@@ -40,7 +40,7 @@
   .content { @apply flex-1 min-w-0 flex flex-col; }
   .content-body { @apply flex-1 min-w-0 px-4 py-5 sm:px-6 sm:py-6 max-w-5xl w-full mx-auto; }
 
-  .card { @apply bg-surface border border-line rounded-xl shadow-sm; }
+  .card { @apply bg-surface border border-line rounded-card shadow-sm; }
   .card-header { @apply flex flex-wrap items-center justify-between gap-3 border-b border-line-subtle px-5 py-4; }
   .card-body { @apply p-5; }
 
@@ -101,8 +101,15 @@
   .panel-note { @apply px-5 py-4 text-sm text-ink-faint; }
   .panel-note-muted { @apply px-5 py-4 text-sm text-ink-muted; }
   .panel-note-tail { @apply px-5 pb-4 text-sm text-ink-faint; }
-  .text-hint { @apply text-sm text-ink-faint; }
+  .hint-text { @apply text-sm text-ink-faint; }
+  .hint-small { @apply text-xs text-ink-faint; }
   .field-caption { @apply text-xs font-medium text-ink-muted; }
   .inline-row { @apply flex items-center gap-2; }
   .theme-option { @apply rounded-md px-2 py-1 text-xs font-medium; }
+  .theme-option-on { @apply bg-sidebar-accent text-sidebar-accent-fg; }
+  .theme-option-off { @apply text-sidebar-muted hover:text-sidebar-strong; }
+  .status-dot { @apply font-medium before:mr-2 before:inline-block before:h-2 before:w-2 before:rounded-full; }
+  .status-dot-success { @apply status-dot before:bg-success-fg; }
+  .status-dot-danger { @apply status-dot before:bg-danger-fg; }
+  .status-dot-neutral { @apply status-dot before:bg-neutral-fg; }
 }

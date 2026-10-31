@@ -24,6 +24,8 @@ module.exports = {
   },
   theme: {
     extend: {
+      // The one corner radius of a card; components name it, nothing sizes a radius ad hoc.
+      borderRadius: { 'card': '18px' },
       colors: {
       'ink': 'rgb(var(--ink) / <alpha-value>)',
       'ink-muted': 'rgb(var(--ink-muted) / <alpha-value>)',

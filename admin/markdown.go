@@ -80,10 +80,10 @@ var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
 <div id="field-{{.Name}}-panel-write" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-write" class="widget-panel">{{end}}
 <textarea id="field-{{.Name}}" name="{{.Name}}" class="input font-mono resize-y" rows="12" data-tango-widget="markdown"{{if .Preview}} data-preview-url="{{.PreviewURL}}"{{end}}{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}}{{if .Text.Active}} data-msg-count="{{.Text.T "admin.markdown.count" "{count} characters"}}" data-msg-count-max="{{.Text.T "admin.markdown.count_max" "{count} / {max} characters"}}"{{if .Preview}} data-msg-preview-failed="{{.Text.T "admin.markdown.preview_failed" "Preview failed."}}" data-msg-preview-unavailable="{{.Text.T "admin.markdown.preview_unavailable" "Preview unavailable. Reload the page and try again."}}" data-msg-preview-rendering="{{.Text.T "admin.markdown.preview_rendering" "Rendering preview..."}}"{{end}}{{end}}` + ariaAttrs + `>
 {{.Value}}</textarea>
-<p id="field-{{.Name}}-count" class="text-xs text-ink-faint mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
+<p id="field-{{.Name}}-count" class="hint-small mt-1" aria-live="polite">{{.Count}}</p>{{if .Preview}}
 </div>
 <div id="field-{{.Name}}-panel-preview" role="tabpanel" aria-labelledby="field-{{.Name}}-tab-preview" class="widget-panel" hidden>
-  <p id="field-{{.Name}}-preview-status" role="status" class="text-xs text-ink-faint" data-markdown-status></p>
+  <p id="field-{{.Name}}-preview-status" role="status" class="hint-small" data-markdown-status></p>
   <iframe id="field-{{.Name}}-preview" title="{{.Text.T "admin.markdown.preview_title" "Preview of %s" .Label}}" sandbox="" referrerpolicy="no-referrer" class="w-full min-h-40 mt-2 rounded border border-line-strong bg-white"></iframe>
 </div>{{end}}`))
 
