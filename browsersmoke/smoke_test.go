@@ -137,7 +137,9 @@ func composedSite(t *testing.T) http.Handler {
 	if err := admin.CreateAccount(context.Background(), store, smokeAdminUser, smokeAdminPassword); err != nil {
 		t.Fatalf("seed admin account: %v", err)
 	}
-	if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body) VALUES (1, 'Hello', 'Body')`); err != nil {
+	// The second title is one unbroken word, wider than a phone screen, so a
+	// table that does not wrap its cells is caught by the phone check.
+	if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body) VALUES (1, 'Hello', 'Body'), (2, 'Unbrokenphonecheckvalue0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ', 'Body')`); err != nil {
 		t.Fatalf("seed note: %v", err)
 	}
 
@@ -516,6 +518,25 @@ func (s *smoke) adminNavToggle() {
 // previewHeading reads the first heading of the preview frame from the DOM.
 // The frame is sandboxed without allow-scripts, so the test reads it through
 // the DevTools DOM domain rather than from script.
+// phoneChangelist checks the changelist at the phone width: the page does not
+// scroll sideways, the table does not scroll inside its wrapper, and every
+// row's Edit and Delete link sits inside the viewport.
+func (s *smoke) phoneChangelist() {
+	s.t.Helper()
+	s.check(s.eval(`document.documentElement.scrollWidth <= window.innerWidth`), "the changelist scrolls sideways at the phone width")
+	s.check(s.eval(`(function () { var w = document.querySelector('.table-wrap'); return !w || w.scrollWidth <= w.clientWidth; })()`), "the changelist table scrolls inside its wrapper at the phone width")
+	s.check(s.eval(rowActionsInViewport), "a row's Edit or Delete link is outside the phone viewport")
+}
+
+const rowActionsInViewport = `(function () {
+	var links = document.querySelectorAll('.table-admin tbody a.btn-ghost');
+	if (links.length < 2) return false;
+	return Array.prototype.every.call(links, function (a) {
+		var r = a.getBoundingClientRect();
+		return r.width > 0 && r.left >= 0 && r.right <= window.innerWidth;
+	});
+})()`
+
 func (s *smoke) previewHeading() (string, error) {
 	ctx, cancel := context.WithTimeout(s.ctx, stepTimeout)
 	defer cancel()
@@ -726,6 +747,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	)
 	s.visit("admin dashboard", "/admin/")
 	s.visit("admin changelist", "/admin/smoke_note/")
+	s.phoneChangelist()
 	s.adminNavToggle()
 	s.visit("admin change form", "/admin/smoke_note/1/")
 	s.adminMarkdownPreview()
