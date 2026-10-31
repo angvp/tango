@@ -73,7 +73,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         <thead><tr>{{if .BulkDelete}}<th scope="col" data-bulk-cell hidden><input type="checkbox" data-bulk-select-all class="max-md:hidden" aria-label="{{.T "admin.bulk.select_all" "Select all %d rows on this page" (len .Rows)}}"></th>{{end}}{{range .Columns}}<th scope="col"{{if .Numeric}} class="cell-num"{{end}}>{{.Label}}</th>{{end}}<th scope="col" class="cell-actions">{{.T "admin.list.actions" "Actions"}}</th></tr></thead>
         <tbody>
         {{range .Rows}}<tr>
-          {{if $.BulkDelete}}<td data-bulk-cell hidden><input type="checkbox" data-bulk-pk="{{.PK}}" data-bulk-identity="{{.Identity}}" aria-label="{{$.T "admin.bulk.select_row" "Select %s" .Identity}}"></td>{{end}}
+          {{if $.BulkDelete}}<td data-bulk-cell hidden><label class="inline-flex min-h-6 min-w-6 items-center justify-center"><input type="checkbox" data-bulk-pk="{{.PK}}" data-bulk-identity="{{.Identity}}" aria-label="{{$.T "admin.bulk.select_row" "Select %s" .Identity}}"></label></td>{{end}}
           {{range .Cells}}<td{{if .Numeric}} class="cell-num"{{end}}><span class="cell-label">{{.Label}}</span>{{if .Href}}<a href="{{.Href}}" rel="noopener noreferrer">{{.Text}}</a>{{else if eq .Badge "yes"}}<span class="badge-true">{{$.T "admin.boolean.yes" "Yes"}}</span>{{else if eq .Badge "no"}}<span class="badge-false">{{$.T "admin.boolean.no" "No"}}</span>{{else}}{{.Text}}{{end}}</td>{{end}}
           <td class="cell-actions">
             <div class="table-actions">
