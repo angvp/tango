@@ -137,6 +137,7 @@ func captureApp() tango.App {
 		if err := registry.Admin().Register(captureNote{}, admin.Options{
 			ListDisplay: []string{"Title", "Copies"},
 			Search:      []string{"Title"},
+			HelpText:    map[string]string{"Copies": "Whole number of copies you hold."},
 		}); err != nil {
 			return err
 		}
@@ -144,6 +145,7 @@ func captureApp() tango.App {
 			ListDisplay: []string{"Title", "Published"},
 			Search:      []string{"Title"},
 			Filters:     []string{"Published"},
+			HelpText:    map[string]string{"Published": "Shown to visitors when ticked."},
 		}); err != nil {
 			return err
 		}
@@ -450,6 +452,9 @@ var signedInShots = []shot{
 			chromedp.SendKeys("#field-Copies", "many"),
 			chromedp.Submit("#field-Title"),
 		}
+	}},
+	{name: "entry-create-form", ready: "form", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_entry/new/")}
 	}},
 	// Compact density is the last shot: its cookie outlives this step in the
 	// shared browser, so no later shot may depend on the default density.
