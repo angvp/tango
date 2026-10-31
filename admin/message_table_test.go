@@ -104,6 +104,7 @@ var messageTableForbidden = []string{
 	"strconv", "invalid syntax", `field "`, "ParseFloat", "ValueTooLong", "db:",
 	"UNIQUE", "constraint", "FOREIGN KEY", "internal error",
 	"invalid character", "unexpected end", `{"error"`,
+	"INSERT", "SELECT", "sql:", "messageBook",
 }
 
 func TestBadInputYieldsFriendlyMessagesOnCreateAndEdit(t *testing.T) {

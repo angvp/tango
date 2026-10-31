@@ -44,7 +44,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       <button type="submit" name="density" value="compact" aria-pressed="{{.Compact}}" class="density-option {{if .Compact}}density-option-on{{else}}density-option-off{{end}}">{{.T "admin.density.compact" "Compact"}}</button>
     </form>
     {{if .Rows}}
-    {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.confirm_title" "Delete {count} selected %s?" .Plural}}">
+    {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.confirm_title" "Delete {count} selected %s?" .Plural}}" data-msg-confirm-one="{{.T "admin.bulk.confirm_one" "Delete 1 %s" .Singular}}" data-msg-confirm-many="{{.T "admin.bulk.confirm_many" "Delete {count} %s" .Plural}}">
     <div class="flex items-center gap-3 border-b border-line-subtle px-5 py-3" data-bulk-bar hidden>
       <button type="button" class="btn-danger" data-bulk-open disabled>{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
       <span class="text-sm text-ink-muted" data-bulk-count aria-live="polite"></span>
@@ -58,7 +58,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         <ul class="my-3 max-h-48 list-disc overflow-y-auto pl-5 text-sm text-ink-muted" data-bulk-list></ul>
         <p class="mb-5 text-sm text-ink-muted">{{.T "admin.bulk.cascade_warning" "Rows that reference these rows are deleted with them. This action cannot be undone."}}</p>
         <div class="inline-row">
-          <button type="submit" class="btn-danger" data-bulk-confirm>{{.T "admin.button.confirm_delete" "Confirm delete"}}</button>
+          <button type="submit" class="btn-danger" data-bulk-confirm>{{.T "admin.bulk.confirm_many" "Delete {count} %s" .Plural}}</button>
           <button type="button" class="btn-secondary" data-bulk-cancel autofocus>{{.T "admin.button.cancel" "Cancel"}}</button>
         </div>
       </form>
@@ -148,12 +148,14 @@ var deleteTemplate = cloneWithContent(`{{define "content"}}
 <div class="content-body">
   <div class="card max-w-lg">
     <div class="card-body">
-      <p class="text-sm text-ink-muted mb-5">{{.T "admin.delete.confirm_prefix" "Are you sure you want to delete"}} <span class="font-medium text-ink">{{.Singular}} {{.PK}}</span>? {{.T "admin.delete.confirm_suffix" "This action cannot be undone."}}</p>
+      {{if .Error}}<div class="alert-error" role="alert">{{.Error}}</div>
+      <a href="../" class="btn-secondary">{{.T "admin.button.cancel" "Cancel"}}</a>
+      {{else}}<p class="text-sm text-ink-muted mb-5">{{.T "admin.delete.confirm_prefix" "Are you sure you want to delete"}} <span class="font-medium text-ink">{{.Label}}</span>? {{.T "admin.delete.confirm_suffix" "This action cannot be undone."}}</p>
       <form method="post" class="inline-row">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <button type="submit" class="btn-danger">{{.T "admin.button.confirm_delete" "Confirm delete"}}</button>
+        <button type="submit" class="btn-danger">{{.T "admin.delete.confirm_button" "Delete %s" .Singular}}</button>
         <a href="../" class="btn-secondary">{{.T "admin.button.cancel" "Cancel"}}</a>
-      </form>
+      </form>{{end}}
     </div>
   </div>
 </div>
@@ -220,8 +222,12 @@ type formPageData struct {
 
 type deletePageData struct {
 	chrome
-	Singular  string
-	PK        string
+	Singular string
+	// Label names the row: its display label, or the noun and primary key.
+	Label string
+	// Error is the refusal shown instead of the confirm form, when the database
+	// will not delete the row because other rows still reference it.
+	Error     string
 	CSRFToken string
 }
 

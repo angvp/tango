@@ -99,7 +99,7 @@ func TestAdminCRUDSurfacesTranslateWithI18nMiddleware(t *testing.T) {
 		"admin.button.search":           "Buscar",
 		"admin.button.save":             "Guardar",
 		"admin.button.cancel":           "Cancelar",
-		"admin.button.confirm_delete":   "Confirmar borrado",
+		"admin.delete.confirm_button":   "Confirmar borrado %s",
 		"admin.create.title":            "Nuevo %s",
 		"admin.edit.title":              "Editar %s",
 		"admin.delete.title":            "Borrar %s",
@@ -130,7 +130,7 @@ func TestAdminCRUDSurfacesTranslateWithI18nMiddleware(t *testing.T) {
 	}
 
 	del := doRequest(t, handler, http.MethodGet, fmt.Sprintf("%s%d/delete/", crudBasePath, id), nil).Body.String()
-	if !strings.Contains(del, "Borrar crud product") || !strings.Contains(del, "Confirmar borrado") {
+	if !strings.Contains(del, "Borrar crud product") || !strings.Contains(del, "Confirmar borrado crud product") {
 		t.Fatalf("delete body missing translated text:\n%s", del)
 	}
 }

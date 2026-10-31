@@ -86,6 +86,9 @@
       });
       count.value = String(picked.length);
       title.textContent = text(root, "title", { count: picked.length });
+      confirm.textContent = picked.length === 1
+        ? root.getAttribute("data-msg-confirm-one") || ""
+        : text(root, "confirm-many", { count: picked.length });
       confirm.disabled = false;
       dialog.showModal();
     });

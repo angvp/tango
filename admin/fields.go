@@ -400,7 +400,7 @@ func storeFailure(ctx context.Context, err error, meta model.ModelMeta, opts adm
 		}
 		return nil, i18n.T(ctx, "admin.error.unique_form", "Another %s already uses one of these values.", displayNoun(meta, opts)), true
 	}
-	if errors.Is(err, db.ErrInvalidForeignKey) {
+	if errors.Is(err, db.ErrInvalidForeignKey) || isForeignKeyViolation(err) {
 		return nil, i18n.T(ctx, "admin.error.foreign_key", "The item you chose no longer exists. Choose another and save again."), true
 	}
 	return nil, "", false

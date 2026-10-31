@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -82,5 +83,72 @@ func TestHostCatalogOverridesOneMessageKey(t *testing.T) {
 	}
 	if !strings.Contains(body, "Add the first book to see it here.") {
 		t.Fatalf("a key the host did not override lost its English fallback")
+	}
+}
+
+// TestFilteredEmptyStateNamesTheFilters covers the empty state of a changelist
+// whose filters match nothing.
+func TestFilteredEmptyStateNamesTheFilters(t *testing.T) {
+	handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
+	author := seedFilterAuthor(t, sqlDB, "Ada")
+	seedBook(t, sqlDB, "Draft Only", false, author)
+
+	body := doRequest(t, handler, http.MethodGet, flBookPath+"?filter_published=yes", nil).Body.String()
+	if !strings.Contains(body, "No fl books match the selected filters.") {
+		t.Fatalf("the filtered empty state lacks its copy")
+	}
+}
+
+// TestDeleteConfirmationNamesTheRowAndTheAction covers the single-row delete
+// page and the bulk dialog: the row is named by its label, the button names
+// the action and the noun, and neither shows the primary key alone.
+func TestDeleteConfirmationNamesTheRowAndTheAction(t *testing.T) {
+	handler, sqlDB := buildMessageBookAdmin(t)
+	id := seedMessageBook(t, sqlDB, "Dune")
+
+	page := doRequest(t, handler, http.MethodGet, messageBookBasePath+strconv.FormatInt(id, 10)+"/delete/", nil).Body.String()
+	for _, want := range []string{
+		`<span class="font-medium text-ink">Dune</span>`,
+		">Delete book</button>",
+		">Cancel</a>",
+	} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("delete page lacks %q", want)
+		}
+	}
+	if strings.Contains(page, "Confirm delete") {
+		t.Fatal("delete page still uses the generic confirm label")
+	}
+
+	list := doRequest(t, handler, http.MethodGet, messageBookBasePath, nil).Body.String()
+	for _, want := range []string{
+		`data-msg-confirm-one="Delete 1 book"`,
+		`data-msg-confirm-many="Delete {count} books"`,
+	} {
+		if !strings.Contains(list, want) {
+			t.Fatalf("bulk dialog lacks %q", want)
+		}
+	}
+}
+
+// TestNoRawGoTypeNameOnAnyPage applies the raw-name check to every page a
+// messageBook renders: the changelist, both forms, the delete page and the
+// bulk rejection.
+func TestNoRawGoTypeNameOnAnyPage(t *testing.T) {
+	handler, sqlDB := buildMessageBookAdmin(t)
+	id := seedMessageBook(t, sqlDB, "Dune")
+	idText := strconv.FormatInt(id, 10)
+
+	responses := map[string]string{
+		"list":        doRequest(t, handler, http.MethodGet, messageBookBasePath, nil).Body.String(),
+		"create":      doRequest(t, handler, http.MethodGet, messageBookBasePath+"new/", nil).Body.String(),
+		"edit":        doRequest(t, handler, http.MethodGet, messageBookBasePath+idText+"/", nil).Body.String(),
+		"delete":      doRequest(t, handler, http.MethodGet, messageBookBasePath+idText+"/delete/", nil).Body.String(),
+		"bulk reject": doRequest(t, handler, http.MethodPost, "/admin/message_book/delete-selected/", bulkForm(1, 999)).Body.String(),
+	}
+	for name, body := range responses {
+		if strings.Contains(body, "messageBook") {
+			t.Fatalf("%s page shows the raw Go type name", name)
+		}
 	}
 }

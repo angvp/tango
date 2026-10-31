@@ -471,7 +471,7 @@ func TestDeleteViewGetRendersConfirmationWithoutDeleting(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	if !strings.Contains(body, "Delete this crud product") || !strings.Contains(body, fmt.Sprintf("crud product %d", id)) {
+	if !strings.Contains(body, "Delete this crud product") || !strings.Contains(body, `<span class="font-medium text-ink">Disposable</span>`) {
 		t.Fatalf("body missing delete confirmation: %s", body)
 	}
 	if !productExists(t, sqlDB, id) {
