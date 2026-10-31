@@ -19,6 +19,7 @@ import (
 // survives the round trip.
 var jsonWidgetTemplate = template.Must(template.New("jsonWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
 <div class="json-widget" data-tango-widget="json"{{if .Text.Active}} data-msg-nothing="{{.Text.T "admin.json.status_nothing" "Nothing to format."}}" data-msg-invalid="{{.Text.T "admin.json.status_invalid" "Not valid JSON."}}" data-msg-invalid-detail="{{.Text.T "admin.json.view_invalid" "Not valid JSON: {error}"}}" data-msg-applied="{{.Text.T "admin.json.status_applied" "Formatting applied."}}"{{end}}>
   <div class="widget-tabs" role="tablist" aria-label="{{.Text.T "admin.widget.view_label" "%s view" .Label}}" data-widget-tabs hidden>
     <button type="button" role="tab" id="field-{{.Name}}-tab-edit" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-edit" data-tab="edit">{{.Text.T "admin.json.tab_edit" "Edit"}}</button>

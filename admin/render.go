@@ -140,14 +140,17 @@ var formTemplate = cloneWithContent(`{{define "content"}}
 <div class="content-body">
   <div class="card max-w-2xl">
     <div class="card-body">
-      {{if .Error}}<div class="alert-error">{{.Error}}</div>{{end}}
+      {{with .Summary}}<div class="alert-error" role="alert">
+        <h2 id="form-summary" class="font-semibold" tabindex="-1" autofocus>{{.Heading}}</h2>
+        {{range .Items}}<p class="mt-1">{{if .Href}}<a href="{{.Href}}" class="underline">{{.Text}}</a>{{else}}{{.Text}}{{end}}</p>{{end}}
+      </div>{{end}}
       <form method="post">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      {{range .Fields}}<div class="field-group">{{.HTML}}{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}{{if .Error}}<p class="field-error" id="field-{{.Name}}-error" role="alert">{{.Error}}</p>{{end}}</div>
+      {{range .Fields}}<div class="field-group">{{.HTML}}{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}{{if .Error}}<p class="field-error" id="field-{{.Name}}-error"{{if not $.Summary}} role="alert"{{end}}>{{.Error}}</p>{{end}}</div>
       {{end}}
         <div class="flex items-center gap-2 pt-2">
           <button type="submit" class="btn-primary">{{.T "admin.button.save" "Save"}}</button>
-          <a href="../" class="btn-secondary">{{.T "admin.button.cancel" "Cancel"}}</a>
+          <a href="../" class="btn-secondary">{{.T "admin.form.cancel_to" "Cancel and return to %s" .ListName}}</a>
         </div>
       ` + widgetScriptTag + `
       </form>
@@ -237,8 +240,10 @@ type listPageData struct {
 }
 
 type formField struct {
-	Name     string
-	HTML     template.HTML
+	Name  string
+	Label string
+	HTML  template.HTML
+	// HelpText is set only for a widget that does not print its own help text.
 	HelpText string
 	Error    string
 }
@@ -246,8 +251,9 @@ type formField struct {
 type formPageData struct {
 	chrome
 	Title     string
-	Error     string
 	Fields    []formField
+	Summary   *formSummary
+	ListName  string
 	CSRFToken string
 }
 

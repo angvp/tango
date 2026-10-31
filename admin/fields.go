@@ -167,9 +167,9 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 	}
 	options, ok := relatedSelectOptions(ctx, store, models, adminReg, field.ForeignKey, fc.Value)
 	fc.SelectOptions = options
-	if _, adminRegistered := adminReg.Get(field.ForeignKey); adminRegistered && formOpts.CurrentURL != "" {
+	if registration, adminRegistered := adminReg.Get(field.ForeignKey); adminRegistered && formOpts.CurrentURL != "" {
 		fc.RelatedCreateURL = relatedCreateURL(field.ForeignKey, adminReg, formOpts.CurrentURL, field.Name)
-		fc.RelatedCreateLabel = i18n.T(ctx, "admin.fk.add_related", "Add %s", fc.Label)
+		fc.RelatedCreateLabel = i18n.T(ctx, "admin.fk.add_new", "+ Add new %s", displayNoun(registration.Model, registration.Options))
 	}
 	return fc, ok
 }
@@ -218,7 +218,13 @@ func buildFormFields(ctx context.Context, store *db.Store, models *model.Registr
 		if _, ok := widget.(PreviewWidget); ok {
 			fc.PreviewURL = previewPath(meta.Name, field.Name)
 		}
-		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(ctx, fc), HelpText: fc.HelpText, Error: fc.Error})
+		// A built-in widget prints its help text under its label; any other
+		// widget leaves it to the form, which prints it beneath the control.
+		helpText := fc.HelpText
+		if placesOwnHelp(widget) {
+			helpText = ""
+		}
+		fields = append(fields, formField{Name: field.Name, Label: fc.Label, HTML: widget.Render(ctx, fc), HelpText: helpText, Error: fc.Error})
 	}
 
 	return fields

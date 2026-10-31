@@ -72,7 +72,8 @@ func (w markdownPreviewWidget) Preview(ctx context.Context, source string) (temp
 // the host's rendered HTML is not styled by the admin, so it is not promised
 // to match any public site, and the host owns its own dark-mode behaviour.
 var markdownWidgetTemplate = template.Must(template.New("markdownWidget").Parse(
-	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>{{if .Preview}}
+	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}{{if .Preview}}
 <div class="widget-tabs" role="tablist" aria-label="{{.Text.T "admin.widget.view_label" "%s view" .Label}}" data-widget-tabs hidden>
   <button type="button" role="tab" id="field-{{.Name}}-tab-write" class="widget-tab" aria-selected="true" aria-controls="field-{{.Name}}-panel-write" data-tab="write">{{.Text.T "admin.markdown.tab_write" "Write"}}</button>
   <button type="button" role="tab" id="field-{{.Name}}-tab-preview" class="widget-tab" aria-selected="false" aria-controls="field-{{.Name}}-panel-preview" tabindex="-1" data-tab="preview">{{.Text.T "admin.markdown.tab_preview" "Preview"}}</button>

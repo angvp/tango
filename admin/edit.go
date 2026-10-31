@@ -44,7 +44,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				return err
 			}
 			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOptionsFromRequest(ctx))
-			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: rc, Title: title, Fields: fields, CSRFToken: csrfTokenFromRequest(ctx.Request())})
+			return render(ctx, http.StatusOK, formTemplate, formPage(ctx.Context(), rc, title, meta, registration.Options, fields, "", csrfTokenFromRequest(ctx.Request())))
 
 		case http.MethodPost:
 			existingPtr := reflect.New(meta.Type)
@@ -76,12 +76,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				formOpts.FieldErrors = refused.messages
 				formOpts.Submitted = ctx.Request().PostForm
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
-				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
-					chrome:    rc,
-					Title:     title,
-					Fields:    fields,
-					CSRFToken: csrfTokenFromRequest(ctx.Request()),
-				})
+				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), rc, title, meta, registration.Options, fields, "", csrfTokenFromRequest(ctx.Request())))
 			}
 
 			if err := setPKField(instancePtr.Elem().FieldByName(pkField.Name), pkField, ctx.Param("pk")); err != nil {
@@ -99,13 +94,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				formOpts := formOptionsFromRequest(ctx)
 				formOpts.FieldErrors = fieldErrors
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
-				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
-					chrome:    rc,
-					Title:     title,
-					Error:     formError,
-					Fields:    fields,
-					CSRFToken: csrfTokenFromRequest(ctx.Request()),
-				})
+				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), rc, title, meta, registration.Options, fields, formError, csrfTokenFromRequest(ctx.Request())))
 			}
 
 			setOutcome(ctx, "admin.outcome.saved", displayNoun(meta, registration.Options))

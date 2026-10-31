@@ -156,7 +156,12 @@ func (s *adminSite) outcomes(header map[string]string) map[string]page {
 	s.submitTo("/admin/post/", "/admin/post/delete-selected/", url.Values{"pk": {itoa(first), itoa(second)}, "count": {"2"}}, header)
 	deletedMany := s.get("/admin/post/", header)
 
-	return map[string]page{"created": created, "saved": saved, "removed": removed, "deleted": deleted, "deleted n": deletedMany}
+	// Two field problems put the form summary on the page; a missing author is
+	// refused by the database and is the form's only problem.
+	twoProblems := s.submitTo("/admin/post/new/", "/admin/post/new/", url.Values{"Title": {"Nuevo"}, "Body": {"Texto"}, "AuthorID": {"abc"}, "CreatedAt": {"nunca"}}, header)
+	refused := s.submitTo("/admin/post/new/", "/admin/post/new/", url.Values{"Title": {"Nuevo"}, "Body": {"Texto"}, "AuthorID": {"999999"}}, header)
+
+	return map[string]page{"created": created, "saved": saved, "removed": removed, "deleted": deleted, "deleted n": deletedMany, "two problems": twoProblems, "refused": refused}
 }
 
 // seedPost creates a post under the example's author and returns its key.

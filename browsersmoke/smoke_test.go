@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -95,6 +96,33 @@ type smokeNote struct {
 	Pinned bool
 }
 
+// smokeCode has two text fields that shortCodeWidget bounds, so a save with
+// both too long is two problems and shows the form summary.
+type smokeCode struct {
+	ID    int64 `tango:"pk"`
+	Code  string
+	Label string
+}
+
+// shortCodeWidget is a host text widget whose Parse refuses a value longer
+// than three characters with a field message, so two such fields are two
+// problems on one save.
+type shortCodeWidget struct{}
+
+func (shortCodeWidget) Render(_ context.Context, f admin.FieldContext) template.HTML {
+	return template.HTML(`<label for="field-` + f.Name + `" class="field-label">` + template.HTMLEscapeString(f.Label) + `</label>` +
+		`<input id="field-` + f.Name + `" name="` + f.Name + `" value="` + template.HTMLEscapeString(f.Value) + `" class="input">`)
+}
+
+func (shortCodeWidget) Parse(_ context.Context, f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
+	value := form.Get(f.Name)
+	if len(value) > 3 {
+		return admin.FieldError{Message: f.Label + " must be at most 3 characters."}
+	}
+	dest.SetString(value)
+	return nil
+}
+
 // previewNote is the host's Markdown renderer for the smoke. It emits a
 // heading, so the sandboxed frame has an element the test can read.
 func previewNote(_ context.Context, source string) (template.HTML, error) {
@@ -103,6 +131,14 @@ func previewNote(_ context.Context, source string) (template.HTML, error) {
 
 func notesApp() tango.App {
 	return tango.NewApp("notes", func(registry *tango.Registry) error {
+		if err := registry.Models().Register(smokeCode{}); err != nil {
+			return err
+		}
+		if err := registry.Admin().Register(smokeCode{}, admin.Options{
+			Widgets: map[string]admin.Widget{"Code": shortCodeWidget{}, "Label": shortCodeWidget{}},
+		}); err != nil {
+			return err
+		}
 		if err := registry.Models().Register(smokeNote{}); err != nil {
 			return err
 		}
@@ -127,7 +163,7 @@ func composedSite(t *testing.T) http.Handler {
 	for _, value := range []any{
 		admin.AdminUser{}, admin.AdminSession{},
 		accounts.Account{}, accounts.AccountSession{}, accounts.AccountToken{},
-		smokeNote{},
+		smokeNote{}, smokeCode{},
 	} {
 		if err := models.Register(value); err != nil {
 			t.Fatalf("register %T: %v", value, err)
@@ -813,6 +849,22 @@ func (s *smoke) adminMarkdownPreview() {
 	}
 }
 
+// adminFormSummary saves a create form with two problems and checks that focus
+// moves to the summary heading, then that its link moves focus to the field.
+func (s *smoke) adminFormSummary() {
+	s.t.Helper()
+	s.run("admin create form with two problems",
+		chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible),
+		chromedp.SetValue("#field-Label", "toolong"),
+		chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible),
+		chromedp.WaitVisible("#form-summary"),
+	)
+	const active = `document.activeElement ? document.activeElement.id : ''`
+	s.check(s.evalString(active) == "form-summary", "focus after a failed save is on %q, want the summary heading", s.evalString(active))
+	s.run("summary link to the first field", chromedp.Click(`.alert-error a[href="#field-Code"]`, chromedp.NodeVisible))
+	s.check(s.evalString(active) == "field-Code", "focus after the summary link is on %q, want the field", s.evalString(active))
+}
+
 // headerOf returns the Content-Security-Policy the server sends for path.
 func headerOf(t *testing.T, server *httptest.Server, path string) string {
 	t.Helper()
@@ -907,6 +959,8 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.adminNavToggle()
 	s.visit("admin change form", "/admin/smoke_note/1/")
 	s.adminMarkdownPreview()
+	s.visit("admin create form", "/admin/smoke_code/new/")
+	s.adminFormSummary()
 
 	s.visit("swagger ui", "/docs/")
 	rendered := s.waitUntil(swaggerTimeout, `!!document.querySelector('.swagger-ui')`)

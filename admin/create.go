@@ -24,7 +24,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 		switch ctx.Request().Method {
 		case http.MethodGet:
 			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, reflect.Value{}, formOptionsFromRequest(ctx))
-			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: createChrome, Title: title, Fields: fields, CSRFToken: csrfTokenFromRequest(ctx.Request())})
+			return render(ctx, http.StatusOK, formTemplate, formPage(ctx.Context(), createChrome, title, meta, registration.Options, fields, "", csrfTokenFromRequest(ctx.Request())))
 
 		case http.MethodPost:
 			if err := ctx.Request().ParseForm(); err != nil {
@@ -44,12 +44,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 				formOpts.FieldErrors = refused.messages
 				formOpts.Submitted = ctx.Request().PostForm
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
-				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
-					chrome:    createChrome,
-					Title:     title,
-					Fields:    fields,
-					CSRFToken: csrfTokenFromRequest(ctx.Request()),
-				})
+				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), createChrome, title, meta, registration.Options, fields, "", csrfTokenFromRequest(ctx.Request())))
 			}
 
 			if err := store.Create(ctx.Context(), meta, instancePtr.Interface()); err != nil {
@@ -60,13 +55,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 				formOpts := formOptionsFromRequest(ctx)
 				formOpts.FieldErrors = fieldErrors
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
-				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
-					chrome:    createChrome,
-					Title:     title,
-					Error:     formError,
-					Fields:    fields,
-					CSRFToken: csrfTokenFromRequest(ctx.Request()),
-				})
+				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), createChrome, title, meta, registration.Options, fields, formError, csrfTokenFromRequest(ctx.Request())))
 			}
 
 			setOutcome(ctx, "admin.outcome.created", displayNoun(meta, registration.Options))

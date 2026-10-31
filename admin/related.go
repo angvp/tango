@@ -61,6 +61,7 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 	if err != nil {
 		return nil, false
 	}
+	noun := targetNoun(adminReg, targetName, relatedMeta)
 
 	sliceType := reflect.SliceOf(relatedMeta.Type)
 	destPtr := reflect.New(sliceType)
@@ -68,7 +69,7 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 		// The form still renders, with only the None choice, so an unrelated
 		// outage on the related table does not hide the whole page.
 		slog.ErrorContext(ctx, "admin: listing related rows for a foreign key select failed", "model", targetName, "error", err)
-		return []SelectOption{noneOption(ctx, currentValue)}, true
+		return []SelectOption{noneOption(ctx, currentValue, noun)}, true
 	}
 
 	labelField := labelFieldFor(adminReg, targetName)
@@ -77,7 +78,7 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 	// A foreign key at its zero value is unset (stored as NULL), so every
 	// foreign key select offers an explicit way to leave it that way.
 	options := make([]SelectOption, 1+sliceValue.Len())
-	options[0] = noneOption(ctx, currentValue)
+	options[0] = noneOption(ctx, currentValue, noun)
 	for i := 0; i < sliceValue.Len(); i++ {
 		elem := sliceValue.Index(i)
 		pkValue := elem.FieldByName(relatedPKField.Name).Interface()
@@ -89,12 +90,22 @@ func relatedSelectOptions(ctx context.Context, store *db.Store, models *model.Re
 	return options, true
 }
 
+// targetNoun is the display noun of the related model, which names the
+// empty choice of a foreign key select and the add button beside it.
+func targetNoun(adminReg *adminregistry.Registry, targetName string, meta model.ModelMeta) string {
+	var opts adminregistry.Options
+	if registration, ok := adminReg.Get(targetName); ok {
+		opts = registration.Options
+	}
+	return displayNoun(meta, opts)
+}
+
 // noneOption is the blank choice that leaves a foreign key unset; it is
 // selected while the current value is empty or zero.
-func noneOption(ctx context.Context, currentValue string) SelectOption {
+func noneOption(ctx context.Context, currentValue, noun string) SelectOption {
 	return SelectOption{
 		Value:    "",
-		Text:     i18n.T(ctx, "admin.fk.none", "— None —"),
+		Text:     i18n.T(ctx, "admin.fk.none_selected", "No %s selected", noun),
 		Selected: currentValue == "" || currentValue == "0",
 	}
 }

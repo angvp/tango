@@ -53,6 +53,7 @@ const ariaAttrs = `{{if .Error}} aria-invalid="true"{{end}}{{with .DescribedBy}}
 
 var inputWidgetTemplate = template.Must(template.New("inputWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
 <input id="field-{{.Name}}" type="{{.InputType}}" name="{{.Name}}" value="{{.Value}}"{{if .MaxLength}} maxlength="{{.MaxLength}}"{{end}} class="input"` + ariaAttrs + `>`))
 
 // inputWidget is the built-in generic text/number/date-time field — one
@@ -78,6 +79,7 @@ var checkboxWidgetTemplate = template.Must(template.New("checkboxWidget").Parse(
 	`<div class="checkbox-row">
   <input type="checkbox" id="field-{{.Name}}" name="{{.Name}}" {{if .Checked}}checked{{end}} class="checkbox"` + ariaAttrs + `>
   <label for="field-{{.Name}}" class="text-sm font-medium text-ink-muted">{{.Label}}</label>
+  {{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
 </div>`))
 
 // checkboxWidget is the built-in bool field: a single checkbox.
@@ -94,11 +96,12 @@ func (checkboxWidget) Parse(_ context.Context, f FieldContext, form FieldValues,
 
 var selectWidgetTemplate = template.Must(template.New("selectWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
 <div class="inline-row">
   <select id="field-{{.Name}}" name="{{.Name}}" class="input"` + ariaAttrs + `>
     {{range .SelectOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Text}}</option>{{end}}
   </select>
-  {{if .RelatedCreateURL}}<a href="{{.RelatedCreateURL}}" class="btn-secondary" aria-label="{{.RelatedCreateLabel}}">+</a>{{end}}
+  {{if .RelatedCreateURL}}<a href="{{.RelatedCreateURL}}" class="btn-secondary">{{.RelatedCreateLabel}}</a>{{end}}
 </div>`))
 
 // foreignKeySelectWidget is the built-in foreign key field: a <select>
@@ -113,6 +116,16 @@ func (foreignKeySelectWidget) Render(_ context.Context, f FieldContext) template
 
 func (foreignKeySelectWidget) Parse(_ context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
 	return setFieldFromReflectedString(dest, form.Get(f.Name), form.Has(f.Name))
+}
+
+// placesOwnHelp reports whether a built-in widget renders its field's help
+// text itself, between the label and the control.
+func placesOwnHelp(w Widget) bool {
+	switch w.(type) {
+	case inputWidget, checkboxWidget, foreignKeySelectWidget, textareaWidget, readOnlyWidget, jsonWidget, markdownWidget, markdownPreviewWidget:
+		return true
+	}
+	return false
 }
 
 // defaultWidgetForField returns tanGO's built-in Widget for field, absent
@@ -134,6 +147,7 @@ func defaultWidgetForField(field model.FieldMeta) Widget {
 
 var textareaWidgetTemplate = template.Must(template.New("textareaWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
 <textarea id="field-{{.Name}}" name="{{.Name}}" class="input" rows="4"` + ariaAttrs + `>{{.Value}}</textarea>`))
 
 // textareaWidget is a built-in multi-line text field, for a string field
@@ -158,6 +172,7 @@ func Textarea() Widget { return textareaWidget{} }
 
 var readOnlyWidgetTemplate = template.Must(template.New("readOnlyWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
 <input id="field-{{.Name}}" type="text" value="{{.Value}}" readonly class="input bg-surface-sunken text-ink-faint"` + ariaAttrs + `>`))
 
 // readOnlyWidget renders any read-only field as a readonly text input, so

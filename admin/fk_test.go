@@ -284,7 +284,7 @@ func itoa(v int64) string {
 }
 
 const (
-	noneOption = `<option value="" selected>— None —</option>`
+	noneOption = `<option value="" selected>No fk author selected</option>`
 	emptyCell  = ">—<"
 )
 
