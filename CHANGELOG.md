@@ -48,7 +48,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **The bulk delete bar states its selection, and the dialog names the count.** The bar is visible once the script runs. With no row picked, its count slot shows the reason "Select rows to delete them." and Delete selected is disabled and described by that reason; with a row picked, the count shows the selection and the button is enabled. The table's select-all is hidden on a phone, where a "Select all on this page" control in the bar takes its place. The dialog title names the count with singular and plural copy, and lists up to ten names followed by "and N more". The rejected bulk-delete page shows the section's plural name as its heading, the plain reason beneath it, and a "Back to" link. Its breadcrumb current item is "Delete selected".
 
-  **Catalog impact:** new keys `admin.bulk.title_one` ("Delete 1 %s?", the singular noun), `admin.bulk.title_many` ("Delete {count} %s?", the plural noun), `admin.bulk.more_one` ("and 1 more"), `admin.bulk.more_many` ("and {count} more", the count) and `admin.bulk.select_page` ("Select all on this page"). `admin.bulk.back_to` ("Back to %s", the plural noun) replaces `admin.bulk.back`. `admin.bulk.select_first` keeps its name with the new wording. `admin.bulk.back`, `admin.bulk.rejected_title` and `admin.bulk.confirm_title` are removed, so a host translation of those three keys no longer applies. The new keys fall back to English until a host translates them.
+  **Catalog impact:** new keys `admin.bulk.title_one` ("Delete 1 %s?", the singular noun), `admin.bulk.title_many` ("Delete {count} %s?", the plural noun), `admin.bulk.more_one` ("and 1 more"), `admin.bulk.more_many` ("and {count} more", the count) and `admin.bulk.select_page` ("Select all on this page"). `admin.bulk.back_to` ("Back to %s", the plural noun) replaces `admin.bulk.back`. `admin.bulk.select_first` is new. `admin.bulk.back` is removed, so a host translation of it no longer applies. `admin.bulk.rejected_title` keeps its key and wording. The new keys fall back to English until a host translates them.
 
 - **`admin.Options` names a model's rows for messages.** The new `SingularName` and `PluralName` fields give the noun used in headings, empty states, bulk outcomes and field messages. Unset, the humanized Go name is used. Widget-internal messages stay English until a later release.
 
@@ -100,6 +100,38 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 - **Dismissing the admin status notice leaves keyboard focus in the page content.** Enter on the notice's Dismiss control reloads the page, and focus previously fell to the page body. The reloaded page now focuses its content region.
 
   **Catalog impact:** none. No translation key was added or changed.
+
+### Catalog impact
+
+This table lists every `admin.*` message key that this release renames, replaces or removes, against v0.7.0. A host catalog keeps working: a key that is removed is no longer read, and a renamed or replaced key's text falls back to English until the host translates the new key. A catalog value whose format verbs no longer match the English fallback is ignored in the same way.
+
+| Old key (v0.7.0) | New key(s) | Change |
+|------|------|------|
+| `admin.bulk.back` | `admin.bulk.back_to` | Renamed; the placeholder is the plural noun |
+| `admin.bulk.deleted_one` | `admin.bulk.outcome_one` | Renamed; the placeholder is the singular noun |
+| `admin.bulk.deleted_many` | `admin.bulk.outcome_many` | Renamed; the placeholders are the count and the plural noun |
+| `admin.bulk.modal_title` | `admin.bulk.title_one`, `admin.bulk.title_many` | Replaced by a singular and a plural title |
+| `admin.button.confirm_delete` | `admin.delete.confirm_button`, `admin.bulk.confirm_one`, `admin.bulk.confirm_many` | Removed; each use has its own key |
+| `admin.error.bulk_missing` | `admin.error.bulk_selected_missing` | Renamed; takes the singular noun |
+| `admin.error.json_syntax` | `admin.error.json_position` | Renamed; the placeholder is the character position only |
+| `admin.error.too_long` | `admin.error.max_length` | Renamed; the placeholders are the limit and the length |
+| `admin.fk.add_related` | `admin.fk.add_new` | Renamed; the placeholder is the target model's singular noun |
+| `admin.fk.none` | `admin.fk.none_selected` | Renamed; the placeholder is the singular noun |
+| `admin.list.empty_body` | `admin.list.empty_first` | Renamed |
+| `admin.list.empty_search` | `admin.list.empty_no_match` | Renamed; the plural noun, then the search text |
+| `admin.list.empty_filtered` | `admin.list.empty_no_filter_match` | Renamed; the plural noun |
+
+Removed with no replacement; the key is no longer read:
+
+| Old key (v0.7.0) | Change |
+|------|------|
+| `admin.json.view_invalid` | Removed |
+| `admin.json.status_invalid` | Removed |
+| `admin.list.result_singular` | Removed |
+| `admin.list.result_plural` | Removed |
+| `admin.list.for_query` | Removed |
+
+Keys that are new in this release, with no v0.7.0 key to replace, are the keys named in the entries above. Their total is 74: the `admin.*` literals in the non-test Go files of `admin/` that do not appear in the non-test `admin/` files at v0.7.0.
 
 ## [0.7.0] - 2026-10-25
 
