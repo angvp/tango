@@ -153,7 +153,8 @@ func notesApp() tango.App {
 			Filters:     []string{"Pinned"},
 			BulkDelete:  true,
 			Widgets: map[string]admin.Widget{
-				"Body": admin.Markdown(admin.WithMarkdownPreview(previewNote)),
+				"Body":    admin.Markdown(admin.WithMarkdownPreview(previewNote)),
+				"Payload": admin.JSON(),
 			},
 		})
 	})
@@ -679,7 +680,6 @@ func (s *smoke) phoneDrawerKeyboard() {
 
 	s.run("drawer close with Escape", chromedp.KeyEvent(kb.Escape))
 	s.expectClosed("Escape after Tab")
-	s.setWidth(mobileWidth, mobileHeight)
 }
 
 // phoneChangelist checks the changelist at the phone width: the page does not
@@ -836,6 +836,31 @@ func atoi(value string) int {
 	var n int
 	fmt.Sscan(value, &n)
 	return n
+}
+
+// startBrowser starts a headless browser at the phone viewport. The returned
+// cancel ends the session and the browser process.
+func startBrowser(t *testing.T, binary string) (context.Context, func()) {
+	t.Helper()
+	allocator, cancelAllocator := chromedp.NewExecAllocator(context.Background(),
+		append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(binary), chromedp.WindowSize(mobileWidth, mobileHeight))...)
+	browserCtx, cancelBrowser := chromedp.NewContext(allocator)
+	return browserCtx, func() {
+		cancelBrowser()
+		cancelAllocator()
+	}
+}
+
+// adminLogin signs in as the smoke admin and waits for the admin sidebar.
+func (s *smoke) adminLogin() {
+	s.t.Helper()
+	s.visit("admin login", "/admin/login/")
+	s.run("admin login submit",
+		chromedp.SendKeys("#field-username", smokeAdminUser),
+		chromedp.SendKeys("#field-password", smokeAdminPassword),
+		chromedp.Submit("#field-password"),
+		chromedp.WaitVisible("#sidebar"),
+	)
 }
 
 // setWidth sets the emulated viewport size.
@@ -1113,9 +1138,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 		}
 	}
 
-	allocator, cancelAllocator := chromedp.NewExecAllocator(context.Background(),
-		append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(binary), chromedp.WindowSize(mobileWidth, mobileHeight))...)
-	browserCtx, cancelBrowser := chromedp.NewContext(allocator)
+	browserCtx, cancelBrowser := startBrowser(t, binary)
 
 	rec := &recorder{origin: server.URL}
 	// The subscriptions start the browser and must exist before the first
@@ -1137,7 +1160,6 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	t.Cleanup(func() {
 		cancelBrowser()
 		readers.Wait()
-		cancelAllocator()
 		server.Close()
 	})
 
@@ -1154,13 +1176,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.visit("accounts register", "/accounts/register/")
 	s.visit("accounts password reset", "/accounts/password-reset/")
 
-	s.visit("admin login", "/admin/login/")
-	s.run("admin login submit",
-		chromedp.SendKeys("#field-username", smokeAdminUser),
-		chromedp.SendKeys("#field-password", smokeAdminPassword),
-		chromedp.Submit("#field-password"),
-		chromedp.WaitVisible("#sidebar"),
-	)
+	s.adminLogin()
 	s.visit("admin dashboard", "/admin/")
 	s.visit("admin changelist", "/admin/smoke_note/")
 	s.phoneChangelist()

@@ -46,7 +46,7 @@
   .breadcrumb-list { @apply flex flex-wrap items-center gap-x-2; }
   .breadcrumb-item { @apply inline-flex items-center gap-x-2; }
   .breadcrumb-item + .breadcrumb-item { @apply before:text-ink-faint before:content-['/']; }
-  .breadcrumb-link { @apply hover:text-ink hover:underline; }
+  .breadcrumb-link { @apply inline-flex min-h-6 items-center hover:text-ink hover:underline; }
   .breadcrumb-current { @apply font-medium text-ink; }
   .topbar-meta { @apply text-sm text-ink-faint hidden sm:block; }
 
@@ -75,6 +75,7 @@
   .field-label { @apply block text-sm font-medium text-ink-muted mb-1.5; }
   .field-group { @apply mb-4 last:mb-0; }
   .checkbox-row { @apply flex items-center gap-2.5; }
+  .checkbox-row label { @apply inline-flex min-h-6 items-center; }
   .checkbox { @apply h-4 w-4 rounded border-control-line text-accent focus:ring-ring; }
 
   .table-wrap { @apply overflow-x-auto; }

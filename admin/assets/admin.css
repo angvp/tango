@@ -1252,6 +1252,12 @@ html, body{
   content:var(--tw-content);
 }
 
+.breadcrumb-link{
+  display:inline-flex;
+  min-height:1.5rem;
+  align-items:center;
+}
+
 .breadcrumb-link:hover{
   --tw-text-opacity:1;
   color:rgb(var(--ink) / var(--tw-text-opacity, 1));
@@ -1634,6 +1640,12 @@ html, body{
   display:flex;
   align-items:center;
   gap:0.625rem;
+}
+
+.checkbox-row label{
+  display:inline-flex;
+  min-height:1.5rem;
+  align-items:center;
 }
 
 .checkbox{
