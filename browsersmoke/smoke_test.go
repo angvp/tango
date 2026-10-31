@@ -515,9 +515,6 @@ func (s *smoke) adminNavToggle() {
 	}))
 }
 
-// previewHeading reads the first heading of the preview frame from the DOM.
-// The frame is sandboxed without allow-scripts, so the test reads it through
-// the DevTools DOM domain rather than from script.
 // phoneChangelist checks the changelist at the phone width: the page does not
 // scroll sideways, the table does not scroll inside its wrapper, and every
 // row's Edit and Delete link sits inside the viewport.
@@ -537,6 +534,9 @@ const rowActionsInViewport = `(function () {
 	});
 })()`
 
+// previewHeading reads the first heading of the preview frame from the DOM.
+// The frame is sandboxed without allow-scripts, so the test reads it through
+// the DevTools DOM domain rather than from script.
 func (s *smoke) previewHeading() (string, error) {
 	ctx, cancel := context.WithTimeout(s.ctx, stepTimeout)
 	defer cancel()
