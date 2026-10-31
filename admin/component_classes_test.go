@@ -29,7 +29,7 @@ func TestDashboardUsesNamedComponentsForRepeatedChains(t *testing.T) {
 }
 
 // hasClassToken reports whether some class attribute in html lists token as a
-// whole class, so status-dot-success does not satisfy status-dot.
+// whole class, so badge-success does not satisfy badge.
 func hasClassToken(html, token string) bool {
 	return regexp.MustCompile(`class="(?:[^"]*\s)?` + regexp.QuoteMeta(token) + `(?:\s[^"]*)?"`).MatchString(html)
 }

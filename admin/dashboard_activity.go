@@ -72,8 +72,8 @@ const activityCardSource = `{{define "activityCard"}}
     <h2 class="section-title">{{.T "admin.dashboard.activity.title" "Activity"}}</h2>
     {{if eq .Activity.State "ready"}}<p class="hint-text"><span data-activity="scope">{{.Activity.Snapshot.Scope}}</span> &middot; <span data-activity="window">{{.T "admin.dashboard.activity.window" "Window since %s, %s" .Activity.SinceLabel .Activity.WindowLabel}}</span></p>{{end}}
   </div>
-  {{if eq .Activity.State "unavailable"}}<div class="card-body pb-0"><p class="alert-warning">{{.T "admin.dashboard.unavailable" "Unavailable"}}</p></div>
-  {{else if eq .Activity.State "not-configured"}}<div class="card-body pb-0"><p class="alert-neutral">{{.T "admin.dashboard.not_configured" "Not configured"}}</p></div>
+  {{if eq .Activity.State "unavailable"}}{{template "cardUnavailable" .}}
+  {{else if eq .Activity.State "not-configured"}}{{template "cardNotConfigured" .}}
   {{else}}
   <h3 class="section-label">{{.T "admin.dashboard.activity.requests" "Requests"}}</h3>
   {{if .Activity.HasRequests}}

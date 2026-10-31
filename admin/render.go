@@ -35,9 +35,9 @@ var listTemplate = cloneWithContent(`{{define "content"}}
           {{if .Message}}<p class="hint-small">{{.Message}}</p>{{end}}
         </div>{{end}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
-        {{if .SearchQuery}}<a href="{{.ClearSearchHref}}" class="btn-ghost mb-1">{{.T "admin.list.clear_search" "Clear search"}}</a>{{end}}
+        {{if and .SearchQuery (not .Empty)}}<a href="{{.ClearSearchHref}}" class="btn-ghost mb-1">{{.T "admin.list.clear_search" "Clear search"}}</a>{{end}}
       </form>
-      {{if .AppliedFilters}}<p class="mt-3 text-sm text-ink-muted">{{.T "admin.list.filters_applied" "Filters applied:"}} {{range $i, $f := .AppliedFilters}}{{if $i}}, {{end}}{{$.T "admin.list.filter_pair" "%s: %s" $f.Label $f.Value}}{{end}} <a href="{{.ClearFiltersHref}}" class="btn-ghost">{{.T "admin.list.clear_filters" "Clear filters"}}</a></p>{{end}}
+      {{if .AppliedFilters}}<p class="mt-3 text-sm text-ink-muted">{{.T "admin.list.filters_applied" "Filters applied:"}} {{range $i, $f := .AppliedFilters}}{{if $i}}, {{end}}{{$.T "admin.list.filter_pair" "%s: %s" $f.Label $f.Value}}{{end}}{{if not .Empty}} <a href="{{.ClearFiltersHref}}" class="btn-ghost">{{.T "admin.list.clear_filters" "Clear filters"}}</a>{{end}}</p>{{end}}
     </div>
     <form method="post" action="{{.DensityPath}}" class="density-bar">
       <input type="hidden" name="csrf_token" value="{{.SignedIn.CSRFToken}}">
@@ -98,7 +98,13 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     </div>
     {{else}}
     <div class="empty-state">
-      {{if .SearchQuery}}
+      {{if and .SearchQuery .FilterActive}}
+      <p class="empty-state-title">{{.T "admin.list.empty_no_match_filtered" "No %s match “%s” and the selected filters." .Plural .SearchQuery}}</p>
+      <div class="empty-state-actions">
+        <a href="{{.ClearSearchHref}}" class="btn-secondary">{{.T "admin.list.clear_search" "Clear search"}}</a>
+        <a href="{{.ClearFiltersHref}}" class="btn-secondary">{{.T "admin.list.clear_filters" "Clear filters"}}</a>
+      </div>
+      {{else if .SearchQuery}}
       <p class="empty-state-title">{{.T "admin.list.empty_no_match" "No %s match “%s”." .Plural .SearchQuery}}</p>
       <a href="{{.ClearSearchHref}}" class="btn-secondary mt-3">{{.T "admin.list.clear_search" "Clear search"}}</a>
       {{else if .Criteria}}
@@ -212,16 +218,22 @@ type listPageData struct {
 	ResultFirst int
 	ResultLast  int
 	Criteria    bool
-	Page        int
-	TotalPages  int
-	TotalCount  int
-	PageLinks   []pageLink
-	HasPrev     bool
-	HasNext     bool
-	PrevHref    string
-	NextHref    string
-	BulkDelete  bool
-	ReturnTo    string
+	// FilterActive reports that at least one filter parameter is set, so the
+	// empty state can name the search and the filters together.
+	FilterActive bool
+	// Empty reports that no row matched. The toolbar's clear links are then
+	// the empty state's own actions, so the toolbar omits them.
+	Empty      bool
+	Page       int
+	TotalPages int
+	TotalCount int
+	PageLinks  []pageLink
+	HasPrev    bool
+	HasNext    bool
+	PrevHref   string
+	NextHref   string
+	BulkDelete bool
+	ReturnTo   string
 }
 
 type formField struct {

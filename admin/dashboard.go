@@ -118,7 +118,13 @@ func dashboardView(nav []navItem, brand Branding, cfg DashboardConfig) tango.Vie
 	}
 }
 
-var dashboardTemplate = cloneWithContent(dashboardSource + activityCardSource + statusCardSource)
+var dashboardTemplate = cloneWithContent(dashboardSource + cardNoticeSource + activityCardSource + statusCardSource)
+
+// The two card notices are shared by the status and activity cards. An
+// unavailable card is a failure, so it is announced as an alert; a card with
+// no source is informational, so it is a status.
+const cardNoticeSource = `{{define "cardUnavailable"}}<div class="card-body"><p class="alert-warning" role="alert">{{.T "admin.dashboard.unavailable" "Unavailable"}}</p></div>{{end}}
+{{define "cardNotConfigured"}}<div class="card-body"><p class="alert-neutral">{{.T "admin.dashboard.not_configured" "Not configured"}}</p></div>{{end}}`
 
 const dashboardSource = `{{define "content"}}
 <header class="topbar">

@@ -1857,41 +1857,9 @@ html, body{
   font-weight:500;
 }
 
-.badge-true{
-  display:inline-flex;
-  align-items:center;
-  border-radius:9999px;
-  padding-left:0.5rem;
-  padding-right:0.5rem;
-  padding-top:0.125rem;
-  padding-bottom:0.125rem;
-  font-size:0.75rem;
-  line-height:1rem;
-  font-weight:500;
-  --tw-bg-opacity:1;
-  background-color:rgb(var(--success-bg) / var(--tw-bg-opacity, 1));
-  --tw-text-opacity:1;
-  color:rgb(var(--success-fg) / var(--tw-text-opacity, 1));
-}
+/* badge-true and badge-false are the boolean names for the success and neutral badges. */
 
-.badge-false{
-  display:inline-flex;
-  align-items:center;
-  border-radius:9999px;
-  padding-left:0.5rem;
-  padding-right:0.5rem;
-  padding-top:0.125rem;
-  padding-bottom:0.125rem;
-  font-size:0.75rem;
-  line-height:1rem;
-  font-weight:500;
-  --tw-bg-opacity:1;
-  background-color:rgb(var(--neutral-bg) / var(--tw-bg-opacity, 1));
-  --tw-text-opacity:1;
-  color:rgb(var(--neutral-fg) / var(--tw-text-opacity, 1));
-}
-
-.badge-success{
+.badge-success, .badge-true{
   display:inline-flex;
   align-items:center;
   border-radius:9999px;
@@ -1942,7 +1910,7 @@ html, body{
   color:rgb(var(--warning-fg) / var(--tw-text-opacity, 1));
 }
 
-.badge-neutral{
+.badge-neutral, .badge-false{
   display:inline-flex;
   align-items:center;
   border-radius:9999px;
@@ -2086,7 +2054,6 @@ html, body{
 }
 
 .alert-warning{
-  margin-bottom:1.25rem;
   border-radius:0.375rem;
   border-width:1px;
   --tw-border-opacity:1;
@@ -2104,7 +2071,6 @@ html, body{
 }
 
 .alert-neutral{
-  margin-bottom:1.25rem;
   border-radius:0.375rem;
   border-width:1px;
   --tw-border-opacity:1;
@@ -2184,6 +2150,75 @@ html, body{
   line-height:1.25rem;
   --tw-text-opacity:1;
   color:rgb(var(--ink-faint) / var(--tw-text-opacity, 1));
+}
+
+.empty-state-actions{
+  margin-top:0.75rem;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:center;
+  gap:0.5rem;
+}
+
+/* Deprecated aliases (D52): the status dot shipped before the badges. Removed in the next minor release. */
+
+.status-dot{
+  font-weight:500;
+}
+
+.status-dot::before{
+  margin-right:0.5rem;
+  display:inline-block;
+  height:0.5rem;
+  width:0.5rem;
+  content:var(--tw-content);
+  border-radius:9999px;
+}
+
+.status-dot-success{
+  font-weight:500;
+}
+
+.status-dot-success::before{
+  margin-right:0.5rem;
+  display:inline-block;
+  height:0.5rem;
+  width:0.5rem;
+  border-radius:9999px;
+  content:var(--tw-content);
+  --tw-bg-opacity:1;
+  background-color:rgb(var(--success-fg) / var(--tw-bg-opacity, 1));
+}
+
+.status-dot-danger{
+  font-weight:500;
+}
+
+.status-dot-danger::before{
+  margin-right:0.5rem;
+  display:inline-block;
+  height:0.5rem;
+  width:0.5rem;
+  border-radius:9999px;
+  content:var(--tw-content);
+  --tw-bg-opacity:1;
+  background-color:rgb(var(--danger-fg) / var(--tw-bg-opacity, 1));
+}
+
+.status-dot-neutral{
+  font-weight:500;
+}
+
+.status-dot-neutral::before{
+  margin-right:0.5rem;
+  display:inline-block;
+  height:0.5rem;
+  width:0.5rem;
+  border-radius:9999px;
+  content:var(--tw-content);
+  --tw-bg-opacity:1;
+  background-color:rgb(var(--neutral-fg) / var(--tw-bg-opacity, 1));
 }
 
 .stat-row{
@@ -8072,10 +8107,6 @@ html, body{
 .py-3{
   padding-top:0.75rem;
   padding-bottom:0.75rem;
-}
-
-.pb-0{
-  padding-bottom:0px;
 }
 
 .pb-2{

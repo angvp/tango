@@ -98,3 +98,53 @@ func TestFilterEmptyStateNamesTheFiltersAndClearsThem(t *testing.T) {
 		t.Errorf("filter empty state lacks a Clear filters action:\n%s", block)
 	}
 }
+
+// With a search and a filter both active, the empty state names both and offers
+// both clear actions, so neither has to be guessed from the toolbar.
+func TestSearchAndFilterEmptyStateOffersBothClears(t *testing.T) {
+	handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
+	author := seedFilterAuthor(t, sqlDB, "Ada")
+	seedBook(t, sqlDB, "Draft Only", false, author)
+
+	body := doRequest(t, handler, http.MethodGet, flBookPath+"?q=lemon&filter_published=yes", nil).Body.String()
+	block := emptyStateBlock(t, body)
+	if !strings.Contains(block, "No fl books match “lemon” and the selected filters.") {
+		t.Errorf("combined empty state lacks its headline:\n%s", block)
+	}
+	if !strings.Contains(block, ">Clear search</a>") || !strings.Contains(block, ">Clear filters</a>") {
+		t.Errorf("combined empty state lacks one of its clear actions:\n%s", block)
+	}
+}
+
+// The toolbar's clear links are dropped while the empty state shows the same
+// actions, so each action appears once on the page.
+func TestEmptyStateDoesNotDuplicateTheToolbarClearLinks(t *testing.T) {
+	handler, sqlDB := buildMessageBookAdmin(t)
+	seedMessageBook(t, sqlDB, "Dune")
+	body := doRequest(t, handler, http.MethodGet, messageBookBasePath+"?q=lemon", nil).Body.String()
+	if got := strings.Count(body, ">Clear search</a>"); got != 1 {
+		t.Errorf("Clear search appears %d times on an empty search page, want 1", got)
+	}
+
+	handler, sqlDB = buildBookAdmin(t, bookFilterOptions())
+	author := seedFilterAuthor(t, sqlDB, "Ada")
+	seedBook(t, sqlDB, "Draft Only", false, author)
+	body = doRequest(t, handler, http.MethodGet, flBookPath+"?filter_published=yes", nil).Body.String()
+	if got := strings.Count(body, ">Clear filters</a>"); got != 1 {
+		t.Errorf("Clear filters appears %d times on an empty filter page, want 1", got)
+	}
+	if !strings.Contains(body, "Filters applied:") {
+		t.Errorf("the applied filters are no longer named above an empty list")
+	}
+}
+
+// A page with rows keeps its toolbar clear link: the duplicate rule applies
+// only while the empty state is showing.
+func TestSearchWithResultsKeepsTheToolbarClearLink(t *testing.T) {
+	handler, sqlDB := buildMessageBookAdmin(t)
+	seedMessageBook(t, sqlDB, "Dune")
+	body := doRequest(t, handler, http.MethodGet, messageBookBasePath+"?q=Dune", nil).Body.String()
+	if got := strings.Count(body, ">Clear search</a>"); got != 1 {
+		t.Errorf("Clear search appears %d times on a page with a match, want 1", got)
+	}
+}

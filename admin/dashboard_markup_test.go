@@ -119,21 +119,21 @@ func TestDashboardCardStatesAreTextAlerts(t *testing.T) {
 	}))
 	body := getIndex(t, failing).Body.String()
 	section := regexp.MustCompile(`(?s)<section class="card" data-dashboard="status"[^>]*>.*?</section>`).FindString(body)
-	if !strings.Contains(section, `class="alert-warning"`) || !strings.Contains(section, "Unavailable") {
+	if !strings.Contains(section, `<p class="alert-warning" role="alert">Unavailable</p>`) {
 		t.Errorf("unavailable status card lacks a warning alert with its text:\n%s", section)
 	}
 
 	failingActivity := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{Activity: stubSource{err: context.DeadlineExceeded}}))
 	body = getIndex(t, failingActivity).Body.String()
 	activity := regexp.MustCompile(`(?s)<section class="card" data-dashboard="activity"[^>]*>.*?</section>`).FindString(body)
-	if !strings.Contains(activity, `class="alert-warning"`) || !strings.Contains(activity, "Unavailable") {
+	if !strings.Contains(activity, `<p class="alert-warning" role="alert">Unavailable</p>`) {
 		t.Errorf("unavailable activity card lacks a warning alert with its text:\n%s", activity)
 	}
 
 	unconfigured := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{Activity: stubSource{}}))
 	body = getIndex(t, unconfigured).Body.String()
 	section = regexp.MustCompile(`(?s)<section class="card" data-dashboard="status"[^>]*>.*?</section>`).FindString(body)
-	if !strings.Contains(section, `class="alert-neutral"`) || !strings.Contains(section, "Not configured") {
+	if !strings.Contains(section, `<p class="alert-neutral">Not configured</p>`) {
 		t.Errorf("unconfigured status card lacks a neutral alert with its text:\n%s", section)
 	}
 	noActivity := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{
@@ -143,7 +143,7 @@ func TestDashboardCardStatesAreTextAlerts(t *testing.T) {
 	}))
 	body = getIndex(t, noActivity).Body.String()
 	activity = regexp.MustCompile(`(?s)<section class="card" data-dashboard="activity"[^>]*>.*?</section>`).FindString(body)
-	if !strings.Contains(activity, `class="alert-neutral"`) || !strings.Contains(activity, "Not configured") {
+	if !strings.Contains(activity, `<p class="alert-neutral">Not configured</p>`) {
 		t.Errorf("unconfigured activity card lacks a neutral alert with its text:\n%s", activity)
 	}
 }
@@ -190,10 +190,23 @@ func TestDashboardPendingMigrationsAreAWarningBadge(t *testing.T) {
 	}))
 	body := getIndex(t, handler).Body.String()
 	field := regexp.MustCompile(`(?s)<dd [^>]*data-field="pending">.*?</dd>`).FindString(body)
-	if !strings.Contains(field, `<span class="badge-warning">2 pending</span>`) {
+	if !strings.Contains(field, `<span class="badge-warning">2 pending migrations</span>`) {
 		t.Errorf("pending field %q lacks the warning badge", field)
 	}
 	if !strings.Contains(field, "0002_add_year") {
 		t.Errorf("pending field %q lost the migration names", field)
+	}
+}
+
+// One pending migration reads in the singular, not "1 pending migrations".
+func TestDashboardSinglePendingMigrationReadsInTheSingular(t *testing.T) {
+	handler := buildDashboardHandler(t, admin.WithDashboard(admin.DashboardConfig{
+		Status: func(context.Context) (admin.DashboardStatus, error) {
+			return admin.DashboardStatus{Database: admin.DatabaseReachable, TrackingTable: admin.TrackingTablePresent, Pending: []string{"0002_add_year"}}, nil
+		},
+	}))
+	body := getIndex(t, handler).Body.String()
+	if !strings.Contains(body, `<span class="badge-warning">1 pending migration</span>`) {
+		t.Errorf("single pending migration lacks its singular badge:\n%s", body)
 	}
 }

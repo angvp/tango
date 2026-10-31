@@ -96,9 +96,9 @@ var declaredPairs = []pair{
 	{"accent-ui", "surface-sunken", 3, "selected-control fill on the page"},
 	{"ring", "surface-hover", 3, "focus ring on a hovered row"},
 	{"accent-fg", "accent-ui", 3, "label on a selected control"},
-	{"success-fg", "surface", 3, "status dot"},
-	{"danger-fg", "surface", 3, "status dot"},
-	{"warning-fg", "surface", 3, "status dot"},
+	{"success-fg", "surface", 3, "success badge text on the card"},
+	{"danger-fg", "surface", 3, "danger badge text on the card"},
+	{"warning-fg", "surface", 3, "warning badge text on the card"},
 }
 
 func TestDeclaredTokenPairsMeetWCAGInBothThemes(t *testing.T) {

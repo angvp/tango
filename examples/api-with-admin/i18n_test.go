@@ -252,7 +252,7 @@ func TestSpanishAdminIsComplete(t *testing.T) {
 func unwalkedKey(key string) bool {
 	for _, prefix := range []string{
 		"admin.json.", "admin.markdown.", "admin.widget.", "admin.error.", "admin.dashboard.activity.job.",
-		"admin.dashboard.status.unreachable", "admin.dashboard.status.missing", "admin.dashboard.status.pending",
+		"admin.dashboard.status.unreachable", "admin.dashboard.status.missing",
 		"admin.dashboard.status.unknown", "admin.dashboard.unavailable", "admin.dashboard.not_configured",
 		"admin.list.filter_too_many", "admin.index.empty", "admin.login.invalid",
 		// Data the example does not have: boolean columns, filters, a second
@@ -262,6 +262,18 @@ func unwalkedKey(key string) bool {
 		"admin.dashboard.activity.total", "admin.dashboard.status.not_reported",
 	} {
 		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+	// Exact keys: a prefix would exempt keys added later without anyone
+	// deciding they are unreachable. The pending keys need a migration the
+	// example never has; the combined and empty-model states need data the
+	// example does not seed.
+	for _, exact := range []string{
+		"admin.dashboard.status.pending", "admin.dashboard.status.pending_one", "admin.dashboard.status.pending_many",
+		"admin.list.empty_title", "admin.list.empty_no_match_filtered",
+	} {
+		if key == exact {
 			return true
 		}
 	}

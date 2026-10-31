@@ -106,12 +106,11 @@
   }
 
   .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
-  .badge-true { @apply badge bg-success-bg text-success-fg; }
-  .badge-false { @apply badge bg-neutral-bg text-neutral-fg; }
-  .badge-success { @apply badge bg-success-bg text-success-fg; }
+  /* badge-true and badge-false are the boolean names for the success and neutral badges. */
+  .badge-success, .badge-true { @apply badge bg-success-bg text-success-fg; }
   .badge-danger { @apply badge bg-danger-bg text-danger-fg; }
   .badge-warning { @apply badge bg-warning-bg text-warning-fg; }
-  .badge-neutral { @apply badge bg-neutral-bg text-neutral-fg; }
+  .badge-neutral, .badge-false { @apply badge bg-neutral-bg text-neutral-fg; }
 
   .pagination { @apply flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-5 py-3.5 text-sm text-ink-faint; }
   .pagination-pages { @apply flex items-center gap-1; }
@@ -121,8 +120,8 @@
 
   .alert-success { @apply mb-5 rounded-md border border-success-border bg-success-bg px-4 py-3 text-sm text-success-fg; }
   .alert-error { @apply mb-5 rounded-md border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg; }
-  .alert-warning { @apply mb-5 rounded-md border border-warning-border bg-warning-bg px-4 py-3 text-sm text-warning-fg; }
-  .alert-neutral { @apply mb-5 rounded-md border border-neutral-border bg-neutral-bg px-4 py-3 text-sm text-neutral-fg; }
+  .alert-warning { @apply rounded-md border border-warning-border bg-warning-bg px-4 py-3 text-sm text-warning-fg; }
+  .alert-neutral { @apply rounded-md border border-neutral-border bg-neutral-bg px-4 py-3 text-sm text-neutral-fg; }
   .status-message { @apply flex flex-wrap items-center justify-between gap-3; }
   .status-region:not(:empty) { @apply px-4 pt-4 sm:px-6; }
 
@@ -132,6 +131,13 @@
   .empty-state { @apply flex flex-col items-center justify-center gap-1 px-5 py-16 text-center; }
   .empty-state-title { @apply text-base font-semibold text-ink; }
   .empty-state-body { @apply text-sm text-ink-faint; }
+  .empty-state-actions { @apply mt-3 flex flex-wrap items-center justify-center gap-2; }
+
+  /* Deprecated aliases (D52): the status dot shipped before the badges. Removed in the next minor release. */
+  .status-dot { @apply font-medium before:mr-2 before:inline-block before:h-2 before:w-2 before:rounded-full; }
+  .status-dot-success { @apply status-dot before:bg-success-fg; }
+  .status-dot-danger { @apply status-dot before:bg-danger-fg; }
+  .status-dot-neutral { @apply status-dot before:bg-neutral-fg; }
 
   .stat-row { @apply flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start; }
   .stat-label { @apply text-sm text-ink-faint; }
@@ -140,8 +146,6 @@
   .row-list { @apply divide-y divide-line-subtle; }
   .section-title { @apply text-sm font-semibold text-ink; }
   .section-label { @apply px-5 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-ink-faint; }
-  .panel-note { @apply px-5 py-4 text-sm text-ink-faint; }
-  .panel-note-muted { @apply px-5 py-4 text-sm text-ink-muted; }
   .panel-note-tail { @apply px-5 pb-4 text-sm text-ink-faint; }
   .hint-text { @apply text-sm text-ink-faint; }
   .hint-small { @apply text-xs text-ink-faint; }

@@ -46,7 +46,7 @@ func TestStatusCardRendersEveryField(t *testing.T) {
 		"database":      `<span class="badge-success">Reachable</span>`,
 		"dialect":       "postgres",
 		"applied":       "7",
-		"pending":       `<span class="badge-warning">2 pending</span><ul><li>0009_add_orders</li><li>0010_index_orders</li></ul>`,
+		"pending":       `<span class="badge-warning">2 pending migrations</span><ul><li>0009_add_orders</li><li>0010_index_orders</li></ul>`,
 		"tracking":      "Present",
 		"release":       "0.6.0",
 		"process-start": "2026-10-20 08:30:00 UTC",
@@ -78,8 +78,8 @@ func TestStatusCardShowsUnreachableDatabaseAsAWordNotHealth(t *testing.T) {
 	if got, _ := statusField(body, "database"); got != `<span class="badge-danger">Unreachable</span>` {
 		t.Fatalf("database = %q, want the danger badge Unreachable", got)
 	}
-	if got, _ := statusField(body, "tracking"); got != "Missing" {
-		t.Fatalf("tracking = %q, want Missing", got)
+	if got, _ := statusField(body, "tracking"); got != `<span class="badge-warning">Missing</span>` {
+		t.Fatalf("tracking = %q, want the warning badge Missing", got)
 	}
 }
 
@@ -118,9 +118,9 @@ func TestZeroStatusRendersUnknownNeverHealthy(t *testing.T) {
 	want := map[string]string{
 		"database":      `<span class="badge-neutral">Unknown</span>`,
 		"dialect":       "Not reported",
-		"applied":       "Unknown",
-		"pending":       "Unknown",
-		"tracking":      "Unknown",
+		"applied":       `<span class="badge-neutral">Unknown</span>`,
+		"pending":       `<span class="badge-neutral">Unknown</span>`,
+		"tracking":      `<span class="badge-neutral">Unknown</span>`,
 		"release":       "Not reported",
 		"process-start": "Not reported",
 	}
