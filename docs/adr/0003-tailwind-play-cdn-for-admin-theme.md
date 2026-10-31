@@ -1,5 +1,7 @@
 # Use Tailwind's Play CDN for the Admin Default Theme
 
+Status: Accepted. Superseded in part by [ADR 0069](0069-the-admin-redesign-adopts-a-component-layer-framework-owned-plain-language-messages-and-a-strict-csp-compatible-look.md): the precompiled stylesheet replaces the Play CDN delivery.
+
 ## Context
 
 tanGO's admin has a django-grappelli-inspired, shadcn/ui-influenced default theme. tanGO is a pure-Go, server-rendered (`html/template`) framework; admin's templates are Go string literals compiled into the binary, with no Node/npm toolchain anywhere else in the project.

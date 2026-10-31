@@ -29,6 +29,7 @@ The admin must keep its delivery constraints: no inline script, style or event h
 ## Supersedes
 
 - The admin palette values of [0062](0062-admin-theme-is-semantic-colour-tokens-selected-by-system-preference-with-a-cookie-override.md), in part. The semantic-token structure and the system-preference-plus-cookie selection stay. The colour values and the contrast tests change with the new roles.
+- The Play CDN delivery of [0003](0003-tailwind-play-cdn-for-admin-theme.md), in part. The admin ships a precompiled stylesheet in place of the CDN script.
 
 ## Deferred
 
