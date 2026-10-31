@@ -13,16 +13,20 @@
   :focus-visible { @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-surface; }
 }
 @layer components {
-  .shell { @apply min-h-screen flex bg-surface-sunken text-ink antialiased; }
+  .shell { @apply min-h-screen flex max-md:flex-col bg-surface-sunken text-ink antialiased; }
 
   .skip-link { @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-accent-fg; }
 
-  .sidebar { @apply w-64 shrink-0 bg-sidebar text-sidebar-fg border-r border-line flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full max-md:invisible max-md:[transition:transform_200ms_ease-out,visibility_0s_linear_200ms] md:relative md:translate-x-0; }
-  .sidebar-open { @apply translate-x-0 border-line-strong max-md:visible max-md:[transition:transform_200ms_ease-out,visibility_0s] shadow-xl; }
+  .sidebar { @apply w-64 shrink-0 bg-sidebar text-sidebar-fg border-r border-line flex flex-col max-md:w-full md:relative; }
+  /* The phone drawer applies only once nav.js has marked the document, so a page without the script keeps its model list in the flow. The open rules sit after the closed ones at equal specificity. */
+  .nav-js .sidebar { @apply max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-64 max-md:-translate-x-full max-md:invisible max-md:[transition:transform_200ms_ease-out,visibility_0s_linear_200ms]; }
+  .sidebar-open { @apply border-line-strong shadow-xl; }
+  .nav-js .sidebar-open { @apply max-md:translate-x-0 max-md:visible max-md:[transition:transform_200ms_ease-out,visibility_0s]; }
   .sidebar-backdrop { @apply fixed inset-0 z-30 bg-scrim/60 hidden md:hidden; }
   .sidebar-backdrop-open { @apply block; }
-  .menu-btn { @apply md:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-ink-faint hover:bg-surface-hover hover:text-ink -ml-1.5; }
-  .drawer-close { @apply md:hidden mx-3 mt-3 inline-flex items-center gap-2 self-start rounded-full px-3 py-2 text-sm font-medium text-sidebar-strong hover:bg-sidebar-pill-hover; }
+  .menu-btn { @apply hidden items-center justify-center h-9 w-9 rounded-md text-ink-faint hover:bg-surface-hover hover:text-ink -ml-1.5; }
+  .drawer-close { @apply hidden mx-3 mt-3 items-center gap-2 self-start rounded-full px-3 py-2 text-sm font-medium text-sidebar-strong hover:bg-sidebar-pill-hover; }
+  .nav-js .menu-btn, .nav-js .drawer-close { @apply max-md:inline-flex; }
   .sidebar-brand { @apply flex items-center gap-2.5 px-5 h-16 border-b border-line shrink-0; }
   .sidebar-brand-mark { @apply flex h-7 w-7 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-fg text-sm font-bold; }
   .sidebar-brand-text { @apply text-sidebar-strong font-semibold tracking-tight text-[15px]; }

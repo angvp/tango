@@ -218,6 +218,9 @@ var signedInShots = []shot{
 	{name: "dashboard", ready: "[data-dashboard]", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/")}
 	}},
+	{name: "phone-drawer-closed", phoneOnly: true, ready: ".menu-btn", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/")}
+	}},
 	{name: "phone-drawer-open", phoneOnly: true, ready: ".sidebar-open", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{
 			visit(b, "/admin/capture_book/"),

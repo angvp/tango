@@ -801,6 +801,12 @@ html, body{
   -moz-osx-font-smoothing:grayscale;
 }
 
+@media not all and (min-width: 768px){
+  .shell{
+    flex-direction:column;
+  }
+}
+
 .skip-link{
   position:absolute;
   width:1px;
@@ -841,16 +847,9 @@ html, body{
 }
 
 .\!sidebar{
-  position:fixed;
-  top:0px;
-  bottom:0px;
-  left:0px;
-  z-index:40;
   display:flex;
   width:16rem;
   flex-shrink:0;
-  --tw-translate-x:-100%;
-  transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
   flex-direction:column;
   border-right-width:1px;
   --tw-border-opacity:1;
@@ -863,30 +862,20 @@ html, body{
 
 @media not all and (min-width: 768px){
   .\!sidebar{
-    visibility:hidden;
-    transition:transform 200ms ease-out,visibility 0s linear 200ms;
+    width:100%;
   }
 }
 
 @media (min-width: 768px){
   .\!sidebar{
     position:relative;
-    --tw-translate-x:0px;
-    transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
   }
 }
 
 .sidebar{
-  position:fixed;
-  top:0px;
-  bottom:0px;
-  left:0px;
-  z-index:40;
   display:flex;
   width:16rem;
   flex-shrink:0;
-  --tw-translate-x:-100%;
-  transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
   flex-direction:column;
   border-right-width:1px;
   --tw-border-opacity:1;
@@ -899,22 +888,47 @@ html, body{
 
 @media not all and (min-width: 768px){
   .sidebar{
-    visibility:hidden;
-    transition:transform 200ms ease-out,visibility 0s linear 200ms;
+    width:100%;
   }
 }
 
 @media (min-width: 768px){
   .sidebar{
     position:relative;
-    --tw-translate-x:0px;
+  }
+}
+
+/* The phone drawer applies only once nav.js has marked the document, so a page without the script keeps its model list in the flow. The open rules sit after the closed ones at equal specificity. */
+
+@media not all and (min-width: 768px){
+  .nav-js .sidebar{
+    visibility:hidden;
+    position:fixed;
+    top:0px;
+    bottom:0px;
+    left:0px;
+    z-index:40;
+    width:16rem;
+    --tw-translate-x:-100%;
     transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+    transition:transform 200ms ease-out,visibility 0s linear 200ms;
+  }
+
+  .nav-js .\!sidebar{
+    visibility:hidden;
+    position:fixed;
+    top:0px;
+    bottom:0px;
+    left:0px;
+    z-index:40;
+    width:16rem;
+    --tw-translate-x:-100%;
+    transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+    transition:transform 200ms ease-out,visibility 0s linear 200ms;
   }
 }
 
 .sidebar-open{
-  --tw-translate-x:0px;
-  transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
   --tw-border-opacity:1;
   border-color:rgb(var(--line-strong) / var(--tw-border-opacity, 1));
   --tw-shadow:0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
@@ -923,8 +937,10 @@ html, body{
 }
 
 @media not all and (min-width: 768px){
-  .sidebar-open{
+  .nav-js .sidebar-open{
     visibility:visible;
+    --tw-translate-x:0px;
+    transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
     transition:transform 200ms ease-out,visibility 0s;
   }
 }
@@ -949,7 +965,7 @@ html, body{
 
 .menu-btn{
   margin-left:-0.375rem;
-  display:inline-flex;
+  display:none;
   height:2.25rem;
   width:2.25rem;
   align-items:center;
@@ -966,17 +982,11 @@ html, body{
   color:rgb(var(--ink) / var(--tw-text-opacity, 1));
 }
 
-@media (min-width: 768px){
-  .menu-btn{
-    display:none;
-  }
-}
-
 .drawer-close{
   margin-left:0.75rem;
   margin-right:0.75rem;
   margin-top:0.75rem;
-  display:inline-flex;
+  display:none;
   align-items:center;
   gap:0.5rem;
   align-self:flex-start;
@@ -997,9 +1007,9 @@ html, body{
   background-color:rgb(var(--sidebar-pill-hover) / var(--tw-bg-opacity, 1));
 }
 
-@media (min-width: 768px){
-  .drawer-close{
-    display:none;
+@media not all and (min-width: 768px){
+  .nav-js .menu-btn, .nav-js .drawer-close{
+    display:inline-flex;
   }
 }
 

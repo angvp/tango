@@ -26,6 +26,7 @@ import (
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/log"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
@@ -407,15 +408,57 @@ func (s *smoke) sidebarOpen() bool {
 	return s.eval(`document.getElementById('sidebar').classList.contains('sidebar-open')`)
 }
 
-// adminNavToggle opens the sidebar with the menu button, then closes it by
-// clicking the backdrop. The backdrop is hit-tested first, so the click lands
-// on the element the script binds to, not on whatever sits under the point.
-func (s *smoke) adminNavToggle() {
+// check reports a failed assertion without stopping the run, so independent
+// expectations of one interaction are all visible in a single run.
+func (s *smoke) check(ok bool, format string, args ...any) {
 	s.t.Helper()
-	s.run("admin nav open", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	if !ok {
+		s.t.Errorf(format, args...)
+	}
+}
+
+const (
+	drawerVisibleOnScreen = `(function () {
+		var sidebar = document.getElementById('sidebar');
+		var box = sidebar.getBoundingClientRect();
+		return getComputedStyle(sidebar).visibility === 'visible' && box.left >= 0 && box.right > 0 && box.width > 0;
+	})()`
+	focusOnMenuButton  = `document.activeElement === document.querySelector('.menu-btn')`
+	menuButtonExpanded = `document.querySelector('.menu-btn').getAttribute('aria-expanded') === 'true'`
+	backgroundInert    = `document.getElementById('main').inert && document.querySelector('.skip-link').inert`
+	backgroundLive     = `!document.getElementById('main').inert && !document.querySelector('.skip-link').inert`
+)
+
+// expectClosed checks everything a closed drawer leaves behind.
+func (s *smoke) expectClosed(how string) {
+	s.t.Helper()
+	s.check(!s.sidebarOpen(), "%s did not close the sidebar", how)
+	s.check(!s.eval(menuButtonExpanded), "aria-expanded stayed true after %s", how)
+	s.check(s.eval(backgroundLive), "the page behind the drawer stayed inert after %s", how)
+	s.check(s.eval(focusOnMenuButton), "focus did not return to the menu button after %s", how)
+}
+
+// expectOpen checks a drawer that has finished opening.
+func (s *smoke) expectOpen() {
+	s.t.Helper()
 	if !s.sidebarOpen() {
 		s.t.Fatal("the menu button did not open the sidebar: nav.js is not running")
 	}
+	s.check(s.eval(menuButtonExpanded), "the open drawer did not set aria-expanded on the menu button")
+	s.check(s.eval(`document.activeElement === document.querySelector('#sidebar button[data-admin-nav-close]')`), "focus did not move to the drawer's Close button")
+	s.check(s.eval(backgroundInert), "the page behind the open drawer, skip link included, is not inert")
+	s.check(s.eval(drawerVisibleOnScreen), "the open drawer is not visible on screen")
+	s.check(s.eval(`/, 0\.6\)$/.test(getComputedStyle(document.getElementById('sidebar-backdrop')).backgroundColor)`), "the drawer scrim is not drawn at 60 percent")
+}
+
+// adminNavToggle drives the phone drawer: open and close it every way the
+// script offers, then check the page without the script's mark and the script
+// at desktop width. The backdrop is hit-tested first, so the click lands on the
+// element the script binds to, not on whatever sits under the point.
+func (s *smoke) adminNavToggle() {
+	s.t.Helper()
+	s.run("admin nav open", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	s.expectOpen()
 
 	ctx, cancel := context.WithTimeout(s.ctx, stepTimeout)
 	defer cancel()
@@ -432,25 +475,42 @@ func (s *smoke) adminNavToggle() {
 	if hit != "sidebar-backdrop" {
 		s.t.Fatalf("point (%g, %g) is over #%s, not the backdrop", point[0], point[1], hit)
 	}
-	s.run("admin nav close", chromedp.MouseClickXY(point[0], point[1]))
-	if s.sidebarOpen() {
-		s.t.Fatal("the backdrop did not close the sidebar: nav.js is not running")
-	}
+	s.run("admin nav backdrop close", chromedp.MouseClickXY(point[0], point[1]))
+	s.expectClosed("a backdrop click")
 
-	s.run("admin nav reopen", chromedp.Click(".menu-btn", chromedp.NodeVisible))
-	if !s.eval(`document.querySelector('.menu-btn').getAttribute('aria-expanded') === 'true'`) {
-		s.t.Fatal("the open drawer did not set aria-expanded on the menu button")
-	}
-	if !s.eval(`document.activeElement === document.querySelector('#sidebar button[data-admin-nav-close]')`) {
-		s.t.Fatal("focus did not move to the drawer's Close button")
-	}
+	s.run("admin nav reopen for Close", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	s.expectOpen()
+	s.run("admin nav close button", chromedp.Click("#sidebar button[data-admin-nav-close]", chromedp.NodeVisible))
+	s.expectClosed("the Close button")
+
+	s.run("admin nav reopen for Escape", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	s.expectOpen()
 	s.run("admin nav escape", chromedp.KeyEvent(kb.Escape))
-	if s.sidebarOpen() {
-		s.t.Fatal("Escape did not close the sidebar")
-	}
-	if !s.eval(`document.activeElement === document.querySelector('.menu-btn')`) {
-		s.t.Fatal("focus did not return to the menu button after Escape")
-	}
+	s.expectClosed("Escape")
+
+	// Without the script's mark the phone page keeps its model list in the
+	// flow and shows no control that needs the script.
+	s.check(s.eval(`document.documentElement.classList.contains('nav-js')`), "nav.js did not mark the document")
+	s.eval(`document.documentElement.classList.remove('nav-js'), true`)
+	s.check(s.eval(drawerVisibleOnScreen), "the model list is hidden on a phone without the script's mark")
+	s.check(s.eval(`getComputedStyle(document.getElementById('sidebar')).position !== 'fixed'`), "the sidebar overlays the page on a phone without the script's mark")
+	s.check(s.eval(`getComputedStyle(document.querySelector('.menu-btn')).display === 'none'`), "the menu button shows on a phone without the script")
+	s.eval(`document.documentElement.classList.add('nav-js'), true`)
+
+	// At desktop width the drawer does not exist: opening is a no-op.
+	s.run("admin nav desktop width", chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
+		_, err := chromedp.Call(c, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{
+			Width: 1280, Height: 800, DeviceScaleFactor: 1,
+		})
+		return err
+	}))
+	s.eval(`window.tangoAdminNav.open(), true`)
+	s.check(!s.sidebarOpen(), "open() opened the drawer at desktop width")
+	s.check(s.eval(backgroundLive), "open() left the page inert at desktop width")
+	s.run("admin nav phone width", chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
+		_, err := chromedp.Call(c, emulation.ClearDeviceMetricsOverride, cdp.Empty{})
+		return err
+	}))
 }
 
 // previewHeading reads the first heading of the preview frame from the DOM.

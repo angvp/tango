@@ -258,3 +258,20 @@ func TestBulkDialogBackdropUsesTheScrimToken(t *testing.T) {
 		t.Errorf("dialog classes = %q, want the scrim backdrop", classes)
 	}
 }
+
+// Without the script the phone page must keep its model list: the markup
+// carries no class that hides the drawer, and nav.js alone adds the mark the
+// stylesheet gates the drawer on.
+func TestMarkupCarriesNoDrawerHidingClassBeforeTheScriptRuns(t *testing.T) {
+	for name, body := range shellPages(t) {
+		doc := parseShell(t, body)
+		roots := findAll(doc, func(n *html.Node) bool { return n.Data == "html" })
+		if len(roots) != 1 || attrValue(roots[0], "class") != "" {
+			t.Errorf("%s: <html> carries class %q before any script runs", name, attrValue(roots[0], "class"))
+		}
+		sidebar := findAll(doc, func(n *html.Node) bool { return attrValue(n, "id") == "sidebar" })
+		if len(sidebar) != 1 || attrValue(sidebar[0], "class") != "sidebar" {
+			t.Errorf("%s: #sidebar class = %q, want only sidebar", name, attrValue(sidebar[0], "class"))
+		}
+	}
+}

@@ -3,7 +3,10 @@
 // Elements opt in with data-admin-nav-open and data-admin-nav-close, so the
 // layout's markup carries no inline handler. Focus moves into the drawer on
 // open and returns to the menu button on close; while the drawer is open the
-// page behind it is inert and Tab stays inside the drawer.
+// page behind it, the skip link included, is inert and Tab stays inside the
+// drawer. The script marks the document with nav-js; the stylesheet applies the
+// phone drawer only under that mark, so without the script the model list
+// stays in the page.
 (function () {
   "use strict";
 
@@ -13,7 +16,10 @@
     return;
   }
 
+  document.documentElement.classList.add("nav-js");
+
   var main = document.getElementById("main");
+  var skipLink = document.querySelector(".skip-link");
   var openers = document.querySelectorAll("[data-admin-nav-open]");
   var closeButton = sidebar.querySelector("button[data-admin-nav-close]");
   var desktop = window.matchMedia("(min-width: 768px)");
@@ -29,8 +35,16 @@
     });
   }
 
+  function setBackgroundInert(value) {
+    [main, skipLink].forEach(function (element) {
+      if (element) {
+        element.inert = value;
+      }
+    });
+  }
+
   function open() {
-    if (isOpen()) {
+    if (isOpen() || desktop.matches) {
       return;
     }
     opener = document.activeElement && document.activeElement.hasAttribute("data-admin-nav-open")
@@ -39,9 +53,7 @@
     sidebar.classList.add("sidebar-open");
     backdrop.classList.add("sidebar-backdrop-open");
     setExpanded(true);
-    if (main) {
-      main.inert = true;
-    }
+    setBackgroundInert(true);
     if (closeButton) {
       closeButton.focus();
     }
@@ -51,14 +63,11 @@
     if (!isOpen()) {
       return;
     }
-    var focusWasInside = sidebar.contains(document.activeElement);
     sidebar.classList.remove("sidebar-open");
     backdrop.classList.remove("sidebar-backdrop-open");
     setExpanded(false);
-    if (main) {
-      main.inert = false;
-    }
-    if (focusWasInside && opener && !desktop.matches) {
+    setBackgroundInert(false);
+    if (opener && !desktop.matches) {
       opener.focus();
     }
   }
