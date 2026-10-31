@@ -27,11 +27,12 @@ func TestAdminBulkDeleteRemovesSelectedPostsAndTheirComments(t *testing.T) {
 		"pk":    {strconv.FormatInt(gone, 10), strconv.FormatInt(alsoGone, 10)},
 		"count": {"2"},
 	})
-	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/admin/post/?deleted=2" {
-		t.Fatalf("status = %d, Location = %q, want 302 to /admin/post/?deleted=2: %s", rec.Code, rec.Header().Get("Location"), rec.Body)
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/admin/post/" {
+		t.Fatalf("status = %d, Location = %q, want 302 to /admin/post/: %s", rec.Code, rec.Header().Get("Location"), rec.Body)
 	}
 
-	posts := ops.do("GET", "/admin/post/?deleted=2", nil).Body.String()
+	// The outcome arrives in the flash cookie the browser holds, not in the URL.
+	posts := ops.do("GET", "/admin/post/", nil).Body.String()
 	if !strings.Contains(posts, "2 posts deleted") || !strings.Contains(posts, "Post to keep") ||
 		strings.Contains(posts, "Post to remove") || strings.Contains(posts, "Another post to remove") {
 		t.Fatalf("the Post changelist after the delete is wrong:\n%s", posts)

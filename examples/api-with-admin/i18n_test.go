@@ -13,8 +13,10 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/admin"
+	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/i18n/i18ntest"
+	"github.com/angvp/tango/model"
 
 	"api-with-admin/apps/authors"
 	"api-with-admin/apps/posts"
@@ -23,10 +25,13 @@ import (
 // adminSite is the example's admin on a real server, with a signed-in
 // browser, an author and a post to look at.
 type adminSite struct {
-	t       *testing.T
-	url     string
-	browser *http.Client
-	postID  int64
+	t        *testing.T
+	url      string
+	browser  *http.Client
+	postID   int64
+	authorID int64
+	store    *db.Store
+	postMeta model.ModelMeta
 }
 
 func newAdminSite(t *testing.T) *adminSite {
@@ -52,7 +57,7 @@ func newAdminSite(t *testing.T) *adminSite {
 	if err != nil {
 		t.Fatal(err)
 	}
-	site := &adminSite{t: t, url: server.URL, postID: post.ID,
+	site := &adminSite{t: t, url: server.URL, postID: post.ID, authorID: author.ID, store: store, postMeta: postMeta,
 		browser: &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 
 	login := site.get("/admin/login/", nil)
@@ -114,16 +119,91 @@ func (s *adminSite) walk(locale string) map[string]page {
 		"edit":       "/admin/post/" + id + "/",
 		"delete":     "/admin/post/" + id + "/delete/",
 		"authors":    "/admin/author/",
-		"deleted":    "/admin/post/?deleted=1",
-		"deleted n":  "/admin/post/?deleted=2",
 		"login":      "/admin/login/",
 	}
+	header := map[string]string{"Accept-Language": locale}
 	pages := make(map[string]page, len(paths))
 	for name, path := range paths {
-		pages[name] = s.get(path, map[string]string{"Accept-Language": locale})
+		pages[name] = s.get(path, header)
+	}
+	for name, outcome := range s.outcomes(header) {
+		pages[name] = outcome
 	}
 	return pages
 }
+
+// outcomes runs the create, save and delete flows through the browser and
+// returns the changelist each one redirects to, so every outcome message is
+// rendered in the locale the walk asked for.
+func (s *adminSite) outcomes(header map[string]string) map[string]page {
+	s.t.Helper()
+	author := strconv.FormatInt(s.authorID, 10)
+	s.submitTo("/admin/post/new/", "/admin/post/new/", url.Values{"Title": {"Nuevo"}, "Body": {"Texto"}, "AuthorID": {author}}, header)
+	created := s.get("/admin/post/", header)
+
+	s.submitTo("/admin/post/"+itoa(s.postID)+"/", "/admin/post/"+itoa(s.postID)+"/", url.Values{"Title": {"Hola"}, "Body": {"Primera"}, "AuthorID": {author}}, header)
+	saved := s.get("/admin/post/", header)
+
+	single := s.seedPost("Borrador")
+	s.submitTo("/admin/post/"+itoa(single)+"/delete/", "/admin/post/"+itoa(single)+"/delete/", nil, header)
+	removed := s.get("/admin/post/", header)
+
+	one := s.seedPost("Uno")
+	s.submitTo("/admin/post/", "/admin/post/delete-selected/", url.Values{"pk": {itoa(one)}, "count": {"1"}}, header)
+	deleted := s.get("/admin/post/", header)
+
+	first, second := s.seedPost("Dos"), s.seedPost("Tres")
+	s.submitTo("/admin/post/", "/admin/post/delete-selected/", url.Values{"pk": {itoa(first), itoa(second)}, "count": {"2"}}, header)
+	deletedMany := s.get("/admin/post/", header)
+
+	return map[string]page{"created": created, "saved": saved, "removed": removed, "deleted": deleted, "deleted n": deletedMany}
+}
+
+// seedPost creates a post under the example's author and returns its key.
+func (s *adminSite) seedPost(title string) int64 {
+	s.t.Helper()
+	post := posts.Post{Title: title, Body: "Texto", AuthorID: s.authorID}
+	if err := s.store.Create(s.t.Context(), s.postMeta, &post); err != nil {
+		s.t.Fatal(err)
+	}
+	return post.ID
+}
+
+// submitTo loads formPath with a GET, then posts fields and the CSRF token
+// that page carries to action. The redirect is not followed; the browser keeps
+// the cookies it sets.
+func (s *adminSite) submitTo(formPath, action string, fields url.Values, header map[string]string) page {
+	s.t.Helper()
+	loaded := s.get(formPath, header)
+	match := csrfTokenPattern.FindStringSubmatch(loaded.body)
+	if match == nil {
+		s.t.Fatalf("GET %s: no CSRF token on the page", formPath)
+	}
+	form := url.Values{"csrf_token": {match[1]}}
+	for name, values := range fields {
+		form[name] = values
+	}
+	request, err := http.NewRequest(http.MethodPost, s.url+action, strings.NewReader(form.Encode()))
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for name, value := range header {
+		request.Header.Set(name, value)
+	}
+	response, err := s.browser.Do(request)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return page{status: response.StatusCode, header: response.Header, body: string(body)}
+}
+
+var csrfTokenPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
