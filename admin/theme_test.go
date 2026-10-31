@@ -79,6 +79,11 @@ var declaredPairs = []pair{
 	{"ring", "surface-sunken", 3, "focus ring on the page"},
 	{"control-line", "surface", 3, "input and checkbox boundary"},
 	{"accent-ui", "surface", 3, "checkbox and selected-control fill"},
+	{"accent", "surface", 3, "action fill as a control boundary on cards"},
+	{"accent", "surface-sunken", 3, "action fill on the page"},
+	{"accent-ui", "surface-sunken", 3, "selected-control fill on the page"},
+	{"ring", "surface-hover", 3, "focus ring on a hovered row"},
+	{"accent-fg", "accent-ui", 3, "label on a selected control"},
 	{"success-fg", "surface", 3, "status dot"},
 	{"danger-fg", "surface", 3, "status dot"},
 	{"warning-fg", "surface", 3, "status dot"},
@@ -121,5 +126,40 @@ func TestLayoutLoadsTheStylesheetBeforeTheBody(t *testing.T) {
 	}
 	if link > strings.Index(html, "<body>") {
 		t.Error("the admin stylesheet must load in the head, before the body")
+	}
+}
+
+// The brand roles of the redesign (decisions D29 to D31): navy carries the
+// action, focus and selection on light surfaces; cyan does the same on dark
+// surfaces with an ink label, and is never text or focus on light.
+func TestPaletteCarriesTheBrandRoles(t *testing.T) {
+	navy, cyan, ink := rgb{1, 59, 138}, rgb{1, 170, 222}, rgb{11, 31, 63}
+	want := []struct {
+		name  string
+		dark  bool
+		value rgb
+	}{
+		{"accent", false, navy},
+		{"accent-ui", false, navy},
+		{"ring", false, navy},
+		{"ink", false, ink},
+		{"surface-sunken", false, rgb{247, 249, 252}},
+		{"surface-hover", false, rgb{232, 246, 252}},
+		{"accent", true, cyan},
+		{"accent-ui", true, cyan},
+		{"ring", true, cyan},
+		{"accent-fg", true, ink},
+		{"surface", true, rgb{10, 26, 54}},
+		{"surface-sunken", true, rgb{5, 15, 34}},
+	}
+	for _, w := range want {
+		if got := tokenValue(t, w.name, w.dark); got != w.value {
+			t.Errorf("dark=%v token %s = %v, want %v", w.dark, w.name, got, w.value)
+		}
+	}
+	for _, name := range []string{"accent", "accent-hover", "accent-ui", "ring", "selection-fg", "ink", "ink-muted", "ink-faint"} {
+		if tokenValue(t, name, false) == cyan {
+			t.Errorf("light token %s is cyan; cyan is a decorative fill on light surfaces", name)
+		}
 	}
 }
