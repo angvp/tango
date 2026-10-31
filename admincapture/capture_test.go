@@ -180,7 +180,7 @@ func visit(base, path string) chromedp.Action[chromedp.Void] {
 
 // signedInShots are taken after sign-in; the login page is taken before.
 var signedInShots = []shot{
-	{name: "changelist-rows", ready: "table", steps: func(b string) []chromedp.Action[chromedp.Void] {
+	{name: "changelist-rows", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/")}
 	}},
 	{name: "changelist-empty", ready: ".content-body", steps: func(b string) []chromedp.Action[chromedp.Void] {
@@ -225,6 +225,19 @@ var signedInShots = []shot{
 		return []chromedp.Action[chromedp.Void]{
 			visit(b, "/admin/capture_book/"),
 			chromedp.Click(".menu-btn", chromedp.NodeVisible),
+		}
+	}},
+	// Compact density is the last shot: its cookie outlives this step in the
+	// shared browser, so no later shot may depend on the default density.
+	{name: "changelist-rows-compact", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
+				_, err := chromedp.Call(c, network.SetCookie, network.SetCookieParams{
+					Name: "tango_admin_density", Value: "compact", URL: b + "/admin/",
+				})
+				return err
+			}),
+			visit(b, "/admin/capture_book/"),
 		}
 	}},
 }
