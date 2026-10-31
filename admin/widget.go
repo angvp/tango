@@ -97,8 +97,8 @@ func (checkboxWidget) Parse(_ context.Context, f FieldContext, form FieldValues,
 var selectWidgetTemplate = template.Must(template.New("selectWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
 {{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
-<div class="inline-row">
-  <select id="field-{{.Name}}" name="{{.Name}}" class="input"` + ariaAttrs + `>
+<div class="inline-row flex-wrap">
+  <select id="field-{{.Name}}" name="{{.Name}}" class="input min-w-[10rem] flex-1"` + ariaAttrs + `>
     {{range .SelectOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Text}}</option>{{end}}
   </select>
   {{if .RelatedCreateURL}}<a href="{{.RelatedCreateURL}}" class="btn-secondary whitespace-nowrap">{{.RelatedCreateLabel}}</a>{{end}}

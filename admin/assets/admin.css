@@ -2518,6 +2518,10 @@ html, body{
   min-width:1.5rem;
 }
 
+.min-w-\[10rem\]{
+  min-width:10rem;
+}
+
 .min-w-\[200px\]{
   min-width:200px;
 }
