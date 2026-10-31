@@ -2,6 +2,7 @@ package tango_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -120,6 +121,7 @@ type cspViolation struct {
 type framePageAudit struct {
 	t          *testing.T
 	handler    http.Handler
+	sqlDB      *sql.DB
 	routes     []tango.DescribedRoute
 	session    *http.Cookie
 	csrf       string
@@ -140,6 +142,10 @@ func TestFrameworkPagesSatisfyTheStrictReferencePolicy(t *testing.T) {
 		}
 		page := "GET " + route.Pattern
 		path := fillPattern(route.Pattern)
+		if route.Doc != nil && route.Doc.Summary == answeredMethodSummary {
+			audit.visitErrorPage(page, http.MethodGet, path, "", nil, http.StatusMethodNotAllowed)
+			continue
+		}
 		audit.visit(page, http.MethodGet, path, "", nil, nil)
 		if isAdminPage(path) {
 			audit.visit(page, http.MethodGet, path, "", audit.session, nil)
@@ -147,6 +153,8 @@ func TestFrameworkPagesSatisfyTheStrictReferencePolicy(t *testing.T) {
 	}
 	audit.submitErrorStates()
 	audit.previewMarkdown()
+	// The server failure drops a table, so it runs after every page that needs it.
+	audit.visitServerFailure()
 	audit.checkLinkedStylesheets()
 
 	for _, page := range []string{
@@ -228,6 +236,7 @@ func newFramePageAudit(t *testing.T) *framePageAudit {
 	return &framePageAudit{
 		t:           t,
 		handler:     handler,
+		sqlDB:       sqlDB,
 		routes:      registry.Routes().Described(),
 		visited:     map[string]bool{},
 		stylesheets: map[string]string{},
@@ -611,11 +620,56 @@ func (a *framePageAudit) submitErrorStates() {
 	a.visitErrorPages()
 }
 
-// visitErrorPages requests the admin's HTML error pages under the admin
-// session: a missing row, and a form posted without its CSRF token.
+// answeredMethodSummary is the route summary of a 405 route the admin
+// registers for a method its page does not handle; see the admin package.
+const answeredMethodSummary = "Answers a method its page does not handle with the HTML 405 page."
+
+// visitErrorPages requests the admin's HTML error pages: a missing row, a form
+// posted without its CSRF token, an account without staff access, and a sign-in
+// throttled after repeated failures.
 func (a *framePageAudit) visitErrorPages() {
 	a.visitErrorPage("GET /admin/csp_page_note/{pk}/ (missing row)", http.MethodGet, "/admin/csp_page_note/999999/", "", nil, http.StatusNotFound)
 	a.visitErrorPage("POST /admin/csp_page_note/new/ (expired form)", http.MethodPost, "/admin/csp_page_note/new/", url.Values{"Body": {"x"}}.Encode(), map[string]string{"Content-Type": "application/x-www-form-urlencoded"}, http.StatusForbidden)
+	a.visitNotStaffPage()
+	a.visitThrottledSignIn()
+}
+
+// visitNotStaffPage requests the admin under a session whose account has no
+// staff access, then restores the account.
+func (a *framePageAudit) visitNotStaffPage() {
+	a.t.Helper()
+	if _, err := a.sqlDB.Exec(`UPDATE admin_user SET is_staff = $1 WHERE username = $2`, false, cspAdminUser); err != nil {
+		a.t.Fatal(err)
+	}
+	a.visitErrorPage("GET /admin/csp_page_note/ (no staff access)", http.MethodGet, "/admin/csp_page_note/", "", nil, http.StatusForbidden)
+	if _, err := a.sqlDB.Exec(`UPDATE admin_user SET is_staff = $1 WHERE username = $2`, true, cspAdminUser); err != nil {
+		a.t.Fatal(err)
+	}
+}
+
+// visitThrottledSignIn repeats failed sign-ins until the limiter answers 429.
+func (a *framePageAudit) visitThrottledSignIn() {
+	a.t.Helper()
+	var last *httptest.ResponseRecorder
+	for i := 0; i < 10; i++ {
+		last = a.postErrorState("/admin/login/", url.Values{"username": {cspAdminUser}, "password": {"wrong-password"}})
+		if last.Code == http.StatusTooManyRequests {
+			break
+		}
+	}
+	if last.Code != http.StatusTooManyRequests {
+		a.t.Fatalf("POST /admin/login/: repeated failures answered %d, want 429", last.Code)
+	}
+}
+
+// visitServerFailure requests a page whose table has been dropped, so the
+// admin answers with its server-failure page.
+func (a *framePageAudit) visitServerFailure() {
+	a.t.Helper()
+	if _, err := a.sqlDB.Exec(`DROP TABLE csp_page_note`); err != nil {
+		a.t.Fatal(err)
+	}
+	a.visitErrorPage("GET /admin/csp_page_note/ (server failure)", http.MethodGet, "/admin/csp_page_note/", "", nil, http.StatusInternalServerError)
 }
 
 // visitErrorPage checks an error response's status and scans its markup. The
@@ -657,7 +711,7 @@ func (a *framePageAudit) postBulkRejection() {
 // postErrorState fetches a form page, then posts fields with the form's own
 // csrf_token and the cookies the GET set, and scans the response as the
 // page's error state.
-func (a *framePageAudit) postErrorState(path string, fields url.Values) {
+func (a *framePageAudit) postErrorState(path string, fields url.Values) *httptest.ResponseRecorder {
 	a.t.Helper()
 	page := "POST " + path
 	get := a.request(http.MethodGet, path, "", nil, nil)
@@ -675,4 +729,5 @@ func (a *framePageAudit) postErrorState(path string, fields url.Values) {
 	}
 	a.visited[page] = true
 	a.scan(page, path, post.Body.String())
+	return post
 }
