@@ -3,8 +3,8 @@
 // The semantic colour tokens (admin/theme_palette_test.go lists the same set).
 const OPACITY_TOKENS = [
   'ink', 'ink-muted', 'ink-faint',
-  'surface', 'surface-sunken', 'surface-hover',
-  'line', 'line-subtle', 'line-strong', 'control-line',
+  'surface', 'surface-sunken', 'surface-hover', 'header',
+  'line','line-subtle', 'line-strong', 'control-line',
   'accent', 'accent-hover', 'accent-fg', 'accent-ui', 'ring', 'selection-bg', 'selection-fg',
   'danger-solid', 'danger-solid-hover', 'danger-solid-fg',
   'sidebar', 'sidebar-fg', 'sidebar-strong', 'sidebar-muted', 'sidebar-dot', 'sidebar-accent', 'sidebar-accent-fg', 'sidebar-pill-hover', 'sidebar-pill-current',
@@ -34,6 +34,7 @@ module.exports = {
       'surface': 'rgb(var(--surface) / <alpha-value>)',
       'surface-sunken': 'rgb(var(--surface-sunken) / <alpha-value>)',
       'surface-hover': 'rgb(var(--surface-hover) / <alpha-value>)',
+      'header': 'rgb(var(--header) / <alpha-value>)',
       'line': 'rgb(var(--line) / <alpha-value>)',
       'line-subtle': 'rgb(var(--line-subtle) / <alpha-value>)',
       'line-strong': 'rgb(var(--line-strong) / <alpha-value>)',
@@ -81,7 +82,7 @@ module.exports = {
   safelist: [
     'status-dot', 'status-dot-success', 'status-dot-danger', 'status-dot-neutral',
     {
-      pattern: /^(text|bg|border|ring)-(ink|surface|line|control-line|accent|ring|selection|danger-solid|sidebar|success|danger|warning|neutral|scrim)(-[a-z]+)*$/,
+      pattern: /^(text|bg|border|ring)-(ink|surface|header|line|control-line|accent|ring|selection|danger-solid|sidebar|success|danger|warning|neutral|scrim)(-[a-z]+)*$/,
     },
     // Opacity modifiers (text-ink/60) on the same token utilities. The steps
     // are Tailwind's default opacity scale, listed explicitly so the set does

@@ -30,6 +30,9 @@ var palette = []themeToken{
 	{Name: "surface", Light: rgb{255, 255, 255}, Dark: rgb{10, 26, 54}},
 	{Name: "surface-sunken", Light: rgb{247, 249, 252}, Dark: rgb{5, 15, 34}},
 	{Name: "surface-hover", Light: rgb{232, 246, 252}, Dark: rgb{20, 40, 76}},
+	// The page header is a solid fill raised above the dark sidebar, so the two
+	// are told apart by lightness rather than by a translucent wash.
+	{Name: "header", Light: rgb{255, 255, 255}, Dark: rgb{26, 50, 94}},
 
 	// Lines: line and line-subtle are decorative dividers; control-line is
 	// the boundary of an input, which must stay visible.

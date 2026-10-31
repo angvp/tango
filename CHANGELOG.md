@@ -29,6 +29,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **The JSON and Markdown widgets show their editors without script, and hide what is empty.** Without JavaScript the Formatted panel of the JSON field and the Preview panel of a Markdown field are visible, stacked under the editor. The Formatted box and the Preview frame stay hidden until they have content, so the editor is the only visible control. With the script, the tabs show and the inactive panel is hidden as before.
 
+- **The dark header is distinct from the sidebar.** The admin header has its own surface token: in the dark theme it is a lighter navy than the sidebar and the page, so the bands read apart. The light theme is unchanged.
+
 - **The widget tabs have a selection edge and a focus ring.** The selected tab is marked with a navy edge in the light theme and a cyan edge in the dark theme, and a focused tab shows a ring with an offset. Tab targets are at least 36px tall.
 
 - **On a phone, the form's Save and Cancel buttons are full width.** Below 640px each takes the full width of the form, one above the other, with Cancel's text wrapping rather than overflowing.

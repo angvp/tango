@@ -99,6 +99,11 @@ var declaredPairs = []pair{
 	{"success-fg", "surface", 3, "success badge text on the card"},
 	{"danger-fg", "surface", 3, "danger badge text on the card"},
 	{"warning-fg", "surface", 3, "warning badge text on the card"},
+	{"ink", "header", 4.5, "page title and header text"},
+	{"ink-muted", "header", 4.5, "breadcrumbs and header links"},
+	{"ink-faint", "header", 4.5, "header meta text"},
+	{"accent", "header", 3, "header action boundary"},
+	{"ring", "header", 3, "focus ring on the header"},
 }
 
 func TestDeclaredTokenPairsMeetWCAGInBothThemes(t *testing.T) {
@@ -140,6 +145,29 @@ func TestEveryTokenHasBothThemes(t *testing.T) {
 		seen[tok.Name] = true
 		if tok.Light == tok.Dark && !tok.SameInBothThemes {
 			t.Errorf("token %q has identical light and dark values; mark SameInBothThemes if that is intended", tok.Name)
+		}
+	}
+}
+
+// The header is a solid token, so the ratio below is the colour that is painted.
+// In dark it must lift off both the sidebar and the page ground; in light the
+// header is the white surface, so the sidebar's pale tint is the only fill
+// it has to separate from, and the bottom border carries the rest.
+func TestHeaderIsDistinctFromSidebarAndPage(t *testing.T) {
+	cases := []struct {
+		dark    bool
+		against string
+		min     float64
+	}{
+		{true, "sidebar", 1.3},
+		{true, "surface-sunken", 1.3},
+		{false, "sidebar", 1.05},
+	}
+	for _, c := range cases {
+		theme := map[bool]string{false: "light", true: "dark"}[c.dark]
+		got := contrast(tokenValue(t, "header", c.dark), tokenValue(t, c.against, c.dark))
+		if got < c.min {
+			t.Errorf("%s: header against %s = %.2f:1, want at least %.2f:1", theme, c.against, got, c.min)
 		}
 	}
 }
