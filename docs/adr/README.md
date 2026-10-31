@@ -2,13 +2,13 @@
 
 Each record explains one decision that is hard to reverse once code depends on it: what was chosen, what was rejected, and what it costs. Records are never deleted. When a later decision changes an earlier one, the earlier record links forward and its status below says so.
 
-New records take the next free number here. This directory is the single, public set of tanGO's decisions.
+New records take the next free number here. Numbers 0060 and 0065 to 0068 are unused; 0065 was renumbered to 0069. This directory is the single, public set of tanGO's decisions.
 
 | # | Decision | Status |
 |---|---|---|
 | [0001](0001-design-principles.md) | Founding Design Principles | Accepted |
 | [0002](0002-chi-as-internal-router.md) | Use Chi as an Internal Router | Accepted |
-| [0003](0003-tailwind-play-cdn-for-admin-theme.md) | Use Tailwind's Play CDN for the Admin Default Theme | Accepted |
+| [0003](0003-tailwind-play-cdn-for-admin-theme.md) | Use Tailwind's Play CDN for the Admin Default Theme | Accepted; the Play CDN delivery is superseded by the precompiled stylesheet in [0069](0069-the-admin-redesign-adopts-a-component-layer-framework-owned-plain-language-messages-and-a-strict-csp-compatible-look.md) |
 | [0004](0004-explicit-dialect-for-postgresql-support.md) | Explicit `Dialect` argument for PostgreSQL support | Accepted; env-based loading added later (see note) |
 | [0005](0005-yaegi-for-tango-shell.md) | Yaegi as the direction for `tango shell` | Accepted; a 2026-10-09 spike found it workable with limits; built as described in ADR 0048 |
 | [0006](0006-typed-go-migration-steps.md) | Migrations as typed Go steps, not raw SQL files | Accepted |
