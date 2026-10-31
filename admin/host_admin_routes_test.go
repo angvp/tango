@@ -31,6 +31,7 @@ func TestHostRoutesUnderTheAdminPrefixReceiveTheMethodsTheAdminAnswers(t *testin
 	}
 	registry.Routes().Include("/admin/reports/", tango.URLs{
 		tango.Path(http.MethodPut, "/{id}/", hostView),
+		tango.Path(http.MethodPatch, "/{id}/", hostView),
 		tango.Path(http.MethodDelete, "/{id}/", hostView),
 	})
 	if err := registry.RunRegistration(); err != nil {
@@ -41,7 +42,7 @@ func TestHostRoutesUnderTheAdminPrefixReceiveTheMethodsTheAdminAnswers(t *testin
 		t.Fatalf("build handler: %v", err)
 	}
 
-	for _, method := range []string{http.MethodPut, http.MethodDelete} {
+	for _, method := range []string{http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		response := doRequest(t, handler, method, "/admin/reports/1/", nil)
 		if response.Code != hostStatus {
 			t.Errorf("%s /admin/reports/1/ = %d, want the host handler's %d", method, response.Code, hostStatus)
