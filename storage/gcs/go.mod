@@ -8,7 +8,7 @@ require (
 	cloud.google.com/go/storage v1.70.0
 	github.com/angvp/tango v0.0.0
 	github.com/fsouza/fake-gcs-server v1.56.1
-	google.golang.org/api v0.308.0
+	google.golang.org/api v0.309.0
 )
 
 require (
