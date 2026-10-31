@@ -73,8 +73,20 @@ var declaredPairs = []pair{
 	{"danger-fg", "surface", 4.5, "field errors and the delete link"},
 	{"danger-fg", "danger-bg", 4.5, "delete link on hover"},
 	{"selection-fg", "selection-bg", 4.5, "selected text"},
-	{"sidebar-strong", "sidebar", 4.5, "active sidebar link and brand"},
-	{"sidebar-accent-fg", "sidebar-accent", 3, "brand mark glyph"},
+	{"sidebar-strong", "sidebar", 4.5, "brand name and the close control"},
+	{"sidebar-fg", "sidebar-pill-hover", 4.5, "sidebar link on hover"},
+	{"sidebar-strong", "sidebar-pill-hover", 4.5, "sidebar link text on hover"},
+	{"sidebar-fg", "sidebar-pill-current", 4.5, "current sidebar link"},
+	{"sidebar-strong", "sidebar-pill-current", 4.5, "current sidebar link text"},
+	{"sidebar-muted", "sidebar-pill-hover", 4.5, "sidebar footer text on a hovered pill"},
+	{"sidebar-accent-fg", "sidebar-accent", 4.5, "brand mark glyph and pressed theme choice"},
+	{"sidebar-accent", "sidebar", 3, "pressed theme choice boundary and brand mark"},
+	{"sidebar-accent", "sidebar-pill-current", 3, "current model dot"},
+	{"sidebar-dot", "sidebar", 3, "resting model dot"},
+	{"sidebar-dot", "sidebar-pill-hover", 3, "model dot on a hovered pill"},
+	{"ring", "sidebar", 3, "focus ring on the sidebar"},
+	{"ring", "sidebar-pill-hover", 3, "focus ring on a hovered pill"},
+	{"ring", "sidebar-pill-current", 3, "focus ring on the current pill"},
 	{"ring", "surface", 3, "focus ring on cards"},
 	{"ring", "surface-sunken", 3, "focus ring on the page"},
 	{"control-line", "surface", 3, "input and checkbox boundary"},
@@ -169,13 +181,21 @@ func TestPaletteCarriesTheBrandRoles(t *testing.T) {
 		{"accent-fg", true, ink},
 		{"surface", true, rgb{10, 26, 54}},
 		{"surface-sunken", true, rgb{5, 15, 34}},
+		{"sidebar", false, rgb{232, 246, 252}},
+		{"sidebar", true, rgb{10, 26, 54}},
+		{"sidebar-strong", false, ink},
+		{"sidebar-accent", false, navy},
+		{"sidebar-accent", true, cyan},
+		{"sidebar-accent-fg", true, ink},
+		{"sidebar-pill-current", false, rgb{200, 220, 238}},
+		{"sidebar-pill-current", true, rgb{8, 52, 84}},
 	}
 	for _, w := range want {
 		if got := tokenValue(t, w.name, w.dark); got != w.value {
 			t.Errorf("dark=%v token %s = %v, want %v", w.dark, w.name, got, w.value)
 		}
 	}
-	for _, name := range []string{"accent", "accent-hover", "accent-ui", "ring", "selection-bg", "selection-fg", "ink", "ink-muted", "ink-faint", "surface", "surface-sunken", "surface-hover"} {
+	for _, name := range []string{"accent", "accent-hover", "accent-ui", "ring", "selection-bg", "selection-fg", "ink", "ink-muted", "ink-faint", "surface", "surface-sunken", "surface-hover", "sidebar", "sidebar-fg", "sidebar-strong", "sidebar-muted", "sidebar-dot", "sidebar-accent", "sidebar-accent-fg", "sidebar-pill-hover", "sidebar-pill-current"} {
 		if tokenValue(t, name, false) == cyan {
 			t.Errorf("light token %s is cyan; cyan is a decorative fill on light surfaces", name)
 		}
@@ -184,5 +204,16 @@ func TestPaletteCarriesTheBrandRoles(t *testing.T) {
 		if tok.Dark == navy {
 			t.Errorf("dark token %s is navy; navy is never used on dark surfaces", tok.Name)
 		}
+	}
+}
+
+// The sidebar is a light surface in light and a dark-surface token in dark:
+// no dark-ink sidebar survives in either theme.
+func TestSidebarIsLightInLightAndDarkSurfaceInDark(t *testing.T) {
+	if got := luminance(tokenValue(t, "sidebar", false)); got < 0.85 {
+		t.Errorf("light sidebar luminance = %.2f, want a light ground (at least 0.85)", got)
+	}
+	if got := luminance(tokenValue(t, "sidebar", true)); got > 0.05 {
+		t.Errorf("dark sidebar luminance = %.2f, want a dark surface (at most 0.05)", got)
 	}
 }

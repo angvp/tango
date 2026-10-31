@@ -52,14 +52,18 @@ var palette = []themeToken{
 	{Name: "danger-solid-hover", Light: rgb{185, 28, 28}, Dark: rgb{185, 28, 28}, SameInBothThemes: true},
 	{Name: "danger-solid-fg", Light: rgb{255, 255, 255}, Dark: rgb{255, 255, 255}, SameInBothThemes: true},
 
-	// Sidebar: brand ink in light; a shade deeper than the content in dark.
-	{Name: "sidebar", Light: rgb{11, 31, 63}, Dark: rgb{2, 9, 22}},
-	{Name: "sidebar-fg", Light: rgb{203, 213, 225}, Dark: rgb{203, 213, 225}, SameInBothThemes: true},
-	{Name: "sidebar-strong", Light: rgb{255, 255, 255}, Dark: rgb{255, 255, 255}, SameInBothThemes: true},
-	{Name: "sidebar-muted", Light: rgb{148, 163, 184}, Dark: rgb{148, 163, 184}, SameInBothThemes: true},
-	{Name: "sidebar-dot", Light: rgb{71, 85, 105}, Dark: rgb{71, 85, 105}, SameInBothThemes: true},
-	{Name: "sidebar-accent", Light: rgb{1, 170, 222}, Dark: rgb{1, 170, 222}, SameInBothThemes: true},
-	{Name: "sidebar-accent-fg", Light: rgb{11, 31, 63}, Dark: rgb{11, 31, 63}, SameInBothThemes: true},
+	// Sidebar: the tinted ground in light and the card surface in dark. The
+	// current model is a navy-tinted pill in light and a cyan-tinted pill in
+	// dark; sidebar-accent is the brand mark and the pressed theme choice.
+	{Name: "sidebar", Light: rgb{232, 246, 252}, Dark: rgb{10, 26, 54}},
+	{Name: "sidebar-fg", Light: rgb{52, 70, 102}, Dark: rgb{203, 213, 225}},
+	{Name: "sidebar-strong", Light: rgb{11, 31, 63}, Dark: rgb{241, 245, 249}},
+	{Name: "sidebar-muted", Light: rgb{74, 93, 122}, Dark: rgb{148, 163, 184}},
+	{Name: "sidebar-dot", Light: rgb{116, 129, 148}, Dark: rgb{112, 128, 150}},
+	{Name: "sidebar-accent", Light: rgb{1, 59, 138}, Dark: rgb{1, 170, 222}},
+	{Name: "sidebar-accent-fg", Light: rgb{255, 255, 255}, Dark: rgb{11, 31, 63}},
+	{Name: "sidebar-pill-hover", Light: rgb{217, 235, 247}, Dark: rgb{20, 40, 76}},
+	{Name: "sidebar-pill-current", Light: rgb{200, 220, 238}, Dark: rgb{8, 52, 84}},
 
 	// Status family: background, text and border of each.
 	{Name: "success-bg", Light: rgb{209, 250, 229}, Dark: rgb{6, 78, 59}},
