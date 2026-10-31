@@ -18,13 +18,13 @@ config := tango.Config{
 Installed with no options, the middleware applies the strict baseline. For a response it wraps, the headers are:
 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-<value>'; style-src 'self' 'nonce-<value>'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'
+Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-<value>'; style-src 'self' 'nonce-<value>'; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
 X-Frame-Options: SAMEORIGIN
 ```
 
-Under the baseline, a page cannot run inline `<script>` or `<style>` unless the element carries the request's nonce, cannot use inline event-handler attributes or `style=` attributes, and cannot load script, style, images, fonts or frames from another origin. An application that already has inline blocks must add the nonce to them, or move them into files, before it installs the middleware.
+Under the baseline, a page cannot run inline `<script>` or `<style>` unless the element carries the request's nonce, cannot use inline event-handler attributes or `style=` attributes, and cannot load script, style, images, fonts or frames from another origin. A form can submit only to the application's own origin. An application that already has inline blocks must add the nonce to them, or move them into files, before it installs the middleware.
 
 Place `SecurityHeaders` outside `Recoverer`, as shown above. A 500 produced by a recovered panic then still carries the policy and the companion headers.
 
@@ -41,7 +41,7 @@ A policy is a `tango.CSP` value with one field per directive: `DefaultSrc`, `Scr
 | `tango.Data()` | `data:` |
 | `tango.Blob()` | `blob:` |
 | `tango.NonceSource()` | `'nonce-…'` for the request (see [Nonces](#nonces)) |
-| `tango.UnsafeInlineStyle()` | `'unsafe-inline'`, valid in `style-src` only |
+| `tango.UnsafeInlineStyle()` | `'unsafe-inline'`, valid in `style-src` only. `WithContentSecurityPolicy` panics when another directive carries it. |
 
 There is no raw-string constructor and no constant for `'unsafe-eval'`, `'unsafe-hashes'` or `'unsafe-inline'` in `script-src`. A misspelled directive or source fails to compile. The package renders the header in one fixed order and omits directives with no sources, so a given policy always produces the same header.
 

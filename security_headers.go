@@ -84,10 +84,15 @@ type SecurityHeaderOption func(*securityHeadersConfig)
 // WithContentSecurityPolicy sets the policy the middleware sends. The policy
 // is used exactly as written: it is not merged with the strict baseline. It
 // panics when the policy has no directives, because an empty policy would send
-// no Content-Security-Policy at all while the host believes one is applied.
+// no Content-Security-Policy at all while the host believes one is applied. It
+// also panics when UnsafeInlineStyle appears in any directive other than
+// style-src.
 func WithContentSecurityPolicy(policy CSP) SecurityHeaderOption {
 	if policy.render("") == "" {
 		panic("tango: Content-Security-Policy has no directives")
+	}
+	if directive := policy.misplacedUnsafeInlineStyle(); directive != "" {
+		panic("tango: UnsafeInlineStyle is valid only in style-src, not in " + directive)
 	}
 	return func(config *securityHeadersConfig) {
 		config.policy = cloneCSP(policy)
@@ -160,12 +165,14 @@ type CSP struct {
 
 // StrictCSP returns the baseline policy that SecurityHeaders applies when no
 // policy option is given. Each call returns a new value, so a caller may
-// modify its copy without changing the middleware's baseline.
+// modify its copy without changing the middleware's baseline. FormAction is
+// set here because form-action does not fall back to default-src.
 func StrictCSP() CSP {
 	return CSP{
 		DefaultSrc:     []Source{Self()},
 		ScriptSrc:      []Source{Self(), NonceSource()},
 		StyleSrc:       []Source{Self(), NonceSource()},
+		FormAction:     []Source{Self()},
 		ObjectSrc:      []Source{None()},
 		BaseURI:        []Source{Self()},
 		FrameAncestors: []Source{Self()},
@@ -191,6 +198,22 @@ func (p CSP) directives() []cspDirective {
 		{"base-uri", p.BaseURI},
 		{"frame-ancestors", p.FrameAncestors},
 	}
+}
+
+// misplacedUnsafeInlineStyle returns the name of the first directive other
+// than style-src that carries UnsafeInlineStyle, or "" when none does.
+func (p CSP) misplacedUnsafeInlineStyle() string {
+	for _, d := range p.directives() {
+		if d.name == "style-src" {
+			continue
+		}
+		for _, s := range d.sources {
+			if s.kind == sourceUnsafeInlineStyle {
+				return d.name
+			}
+		}
+	}
+	return ""
 }
 
 // usesNonce reports whether any directive carries NonceSource.
@@ -287,8 +310,8 @@ func Data() Source { return Source{kind: sourceData} }
 func Blob() Source { return Source{kind: sourceBlob} }
 
 // UnsafeInlineStyle is the 'unsafe-inline' source. It is valid in style-src
-// only, and exists for the one route that needs inline styles. Placing it in
-// another directive is a caller error the type does not prevent.
+// only, and exists for the one route that needs inline styles. WithContentSecurityPolicy
+// panics when another directive carries it.
 func UnsafeInlineStyle() Source { return Source{kind: sourceUnsafeInlineStyle} }
 
 // NonceSource is the per-request nonce source. The middleware generates one

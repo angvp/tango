@@ -104,7 +104,7 @@ func TestTheHomePageUsesThePerRequestNonce(t *testing.T) {
 	}
 	nonce := match[1]
 	assertHeader(t, rec, "Content-Security-Policy",
-		"default-src 'self'; script-src 'self' 'nonce-"+nonce+"'; style-src 'self' 'nonce-"+nonce+"'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'")
+		"default-src 'self'; script-src 'self' 'nonce-"+nonce+"'; style-src 'self' 'nonce-"+nonce+"'; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'")
 	assertHeader(t, rec, "X-Frame-Options", "SAMEORIGIN")
 	if !strings.Contains(rec.Body.String(), ` nonce="`+nonce+`"`) {
 		t.Errorf("the page does not render the header's nonce:\n%s", rec.Body.String())

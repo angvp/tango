@@ -42,7 +42,7 @@ func TestSecurityHeadersEnabledWithoutPolicyAppliesStrictBaselineAndCompanionDef
 	defer restore()
 	response := serveThroughSecurityHeaders(t, tango.SecurityHeaders())
 
-	const wantCSP = "default-src 'self'; script-src 'self' 'nonce-AAAAAAAAAAAAAAAAAAAAAA=='; style-src 'self' 'nonce-AAAAAAAAAAAAAAAAAAAAAA=='; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+	const wantCSP = "default-src 'self'; script-src 'self' 'nonce-AAAAAAAAAAAAAAAAAAAAAA=='; style-src 'self' 'nonce-AAAAAAAAAAAAAAAAAAAAAA=='; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
 	if got := response.Header().Get("Content-Security-Policy"); got != wantCSP {
 		t.Fatalf("Content-Security-Policy = %q, want %q", got, wantCSP)
 	}
@@ -110,6 +110,54 @@ func TestSecurityHeadersUnsafeInlineStyleRendersAsUnsafeInlineInStyleSrc(t *test
 
 	if got := response.Header().Get("Content-Security-Policy"); got != "style-src 'self' 'unsafe-inline'" {
 		t.Fatalf("Content-Security-Policy = %q, want %q", got, "style-src 'self' 'unsafe-inline'")
+	}
+}
+
+func TestSecurityHeadersUnsafeInlineStyleOutsideStyleSrcIsRejected(t *testing.T) {
+	tests := []struct {
+		directive string
+		policy    tango.CSP
+	}{
+		{"default-src", tango.CSP{DefaultSrc: []tango.Source{tango.Self(), tango.UnsafeInlineStyle()}}},
+		{"script-src", tango.CSP{ScriptSrc: []tango.Source{tango.Self(), tango.UnsafeInlineStyle()}}},
+		{"img-src", tango.CSP{ImgSrc: []tango.Source{tango.Self(), tango.UnsafeInlineStyle()}}},
+		{"font-src", tango.CSP{FontSrc: []tango.Source{tango.Self(), tango.UnsafeInlineStyle()}}},
+		{"connect-src", tango.CSP{ConnectSrc: []tango.Source{tango.Self(), tango.UnsafeInlineStyle()}}},
+		{"form-action", tango.CSP{FormAction: []tango.Source{tango.Self(), tango.UnsafeInlineStyle()}}},
+		{"object-src", tango.CSP{ObjectSrc: []tango.Source{tango.UnsafeInlineStyle()}}},
+		{"base-uri", tango.CSP{BaseURI: []tango.Source{tango.Self(), tango.UnsafeInlineStyle()}}},
+		{"frame-ancestors", tango.CSP{FrameAncestors: []tango.Source{tango.Self(), tango.UnsafeInlineStyle()}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.directive, func(t *testing.T) {
+			const want = "tango: UnsafeInlineStyle is valid only in style-src"
+			defer func() {
+				got := recover()
+				if got == nil {
+					t.Fatalf("WithContentSecurityPolicy did not panic for UnsafeInlineStyle in %s", tt.directive)
+				}
+				if message, _ := got.(string); message != want+", not in "+tt.directive {
+					t.Fatalf("panic = %q, want %q", got, want+", not in "+tt.directive)
+				}
+			}()
+			tango.WithContentSecurityPolicy(tt.policy)
+		})
+	}
+}
+
+func TestSecurityHeadersStrictCSPRestrictsFormActionToSelf(t *testing.T) {
+	restore := tango.SetNonceRandomSourceForTest(zeroRandomSource{})
+	defer restore()
+	response := serveThroughSecurityHeaders(t, tango.SecurityHeaders())
+
+	var formAction string
+	for _, directive := range strings.Split(response.Header().Get("Content-Security-Policy"), "; ") {
+		if strings.HasPrefix(directive, "form-action") {
+			formAction = directive
+		}
+	}
+	if want := "form-action 'self'"; formAction != want {
+		t.Fatalf("StrictCSP form-action directive = %q, want %q", formAction, want)
 	}
 }
 
