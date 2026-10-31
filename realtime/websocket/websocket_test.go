@@ -174,6 +174,19 @@ func TestAccessLoggerPreservesRealWebSocketUpgrade(t *testing.T) {
 	}
 }
 
+func TestSecurityHeadersPreservesRealWebSocketUpgrade(t *testing.T) {
+	fc := &fakeCoordinator{}
+	handler := buildHandlerWithMiddleware(t, fc, alwaysAuth("alice"), fixedRoom("room-1"), tango.SecurityHeaders())
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	conn, _, err := ws.Dial(context.Background(), toWSURL(server.URL)+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial through SecurityHeaders: %v", err)
+	}
+	_ = conn.Close(ws.StatusNormalClosure, "")
+}
+
 func TestAuthenticationFailureNeverUpgrades(t *testing.T) {
 	fc := &fakeCoordinator{}
 	deniedAuth := func(*http.Request) (realtime.Principal, error) {
