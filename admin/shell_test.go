@@ -218,3 +218,23 @@ func TestShellRendersNoInlineScriptStyleOrHandler(t *testing.T) {
 		}
 	}
 }
+
+func TestBulkDialogBackdropUsesTheScrimToken(t *testing.T) {
+	doc := parseShell(t, shellPages(t)["list"])
+	dialogs := findAll(doc, func(n *html.Node) bool { _, ok := attrOf(n, "data-bulk-dialog"); return n.Data == "dialog" && ok })
+	if len(dialogs) != 1 {
+		t.Fatalf("%d bulk dialogs, want 1", len(dialogs))
+	}
+	classes := strings.Fields(attrValue(dialogs[0], "class"))
+	has := func(c string) bool {
+		for _, x := range classes {
+			if x == c {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("backdrop:bg-scrim/60") || has("backdrop:bg-sidebar/50") {
+		t.Errorf("dialog classes = %q, want the scrim backdrop", classes)
+	}
+}

@@ -65,6 +65,11 @@ var palette = []themeToken{
 	{Name: "sidebar-pill-hover", Light: rgb{217, 235, 247}, Dark: rgb{20, 40, 76}},
 	{Name: "sidebar-pill-current", Light: rgb{200, 220, 238}, Dark: rgb{8, 52, 84}},
 
+	// Scrim: the dimming layer behind the phone drawer and the bulk delete
+	// dialog. Ink over a light page, black over a dark one, so the page behind
+	// darkens in both themes.
+	{Name: "scrim", Light: rgb{11, 31, 63}, Dark: rgb{0, 0, 0}},
+
 	// Status family: background, text and border of each.
 	{Name: "success-bg", Light: rgb{209, 250, 229}, Dark: rgb{6, 78, 59}},
 	{Name: "success-fg", Light: rgb{4, 120, 87}, Dark: rgb{110, 231, 183}},

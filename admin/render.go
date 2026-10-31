@@ -42,7 +42,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       <button type="button" class="btn-danger" data-bulk-open disabled>{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
       <span class="text-sm text-ink-muted" data-bulk-count aria-live="polite"></span>
     </div>
-    <dialog class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-line bg-surface p-0 text-ink shadow-lg backdrop:bg-sidebar/50" data-bulk-dialog aria-labelledby="bulk-title">
+    <dialog class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-line bg-surface p-0 text-ink shadow-lg backdrop:bg-scrim/60" data-bulk-dialog aria-labelledby="bulk-title">
       <form method="post" action="{{.BasePath}}delete-selected/" class="p-5" data-bulk-form>
         <input type="hidden" name="csrf_token" value="{{.SignedIn.CSRFToken}}">
         <input type="hidden" name="return_to" value="{{.ReturnTo}}">

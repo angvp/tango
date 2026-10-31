@@ -189,6 +189,8 @@ func TestPaletteCarriesTheBrandRoles(t *testing.T) {
 		{"sidebar-accent-fg", true, ink},
 		{"sidebar-pill-current", false, rgb{200, 220, 238}},
 		{"sidebar-pill-current", true, rgb{8, 52, 84}},
+		{"scrim", false, ink},
+		{"scrim", true, rgb{0, 0, 0}},
 	}
 	for _, w := range want {
 		if got := tokenValue(t, w.name, w.dark); got != w.value {
@@ -208,12 +210,54 @@ func TestPaletteCarriesTheBrandRoles(t *testing.T) {
 }
 
 // The sidebar is a light surface in light and a dark-surface token in dark:
-// no dark-ink sidebar survives in either theme.
+// the sidebar takes a surface ground in each theme, never the old dark ink.
 func TestSidebarIsLightInLightAndDarkSurfaceInDark(t *testing.T) {
 	if got := luminance(tokenValue(t, "sidebar", false)); got < 0.85 {
 		t.Errorf("light sidebar luminance = %.2f, want a light ground (at least 0.85)", got)
 	}
 	if got := luminance(tokenValue(t, "sidebar", true)); got > 0.05 {
 		t.Errorf("dark sidebar luminance = %.2f, want a dark surface (at most 0.05)", got)
+	}
+}
+
+// scrimAlpha is the opacity the stylesheet applies to the scrim token
+// (bg-scrim/60); the smoke reads the computed backdrop colour to keep the two
+// equal.
+const scrimAlpha = 0.6
+
+func blend(over rgb, alpha float64, under rgb) rgb {
+	var out rgb
+	for i := range out {
+		out[i] = uint8(math.Round(float64(over[i])*alpha + float64(under[i])*(1-alpha)))
+	}
+	return out
+}
+
+// The scrim darkens the page behind the phone drawer and the bulk delete
+// dialog in both themes. It is drawn over the page ground (surface-sunken) and
+// over cards (surface).
+func TestScrimDarkensThePageInBothThemes(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		for _, underlay := range []string{"surface", "surface-sunken"} {
+			under := tokenValue(t, underlay, dark)
+			dimmed := blend(tokenValue(t, "scrim", dark), scrimAlpha, under)
+			if got, ceiling := luminance(dimmed), luminance(under)/2; got > ceiling {
+				t.Errorf("dark=%v scrim over %s: luminance %.4f, want at most %.4f (half the page's)", dark, underlay, got, ceiling)
+			}
+		}
+	}
+}
+
+// The open drawer has to read against the dimmed page. In light its ground is
+// pale against a dimmed page. In dark the drawer and the page are both near
+// black, so no scrim separates them by fill: the drawer's edge does.
+func TestOpenDrawerIsDistinctFromTheDimmedPage(t *testing.T) {
+	light := blend(tokenValue(t, "scrim", false), scrimAlpha, tokenValue(t, "surface-sunken", false))
+	if got := contrast(tokenValue(t, "sidebar", false), light); got < 3 {
+		t.Errorf("light: drawer against the dimmed page = %.2f:1, want at least 3:1", got)
+	}
+	dark := blend(tokenValue(t, "scrim", true), scrimAlpha, tokenValue(t, "surface-sunken", true))
+	if got := contrast(tokenValue(t, "line-strong", true), dark); got < 1.8 {
+		t.Errorf("dark: drawer edge against the dimmed page = %.2f:1, want at least 1.8:1", got)
 	}
 }

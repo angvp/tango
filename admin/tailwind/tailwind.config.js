@@ -12,6 +12,7 @@ const OPACITY_TOKENS = [
   'danger-bg', 'danger-fg', 'danger-border',
   'warning-bg', 'warning-fg', 'warning-border',
   'neutral-bg', 'neutral-fg', 'neutral-border',
+  'scrim',
 ];
 
 // Tailwind's default opacity scale.
@@ -68,6 +69,7 @@ module.exports = {
       'neutral-bg': 'rgb(var(--neutral-bg) / <alpha-value>)',
       'neutral-fg': 'rgb(var(--neutral-fg) / <alpha-value>)',
       'neutral-border': 'rgb(var(--neutral-border) / <alpha-value>)',
+      'scrim': 'rgb(var(--scrim) / <alpha-value>)',
       },
     },
   },
@@ -76,7 +78,7 @@ module.exports = {
   // are always generated.
   safelist: [
     {
-      pattern: /^(text|bg|border|ring)-(ink|surface|line|control-line|accent|ring|selection|danger-solid|sidebar|success|danger|warning|neutral)(-[a-z]+)*$/,
+      pattern: /^(text|bg|border|ring)-(ink|surface|line|control-line|accent|ring|selection|danger-solid|sidebar|success|danger|warning|neutral|scrim)(-[a-z]+)*$/,
     },
     // Opacity modifiers (text-ink/60) on the same token utilities. The steps
     // are Tailwind's default opacity scale, listed explicitly so the set does
