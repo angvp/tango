@@ -34,6 +34,10 @@ The admin ships English only; this example supplies the rest. `catalog_es.go` is
 
 `i18n_test.go` walks the admin pages in `es` and `es-MX`, fails on any key the catalog lacks, and checks `i18n.Validate`. It is the pattern to copy for your own catalogs. See the [i18n guide](../../docs/guides/i18n.md).
 
+## Content Security Policy
+
+This example runs under a Content-Security-Policy, so its wiring can be copied as is. `main.go` installs `tango.SecurityHeaders` with `tango.StrictCSP()` for every response, which allows only the application's own origin and inline script or style that carries the request's nonce. The home page in `apps/home` is the one application template that uses the nonce: it passes `tango.CSPNonce` into its data and renders `{{NonceAttr .Nonce}}` on its `<style>` element. The admin composes `admin.ContentSecurityPolicy()` into its own tier, because its pages need a policy of their own and `/admin/` takes that policy in place of the global one. `security_test.go` checks the headers of the admin login, the home page and the JSON API, and scans the rendered markup of the admin login and the home page. The policy names no third-party origin; add one only when a page needs it. See the [content security policy guide](../../docs/guides/content-security-policy.md).
+
 ## Configuration
 
 - `TANGO_DB_DSN` picks the database and defaults to `sqlite://app.db`.

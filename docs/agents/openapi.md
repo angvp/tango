@@ -6,7 +6,7 @@ Canonical files: `openapi/openapi.go`, `openapi/build.go`, `openapi/schema.go`, 
 
 ## Rule
 
-- Install `openapi.New(openapi.Options{Title, Version})` in `InstalledApps`; nothing is served otherwise. `openapi.Dev(...)` takes the same options and serves only when `TANGO_OPENAPI=1`: prefer it for a project that deploys. Add `UI: swaggerui.New()` only when a browsable page is wanted (it adds about 1.7 MB).
+- Install `openapi.New(openapi.Options{Title, Version})` in `InstalledApps`; nothing is served otherwise. `openapi.Dev(...)` takes the same options and serves only when `TANGO_OPENAPI=1`: prefer it for a project that deploys. Add `UI: swaggerui.New()` only when a browsable page is wanted (it adds about 1.7 MB). Under a strict Content-Security-Policy, use `swaggerui.New(swaggerui.WithContentSecurityPolicy(policy))`; see `content-security-policy.md`.
 - Every included route is listed automatically. Add detail with `tango.Doc(tango.RouteDoc{...})` as a route option: `Summary`, `Body`, `Query`, `Responses` (status to a sample value; `nil` for no body), `Bearer`, `Tags`.
 - Pass sample values of the right Go type (`Pet{}`, `[]Pet{}`, `&Pet{}`); the type is what is read. Schemas follow `encoding/json` tags; a pointer or `omitempty` field is optional.
 - Hide a route with `RouteDoc{Hidden: true}`, or a path prefix with `Options.ExcludePrefixes`. Pages for browsers (admin, HTML forms) are not API: hide them.

@@ -18,6 +18,7 @@ import (
 	"github.com/angvp/tango/observability"
 
 	"api-with-admin/apps/authors"
+	"api-with-admin/apps/home"
 	"api-with-admin/apps/locale"
 	"api-with-admin/apps/posts"
 	"api-with-admin/migrations"
@@ -78,12 +79,22 @@ func appConfig(store *db.Store, sqlDB *sql.DB, dialect db.Dialect, window *obser
 	// The admin and the Spanish catalogs: a request picks its language from
 	// ?lang=, then the lang cookie, then Accept-Language (see apps/locale).
 	registerCatalogs()
-	config.Middleware = []tango.Middleware{i18n.MiddlewareResolver(locale.Resolver())}
+	// Every response carries the strict baseline policy. Its nonce is what
+	// the home page's template uses. The admin composes its own policy into
+	// its tier, which replaces this one for /admin/ pages.
+	config.Middleware = []tango.Middleware{
+		tango.SecurityHeaders(tango.WithContentSecurityPolicy(tango.StrictCSP())),
+		i18n.MiddlewareResolver(locale.Resolver()),
+	}
 	config.InstalledApps = []tango.App{
 		posts.New(store),
 		authors.New(),
 		locale.New(),
-		admin.New(store, admin.WithDashboard(dashboard)),
+		home.New(),
+		admin.New(store,
+			admin.WithDashboard(dashboard),
+			admin.WithMiddleware(tango.SecurityHeaders(tango.WithContentSecurityPolicy(admin.ContentSecurityPolicy()))),
+		),
 	}
 	finished = config
 	return config

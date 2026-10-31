@@ -66,6 +66,21 @@ Before a release that changes anything under `admin/`, look at the admin in both
 
 Check that text stays legible on every surface, the focus ring is visible, the sidebar reads as part of the page, and nothing is clipped on the phone.
 
+### Admin stylesheet and browser checks
+
+The admin's stylesheet, `admin/assets/admin.css`, is generated from `admin/tailwind/` and the classes the admin's templates use. Regenerate it with the pinned Tailwind CSS v3.4.19 standalone CLI, obtained from the Tailwind release page and checked against the release's SHA-256, whenever a template's classes or the Tailwind inputs change:
+
+```sh
+scripts/admin-css.sh /path/to/tailwindcss        # regenerates admin/assets/admin.css
+scripts/admin-css.sh /path/to/tailwindcss --check # fails when the committed file is stale
+```
+
+The CI job **admin stylesheet freshness** runs the `--check` form with the pinned CLI. `scripts/check.sh` runs the same check when `TAILWIND_CLI` names that binary, and prints SKIPPED otherwise.
+
+The CI job **browser CSP smoke** runs `browsersmoke`, a separate Go module, in Chrome as the runner image provides it. It loads the accounts pages, the admin login, dashboard, changelist, change form, navigation toggle and Markdown preview, and the Swagger UI page. It fails on any CSP violation, browser security-log entry or cross-origin request it observes, and it checks each page's `Content-Security-Policy` header against its expected value, including the Swagger UI page's relaxed one. Chrome's version is not pinned in this repository. The job prints the version it ran with, so a failure can be matched to a browser build.
+
+Before a release that changes how served objects are displayed, check the sandbox policy that `storage.Serve` sends by default (`sandbox; default-src 'none'`). Serve an uploaded PDF inline through a route whose `ServeOptions` list `application/pdf` in `InlineTypes`, open it in each browser the release names as supported, and confirm it displays. If a browser does not display it, state in the release notes which route needs `SkipSandboxPolicy`.
+
 ## After the tag
 
 The Release job refuses the tag, creating nothing, unless the tagged commit is on `main`, CI passed on that exact commit, the changelog has a dated section for the version, the version's migration-compat corpus is committed and listed, a patch release has no incompatible change, and the module proxy doesn't already serve the tag from another commit. It then creates the GitHub release and moves the website. Its outcomes:

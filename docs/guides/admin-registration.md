@@ -355,7 +355,7 @@ Omit it — `admin.New(store)` with no options — and the sidebar shows tanGO's
 
 Every admin page follows the browser's light or dark preference, with no setup. Signed-in staff can also choose **Light**, **Dark** or **System** from the sidebar footer. Light and Dark are remembered in a cookie named `tango_admin_theme`, scoped to `/admin/`, set only after the staff session and CSRF token check out; System removes it again. The login page uses the cookie when there is one and the browser's preference otherwise; it has no switch. The switch is a plain form post, so it works without JavaScript.
 
-The admin's colours are semantic tokens, not fixed palette colours, and one table in the `admin` package defines each token's light and dark value. Widgets you write should use the same token classes in the HTML they return, so they follow the theme:
+The admin's colours are semantic tokens, not fixed palette colours, and the admin's stylesheet defines each token's light and dark value. Widgets you write should use the same token classes in the HTML they return, so they follow the theme:
 
 | Use | Classes |
 | --- | --- |
@@ -365,9 +365,23 @@ The admin's colours are semantic tokens, not fixed palette colours, and one tabl
 | Accent | `bg-accent` with `text-accent-fg`, `text-accent-ui`, `ring-ring` |
 | Status | `bg-success-bg text-success-fg border-success-border`, and the same for `danger`, `warning` and `neutral` |
 
+The admin's stylesheet is precompiled and ships with the admin. Widgets can rely on the token utilities above, for the `text-`, `bg-`, `border-` and `ring-` prefixes. Other Tailwind classes in the stylesheet belong to the admin's own templates and a release may change them, so a widget that needs other styling ships its own stylesheet, served from a content-hashed URL.
+
 A widget that hard-codes light colours stays light inside a dark admin; fixing it is the widget's job, as there is no theming hook. Branding's `LogoURL` is shown as is, so use a logo that reads on the dark sidebar, which looks the same in both themes apart from a slightly deeper shade in dark.
 
 The Markdown field's preview is deliberately a white canvas in both themes. It is an isolated, sandboxed page, so it shows what your renderer produced and is not a promise that the text matches your public site, whose styling and dark-mode behaviour are yours to own.
+
+## Content Security Policy
+
+The admin sends no Content-Security-Policy by default. A host runs the admin's pages under `admin.ContentSecurityPolicy()` by composing it into the admin tier:
+
+```go
+admin.New(store, admin.WithMiddleware(
+	tango.SecurityHeaders(tango.WithContentSecurityPolicy(admin.ContentSecurityPolicy())),
+))
+```
+
+Under that policy the admin's own pages run no inline script or style, no inline event handler and no third-party resource. Host widgets and templates are the host's code: an inline `style` attribute or an inline event handler in a widget's markup is blocked. The [content security policy guide](content-security-policy.md#the-admin) covers logo origins, the Markdown preview and the rest.
 
 ## Operator checklist
 
@@ -376,7 +390,7 @@ Automated tests pin the admin's structural markup: labels, `aria-invalid` and `a
 - **Focus order.** Tab through a create or edit form, and through a changelist with filters. Focus moves in reading order, every control shows a visible focus ring, and nothing traps it.
 - **Keyboard.** Every control works without a mouse: filter selects, Search, and the **Edit**/**Formatted** and **Write**/**Preview** tabs (Left, Right, Home and End move between tabs). After a refused save, the error appears beside its field.
 - **Screen reader.** A field with help text or an error reads its label, then the help text and the error. The search box and each filter announce their labels. The table announces its caption and column headers. The Markdown character count and the preview status are announced as they change.
-- **Contrast.** Text, help text, errors and focus rings stay readable against their backgrounds. The admin loads Tailwind from a CDN, so check the pages as you actually deploy them.
+- **Contrast.** Text, help text, errors and focus rings stay readable against their backgrounds. Check the pages as you actually deploy them, with your own styles and widgets in place.
 - **Responsive layout.** At a narrow width the filters wrap, the table scrolls rather than breaking the page, and the form controls stay usable.
 - **JSON Formatted tab.** On a JSON field, **Formatted** shows valid JSON indented and invalid text with a visible error, and never changes the textarea unless you choose **Use this formatting**. With JavaScript off, the field is a plain textarea and the server still refuses invalid JSON.
 - **Markdown Preview.** With a preview renderer set, **Preview** shows the rendered text in a frame that runs no script, loads nothing and cannot navigate the admin page. A renderer error shows in the Preview tab and never changes the text.

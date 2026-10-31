@@ -13,7 +13,7 @@ Canonical files: `middleware.go`, `routeregistry.go`, `accounts/require_login.go
 
 - Panic recovery with `tango.Recoverer()`.
 - Correlation IDs with `tango.RequestID()` and structured access events with `tango.AccessLogger()`.
-- CORS, compression, security headers, or other raw `net/http` concerns.
+- CORS, compression, security headers, or other raw `net/http` concerns. Content-Security-Policy and its companion headers are in `content-security-policy.md`.
 
 - Request body limits with `tango.MaxBodySize(n)` (`n` must be positive; it panics otherwise). The most restrictive limit on a request wins: a limit closer to the View can lower an outer limit, never raise it. A route that needs larger bodies must be left outside the global limit, for example in a separately mounted group with its own `WithMiddleware(tango.MaxBodySize(...))`.
 

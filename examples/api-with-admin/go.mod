@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/angvp/tango v0.0.0
+	golang.org/x/net v0.61.0
 	modernc.org/sqlite v1.61.0
 )
 

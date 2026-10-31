@@ -21,6 +21,7 @@ Read in this order:
 - Relationships: `relationships.md`.
 - Reusable package: `reusable-apps.md`.
 - Request cross-cutting concern: `middleware.md`; use `ratelimit.md` for quotas and `observability.md` for logs/metrics.
+- Security headers, a Content-Security-Policy, or inline script and style under a nonce, including the admin under a policy: `content-security-policy.md`; pair with `middleware.md`.
 - An operational overview at `/admin/` (database and migration status, recent request and job activity): `admin-dashboard.md`; pair with `observability.md`.
 - Publishing or exporting an OpenAPI document or Swagger UI for the routes: `openapi.md`.
 - Locale-aware text: `i18n.md`.

@@ -92,7 +92,7 @@ The project's own binary produces it (`go run . -tango-openapi`), and the output
 
 ## Swagger UI
 
-`swaggerui.New()` serves Swagger UI 5.17.14 from the binary: no network request, and no inline script, so a Content-Security-Policy that allows same-origin scripts works (Swagger UI sets inline styles, so `style-src` needs `'unsafe-inline'`). Its Authorize button takes a bearer token for routes marked `Bearer`. Importing the package adds about 1.7 MB to the binary, which is why it is separate: an app that only wants the document leaves it out.
+`swaggerui.New()` serves Swagger UI 5.17.14 from the binary: no network request, and no inline script, so a Content-Security-Policy that allows same-origin scripts works. Swagger UI writes inline styles, so under a strict policy the page needs three relaxations. `swaggerui.New(swaggerui.WithContentSecurityPolicy(policy))` grants them on the UI page's route only; see the [content security policy guide](content-security-policy.md#swagger-ui). Its Authorize button takes a bearer token for routes marked `Bearer`. Importing the package adds about 1.7 MB to the binary, which is why it is separate: an app that only wants the document leaves it out.
 
 ## Limits
 
