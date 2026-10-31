@@ -24,7 +24,7 @@ go run .
 
 To add tanGO to an existing module instead, run `go get github.com/angvp/tango`. The `tango` CLI is optional but recommended: it wraps `go run`/`go build` with a few conventions the framework expects your `main.go` to implement.
 
-![The tanGO admin listing posts, with search and per-row edit and delete](docs/images/admin-post-list.png)
+![The tanGO admin in the light theme, listing posts with a search box, row selection and a bulk-delete bar, and per-row edit and delete](docs/images/admin-post-list.png)
 
 *The server-rendered admin over two models, from [`examples/api-with-admin`](examples/api-with-admin).*
 
