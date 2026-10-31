@@ -100,6 +100,16 @@ func setDashboardFeed(status admin.DashboardStatus, err error) chromedp.Action[c
 	})
 }
 
+// captureNote refers to a captureBook, so the photographs show a foreign key
+// select with its empty choice and its add button. Copies is a number, so a
+// save that submits a word for it is a field problem.
+type captureNote struct {
+	ID     int64 `tango:"pk"`
+	Title  string
+	Copies int
+	BookID int64 `tango:"fk=captureBook"`
+}
+
 // seededEntries is more than one page of entries, and half of them are
 // published, so a filter leaves a page that still shows its summary.
 const seededEntries = 30
@@ -111,7 +121,7 @@ type captureTag struct {
 
 func captureApp() tango.App {
 	return tango.NewApp("capture", func(registry *tango.Registry) error {
-		for _, value := range []any{captureBook{}, captureTag{}, captureEntry{}, captureDraft{}} {
+		for _, value := range []any{captureBook{}, captureTag{}, captureEntry{}, captureDraft{}, captureNote{}} {
 			if err := registry.Models().Register(value); err != nil {
 				return err
 			}
@@ -120,6 +130,13 @@ func captureApp() tango.App {
 			ListDisplay: []string{"Title", "Pages"},
 			Search:      []string{"Title"},
 			BulkDelete:  true,
+			Label:       "Title",
+		}); err != nil {
+			return err
+		}
+		if err := registry.Admin().Register(captureNote{}, admin.Options{
+			ListDisplay: []string{"Title", "Copies"},
+			Search:      []string{"Title"},
 		}); err != nil {
 			return err
 		}
@@ -144,7 +161,7 @@ func captureApp() tango.App {
 func site(t *testing.T) http.Handler {
 	t.Helper()
 	models := model.NewRegistry()
-	for _, value := range []any{admin.AdminUser{}, admin.AdminSession{}, captureBook{}, captureTag{}, captureEntry{}, captureDraft{}} {
+	for _, value := range []any{admin.AdminUser{}, admin.AdminSession{}, captureBook{}, captureTag{}, captureEntry{}, captureDraft{}, captureNote{}} {
 		if err := models.Register(value); err != nil {
 			t.Fatalf("register %T: %v", value, err)
 		}
@@ -182,6 +199,9 @@ func site(t *testing.T) http.Handler {
 		if _, err := sqlDB.Exec(`INSERT INTO capture_entry (id, title, published) VALUES (?, ?, ?)`, i, fmt.Sprintf("Entry %02d", i), i%2 == 0); err != nil {
 			t.Fatalf("seed entry: %v", err)
 		}
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO capture_note (id, title, copies, book_id) VALUES (1, 'Margin notes', 2, 3)`); err != nil {
+		t.Fatalf("seed note: %v", err)
 	}
 	registry, err := tango.BuildRegistry(tango.Config{
 		InstalledApps: []tango.App{
@@ -412,6 +432,23 @@ var signedInShots = []shot{
 				})
 				return err
 			}),
+		}
+	}},
+	{name: "fk-create-form", ready: "select#field-BookID", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_note/new/")}
+	}},
+	{name: "fk-edit-form", ready: "select#field-BookID", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_note/1/")}
+	}},
+	{name: "create-form-failed-save-summary", ready: "#form-summary", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_note/new/"),
+			chromedp.WaitVisible("#field-Copies"),
+			script(`document.getElementById('field-Copies').type = 'text'`),
+			script(`var book = document.getElementById('field-BookID'); book.add(new Option('x', 'x')); book.value = 'x'`),
+			chromedp.SendKeys("#field-Title", "Two problems"),
+			chromedp.SendKeys("#field-Copies", "many"),
+			chromedp.Submit("#field-Title"),
 		}
 	}},
 	// Compact density is the last shot: its cookie outlives this step in the
