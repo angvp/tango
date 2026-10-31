@@ -198,9 +198,9 @@ func TestSpanishAdminPagesReadAsSpanish(t *testing.T) {
 		"changelist": "Buscar",
 		"create":     "Guardar",
 		"delete":     "Esta acción no se puede deshacer.",
-		"deleted":    "Se eliminó 1 fila.",
-		"deleted n":  "Se eliminaron 2 filas.",
-		"no results": "Nada coincide con",
+		"deleted":    "Se eliminó 1 post.",
+		"deleted n":  "Se eliminaron 2 posts.",
+		"no results": "No hay posts que coincidan con",
 	} {
 		if !strings.Contains(pages[name].body, want) {
 			t.Errorf("%s page lacks %q", name, want)
@@ -209,7 +209,7 @@ func TestSpanishAdminPagesReadAsSpanish(t *testing.T) {
 	if strings.Contains(pages["create"].body, ">Save<") {
 		t.Error("the create page still shows English")
 	}
-	if !strings.Contains(pages["changelist"].body, "Añadir Post") {
+	if !strings.Contains(pages["changelist"].body, "Añadir post") {
 		t.Error("the es add button is not Spanish")
 	}
 }
@@ -218,7 +218,7 @@ func TestMexicanSpanishOverridesAFewKeysAndFallsBackToEs(t *testing.T) {
 	i18ntest.Isolate(t)
 	site := newAdminSite(t)
 	mx := site.walk("es-MX")["changelist"].body
-	if !strings.Contains(mx, "Agregar Post") || strings.Contains(mx, "Añadir Post") {
+	if !strings.Contains(mx, "Agregar post") || strings.Contains(mx, "Añadir post") {
 		t.Error("es-MX add button not overridden")
 	}
 	if !strings.Contains(mx, ">Buscar<") {
@@ -254,7 +254,7 @@ func TestQueryOverridesTheCookieForOneRequestAndTheCookiePersists(t *testing.T) 
 	if body := site.get("/admin/post/", english).body; !strings.Contains(body, `lang="es"`) {
 		t.Errorf("the cookie did not select Spanish:\n%.300s", body)
 	}
-	if body := site.get("/admin/post/?lang=es-MX", english).body; !strings.Contains(body, `lang="es-MX"`) || !strings.Contains(body, "Agregar Post") {
+	if body := site.get("/admin/post/?lang=es-MX", english).body; !strings.Contains(body, `lang="es-MX"`) || !strings.Contains(body, "Agregar post") {
 		t.Errorf("?lang=es-MX did not override the cookie:\n%.300s", body)
 	}
 	if body := site.get("/admin/post/", english).body; !strings.Contains(body, `lang="es"`) {

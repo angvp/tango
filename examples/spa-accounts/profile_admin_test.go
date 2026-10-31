@@ -82,7 +82,7 @@ func TestProfileAdminEditsPreferencesAsJSON(t *testing.T) {
 
 	invalid := "{\"theme\": \"dark\",\n"
 	bad := request(http.MethodPost, path, merge(form, url.Values{"Preferences": {invalid}}))
-	if bad.Code != http.StatusUnprocessableEntity || !strings.Contains(bad.Body.String(), "Invalid JSON") {
+	if bad.Code != http.StatusUnprocessableEntity || !strings.Contains(bad.Body.String(), "This is not valid JSON") {
 		t.Fatalf("invalid preferences: %d\n%s", bad.Code, bad.Body.String())
 	}
 	if m := profileTextarea.FindStringSubmatch(bad.Body.String()); m == nil || htmlUnescape(m[1]) != invalid {

@@ -32,7 +32,7 @@ func TestAdminBulkDeleteRemovesSelectedPostsAndTheirComments(t *testing.T) {
 	}
 
 	posts := ops.do("GET", "/admin/post/?deleted=2", nil).Body.String()
-	if !strings.Contains(posts, "Deleted 2 rows.") || !strings.Contains(posts, "Post to keep") ||
+	if !strings.Contains(posts, "2 posts deleted") || !strings.Contains(posts, "Post to keep") ||
 		strings.Contains(posts, "Post to remove") || strings.Contains(posts, "Another post to remove") {
 		t.Fatalf("the Post changelist after the delete is wrong:\n%s", posts)
 	}

@@ -21,7 +21,7 @@ func fieldLabel(opts adminregistry.Options, name string) string {
 	return humanizeFieldName(name)
 }
 
-// displayNoun is the lowercase noun for one row of the model.
+// displayNoun is the noun for one row of the model, as a sentence uses it.
 func displayNoun(meta model.ModelMeta, opts adminregistry.Options) string {
 	if opts.SingularName != "" {
 		return strings.ToLower(opts.SingularName)
@@ -29,7 +29,7 @@ func displayNoun(meta model.ModelMeta, opts adminregistry.Options) string {
 	return strings.ToLower(humanizeFieldName(meta.Name))
 }
 
-// pluralNoun is the lowercase noun for several rows of the model. Unset, it
+// pluralNoun is the noun for several rows of the model, as a sentence uses it. Unset, it
 // is the singular with the usual English plural ending.
 func pluralNoun(meta model.ModelMeta, opts adminregistry.Options) string {
 	if opts.PluralName != "" {
@@ -38,7 +38,7 @@ func pluralNoun(meta model.ModelMeta, opts adminregistry.Options) string {
 	return englishPlural(displayNoun(meta, opts))
 }
 
-// capitalizeFirst upper-cases the first letter of s, for a heading.
+// capitalizeFirst returns s with its first letter in capitals, for a heading.
 func capitalizeFirst(s string) string {
 	runes := []rune(s)
 	if len(runes) == 0 {
@@ -48,7 +48,7 @@ func capitalizeFirst(s string) string {
 	return string(runes)
 }
 
-// englishPlural applies the common regular endings to a lowercase noun.
+// englishPlural applies the common regular endings to a noun.
 func englishPlural(noun string) string {
 	switch {
 	case strings.HasSuffix(noun, "s"), strings.HasSuffix(noun, "x"), strings.HasSuffix(noun, "z"),
