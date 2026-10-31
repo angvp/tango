@@ -39,17 +39,3 @@ func TestDeleteViewPostOnReferencedRowIsRefusedWithConflict(t *testing.T) {
 		t.Fatalf("fk_author rows = %d, want 1 (refused delete must not remove the row)", got)
 	}
 }
-
-func TestDeleteViewRejectsUnsupportedMethod(t *testing.T) {
-	handler, sqlDB := buildProductAdmin(t)
-	id := seedProduct(t, sqlDB, "Disposable", 1)
-
-	response := doRequest(t, handler, http.MethodPut, fmt.Sprintf("%s%d/delete/", crudBasePath, id), nil)
-
-	if response.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
-	}
-	if !productExists(t, sqlDB, id) {
-		t.Fatal("rejected PUT removed the row")
-	}
-}

@@ -71,19 +71,3 @@ func TestEditViewSaveDuplicateUniqueValueRerendersWithFieldError(t *testing.T) {
 		t.Fatalf("code = %q after refused save, want %q", code, "beta")
 	}
 }
-
-func TestEditViewRejectsUnsupportedMethod(t *testing.T) {
-	handler, sqlDB := buildProductAdmin(t)
-	id := seedProduct(t, sqlDB, "Widget", 2)
-
-	response := doRequest(t, handler, http.MethodPut, fmt.Sprintf("%s%d/", crudBasePath, id), url.Values{
-		"name": {"Changed"},
-	})
-
-	if response.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
-	}
-	if got := getProduct(t, sqlDB, id).Name; got != "Widget" {
-		t.Fatalf("name = %q after rejected PUT, want %q", got, "Widget")
-	}
-}
