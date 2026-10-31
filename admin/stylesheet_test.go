@@ -155,3 +155,42 @@ func TestAdminStylesheetGeneratesTheTokenUtilitiesWidgetsUse(t *testing.T) {
 		}
 	}
 }
+
+// Host widgets also write opacity modifiers such as text-ink/60. The served
+// stylesheet must style them with the declarations Tailwind v3 derives from the
+// token's rgb(var(...) / <alpha-value>) colour.
+func TestAdminStylesheetStylesOpacityVariantsOfTokenUtilities(t *testing.T) {
+	_, response := servedAdminStylesheet(t)
+	css := response.Body.String()
+	cases := []struct {
+		class, declaration string
+	}{
+		{`text-ink\/60`, `color:rgb(var(--ink) / 0.6)`},
+		{`bg-surface\/50`, `background-color:rgb(var(--surface) / 0.5)`},
+		{`border-line\/80`, `border-color:rgb(var(--line) / 0.8)`},
+		{`ring-ring\/40`, `--tw-ring-color:rgb(var(--ring) / 0.4)`},
+	}
+	for _, tc := range cases {
+		selector := regexp.QuoteMeta("." + tc.class)
+		if body := ruleBody(css, selector); !strings.Contains(body, tc.declaration) {
+			t.Errorf("rule .%s does not contain %q; rule body %q", tc.class, tc.declaration, body)
+		}
+	}
+}
+
+// Every token has an opacity variant for each of the four colour prefixes, at
+// every step of Tailwind's default opacity scale.
+func TestAdminStylesheetGeneratesEveryTokenOpacityVariant(t *testing.T) {
+	_, response := servedAdminStylesheet(t)
+	css := response.Body.String()
+	steps := []string{"0", "5", "10", "20", "25", "30", "40", "50", "60", "70", "75", "80", "90", "95", "100"}
+	for _, tok := range admin.TokenPaletteForTest {
+		for _, prefix := range []string{"text", "bg", "border", "ring"} {
+			for _, step := range steps {
+				if selector := "." + prefix + "-" + tok.Name + `\/` + step + "{"; !strings.Contains(css, selector) {
+					t.Errorf("stylesheet lacks the %s utility %s/%s", prefix, tok.Name, step)
+				}
+			}
+		}
+	}
+}

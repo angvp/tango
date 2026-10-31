@@ -18,7 +18,7 @@ Canonical example: `examples/api-with-admin/apps/posts/app.go`. Human guide: `do
 - Use `Filters` for boolean and foreign-key fields operators filter by, and `Display` with `admin.DisplayFunc` for computed list cells; a `Display` column that is not a model field needs a `Labels` entry. Build a download link in your own authorized View and pass it as `Href`; admin must never learn storage keys.
 - Set `BulkDelete: true` only on models where an operator deleting a page of rows at once is acceptable: it cascades like a single-row delete, needs JavaScript, never spans a page, and is all-or-nothing. Do not build a `delete-selected` form yourself; the route and field names are not a contract.
 - Behind a reverse proxy, pass `admin.WithTrustedProxies(networks...)` (and `accounts.WithTrustedProxies` if `accounts` is installed) or every user shares one login-limiter bucket. Never trust `X-Forwarded-For` without it.
-- Use the admin theme tokens (`bg-surface`, `text-ink`, `border-line`, the status family) in widget HTML, not raw palette colours, so a widget follows light and dark; see the theme table in `docs/guides/admin-registration.md`. The admin has no theming hook.
+- Use the admin theme tokens (`bg-surface`, `text-ink`, `border-line`, the status family, and their opacity variants such as `text-ink/60`) in widget HTML, not raw palette colours, so a widget follows light and dark; see the theme table in `docs/guides/admin-registration.md`. The admin has no theming hook.
 - Use `admin.WithBranding` or `admin.WithMiddleware` on `admin.New(store, ...)` for admin-wide branding or `/admin/`-scoped HTTP behavior.
 
 Tiny shape:

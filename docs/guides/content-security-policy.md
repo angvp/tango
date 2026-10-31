@@ -153,7 +153,7 @@ For `/admin/` pages this policy replaces any policy the global tier sends. The p
 
 - **Host widgets and templates.** The admin's pages no longer depend on inline code, but a widget or template you write does. A strict admin policy blocks an inline `style` attribute and an inline event handler in a widget's markup, and an inline `<script>` without the nonce. Move that behaviour into a file the admin serves, or give the element the nonce from your data.
 
-- **Colour tokens.** The admin's stylesheet is precompiled. Widgets can rely on the colour token utilities for the `text-`, `bg-`, `border-` and `ring-` prefixes, listed in the [admin guide](admin-registration.md#light-and-dark-theme). Other Tailwind classes in the stylesheet belong to the admin's own templates and may change in a release, so a widget that needs other styling ships its own stylesheet, served from a content-hashed URL.
+- **Colour tokens.** The admin's stylesheet is precompiled. Widgets can rely on the colour token utilities for the `text-`, `bg-`, `border-` and `ring-` prefixes, including opacity variants such as `text-ink/60`, listed in the [admin guide](admin-registration.md#light-and-dark-theme). Other Tailwind utilities are not part of that contract and may change in a release, so a widget that needs other styling ships its own stylesheet, served from a content-hashed URL.
 
 ## Accounts pages
 
@@ -184,6 +184,10 @@ Pass the same policy value that the middleware uses. The document, the UI's asse
 ## Served uploads
 
 `storage.Serve` sends `Content-Security-Policy: sandbox; default-src 'none'` on every object response unless the route sets `storage.ServeOptions{SkipSandboxPolicy: true}`. The uploads guide describes the policy and the opt-out, and the CHANGELOG records the upgrade note.
+
+## Covered surface
+
+From v0.8.0 the Content-Security-Policy API is part of the [Covered API](../compatibility.md): `tango.SecurityHeaders` with `SecurityHeaderOption`, `WithContentSecurityPolicy`, `WithHSTS` and `WithReferrerPolicy`; the `CSP` type and its directive fields; `StrictCSP`; the `Source` type and its constructors `Self`, `None`, `Host`, `Scheme`, `Data`, `Blob`, `NonceSource` and `UnsafeInlineStyle`; `CSPNonce` and `NonceAttr`; `admin.ContentSecurityPolicy`; `swaggerui.Option`, `swaggerui.WithContentSecurityPolicy` and the variadic `swaggerui.New`; and the `storage.ServeOptions.SkipSandboxPolicy` opt-out. The markup of the admin and Swagger UI pages that a policy governs is not covered.
 
 ## Checking a policy
 

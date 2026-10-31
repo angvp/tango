@@ -1,4 +1,22 @@
 /** Tailwind CSS v3 configuration for admin/assets/admin.css. See scripts/admin-css.sh. */
+
+// The semantic colour tokens (admin/theme_palette_test.go lists the same set).
+const OPACITY_TOKENS = [
+  'ink', 'ink-muted', 'ink-faint',
+  'surface', 'surface-sunken', 'surface-hover',
+  'line', 'line-subtle', 'line-strong', 'control-line',
+  'accent', 'accent-hover', 'accent-fg', 'accent-ui', 'ring', 'selection-bg', 'selection-fg',
+  'danger-solid', 'danger-solid-hover', 'danger-solid-fg',
+  'sidebar', 'sidebar-fg', 'sidebar-strong', 'sidebar-muted', 'sidebar-dot', 'sidebar-accent', 'sidebar-accent-fg',
+  'success-bg', 'success-fg', 'success-border',
+  'danger-bg', 'danger-fg', 'danger-border',
+  'warning-bg', 'warning-fg', 'warning-border',
+  'neutral-bg', 'neutral-fg', 'neutral-border',
+];
+
+// Tailwind's default opacity scale.
+const OPACITY_STEPS = ['0', '5', '10', '20', '25', '30', '40', '50', '60', '70', '75', '80', '90', '95', '100'];
+
 module.exports = {
   content: {
     relative: true,
@@ -55,6 +73,14 @@ module.exports = {
   safelist: [
     {
       pattern: /^(text|bg|border|ring)-(ink|surface|line|control-line|accent|ring|selection|danger-solid|sidebar|success|danger|warning|neutral)(-[a-z]+)*$/,
+    },
+    // Opacity modifiers (text-ink/60) on the same token utilities. The steps
+    // are Tailwind's default opacity scale, listed explicitly so the set does
+    // not depend on the theme.
+    {
+      pattern: new RegExp(
+        `^(text|bg|border|ring)-(${OPACITY_TOKENS.join('|')})\\/(${OPACITY_STEPS.join('|')})$`,
+      ),
     },
   ],
   plugins: [],
