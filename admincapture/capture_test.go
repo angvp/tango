@@ -38,10 +38,15 @@ import (
 )
 
 const (
-	adminUser     = "admin"
-	adminPassword = "secret"
-	stepTimeout   = 30 * time.Second
-	settleTime    = 300 * time.Millisecond
+	adminUser      = "admin"
+	adminPassword  = "secret"
+	readerUser     = "reader"
+	readerPassword = "reader-secret"
+	readerToken    = "capture-reader-session"
+	adminToken     = "capture-admin-session"
+	sessionCookie  = "tango_admin_session"
+	stepTimeout    = 30 * time.Second
+	settleTime     = 300 * time.Millisecond
 
 	// seededBooks fills the changelist past a phone screen yet stays within one
 	// page of the admin, so the photographs show a populated list without
@@ -111,6 +116,19 @@ func site(t *testing.T) http.Handler {
 	store := db.NewStore(sqlDB, dialect)
 	if err := admin.CreateAccount(context.Background(), store, adminUser, adminPassword); err != nil {
 		t.Fatalf("seed admin account: %v", err)
+	}
+	// The reader account has a session but no staff access, for the access page.
+	if err := admin.CreateAccount(context.Background(), store, readerUser, readerPassword); err != nil {
+		t.Fatalf("seed reader account: %v", err)
+	}
+	if _, err := sqlDB.Exec(`UPDATE admin_user SET is_staff = ? WHERE username = ?`, false, readerUser); err != nil {
+		t.Fatalf("drop staff access: %v", err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO admin_session (token, user_id, expires_at) SELECT ?, id, ? FROM admin_user WHERE username = ?`, readerToken, time.Now().Add(time.Hour).UTC(), readerUser); err != nil {
+		t.Fatalf("seed reader session: %v", err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO admin_session (token, user_id, expires_at) SELECT ?, id, ? FROM admin_user WHERE username = ?`, adminToken, time.Now().Add(time.Hour).UTC(), adminUser); err != nil {
+		t.Fatalf("seed admin session: %v", err)
 	}
 	for i := 1; i <= seededBooks; i++ {
 		if _, err := sqlDB.Exec(`INSERT INTO capture_book (id, title, pages) VALUES (?, ?, ?)`, i, fmt.Sprintf("Field notes, volume %d", i), 80+i*17); err != nil {
@@ -302,6 +320,26 @@ var signedInShots = []shot{
 	}},
 	{name: "error-not-found", ready: "main p.text-base", steps: func(b string) []chromedp.Action[chromedp.Void] {
 		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/999999/")}
+	}},
+	// The access page for an account without staff access. The browser's own
+	// session is swapped for the reader's for this load, then restored, so the
+	// shots after it keep the admin session.
+	{name: "error-no-staff-access", ready: "main p.text-base", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
+				_, err := chromedp.Call(c, network.SetCookie, network.SetCookieParams{
+					Name: sessionCookie, Value: readerToken, URL: b + "/admin/",
+				})
+				return err
+			}),
+			visit(b, "/admin/capture_book/"),
+			chromedp.Func(func(c context.Context, _ *chromedp.Target) error {
+				_, err := chromedp.Call(c, network.SetCookie, network.SetCookieParams{
+					Name: sessionCookie, Value: adminToken, URL: b + "/admin/",
+				})
+				return err
+			}),
+		}
 	}},
 	// Compact density is the last shot: its cookie outlives this step in the
 	// shared browser, so no later shot may depend on the default density.
