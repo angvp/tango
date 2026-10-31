@@ -49,4 +49,5 @@ registry.Admin().Register(Book{}, admin.Options{
 
 - Compare with `examples/api-with-admin/apps/posts/app.go` and `examples/api-with-admin/apps/authors/app.go`.
 - For a foreign key, verify the related model is also admin-registered if editors should get the quick-create link.
+- For a change to admin visuals, responsive layout, widgets, dialogs, sidebar behavior or CSP-sensitive markup, do the [admin theme check](../../RELEASING.md#admin-theme-check) in both themes, at desktop and phone width. It is a manual complement to the automated tests and never a replacement for them. Never commit screenshots.
 - Run the shared checklist: `docs/agents/checklist.md`.
