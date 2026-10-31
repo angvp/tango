@@ -16,25 +16,13 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **The admin's breadcrumb links and the labels beside form checkboxes are at least 24 CSS pixels tall.** Both were 20 pixels tall on a phone, below the size a touch reliably hits.
 
-- **The admin's list, form, delete, bulk outcome, sign-in, dashboard and error pages each have their own browser tab title.** The title starts with the page's heading, such as "Crud products · tanGO Admin", and the sign-in page reads "Sign in · tanGO Admin". The bulk delete outcome page is titled with its action, "Delete selected". **Catalog impact:** new key `admin.login.page_title` ("Sign in"), with an English fallback; a catalog without it shows the English text. The admin's name is still the `admin.layout.title` key.
+- **The admin's list, form, delete, bulk outcome, sign-in, dashboard and error pages each have their own browser tab title.** The title starts with the page's heading, such as "Crud products · tanGO Admin", and the sign-in page reads "Sign in · tanGO Admin". The bulk delete outcome page is titled with its action, "Delete selected".
 
-- **The admin's create and edit forms explain a failed save.** A save with more than one problem shows a summary above the first field, headed with the count ("Fix 2 problems to save this book.") and listing each problem as a link to its field. Each link is the field's label followed by its message. Focus moves to the summary when the page renders; a save with one field problem moves focus to that field instead, and the summary is shown for one problem only when it is not tied to a field. Built-in widgets print each field's help text between its label and its control. A host widget keeps the help text beneath its control, unless its own markup prints it. The empty foreign key choice reads "No author selected", the add button beside a foreign key names the target in visible text ("Add new author") after a "+" that is hidden from assistive technology, and Cancel names the list it returns to. **Catalog impact:** new `admin.*` keys with English fallbacks: `admin.form.problems` ("Fix %d problems to save this %s.": the count and the singular noun), `admin.form.problem_one` ("Fix 1 problem to save this %s.": the singular noun), `admin.form.problem_item` ("%s: %s": the field label and its message), and `admin.form.cancel_to` ("Cancel and return to %s": the plural noun). `admin.fk.none_selected` ("No %s selected": the singular noun) replaces `admin.fk.none` ("— None —"), which is removed. `admin.fk.add_new` ("Add new %s") replaces `admin.fk.add_related` ("Add %s"), which is removed; its placeholder changed meaning from the field label to the target model's singular noun, and its text no longer begins with a "+", which the markup now supplies. A host translation of a removed key no longer applies, and a new key's text falls back to English until a host translates it.
+- **The admin's create and edit forms explain a failed save.** A save with more than one problem shows a summary above the first field, headed with the count ("Fix 2 problems to save this book.") and listing each problem as a link to its field. Each link is the field's label followed by its message. Focus moves to the summary when the page renders; a save with one field problem moves focus to that field instead, and the summary is shown for one problem only when it is not tied to a field. Built-in widgets print each field's help text between its label and its control. A host widget keeps the help text beneath its control, unless its own markup prints it. The empty foreign key choice reads "No author selected", the add button beside a foreign key names the target in visible text ("Add new author") after a "+" that is hidden from assistive technology, and Cancel names the list it returns to.
 
 - **Admin outcomes appear in a status region on every page.** After a create, save, delete or bulk delete, the next admin page shows the outcome in one `role="status"` region above the content, with a Dismiss control. The outcome is carried in a cookie signed with a key derived from the admin session, so it cannot be forged and is shown only to the session that set it. The page that shows the outcome expires the cookie in the browser; the server also stops accepting a copy of it 300 seconds after it was set. A copy taken before that time is still accepted until then. The bulk delete redirect no longer carries a `deleted` query parameter.
 
-  **Catalog impact:** new `admin.*` keys, covered API: `admin.outcome.created` ("The %s was added.", the singular noun), `admin.outcome.saved` ("The %s was saved.", the singular noun), `admin.outcome.deleted` ("The %s was deleted.", the singular noun), and `admin.status.dismiss` ("Dismiss"). The bulk outcome keys `admin.bulk.outcome_one` and `admin.bulk.outcome_many` now carry the outcome. A host catalog keeps working; a new key's text falls back to English until the host translates it.
-
 - **Admin save errors name the field and keep what you typed.** A value that is not a number, a date or valid JSON shows a plain message beside its field, and the other values in the form stay as submitted. A duplicate unique value returns 422 with a message beside the field, where it returned a server error before. A foreign key that no longer exists, and a delete the database refuses because other rows still use the row, show a plain message instead of a server error. The raw parser and database text is never shown. Messages come from `admin.*` keys with English fallbacks, so a host catalog overrides one key at a time. The sidebar, headings, breadcrumbs and messages name a model with its display noun (`admin.Options` `SingularName` and `PluralName`), not its Go type name. The style guide is `admin/MESSAGE_STYLE.md`.
-
-  **Catalog impact:** the admin's message keys are covered API, and this release renames or removes some of them. A host catalog keeps working; a renamed key's text falls back to English until the host translates the new key, and a catalog value whose format verbs no longer match the English fallback is ignored in the same way.
-  - Renamed, placeholders changed: `admin.bulk.deleted_one` to `admin.bulk.outcome_one` ("1 %s deleted", the singular noun); `admin.bulk.deleted_many` to `admin.bulk.outcome_many` ("%d %s deleted", the count and the plural noun); `admin.bulk.modal_title` to `admin.bulk.title_one` ("Delete 1 %s?", the singular noun) and `admin.bulk.title_many` ("Delete {count} %s?", the plural noun); `admin.error.bulk_missing` to `admin.error.bulk_selected_missing` (takes the singular noun); `admin.error.json_syntax` to `admin.error.json_position` ("This is not valid JSON at character %d. Check that commas, quotes and brackets are in place.", the character position only; the decoder text is no longer shown); `admin.list.empty_body` to `admin.list.empty_first` (the singular noun); `admin.list.empty_search` to `admin.list.empty_no_match` (the plural noun, then the search text); `admin.list.empty_filtered` to `admin.list.empty_no_filter_match` (the plural noun).
-  - Removed: `admin.button.confirm_delete` ("Confirm delete"). Its uses are replaced by `admin.delete.confirm_button` on the single-row delete page and by `admin.bulk.confirm_one` and `admin.bulk.confirm_many` in the bulk dialog.
-  - Added: `admin.delete.confirm_button` ("Delete %s", the singular noun), `admin.delete.refused` ("This %s cannot be deleted because other rows still use it.", the singular noun), `admin.bulk.confirm_one` ("Delete 1 %s"), `admin.bulk.confirm_many` ("Delete {count} %s", the plural noun), `admin.error.unique_field` ("Another %s already uses this value.", the singular noun), `admin.error.unique_form` (the noun), `admin.error.foreign_key`, `admin.error.not_whole_number` ("Enter a whole number."), `admin.error.not_number` ("Enter a number.") and `admin.error.not_date_time` ("Enter a date and time."). The field messages no longer name the field, so the form summary's "Label: message" never repeats the label.
-  - Same name, argument changed: `admin.button.add_model` ("+ Add %s", now the singular noun instead of the Go type name); `admin.list.search_placeholder` ("Search %s…", now the plural noun); `admin.create.title` ("New %s", the singular noun); `admin.edit.title` ("Edit %s", the singular noun); `admin.delete.title` ("Delete this %s", the singular noun); `admin.list.empty_title` ("No %s yet.", the plural noun, formerly "No %s rows yet"). A catalog that translated these with the Go type name will show the noun instead.
-  - Same name, English wording changed, placeholders unchanged, all present at v0.7.0: `admin.error.invalid_json` ("This is not valid JSON. Check that commas, quotes and brackets are in place."; was "Not valid JSON."), `admin.error.json_invalid` ("This is not valid JSON. Check that commas, quotes and brackets are in place."; was "Invalid JSON"), `admin.error.bulk_invalid` ("Nothing was deleted. The selection is not valid."; was "the selection is not valid; nothing was deleted").
-  - Removed: `admin.json.view_invalid` ("Not valid JSON: {error}") and `admin.json.status_invalid` ("Not valid JSON."). The Formatted view and the status line now show `admin.error.json_invalid`, one message in the status line, so a host catalog that translated a removed key no longer applies, and the view no longer shows the decoder's text.
-  - New key `admin.error.max_length` ("Use at most %d characters. You entered %d.", the limit and the length) reports a value over a field's maximum length. `admin.error.too_long`, present at v0.7.0 with the label as an argument, is no longer used by the admin, so a host value for it has no effect and the new key's English fallback shows until the host translates it.
-  - Not changed by this bullet: every other `admin.*` key. The changelist bullet below lists its own key changes.
 
 - **The JSON and Markdown widgets show their editors without script, and hide what is empty.** Without JavaScript the Formatted panel of the JSON field and the Preview panel of a Markdown field are visible, stacked under the editor. The Formatted box and the Preview frame stay hidden until they have content, so the editor is the only visible control. With the script, the tabs show and the inactive panel is hidden as before.
 
@@ -48,21 +36,17 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **The bulk delete bar states its selection, and the dialog names the count.** The bar is visible once the script runs. With no row picked, its count slot shows the reason "Select rows to delete them." and Delete selected is disabled and described by that reason; with a row picked, the count shows the selection and the button is enabled. The table's select-all is hidden on a phone, where a "Select all on this page" control in the bar takes its place. The dialog title names the count with singular and plural copy, and lists up to ten names followed by "and N more". The rejected bulk-delete page shows the section's plural name as its heading, the plain reason beneath it, and a "Back to" link. Its breadcrumb current item is "Delete selected".
 
-  **Catalog impact:** new keys `admin.bulk.title_one` ("Delete 1 %s?", the singular noun), `admin.bulk.title_many` ("Delete {count} %s?", the plural noun), `admin.bulk.more_one` ("and 1 more"), `admin.bulk.more_many` ("and {count} more", the count) and `admin.bulk.select_page` ("Select all on this page"). `admin.bulk.back_to` ("Back to %s", the plural noun) replaces `admin.bulk.back`. `admin.bulk.select_first` is new. `admin.bulk.back` is removed, so a host translation of it no longer applies. `admin.bulk.rejected_title` keeps its key and wording. The new keys fall back to English until a host translates them.
-
 - **`admin.Options` names a model's rows for messages.** The new `SingularName` and `PluralName` fields give the noun used in headings, empty states, bulk outcomes and field messages. Unset, the humanized Go name is used. Widget-internal messages stay English until a later release.
 
 - **The admin serves a precompiled stylesheet and no longer loads Tailwind from a CDN.** The admin's stylesheet is generated by `scripts/admin-css.sh` and served from a content-hashed URL. The admin's pages no longer contain inline script, inline style or `onclick` handlers: navigation is a hashed script bound with event listeners. The admin's colour tokens and its light and dark selection are unchanged. **Upgrade note:** host widgets can rely only on the token utilities (`text-`, `bg-`, `border-` and `ring-` for the admin's token names), including their opacity variants such as `text-ink/60`, which the stylesheet styles at Tailwind's default opacity steps. Other Tailwind utilities need the host's own stylesheet: the admin's stylesheet contains them only because the admin's own templates use them, and a release may remove them. A host widget or template that needs other classes, or relied on Tailwind loading at runtime, ships its own stylesheet from a content-hashed URL. Under `admin.ContentSecurityPolicy()` a host widget's inline `style` attribute or inline event handler is blocked.
 
-- **The admin shell is lighter and easier to use with a keyboard and on a phone.** The sidebar takes a light tinted ground in the light theme (the card surface in dark) and lists models as soft pills, the current one marked with `aria-current`. Every page starts with a skip link to the main content. Edit, delete, new and rejected bulk-delete pages show breadcrumbs. On a phone the menu opens a drawer with a Close button, Escape and the backdrop close it, focus moves into it and back, and the page behind it is inert while it is open; the drawer applies only when the admin's script runs, so a phone without script keeps the model list in the page. A new `scrim` colour token dims the page behind the drawer and the bulk delete dialog in both themes. **Catalog impact:** three new message keys, `admin.layout.skip`, `admin.layout.close_menu` and `admin.layout.breadcrumb`, have English fallbacks; a catalog that lacks them shows the English text until it adds them. The admin's markup and class names are not covered by the compatibility promise.
+- **The admin shell is lighter and easier to use with a keyboard and on a phone.** The sidebar takes a light tinted ground in the light theme (the card surface in dark) and lists models as soft pills, the current one marked with `aria-current`. Every page starts with a skip link to the main content. Edit, delete, new and rejected bulk-delete pages show breadcrumbs. On a phone the menu opens a drawer with a Close button, Escape and the backdrop close it, focus moves into it and back, and the page behind it is inert while it is open; the drawer applies only when the admin's script runs, so a phone without script keeps the model list in the page. A new `scrim` colour token dims the page behind the drawer and the bulk delete dialog in both themes.
 
 - **Admin error pages are HTML, and a server failure shows a short request reference.** Access denied, an expired form, a missing row, a throttled sign-in and a server failure now render an HTML page in the admin's layout, with a title, one sentence and a next step, where they returned a JSON or plain-text body. Programmatic callers of these routes that read the JSON error body now receive the HTML page. A server failure shows the first eight characters of the request's reference when the host runs `tango.RequestID` (a non-hexadecimal ID shows up to sixteen characters), and nothing technical. The full error is logged on the same line as `reference=`, so a support report can be matched to the log line. Without `tango.RequestID` the page shows no reference. A method an admin page does not handle gets the HTML page with an `Allow` header listing the methods it does handle. The access page and any failure before the account is known show no model names. A request the router refuses for an unmatched path is still answered by the router. The Markdown preview route keeps its JSON responses, and so do the 400 responses to an invalid density or theme value, which a browser form sends only when its value was edited by hand.
 
-  **Catalog impact:** six keys keep their name and placeholders but now carry a sentence for the page, not the old one-line error: `admin.error.csrf`, `admin.error.not_found`, `admin.error.method_not_allowed`, `admin.error.not_staff` and `admin.error.too_many_login_attempts`. New keys, each with an English fallback: `admin.error.csrf_title`, `admin.error.csrf_next`, `admin.error.not_found_title`, `admin.error.not_found_next`, `admin.error.method_not_allowed_title`, `admin.error.method_not_allowed_next`, `admin.error.not_staff_title`, `admin.error.not_staff_next`, `admin.error.too_many_login_attempts_title`, `admin.error.too_many_login_attempts_next`, `admin.error.sign_in`, `admin.error.back_to_page`, `admin.error.server_title`, `admin.error.server_save` ("Your changes were not saved."), `admin.error.server_load`, `admin.error.server_next`, `admin.error.home` and `admin.error.reference` ("Reference: %s", the reference). A host catalog that translated a changed key keeps the old text until it updates the key.
+- **The admin changelist is denser on a desktop and reads as cards on a phone.** The table sits in one white card with a sticky header, and its numeric columns are right-aligned with tabular figures. A row's Edit and Delete links name the row for assistive technology (for example "Edit Notes on Type"). Below 768px each row becomes a card with its values labelled and its actions at the foot, so the changelist no longer scrolls sideways on a phone. A Row density control switches between comfortable (the default) and compact; it posts to `/admin/density/` with the session's CSRF token and stores the choice in the `tango_admin_density` cookie, which the server reads when it renders the page. Without script the control works as a form. **Upgrade note:** the changelist's markup and class names are not covered by the compatibility promise. Host pages that restyle the table should use the `table-admin` class and the new `cell-num`, `cell-label` and `density-bar` classes.
 
-- **The admin changelist is denser on a desktop and reads as cards on a phone.** The table sits in one white card with a sticky header, and its numeric columns are right-aligned with tabular figures. A row's Edit and Delete links name the row for assistive technology (for example "Edit Notes on Type"). Below 768px each row becomes a card with its values labelled and its actions at the foot, so the changelist no longer scrolls sideways on a phone. A Row density control switches between comfortable (the default) and compact; it posts to `/admin/density/` with the session's CSRF token and stores the choice in the `tango_admin_density` cookie, which the server reads when it renders the page. Without script the control works as a form. **Upgrade note:** the changelist's markup and class names are not covered by the compatibility promise. Host pages that restyle the table should use the `table-admin` class and the new `cell-num`, `cell-label` and `density-bar` classes. **Catalog impact:** six new message keys, `admin.density.label`, `admin.density.comfortable`, `admin.density.compact`, `admin.list.edit_row`, `admin.list.delete_row` and `admin.error.invalid_density`, have English fallbacks; a catalog that lacks them shows the English text until it adds them.
-
-- **The admin changelist states its range and offers a clear action for its search and filters.** The search field is a `type="search"` input, with a Clear search link while a query is set. The applied filters are named above the table with a Clear filters link, which keeps the search. The result line reads "Showing 1 to 25 of 60 books", or "3 books" when every row fits on one page, using the model's display noun, and a filter with no choices shows no label without its control. Pagination links show a focus ring. The filter query keys and the pagination routes are unchanged. **Catalog impact:** seven new message keys, each with an English fallback. `admin.list.showing` ("Showing %d to %d of %d %s": the first row, the last row, the total and the plural noun); `admin.list.count_one` ("%d %s": the count and the singular noun); `admin.list.count_many` ("%d %s": the count and the plural noun); `admin.list.filters_applied` ("Filters applied:", no arguments); `admin.list.filter_pair` ("%s: %s": the filter label and its value); `admin.list.clear_filters` ("Clear filters", no arguments); `admin.list.clear_search` ("Clear search", no arguments). Three keys are removed and are no longer read: `admin.list.result_singular` (verb "result"), `admin.list.result_plural` (verb "results") and `admin.list.for_query` (verb "for", the search suffix of the count, which is dropped). A catalog that lacks a new key shows the English text until it adds it.
+- **The admin changelist states its range and offers a clear action for its search and filters.** The search field is a `type="search"` input, with a Clear search link while a query is set. The applied filters are named above the table with a Clear filters link, which keeps the search. The result line reads "Showing 1 to 25 of 60 books", or "3 books" when every row fits on one page, using the model's display noun, and a filter with no choices shows no label without its control. Pagination links show a focus ring. The filter query keys and the pagination routes are unchanged.
 - **`admin.Widget` takes the request context (best-effort API change; host custom widgets must adapt).** `Render` and `Parse` now receive the request's `context.Context` as their first argument, so a widget translates its own text with `i18n.T(ctx, key, fallback)` and a host catalog can word it. The built-in JSON and Markdown widgets already localised their text; they now receive the context explicitly, and the English-only widget limit is removed. `admin.Widget` is best-effort (see [what is not covered](docs/compatibility.md#what-is-not-covered)), so this is a minor-release change, not a compatibility break.
 
   **Migration (before and after):**
@@ -81,9 +65,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
   **Compile breaks a host sees:** (1) a type stored as an `admin.Widget`, in `Options.Widgets` or returned from a function that returns `admin.Widget`, fails with "wrong type for method Render/Parse"; (2) a direct call `w.Render(f)` or `w.Parse(f, form, dest)` on any widget, including `admin.JSON()`, `admin.Markdown(...)` and `admin.Textarea()`, in host code or host tests, fails with "not enough arguments"; (3) a decorator that wraps an inner widget fails in its own methods and in the call to the inner widget; (4) a host interface that embeds `admin.Widget` or declares the two methods fails where a value is assigned to it; (5) a file that declares the new methods fails until it imports `context`. **Silent break:** a type assertion to an interface that still has the old method shape, such as `interface{ Render(admin.FieldContext) template.HTML }`, compiles and then reports false at run time; search for such assertions. `admin.PreviewWidget` and its `Preview(ctx, source)` method are unchanged.
 
-  **Catalog impact:** no message key or placeholder is added, renamed or removed, and the English text of the built-in widget messages is unchanged.
-
-- **Empty states name the model and say what to do next, and badges and alerts carry their state in words.** A changelist with no rows reads "No books yet." with one sentence and one "+ Add book" action. A search with no match reads "No books match “lemon”." with a Clear search action, and a filter with no match reads "No books match the selected filters." with a Clear filters action; neither says the model has no rows. The dashboard's database state and pending migrations are text badges, and an unavailable or unconfigured status or activity card shows a warning or neutral alert. Colour is never the only signal. **Catalog impact:** new keys `admin.dashboard.status.pending_one` ("1 pending migration") and `admin.dashboard.status.pending_many` ("%d pending migrations", the count), with Spanish entries in the example catalog. `admin.list.empty_title` changes its English wording to "No %s yet." (the placeholder is unchanged), and the search and filter empty states no longer read it. A search with a filter applied uses the new key `admin.list.empty_no_match_filtered` ("No %s match “%s” and the selected filters.", the plural noun and the search). A catalog that lacks a new key shows the English text until it adds it. The `status-dot`, `status-dot-success`, `status-dot-danger` and `status-dot-neutral` stylesheet classes are deprecated aliases (D52): they still render a dot, and they are removed in the next minor release. Use `badge-success`, `badge-danger`, `badge-warning` and `badge-neutral`; `badge-true` and `badge-false` keep their names.
+- **Empty states name the model and say what to do next, and badges and alerts carry their state in words.** A changelist with no rows reads "No books yet." with one sentence and one "+ Add book" action. A search with no match reads "No books match “lemon”." with a Clear search action, and a filter with no match reads "No books match the selected filters." with a Clear filters action; neither says the model has no rows. The dashboard's database state and pending migrations are text badges, and an unavailable or unconfigured status or activity card shows a warning or neutral alert. Colour is never the only signal. Badges use the `badge-success`, `badge-danger`, `badge-warning` and `badge-neutral` classes; `badge-true` and `badge-false` keep their names.
 
 - **The accounts error message takes its colour from a stylesheet.** The error paragraph on the account pages uses a class that a hashed accounts stylesheet defines (`red`, as before), instead of an inline `style` attribute. No setting changes.
 
@@ -95,15 +77,11 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **A rejected bulk delete is titled with its outcome, and the admin's model index has a page title.** The rejection page's browser tab title reads "Nothing was deleted · tanGO Admin" instead of "Delete selected · tanGO Admin". The empty model index at `/admin/` reads "Models · tanGO Admin".
 
-  **Catalog impact:** `admin.bulk.rejected_title` ("Nothing was deleted", Spanish "No se eliminó nada") is the same key and wording as at v0.7.0, where it was the rejection page heading; this branch had removed it. `admin.index.title` ("Models", Spanish "Modelos") is a new key, absent at v0.7.0.
-
 - **Dismissing the admin status notice leaves keyboard focus in the page content.** Enter on the notice's Dismiss control reloads the page, and focus previously fell to the page body. The reloaded page now focuses its content region.
-
-  **Catalog impact:** none. No translation key was added or changed.
 
 ### Catalog impact
 
-This table lists every `admin.*` message key that this release renames, replaces or removes, against v0.7.0. A host catalog keeps working: a key that is removed is no longer read, and a renamed or replaced key's text falls back to English until the host translates the new key. A catalog value whose format verbs no longer match the English fallback is ignored in the same way.
+This table lists every `admin.*` message key that this release renames, replaces or removes, against v0.7.0. A host catalog keeps working: a key that is removed is no longer read, and a renamed or replaced key's text falls back to English until the host translates the new key. A catalog value whose format verbs no longer match the English fallback is ignored in the same way. The admin's name is still the `admin.layout.title` key, and `admin.bulk.rejected_title` keeps its key and wording from v0.7.0. Keys and placeholders are covered API; the English wording is not.
 
 | Old key (v0.7.0) | New key(s) | Change |
 |------|------|------|
@@ -114,7 +92,7 @@ This table lists every `admin.*` message key that this release renames, replaces
 | `admin.button.confirm_delete` | `admin.delete.confirm_button`, `admin.bulk.confirm_one`, `admin.bulk.confirm_many` | Removed; each use has its own key |
 | `admin.error.bulk_missing` | `admin.error.bulk_selected_missing` | Renamed; takes the singular noun |
 | `admin.error.json_syntax` | `admin.error.json_position` | Renamed; the placeholder is the character position only |
-| `admin.error.too_long` | `admin.error.max_length` | Renamed; the placeholders are the limit and the length |
+| `admin.error.too_long` | `admin.error.max_length` | Renamed; the placeholders are the limit and the length. The admin no longer reads `admin.error.too_long`, so a host value for it has no effect |
 | `admin.fk.add_related` | `admin.fk.add_new` | Renamed; the placeholder is the target model's singular noun |
 | `admin.fk.none` | `admin.fk.none_selected` | Renamed; the placeholder is the singular noun |
 | `admin.list.empty_body` | `admin.list.empty_first` | Renamed |
@@ -131,7 +109,103 @@ Removed with no replacement; the key is no longer read:
 | `admin.list.result_plural` | Removed |
 | `admin.list.for_query` | Removed |
 
-Keys that are new in this release, with no v0.7.0 key to replace, are the keys named in the entries above. Their total is 74: the `admin.*` literals in the non-test Go files of `admin/` that do not appear in the non-test `admin/` files at v0.7.0.
+Keys that are new in this release, with no v0.7.0 key to replace, are listed below. Their total is 74: the `admin.*` literals in the non-test Go files of `admin/` that do not appear in the non-test `admin/` files at v0.7.0. Renamed keys also appear in the table above, under their new names.
+
+| New key | English fallback | Arguments |
+|------|------|------|
+| `admin.bulk.back_to` | "Back to %s" | the plural noun |
+| `admin.bulk.confirm_many` | "Delete {count} %s" | the plural noun |
+| `admin.bulk.confirm_one` | "Delete 1 %s" | the singular noun |
+| `admin.bulk.more_many` | "and {count} more" | the count |
+| `admin.bulk.more_one` | "and 1 more" | none |
+| `admin.bulk.outcome_many` | "%d %s deleted" | the count and the plural noun |
+| `admin.bulk.outcome_one` | "1 %s deleted" | the singular noun |
+| `admin.bulk.select_first` | "Select rows to delete them." | none |
+| `admin.bulk.select_page` | "Select all on this page" | none |
+| `admin.bulk.title_many` | "Delete {count} %s?" | the plural noun |
+| `admin.bulk.title_one` | "Delete 1 %s?" | the singular noun |
+| `admin.dashboard.status.pending_many` | "%d pending migrations" | the count |
+| `admin.dashboard.status.pending_one` | "1 pending migration" | none |
+| `admin.delete.confirm_button` | "Delete %s" | the singular noun |
+| `admin.delete.refused` | "This %s cannot be deleted because other rows still use it. Remove or change those rows first." | the singular noun |
+| `admin.density.comfortable` | "Comfortable" | none |
+| `admin.density.compact` | "Compact" | none |
+| `admin.density.label` | "Row density" | none |
+| `admin.error.back_to_page` | "Back to the page" | none |
+| `admin.error.bulk_selected_missing` | "Nothing was deleted. One selected %s no longer exists." | the singular noun |
+| `admin.error.csrf_next` | "Reload the page and submit the form again." | none |
+| `admin.error.csrf_title` | "Your form expired" | none |
+| `admin.error.foreign_key` | "The item you chose no longer exists. Choose another and save again." | none |
+| `admin.error.home` | "Back to the admin home" | none |
+| `admin.error.invalid_density` | "invalid density" | none |
+| `admin.error.json_position` | "This is not valid JSON at character %d. Check that commas, quotes and brackets are in place." | the character position |
+| `admin.error.max_length` | "Use at most %d characters. You entered %d." | the limit and the length |
+| `admin.error.method_not_allowed_next` | "Go back and use the button on the page instead." | none |
+| `admin.error.method_not_allowed_title` | "That action is not available" | none |
+| `admin.error.not_date_time` | "Enter a date and time." | none |
+| `admin.error.not_found_next` | "Go back to the admin home and find it there." | none |
+| `admin.error.not_found_title` | "We could not find that page" | none |
+| `admin.error.not_number` | "Enter a number." | none |
+| `admin.error.not_staff_next` | "Ask an administrator to give you staff access." | none |
+| `admin.error.not_staff_title` | "You do not have access" | none |
+| `admin.error.not_whole_number` | "Enter a whole number." | none |
+| `admin.error.reference` | "Reference: %s" | the reference |
+| `admin.error.server_load` | "This page could not be loaded." | none |
+| `admin.error.server_next` | "Try again in a few minutes. If it keeps happening, give the reference below to the site administrator." | none |
+| `admin.error.server_save` | "Your changes were not saved." | none |
+| `admin.error.server_title` | "Something went wrong" | none |
+| `admin.error.sign_in` | "Sign in" | none |
+| `admin.error.too_many_login_attempts_next` | "Wait a minute, then sign in again." | none |
+| `admin.error.too_many_login_attempts_title` | "Too many sign-in attempts" | none |
+| `admin.error.unique_field` | "Another %s already uses this value." | the singular noun |
+| `admin.error.unique_form` | "Another %s already uses one of these values." | the singular noun |
+| `admin.fk.add_new` | "Add new %s" | the target model's singular noun |
+| `admin.fk.none_selected` | "No %s selected" | the singular noun |
+| `admin.form.cancel_to` | "Cancel and return to %s" | the plural noun |
+| `admin.form.problem_item` | "%s: %s" | the field label and its message |
+| `admin.form.problem_one` | "Fix 1 problem to save this %s." | the singular noun |
+| `admin.form.problems` | "Fix %d problems to save this %s." | the count and the singular noun |
+| `admin.index.title` | "Models" | none |
+| `admin.layout.breadcrumb` | "Breadcrumb" | none |
+| `admin.layout.close_menu` | "Close menu" | none |
+| `admin.layout.skip` | "Skip to content" | none |
+| `admin.list.clear_filters` | "Clear filters" | none |
+| `admin.list.clear_search` | "Clear search" | none |
+| `admin.list.count_many` | "%d %s" | the count and the plural noun |
+| `admin.list.count_one` | "%d %s" | the count and the singular noun |
+| `admin.list.delete_row` | "Delete %s" | the row's identity |
+| `admin.list.edit_row` | "Edit %s" | the row's identity |
+| `admin.list.empty_first` | "Add the first %s to see it here." | the singular noun |
+| `admin.list.empty_no_filter_match` | "No %s match the selected filters." | the plural noun |
+| `admin.list.empty_no_match` | "No %s match “%s”." | the plural noun and the search text |
+| `admin.list.empty_no_match_filtered` | "No %s match “%s” and the selected filters." | the plural noun and the search text |
+| `admin.list.filter_pair` | "%s: %s" | the filter label and its value |
+| `admin.list.filters_applied` | "Filters applied:" | none |
+| `admin.list.showing` | "Showing %d to %d of %d %s" | the first row, the last row, the total and the plural noun |
+| `admin.login.page_title` | "Sign in" | none |
+| `admin.outcome.created` | "The %s was added." | the singular noun |
+| `admin.outcome.deleted` | "The %s was deleted." | the singular noun |
+| `admin.outcome.saved` | "The %s was saved." | the singular noun |
+| `admin.status.dismiss` | "Dismiss" | none |
+
+Same key, English wording or argument changed (placeholders unchanged unless stated):
+
+| Key | Change |
+|------|------|
+| `admin.button.add_model` | "+ Add %s"; the argument is now the singular noun, not the Go type name |
+| `admin.list.search_placeholder` | "Search %s…"; the argument is now the plural noun |
+| `admin.create.title` | "New %s"; the argument is now the singular noun |
+| `admin.edit.title` | "Edit %s"; the argument is now the singular noun |
+| `admin.delete.title` | "Delete this %s"; the argument is now the singular noun |
+| `admin.list.empty_title` | "No %s yet." (was "No %s rows yet"); the argument is the plural noun |
+| `admin.error.invalid_json` | "This is not valid JSON. Check that commas, quotes and brackets are in place." (was "Not valid JSON.") |
+| `admin.error.json_invalid` | "This is not valid JSON. Check that commas, quotes and brackets are in place." (was "Invalid JSON") |
+| `admin.error.bulk_invalid` | "Nothing was deleted. The selection is not valid." (was "the selection is not valid; nothing was deleted") |
+| `admin.error.csrf` | Keeps its key and placeholders; now one sentence for the page, not the one-line error |
+| `admin.error.not_found` | Keeps its key and placeholders; now one sentence for the page, not the one-line error |
+| `admin.error.method_not_allowed` | Keeps its key and placeholders; now one sentence for the page, not the one-line error |
+| `admin.error.not_staff` | Keeps its key and placeholders; now one sentence for the page, not the one-line error |
+| `admin.error.too_many_login_attempts` | Keeps its key and placeholders; now one sentence for the page, not the one-line error |
 
 ## [0.7.0] - 2026-10-25
 
