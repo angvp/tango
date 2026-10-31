@@ -103,7 +103,7 @@ var errorPageTemplate = cloneWithContent(`{{define "content"}}
 func renderErrorPage(ctx *tango.Context, status int, text errorText) error {
 	page := pageChromeFrom(ctx.Context())
 	return render(ctx, status, errorPageTemplate, errorPageData{
-		chrome:    chrome{Nav: page.nav, Brand: page.brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: text.Title}),
+		chrome:    chrome{Nav: page.nav, Brand: page.brand}.withContext(ctx.Context()),
 		errorText: text,
 	})
 }
