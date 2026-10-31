@@ -44,8 +44,11 @@ func assertHTMLErrorPage(t *testing.T, response *httptest.ResponseRecorder, stat
 		}
 	}
 	titles := findAll(parseShell(t, body), func(n *html.Node) bool { return n.Data == "title" })
-	if want := title + " · tanGO Admin"; len(titles) != 1 || textOf(titles[0]) != want {
-		t.Fatalf("document title = %d elements, want %q", len(titles), want)
+	if len(titles) != 1 {
+		t.Fatalf("document has %d title elements, want 1", len(titles))
+	}
+	if want := title + " · tanGO Admin"; textOf(titles[0]) != want {
+		t.Fatalf("document title = %q, want %q", textOf(titles[0]), want)
 	}
 }
 
