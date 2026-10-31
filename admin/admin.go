@@ -61,8 +61,9 @@ func New(store *db.Store, opts ...Option) tango.App {
 		nav := make([]navItem, len(registrations))
 		for i, registration := range registrations {
 			nav[i] = navItem{
-				Name: registration.Model.Name,
-				Path: "/admin/" + db.ColumnName(registration.Model.Name) + "/",
+				Name:  registration.Model.Name,
+				Label: sectionName(registration.Model, registration.Options),
+				Path:  "/admin/" + db.ColumnName(registration.Model.Name) + "/",
 			}
 		}
 

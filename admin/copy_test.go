@@ -65,8 +65,8 @@ func TestDisplayNameFallsBackToHumanizedGoName(t *testing.T) {
 	if !strings.Contains(body, "No crud products yet") {
 		t.Fatalf("empty state lacks the humanized plural name")
 	}
-	if strings.Contains(body, "No crudProduct") {
-		t.Fatalf("the raw Go type name reached the empty state")
+	if strings.Contains(body, "crudProduct") {
+		t.Fatalf("the raw Go type name reached the page")
 	}
 }
 

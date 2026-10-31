@@ -116,7 +116,7 @@ type crumbLink struct{ href, text string }
 
 func TestBreadcrumbsLinkTheTrailAndMarkTheCurrentItem(t *testing.T) {
 	pages := shellPages(t)
-	model := crumbLink{crudBasePath, "crudProduct"}
+	model := crumbLink{crudBasePath, "Crud products"}
 	tests := []struct {
 		page    string
 		links   []crumbLink

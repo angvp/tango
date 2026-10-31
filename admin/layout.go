@@ -19,7 +19,9 @@ var stylesheetLinkTag = `<link rel="stylesheet" href="` + adminStyleAsset.URL + 
 // model, so any admin page can link to any other without a page reload.
 type navItem struct {
 	Name string
-	Path string
+	// Label is the sidebar text: the model's plural display noun.
+	Label string
+	Path  string
 }
 
 // chrome is the data every admin page shares: the sidebar's contents, which
@@ -112,7 +114,7 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
     {{range .Nav}}
     <a href="{{.Path}}" class="sidebar-link group{{if eq .Name $active}} sidebar-link-active{{end}}"{{if eq .Name $active}} aria-current="page"{{end}}>
       <span class="sidebar-link-dot{{if eq .Name $active}} sidebar-link-dot-active{{end}}"></span>
-      {{.Name}}
+      {{.Label}}
     </a>
     {{end}}
   </nav>

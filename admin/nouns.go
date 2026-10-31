@@ -38,6 +38,11 @@ func pluralNoun(meta model.ModelMeta, opts adminregistry.Options) string {
 	return englishPlural(displayNoun(meta, opts))
 }
 
+// sectionName is the capitalized plural noun a page or section is titled with.
+func sectionName(meta model.ModelMeta, opts adminregistry.Options) string {
+	return capitalizeFirst(pluralNoun(meta, opts))
+}
+
 // capitalizeFirst returns s with its first letter in capitals, for a heading.
 func capitalizeFirst(s string) string {
 	runes := []rune(s)

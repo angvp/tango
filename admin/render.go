@@ -19,7 +19,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
   <a href="{{.BasePath}}new/" class="btn-primary">{{.T "admin.button.add_model" "+ Add %s" .Singular}}</a>
 </header>
 <div class="content-body">
-  {{if .Deleted}}<div class="alert-success" role="status">{{if eq .Deleted 1}}{{.T "admin.bulk.deleted_one" "1 %s deleted" .Singular}}{{else}}{{.T "admin.bulk.deleted_many" "%d %s deleted" .Deleted .Plural}}{{end}}</div>{{end}}
+  {{if .Deleted}}<div class="alert-success" role="status">{{if eq .Deleted 1}}{{.T "admin.bulk.outcome_one" "1 %s deleted" .Singular}}{{else}}{{.T "admin.bulk.outcome_many" "%d %s deleted" .Deleted .Plural}}{{end}}</div>{{end}}
   <div class="card changelist-card">
     <div class="card-header">
       <form method="get" class="flex flex-wrap items-end gap-3 w-full">
@@ -44,7 +44,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
       <button type="submit" name="density" value="compact" aria-pressed="{{.Compact}}" class="density-option {{if .Compact}}density-option-on{{else}}density-option-off{{end}}">{{.T "admin.density.compact" "Compact"}}</button>
     </form>
     {{if .Rows}}
-    {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.modal_title" "Delete {count} selected %s?" .Plural}}">
+    {{if .BulkDelete}}<div data-bulk-delete data-msg-selected="{{.T "admin.bulk.selected" "{count} selected"}}" data-msg-title="{{.T "admin.bulk.confirm_title" "Delete {count} selected %s?" .Plural}}">
     <div class="flex items-center gap-3 border-b border-line-subtle px-5 py-3" data-bulk-bar hidden>
       <button type="button" class="btn-danger" data-bulk-open disabled>{{.T "admin.bulk.delete_selected" "Delete selected"}}</button>
       <span class="text-sm text-ink-muted" data-bulk-count aria-live="polite"></span>
@@ -95,7 +95,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
     {{else}}
     <div class="empty-state">
       <p class="empty-state-title">{{.T "admin.list.empty_title" "No %s yet" .Plural}}</p>
-      <p class="empty-state-body">{{if .SearchQuery}}{{.T "admin.list.empty_search" "No %s match “%s”." .Plural .SearchQuery}}{{else if .Criteria}}{{.T "admin.list.empty_filtered" "No %s match the selected filters." .Plural}}{{else}}{{.T "admin.list.empty_body" "Add the first %s to see it here." .Singular}}{{end}}</p>
+      <p class="empty-state-body">{{if .SearchQuery}}{{.T "admin.list.empty_no_match" "No %s match “%s”." .Plural .SearchQuery}}{{else if .Criteria}}{{.T "admin.list.empty_no_filter_match" "No %s match the selected filters." .Plural}}{{else}}{{.T "admin.list.empty_first" "Add the first %s to see it here." .Singular}}{{end}}</p>
       {{if not .Criteria}}<a href="{{.BasePath}}new/" class="btn-primary mt-3">{{.T "admin.button.add_model" "+ Add %s" .Singular}}</a>{{end}}
     </div>
     {{end}}
