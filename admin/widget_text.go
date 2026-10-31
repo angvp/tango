@@ -4,17 +4,16 @@ import (
 	"context"
 
 	"github.com/angvp/tango/i18n"
-	"github.com/angvp/tango/internal/adminregistry"
 )
 
 // widgetText translates the fixed text a built-in widget renders, using the
-// request context the form attached to the field.
+// request context the widget was called with.
 type widgetText struct {
 	ctx context.Context
 }
 
-func newWidgetText(f FieldContext) widgetText {
-	return widgetText{ctx: adminregistry.ContextOf(f)}
+func newWidgetText(ctx context.Context) widgetText {
+	return widgetText{ctx: ctx}
 }
 
 // T is i18n.T for the widget's request.

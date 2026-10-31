@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"html/template"
 	"os"
 	"regexp"
@@ -35,14 +36,14 @@ var widgetSourceFiles = []string{
 func renderedWidgets() map[string]template.HTML {
 	field := FieldContext{Name: "Body", Label: "Body", Value: "text", Checked: true}
 	return map[string]template.HTML{
-		"input":           inputWidget{InputType: "text"}.Render(field),
-		"checkbox":        checkboxWidget{}.Render(field),
-		"textarea":        textareaWidget{}.Render(field),
-		"select":          foreignKeySelectWidget{}.Render(field),
-		"readonly":        readOnlyWidget{}.Render(field),
-		"json":            jsonWidget{}.Render(field),
-		"markdown":        markdownWidget{}.Render(field),
-		"markdownPreview": renderMarkdown(field, true),
+		"input":           inputWidget{InputType: "text"}.Render(context.Background(), field),
+		"checkbox":        checkboxWidget{}.Render(context.Background(), field),
+		"textarea":        textareaWidget{}.Render(context.Background(), field),
+		"select":          foreignKeySelectWidget{}.Render(context.Background(), field),
+		"readonly":        readOnlyWidget{}.Render(context.Background(), field),
+		"json":            jsonWidget{}.Render(context.Background(), field),
+		"markdown":        markdownWidget{}.Render(context.Background(), field),
+		"markdownPreview": renderMarkdown(context.Background(), field, true),
 	}
 }
 
@@ -77,7 +78,7 @@ func TestWidgetSourcesUseNoRawColourClasses(t *testing.T) {
 }
 
 func TestMarkdownPreviewCanvasIsDeliberatelyLight(t *testing.T) {
-	markup := string(renderMarkdown(FieldContext{Name: "Body", Label: "Body"}, true))
+	markup := string(renderMarkdown(t.Context(), FieldContext{Name: "Body", Label: "Body"}, true))
 	if !strings.Contains(markup, markdownPreviewCanvasClass) {
 		t.Fatalf("preview iframe lost its fixed white canvas or its themed frame:\n%s", markup)
 	}

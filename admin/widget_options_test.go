@@ -1,6 +1,7 @@
 package admin_test
 
 import (
+	"context"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -114,11 +115,11 @@ func TestFieldOrderReordersRenderedFields(t *testing.T) {
 // fully replaces a field's default rendering and parsing.
 type uppercaseWidget struct{}
 
-func (uppercaseWidget) Render(f admin.FieldContext) template.HTML {
+func (uppercaseWidget) Render(_ context.Context, f admin.FieldContext) template.HTML {
 	return template.HTML(`<input data-widget="uppercase" name="` + f.Name + `" value="` + f.Value + `" class="input">`)
 }
 
-func (uppercaseWidget) Parse(f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
+func (uppercaseWidget) Parse(_ context.Context, f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
 	dest.SetString(strings.ToUpper(form.Get(f.Name)))
 	return nil
 }
@@ -156,11 +157,11 @@ type contextCapturingWidget struct {
 	parsedWith *admin.FieldContext
 }
 
-func (contextCapturingWidget) Render(f admin.FieldContext) template.HTML {
+func (contextCapturingWidget) Render(_ context.Context, f admin.FieldContext) template.HTML {
 	return template.HTML(`<input name="` + f.Name + `" value="` + f.Value + `" class="input">`)
 }
 
-func (w contextCapturingWidget) Parse(f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
+func (w contextCapturingWidget) Parse(_ context.Context, f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
 	*w.parsedWith = f
 	dest.SetString(form.Get(f.Name))
 	return nil

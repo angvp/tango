@@ -241,10 +241,12 @@ An `admin.Widget` replaces how one field renders and parses in the create/edit f
 
 ```go
 type Widget interface {
-	Render(f FieldContext) template.HTML
-	Parse(f FieldContext, form FieldValues, dest reflect.Value) error
+	Render(ctx context.Context, f FieldContext) template.HTML
+	Parse(ctx context.Context, f FieldContext, form FieldValues, dest reflect.Value) error
 }
 ```
+
+`ctx` is the request's context. A widget that shows its own text translates it with `i18n.T(ctx, "your.key", "English text")`, so a host catalog can word it (see [i18n](i18n.md)).
 
 `FieldContext` carries what a widget needs — field name, label, help text, the field's error message after a failed save (`Error`), current value, maximum length (`MaxLength`, `0` when unbounded), read-only flag, and (for a foreign key field) the related model's select options plus an optional related-object create URL — and is passed to *both* `Render` and `Parse`, so a widget can derive its own submitted form key(s) from `FieldContext.Name` identically on both sides. A simple widget reads `form.Get(f.Name)`; a widget needing more than one HTML input for its one Go field (a date/time picker split into separate controls, say) derives extra names from `f.Name` — e.g. `f.Name + "_date"` and `f.Name + "_time"` — using the same derivation in `Render` and `Parse` so the two never drift apart.
 
@@ -397,7 +399,7 @@ Automated tests pin the admin's structural markup: labels, `aria-invalid` and `a
 
 Recorded pass: on 2026-10-10 the maintainer checked the JSON **Formatted** and Markdown **Preview** tabs by hand in a browser against the `spa-accounts` example; they behaved as described. Repeat the checklist for your own deployment.
 
-Known limits: the widgets' messages ("Invalid JSON…", **Edit**, **Formatted**, **Write**, **Preview**, the character count) are English only, because a widget's `Render` and `Parse` have no request context. The sidebar toggle, skip link and `<main>` landmark are separate follow-ups.
+Known limits: the sidebar toggle, skip link and `<main>` landmark are separate follow-ups.
 
 ## Stability
 

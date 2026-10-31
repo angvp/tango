@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"reflect"
@@ -65,11 +66,11 @@ type inputWidgetData struct {
 	InputType string
 }
 
-func (w inputWidget) Render(f FieldContext) template.HTML {
+func (w inputWidget) Render(_ context.Context, f FieldContext) template.HTML {
 	return renderWidgetTemplate(inputWidgetTemplate, inputWidgetData{FieldContext: f, InputType: w.InputType})
 }
 
-func (inputWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) error {
+func (inputWidget) Parse(_ context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
 	return setFieldFromReflectedString(dest, form.Get(f.Name), form.Has(f.Name))
 }
 
@@ -82,11 +83,11 @@ var checkboxWidgetTemplate = template.Must(template.New("checkboxWidget").Parse(
 // checkboxWidget is the built-in bool field: a single checkbox.
 type checkboxWidget struct{}
 
-func (checkboxWidget) Render(f FieldContext) template.HTML {
+func (checkboxWidget) Render(_ context.Context, f FieldContext) template.HTML {
 	return renderWidgetTemplate(checkboxWidgetTemplate, f)
 }
 
-func (checkboxWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) error {
+func (checkboxWidget) Parse(_ context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
 	dest.SetBool(form.Has(f.Name))
 	return nil
 }
@@ -106,11 +107,11 @@ var selectWidgetTemplate = template.Must(template.New("selectWidget").Parse(
 // related row's primary key as a string.
 type foreignKeySelectWidget struct{}
 
-func (foreignKeySelectWidget) Render(f FieldContext) template.HTML {
+func (foreignKeySelectWidget) Render(_ context.Context, f FieldContext) template.HTML {
 	return renderWidgetTemplate(selectWidgetTemplate, f)
 }
 
-func (foreignKeySelectWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) error {
+func (foreignKeySelectWidget) Parse(_ context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
 	return setFieldFromReflectedString(dest, form.Get(f.Name), form.Has(f.Name))
 }
 
@@ -141,11 +142,11 @@ var textareaWidgetTemplate = template.Must(template.New("textareaWidget").Parse(
 // Options.Widgets (see Textarea).
 type textareaWidget struct{}
 
-func (textareaWidget) Render(f FieldContext) template.HTML {
+func (textareaWidget) Render(_ context.Context, f FieldContext) template.HTML {
 	return renderWidgetTemplate(textareaWidgetTemplate, f)
 }
 
-func (textareaWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) error {
+func (textareaWidget) Parse(_ context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
 	dest.SetString(form.Get(f.Name))
 	return nil
 }
@@ -168,10 +169,10 @@ var readOnlyWidgetTemplate = template.Must(template.New("readOnlyWidget").Parse(
 // always ignored (see admin.Options.ReadOnly).
 type readOnlyWidget struct{}
 
-func (readOnlyWidget) Render(f FieldContext) template.HTML {
+func (readOnlyWidget) Render(_ context.Context, f FieldContext) template.HTML {
 	return renderWidgetTemplate(readOnlyWidgetTemplate, f)
 }
 
-func (readOnlyWidget) Parse(FieldContext, FieldValues, reflect.Value) error {
+func (readOnlyWidget) Parse(context.Context, FieldContext, FieldValues, reflect.Value) error {
 	return nil
 }

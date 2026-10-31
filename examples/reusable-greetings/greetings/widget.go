@@ -1,6 +1,7 @@
 package greetings
 
 import (
+	"context"
 	"html/template"
 	"reflect"
 	"strings"
@@ -25,7 +26,7 @@ var trimmedNameWidgetTemplate = template.Must(template.New("trimmedName").Parse(
 // input's plain pass-through.
 type trimmedNameWidget struct{}
 
-func (trimmedNameWidget) Render(f admin.FieldContext) template.HTML {
+func (trimmedNameWidget) Render(_ context.Context, f admin.FieldContext) template.HTML {
 	var buf strings.Builder
 	// trimmedNameWidgetTemplate is a fixed, compile-time-checked template
 	// executed with admin.FieldContext's own fields — Execute cannot fail
@@ -34,7 +35,7 @@ func (trimmedNameWidget) Render(f admin.FieldContext) template.HTML {
 	return template.HTML(buf.String())
 }
 
-func (trimmedNameWidget) Parse(f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
+func (trimmedNameWidget) Parse(_ context.Context, f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
 	dest.SetString(strings.TrimSpace(form.Get(f.Name)))
 	return nil
 }

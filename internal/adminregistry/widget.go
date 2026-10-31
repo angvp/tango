@@ -68,25 +68,6 @@ type FieldContext struct {
 	// their control aria-invalid when it is set; a custom widget may do the
 	// same.
 	Error string
-
-	// ctx is the request's context, for built-in widgets that translate
-	// their text. Attach it with WithContext; read it with ContextOf.
-	ctx context.Context
-}
-
-// WithContext returns f carrying the request context ctx.
-func WithContext(f FieldContext, ctx context.Context) FieldContext {
-	f.ctx = ctx
-	return f
-}
-
-// ContextOf returns the request context attached to f, or
-// context.Background() when none was.
-func ContextOf(f FieldContext) context.Context {
-	if f.ctx == nil {
-		return context.Background()
-	}
-	return f.ctx
 }
 
 // DescribedBy returns the value for the control's aria-describedby: the ids
@@ -113,6 +94,8 @@ type FieldValues interface {
 // Widget renders one model field's create/edit form control and parses its
 // submitted value back into the Go field, replacing tanGO's default
 // behavior for that field alone — nothing else about the form changes.
+// ctx is the request's context: a widget translates its own messages with
+// i18n.T(ctx, key, fallback), so a host catalog can word them.
 // tanGO's built-in field behaviors (a generic text/number/date-time input,
 // a checkbox, a textarea, and the foreign-key select) are themselves
 // Widgets, set via Options.Widgets like any custom one.
@@ -127,8 +110,8 @@ type FieldValues interface {
 // rendered instance — because the same widget on multiple fields will
 // render its tags more than once.
 type Widget interface {
-	Render(f FieldContext) template.HTML
-	Parse(f FieldContext, form FieldValues, dest reflect.Value) error
+	Render(ctx context.Context, f FieldContext) template.HTML
+	Parse(ctx context.Context, f FieldContext, form FieldValues, dest reflect.Value) error
 }
 
 // PreviewWidget is the optional extension a Widget implements when its field

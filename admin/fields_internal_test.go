@@ -282,7 +282,7 @@ func TestReadOnlyWidgetParseIsANoOp(t *testing.T) {
 	v := reflect.ValueOf(&dest).Elem()
 	dest = "unchanged"
 
-	if err := (readOnlyWidget{}).Parse(FieldContext{}, url.Values{"x": {"y"}}, v); err != nil {
+	if err := (readOnlyWidget{}).Parse(t.Context(), FieldContext{}, url.Values{"x": {"y"}}, v); err != nil {
 		t.Fatalf("readOnlyWidget.Parse: %v", err)
 	}
 	if dest != "unchanged" {

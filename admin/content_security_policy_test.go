@@ -1,6 +1,7 @@
 package admin_test
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -86,11 +87,11 @@ func TestAdminLogoOriginNeedsTheHostToAddItToTheComposedPolicy(t *testing.T) {
 // strict admin policy blocks it, which is the documented host-widget contract.
 type inlineStyleWidget struct{}
 
-func (inlineStyleWidget) Render(f admin.FieldContext) template.HTML {
+func (inlineStyleWidget) Render(_ context.Context, f admin.FieldContext) template.HTML {
 	return template.HTML(`<input id="field-` + f.Name + `" name="` + f.Name + `" style="color: red">`)
 }
 
-func (inlineStyleWidget) Parse(admin.FieldContext, admin.FieldValues, reflect.Value) error {
+func (inlineStyleWidget) Parse(context.Context, admin.FieldContext, admin.FieldValues, reflect.Value) error {
 	return nil
 }
 

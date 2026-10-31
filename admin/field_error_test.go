@@ -1,6 +1,7 @@
 package admin_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -25,11 +26,11 @@ const noteBasePath = "/admin/admin_note/"
 // failingWidget is a text input whose Parse always fails with err.
 type failingWidget struct{ err error }
 
-func (failingWidget) Render(f admin.FieldContext) template.HTML {
+func (failingWidget) Render(_ context.Context, f admin.FieldContext) template.HTML {
 	return template.HTML(fmt.Sprintf(`<input id="field-%s" name="%s" value="%s"%s>`, f.Name, f.Name, template.HTMLEscapeString(f.Value), ""))
 }
 
-func (w failingWidget) Parse(admin.FieldContext, admin.FieldValues, reflect.Value) error {
+func (w failingWidget) Parse(context.Context, admin.FieldContext, admin.FieldValues, reflect.Value) error {
 	return w.err
 }
 

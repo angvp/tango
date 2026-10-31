@@ -6,7 +6,7 @@ import (
 )
 
 func TestJSONWidgetRenderHasNoInlineScriptOrHandler(t *testing.T) {
-	out := string(jsonWidget{}.Render(FieldContext{Name: "Body", Label: "Body", Value: "{}"}))
+	out := string(jsonWidget{}.Render(t.Context(), FieldContext{Name: "Body", Label: "Body", Value: "{}"}))
 	if regexp.MustCompile(`<script(\s[^>]*)?>`).FindString(out) != `<script src="`+widgetsAsset.URL+`" defer>` {
 		t.Errorf("the only script tag should be the shared src tag:\n%s", out)
 	}

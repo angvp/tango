@@ -19,7 +19,7 @@ func (f fakeFieldValues) Has(key string) bool {
 }
 
 func TestTrimmedNameWidgetRendersInputAndOwnAsset(t *testing.T) {
-	html := string(NameWidget().Render(admin.FieldContext{Name: "Name", Label: "Name", Value: "hello"}))
+	html := string(NameWidget().Render(t.Context(), admin.FieldContext{Name: "Name", Label: "Name", Value: "hello"}))
 
 	if !strings.Contains(html, `name="Name"`) {
 		t.Fatalf("rendered HTML does not contain the field's input:\n%s", html)
@@ -36,7 +36,7 @@ func TestTrimmedNameWidgetParseTrimsWhitespace(t *testing.T) {
 	var g Greeting
 	dest := reflect.ValueOf(&g).Elem().FieldByName("Name")
 
-	err := NameWidget().Parse(admin.FieldContext{Name: "Name"}, fakeFieldValues{"Name": "  padded  "}, dest)
+	err := NameWidget().Parse(t.Context(), admin.FieldContext{Name: "Name"}, fakeFieldValues{"Name": "  padded  "}, dest)
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}

@@ -1,6 +1,7 @@
 package documents
 
 import (
+	"context"
 	"html/template"
 	"reflect"
 
@@ -14,14 +15,14 @@ import (
 type storedKeyWidget struct{}
 
 // Render shows only the field's label and a note. It never prints f.Value.
-func (storedKeyWidget) Render(f admin.FieldContext) template.HTML {
+func (storedKeyWidget) Render(_ context.Context, f admin.FieldContext) template.HTML {
 	return template.HTML(`<span class="field-label">` + template.HTMLEscapeString(f.Label) +
 		`</span><div class="input bg-slate-50 text-slate-500">Stored with the file; not editable here.</div>`)
 }
 
 // Parse keeps the key the row already has. f.Value is that stored key on
 // edit and empty on create, where the upload form must be used instead.
-func (storedKeyWidget) Parse(f admin.FieldContext, _ admin.FieldValues, dest reflect.Value) error {
+func (storedKeyWidget) Parse(_ context.Context, f admin.FieldContext, _ admin.FieldValues, dest reflect.Value) error {
 	if f.Value == "" {
 		return admin.FieldError{Message: "files are added with the upload form, not here"}
 	}

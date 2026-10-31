@@ -97,16 +97,16 @@ type markdownWidgetData struct {
 	Preview bool
 }
 
-func (w markdownWidget) Render(f FieldContext) template.HTML {
-	return renderMarkdown(f, false)
+func (w markdownWidget) Render(ctx context.Context, f FieldContext) template.HTML {
+	return renderMarkdown(ctx, f, false)
 }
 
-func (w markdownWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) error {
+func (w markdownWidget) Parse(_ context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
 	return parseMarkdown(f, form, dest)
 }
 
-func renderMarkdown(f FieldContext, preview bool) template.HTML {
-	text := newWidgetText(f)
+func renderMarkdown(ctx context.Context, f FieldContext, preview bool) template.HTML {
+	text := newWidgetText(ctx)
 	return renderWidgetTemplate(markdownWidgetTemplate, markdownWidgetData{
 		FieldContext: f,
 		Text:         text,
@@ -133,10 +133,10 @@ func markdownCountText(text widgetText, value string, maxLength int) string {
 	return strings.NewReplacer("{count}", n).Replace(text.T("admin.markdown.count", "{count} characters"))
 }
 
-func (w markdownPreviewWidget) Render(f FieldContext) template.HTML {
-	return renderMarkdown(f, true)
+func (w markdownPreviewWidget) Render(ctx context.Context, f FieldContext) template.HTML {
+	return renderMarkdown(ctx, f, true)
 }
 
-func (w markdownPreviewWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) error {
+func (w markdownPreviewWidget) Parse(_ context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
 	return parseMarkdown(f, form, dest)
 }

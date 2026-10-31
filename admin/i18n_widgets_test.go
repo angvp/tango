@@ -4,7 +4,9 @@ import (
 	"context"
 	"html/template"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -196,5 +198,64 @@ func TestPreviewDocumentIsTranslatedButEndpointErrorsStayEnglish(t *testing.T) {
 	big := strings.Repeat("x", (256<<10)+1)
 	if msg := previewBody(t, previewRequest(handler, http.MethodPost, notePreviewPath, big, testSessionCSRFToken))["error"]; msg != "request body too large" {
 		t.Errorf("too large error = %v, want the English JSON text", msg)
+	}
+}
+
+// hostNoteWidget is a host's own widget. Its messages reach the catalog only
+// through the request context its Render and Parse receive.
+type hostNoteWidget struct{}
+
+func (hostNoteWidget) Render(ctx context.Context, f admin.FieldContext) template.HTML {
+	hint := template.HTMLEscapeString(i18n.T(ctx, "notes.body_hint", "Add a short note"))
+	return template.HTML(`<input id="field-` + f.Name + `" name="` + f.Name + `" value="` + template.HTMLEscapeString(f.Value) + `" placeholder="` + hint + `">`)
+}
+
+func (hostNoteWidget) Parse(ctx context.Context, f admin.FieldContext, form admin.FieldValues, dest reflect.Value) error {
+	raw := form.Get(f.Name)
+	if len(raw) < 3 {
+		return admin.FieldError{Message: i18n.T(ctx, "notes.body_too_short", "Too short")}
+	}
+	dest.SetString(raw)
+	return nil
+}
+
+func TestHostWidgetMessagesFollowTheRequestLocale(t *testing.T) {
+	i18ntest.Isolate(t)
+	i18n.RegisterCatalog("zz-note", map[string]string{
+		"notes.body_hint":      "Escribe una nota corta",
+		"notes.body_too_short": "Demasiado corto",
+	})
+	handler := buildI18NNoteAdmin(t, hostNoteWidget{}, resolveTo("zz-note"))
+	page := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
+	if !strings.Contains(page, `placeholder="Escribe una nota corta"`) {
+		t.Errorf("widget hint not localised:\n%s", page)
+	}
+	rejected := doRequest(t, handler, http.MethodPost, noteBasePath+"new/", url.Values{"Title": {"t"}, "Body": {"x"}})
+	if rejected.Code != http.StatusUnprocessableEntity || !strings.Contains(rejected.Body.String(), "Demasiado corto") {
+		t.Errorf("Parse message not localised (status %d):\n%s", rejected.Code, rejected.Body.String())
+	}
+}
+
+func TestHostWidgetMessagesFallBackToEnglishWithoutAHostKey(t *testing.T) {
+	i18ntest.Isolate(t)
+	i18n.RegisterCatalog("zz-note-empty", map[string]string{"admin.layout.title": "Admin zz"})
+	handler := buildI18NNoteAdmin(t, hostNoteWidget{}, resolveTo("zz-note-empty"))
+	page := doRequest(t, handler, http.MethodGet, noteBasePath+"new/", nil).Body.String()
+	if !strings.Contains(page, `placeholder="Add a short note"`) {
+		t.Errorf("English fallback missing:\n%s", page)
+	}
+}
+
+func TestHostWidgetMessagesNegotiateFromAcceptLanguage(t *testing.T) {
+	i18ntest.Isolate(t)
+	i18n.RegisterCatalog("zz-neg", map[string]string{"notes.body_hint": "Escribe una nota corta"})
+	handler := buildI18NNoteAdmin(t, hostNoteWidget{}, i18n.DefaultLocaleResolver)
+	request := httptest.NewRequest(http.MethodGet, noteBasePath+"new/", nil)
+	request.Header.Set("Accept-Language", "zz-neg")
+	request.AddCookie(&http.Cookie{Name: "tango_admin_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if !strings.Contains(response.Body.String(), `placeholder="Escribe una nota corta"`) {
+		t.Errorf("Accept-Language not negotiated into the widget:\n%s", response.Body.String())
 	}
 }

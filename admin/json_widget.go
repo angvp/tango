@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,15 +53,15 @@ type jsonWidget struct{}
 // the authority, and the saved value is exactly the submitted text.
 func JSON() Widget { return jsonWidget{} }
 
-func (jsonWidget) Render(f FieldContext) template.HTML {
-	return renderWidgetTemplate(jsonWidgetTemplate, jsonWidgetData{FieldContext: f, Text: newWidgetText(f), ScriptURL: widgetsAsset.URL})
+func (jsonWidget) Render(ctx context.Context, f FieldContext) template.HTML {
+	return renderWidgetTemplate(jsonWidgetTemplate, jsonWidgetData{FieldContext: f, Text: newWidgetText(ctx), ScriptURL: widgetsAsset.URL})
 }
 
 // Parse stores the submitted text before checking it, so that an invalid
 // save re-renders exactly what the user typed. The instance being populated
 // is a fresh local value, so this changes nothing in the database until the
 // whole form is valid.
-func (jsonWidget) Parse(f FieldContext, form FieldValues, dest reflect.Value) error {
+func (jsonWidget) Parse(_ context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
 	if dest.Kind() != reflect.String {
 		return fmt.Errorf("admin.JSON: field %q is %s, not a string", f.Name, dest.Kind())
 	}

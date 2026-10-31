@@ -126,12 +126,12 @@ type formContextOptions struct {
 }
 
 func buildFieldContext(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, opts adminregistry.Options, instance reflect.Value, formOpts formContextOptions) (FieldContext, bool) {
-	fc := adminregistry.WithContext(FieldContext{
+	fc := FieldContext{
 		Name:      field.Name,
 		Label:     humanizeFieldName(field.Name),
 		MaxLength: field.MaxLength,
 		ReadOnly:  contains(opts.ReadOnly, field.Name),
-	}, ctx)
+	}
 	if label, ok := opts.Labels[field.Name]; ok {
 		fc.Label = label
 	}
@@ -218,7 +218,7 @@ func buildFormFields(ctx context.Context, store *db.Store, models *model.Registr
 		if _, ok := widget.(PreviewWidget); ok {
 			fc.PreviewURL = previewPath(meta.Name, field.Name)
 		}
-		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(fc), HelpText: fc.HelpText, Error: fc.Error})
+		fields = append(fields, formField{Name: field.Name, HTML: widget.Render(ctx, fc), HelpText: fc.HelpText, Error: fc.Error})
 	}
 
 	return fields
@@ -264,7 +264,7 @@ func populateFromForm(ctx context.Context, store *db.Store, models *model.Regist
 		fc, fkResolved := buildFieldContext(ctx, store, models, adminReg, field, opts, existing, formContextOptions{})
 		widget := widgetForField(field, opts, fc, fkResolved)
 
-		if err := widget.Parse(fc, form, fieldValue); err != nil {
+		if err := widget.Parse(ctx, fc, form, fieldValue); err != nil {
 			if fieldErrors == nil {
 				fieldErrors = map[string]string{}
 			}
