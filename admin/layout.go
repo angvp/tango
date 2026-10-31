@@ -29,7 +29,23 @@ type chrome struct {
 	Nav    []navItem
 	Active string
 	Brand  Branding
+	// Crumbs is the trail above the page title; a page without one renders
+	// no breadcrumb navigation.
+	Crumbs []crumb
 	ctx    context.Context
+}
+
+// crumb is one step of the breadcrumb trail. The current page has no Href
+// and renders as text.
+type crumb struct {
+	Label string
+	Href  string
+}
+
+// withCrumbs returns the chrome with the breadcrumb trail set.
+func (c chrome) withCrumbs(crumbs ...crumb) chrome {
+	c.Crumbs = crumbs
+	return c
 }
 
 func (c chrome) withContext(ctx context.Context) chrome {
@@ -69,28 +85,37 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
 <title>{{.T "admin.layout.title" "tanGO Admin"}}</title>
 ` + stylesheetLinkTag + `
 
-{{define "menuBtn"}}<button type="button" class="menu-btn" data-admin-nav-open aria-label="{{.T "admin.layout.open_menu" "Open menu"}}">
+{{define "menuBtn"}}<button type="button" class="menu-btn" data-admin-nav-open aria-expanded="false" aria-controls="sidebar" aria-label="{{.T "admin.layout.open_menu" "Open menu"}}">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
 </button>{{end}}
+
+{{define "breadcrumbs"}}{{with .Crumbs}}<nav class="breadcrumb" aria-label="{{$.T "admin.layout.breadcrumb" "Breadcrumb"}}"><ol class="breadcrumb-list">{{range .}}
+  <li class="breadcrumb-item">{{if .Href}}<a href="{{.Href}}" class="breadcrumb-link">{{.Label}}</a>{{else}}<span class="breadcrumb-current" aria-current="page">{{.Label}}</span>{{end}}</li>{{end}}
+</ol></nav>{{end}}{{end}}
 </head>
 <body>
+<a href="#main" class="skip-link">{{.T "admin.layout.skip" "Skip to content"}}</a>
 <div class="shell">
 <div id="sidebar-backdrop" class="sidebar-backdrop" data-admin-nav-close></div>
 <aside id="sidebar" class="sidebar">
+  <button type="button" class="drawer-close" data-admin-nav-close>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    {{.T "admin.layout.close_menu" "Close menu"}}
+  </button>
   <div class="sidebar-brand">
     {{if .Brand.LogoURL}}<img src="{{.Brand.LogoURL}}" alt="" class="h-7 w-7 rounded-md object-cover">{{else}}<span class="sidebar-brand-mark">t</span>{{end}}
     <span class="sidebar-brand-text">{{if .Brand.Name}}{{.Brand.Name}}{{else}}{{.T "admin.layout.brand" "tanGO Admin"}}{{end}}</span>
   </div>
-  <div class="sidebar-nav">
+  <nav class="sidebar-nav" aria-label="{{.T "admin.layout.models" "Models"}}">
     <div class="sidebar-section-label">{{.T "admin.layout.models" "Models"}}</div>
     {{$active := .Active}}
     {{range .Nav}}
-    <a href="{{.Path}}" class="sidebar-link group{{if eq .Name $active}} sidebar-link-active{{end}}">
+    <a href="{{.Path}}" class="sidebar-link group{{if eq .Name $active}} sidebar-link-active{{end}}"{{if eq .Name $active}} aria-current="page"{{end}}>
       <span class="sidebar-link-dot{{if eq .Name $active}} sidebar-link-dot-active{{end}}"></span>
       {{.Name}}
     </a>
     {{end}}
-  </div>
+  </nav>
   <div class="sidebar-footer">{{with .SignedIn}}
     <div>{{$.T "admin.layout.signed_in_as" "Signed in as %s" .Username}}</div>
     <form method="post" action="/admin/theme/" role="group" aria-label="{{$.T "admin.theme.label" "Theme"}}" class="mt-2 flex flex-wrap gap-1">
@@ -106,9 +131,9 @@ var layoutTemplate = template.Must(template.New("layout").Parse(`<!doctype html>
     </form>{{end}}
   </div>
 </aside>
-<div class="content">
+<main id="main" class="content">
 {{block "content" .}}{{end}}
-</div>
+</main>
 </div>
 ` + navScriptTag + `
 </body>

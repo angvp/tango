@@ -170,7 +170,7 @@ func removeBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, fie
 // request comes from a form submission a person is looking at.
 func rejectBulk(ctx *tango.Context, nav []navItem, brand Branding, meta model.ModelMeta, basePath, key, fallback string) error {
 	return render(ctx, http.StatusBadRequest, bulkRejectedTemplate, bulkRejectedPageData{
-		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()),
+		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: meta.Name, Href: basePath}),
 		Message:  i18n.T(ctx.Context(), key, fallback),
 		BasePath: basePath,
 	})

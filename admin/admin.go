@@ -137,7 +137,7 @@ func modelRoutes(modelPath string, store *db.Store, models *model.Registry, admi
 	list := requireSession(store, listView(store, models, adminReg, registration, nav, brand))
 	create := requireSession(store, createView(store, models, adminReg, registration, nav, brand))
 	edit := requireSession(store, editView(store, models, adminReg, registration, nav, brand))
-	del := requireSession(store, deleteView(store, registration, nav, brand))
+	del := requireSession(store, deleteView(store, models, adminReg, registration, nav, brand))
 
 	urls := tango.URLs{
 		tango.Path(http.MethodGet, modelPath, list, hiddenPage),

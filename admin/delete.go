@@ -8,9 +8,11 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/adminregistry"
+	"github.com/angvp/tango/model"
 )
 
-func deleteView(store *db.Store, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
+func deleteView(store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
 	pageChrome := chrome{Nav: nav, Active: meta.Name, Brand: brand}
@@ -36,8 +38,12 @@ func deleteView(store *db.Store, registration ModelRegistration, nav []navItem, 
 				return err
 			}
 
+			rowChrome, err := editChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, instancePtr.Elem())
+			if err != nil {
+				return err
+			}
 			return render(ctx, http.StatusOK, deleteTemplate, deletePageData{
-				chrome:    pageChrome.withContext(ctx.Context()),
+				chrome:    rowChrome,
 				ModelName: meta.Name,
 				PK:        fmt.Sprint(pkValue),
 				CSRFToken: csrfTokenFromRequest(ctx.Request()),

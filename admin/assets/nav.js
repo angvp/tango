@@ -1,6 +1,9 @@
 // Sidebar behaviour for the admin layout: the menu button opens the sidebar
-// and the backdrop closes it. Elements opt in with data-admin-nav-open and
-// data-admin-nav-close, so the layout's markup carries no inline handler.
+// as a drawer, and the Close button, the backdrop and Escape close it.
+// Elements opt in with data-admin-nav-open and data-admin-nav-close, so the
+// layout's markup carries no inline handler. Focus moves into the drawer on
+// open and returns to the menu button on close; while the drawer is open the
+// page behind it is inert and Tab stays inside the drawer.
 (function () {
   "use strict";
 
@@ -10,22 +13,93 @@
     return;
   }
 
+  var main = document.getElementById("main");
+  var openers = document.querySelectorAll("[data-admin-nav-open]");
+  var closeButton = sidebar.querySelector("button[data-admin-nav-close]");
+  var desktop = window.matchMedia("(min-width: 768px)");
+  var opener = null;
+
+  function isOpen() {
+    return sidebar.classList.contains("sidebar-open");
+  }
+
+  function setExpanded(value) {
+    openers.forEach(function (element) {
+      element.setAttribute("aria-expanded", value ? "true" : "false");
+    });
+  }
+
   function open() {
+    if (isOpen()) {
+      return;
+    }
+    opener = document.activeElement && document.activeElement.hasAttribute("data-admin-nav-open")
+      ? document.activeElement
+      : openers[0] || null;
     sidebar.classList.add("sidebar-open");
     backdrop.classList.add("sidebar-backdrop-open");
+    setExpanded(true);
+    if (main) {
+      main.inert = true;
+    }
+    if (closeButton) {
+      closeButton.focus();
+    }
   }
 
   function close() {
+    if (!isOpen()) {
+      return;
+    }
+    var focusWasInside = sidebar.contains(document.activeElement);
     sidebar.classList.remove("sidebar-open");
     backdrop.classList.remove("sidebar-backdrop-open");
+    setExpanded(false);
+    if (main) {
+      main.inert = false;
+    }
+    if (focusWasInside && opener && !desktop.matches) {
+      opener.focus();
+    }
+  }
+
+  function trapTab(event) {
+    var focusable = sidebar.querySelectorAll("a[href], button:not([disabled]), input:not([disabled])");
+    if (focusable.length === 0) {
+      return;
+    }
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   window.tangoAdminNav = { open: open, close: close };
 
-  document.querySelectorAll("[data-admin-nav-open]").forEach(function (element) {
+  openers.forEach(function (element) {
     element.addEventListener("click", open);
   });
   document.querySelectorAll("[data-admin-nav-close]").forEach(function (element) {
     element.addEventListener("click", close);
+  });
+  document.addEventListener("keydown", function (event) {
+    if (!isOpen()) {
+      return;
+    }
+    if (event.key === "Escape") {
+      close();
+    } else if (event.key === "Tab") {
+      trapTab(event);
+    }
+  });
+  desktop.addEventListener("change", function (event) {
+    if (event.matches) {
+      close();
+    }
   });
 })();
