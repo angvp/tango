@@ -14,7 +14,7 @@ func registerCatalogs() {
 var spanishMexico = map[string]string{
 	"admin.button.add_model": "+ Agregar %s",
 	"admin.fk.add_related":   "Agregar %s",
-	"admin.list.empty_first":  "Agrega el primer %s para verlo aquí.",
+	"admin.list.empty_first": "Agrega el primer %s para verlo aquí.",
 }
 
 var spanish = map[string]string{
@@ -25,7 +25,7 @@ var spanish = map[string]string{
 	"admin.bulk.delete_selected":            "Eliminar seleccionadas",
 	"admin.bulk.outcome_many":               "Se eliminaron %d %s.",
 	"admin.bulk.outcome_one":                "Se eliminó 1 %s.",
-	"admin.bulk.confirm_title":                "¿Eliminar {count} %s seleccionados?",
+	"admin.bulk.confirm_title":              "¿Eliminar {count} %s seleccionados?",
 	"admin.bulk.rejected_title":             "No se eliminó nada",
 	"admin.bulk.select_all":                 "Seleccionar las %d filas de esta página",
 	"admin.bulk.select_row":                 "Seleccionar %s",
@@ -80,7 +80,7 @@ var spanish = map[string]string{
 	"admin.error.json_invalid":              "JSON no válido",
 	"admin.error.json_position":             "JSON no válido (problema en el carácter %d).",
 	"admin.error.bulk_invalid":              "la selección no es válida; no se eliminó nada",
-	"admin.error.bulk_selected_missing":              "No se eliminó nada. Un %s seleccionado ya no existe.",
+	"admin.error.bulk_selected_missing":     "No se eliminó nada. Un %s seleccionado ya no existe.",
 	"admin.error.method_not_allowed":        "método no permitido",
 	"admin.error.not_found":                 "no encontrado",
 	"admin.error.not_staff":                 "403 Prohibido: esta cuenta de administración no tiene acceso de personal.",
@@ -113,9 +113,9 @@ var spanish = map[string]string{
 	"admin.list.delete_row":                 "Eliminar %s",
 	"admin.list.edit_row":                   "Editar %s",
 	"admin.list.actions":                    "Acciones",
-	"admin.list.empty_first":                 "Añade el primer %s para verlo aquí.",
-	"admin.list.empty_no_filter_match":             "No hay %s que coincidan con los filtros seleccionados.",
-	"admin.list.empty_no_match":               "No hay %s que coincidan con «%s».",
+	"admin.list.empty_first":                "Añade el primer %s para verlo aquí.",
+	"admin.list.empty_no_filter_match":      "No hay %s que coincidan con los filtros seleccionados.",
+	"admin.list.empty_no_match":             "No hay %s que coincidan con «%s».",
 	"admin.list.empty_title":                "Aún no hay %s",
 	"admin.list.filter_any":                 "Cualquiera",
 	"admin.list.filter_too_many":            "%s tiene demasiados valores para listarlos (más de %d).",
