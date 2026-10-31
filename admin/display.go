@@ -2,7 +2,9 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/internal/adminregistry"
@@ -63,6 +65,34 @@ type listRenderer struct {
 	adminReg *adminregistry.Registry
 	meta     model.ModelMeta
 	display  map[string]DisplayFunc
+	columns  []string
+}
+
+func newListRenderer(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, meta model.ModelMeta, opts adminregistry.Options) listRenderer {
+	return listRenderer{ctx: ctx, store: store, models: models, adminReg: adminReg, meta: meta, display: opts.Display, columns: opts.ListDisplay}
+}
+
+// identityText is the label a row goes by: its first list column's text, or
+// the key when that is blank.
+func identityText(pk, firstCell string) string {
+	if strings.TrimSpace(firstCell) != "" {
+		return firstCell
+	}
+	return pk
+}
+
+// identityOf is the label of one row, the same text the changelist gives it,
+// rendering only the first list column.
+func (r listRenderer) identityOf(row reflect.Value) (string, error) {
+	pkField, err := primaryKeyField(r.meta)
+	if err != nil {
+		return "", err
+	}
+	first := ""
+	if len(r.columns) > 0 {
+		first = r.cell(row, r.columns[0]).Text
+	}
+	return identityText(fmt.Sprint(row.FieldByName(pkField.Name).Interface()), first), nil
 }
 
 // cell renders column for one row. A Display function wins over the field

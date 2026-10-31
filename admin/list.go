@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
-	"strings"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
@@ -108,26 +107,13 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 	}
 }
 
-// rowIdentity is the label a single row goes by: the same text a changelist
-// row carries as its Identity, so a breadcrumb and a bulk confirmation name a
-// row alike.
-func rowIdentity(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, row reflect.Value, meta model.ModelMeta, opts adminregistry.Options) (string, error) {
-	one := reflect.MakeSlice(reflect.SliceOf(meta.Type), 1, 1)
-	one.Index(0).Set(row)
-	rows, err := buildRows(ctx, store, models, adminReg, one, meta, opts)
-	if err != nil {
-		return "", err
-	}
-	return rows[0].Identity, nil
-}
-
 func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, sliceValue reflect.Value, meta model.ModelMeta, opts adminregistry.Options) ([]listRow, error) {
 	pkField, err := primaryKeyField(meta)
 	if err != nil {
 		return nil, err
 	}
 
-	cells := listRenderer{ctx: ctx, store: store, models: models, adminReg: adminReg, meta: meta, display: opts.Display}
+	cells := newListRenderer(ctx, store, models, adminReg, meta, opts)
 	rows := make([]listRow, 0, sliceValue.Len())
 	for i := 0; i < sliceValue.Len(); i++ {
 		elem := sliceValue.Index(i)
@@ -138,10 +124,11 @@ func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adm
 		for j, column := range opts.ListDisplay {
 			row.Cells[j] = cells.cell(elem, column)
 		}
-		row.Identity = row.PK
-		if len(row.Cells) > 0 && strings.TrimSpace(row.Cells[0].Text) != "" {
-			row.Identity = row.Cells[0].Text
+		first := ""
+		if len(row.Cells) > 0 {
+			first = row.Cells[0].Text
 		}
+		row.Identity = identityText(row.PK, first)
 		rows = append(rows, row)
 	}
 

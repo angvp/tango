@@ -39,7 +39,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				return err
 			}
 
-			rc, err := rowChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, "", instancePtr.Elem())
+			rc, err := rowChrome(ctx, newListRenderer(ctx.Context(), store, models, adminReg, meta, registration.Options), pageChrome, basePath, "", instancePtr.Elem())
 			if err != nil {
 				return err
 			}
@@ -62,7 +62,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				return forbiddenCSRF(ctx)
 			}
 
-			rc, err := rowChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, "", existingPtr.Elem())
+			rc, err := rowChrome(ctx, newListRenderer(ctx.Context(), store, models, adminReg, meta, registration.Options), pageChrome, basePath, "", existingPtr.Elem())
 			if err != nil {
 				return err
 			}
@@ -115,11 +115,11 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 // rowChrome is the page chrome for a row's pages: the model, the row's label
 // and then any tail steps. The label is a link to rowHref unless that is
 // empty, which makes it the current step when no tail follows.
-func rowChrome(ctx *tango.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, base chrome, basePath, rowHref string, row reflect.Value, tail ...crumb) (chrome, error) {
-	label, err := rowIdentity(ctx.Context(), store, models, adminReg, row, registration.Model, registration.Options)
+func rowChrome(ctx *tango.Context, cells listRenderer, base chrome, basePath, rowHref string, row reflect.Value, tail ...crumb) (chrome, error) {
+	label, err := cells.identityOf(row)
 	if err != nil {
 		return chrome{}, err
 	}
-	trail := append([]crumb{{Label: registration.Model.Name, Href: basePath}, {Label: label, Href: rowHref}}, tail...)
+	trail := append([]crumb{{Label: cells.meta.Name, Href: basePath}, {Label: label, Href: rowHref}}, tail...)
 	return base.withContext(ctx.Context()).withCrumbs(trail...), nil
 }

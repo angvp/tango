@@ -41,7 +41,7 @@ func deleteView(store *db.Store, models *model.Registry, adminReg *adminregistry
 			}
 
 			pk := fmt.Sprint(pkValue)
-			rc, err := rowChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, basePath+url.PathEscape(pk)+"/", instancePtr.Elem(), crumb{Label: i18n.T(ctx.Context(), "admin.button.delete", "Delete")})
+			rc, err := rowChrome(ctx, newListRenderer(ctx.Context(), store, models, adminReg, meta, registration.Options), pageChrome, basePath, basePath+url.PathEscape(pk)+"/", instancePtr.Elem(), crumb{Label: i18n.T(ctx.Context(), "admin.button.delete", "Delete")})
 			if err != nil {
 				return err
 			}
