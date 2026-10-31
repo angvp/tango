@@ -180,9 +180,9 @@ func TestPaletteCarriesTheBrandRoles(t *testing.T) {
 			t.Errorf("light token %s is cyan; cyan is a decorative fill on light surfaces", name)
 		}
 	}
-	for _, name := range []string{"selection-bg", "surface", "surface-sunken", "surface-hover", "sidebar"} {
-		if tokenValue(t, name, true) == navy {
-			t.Errorf("dark token %s is navy; navy is never used on dark surfaces", name)
+	for _, tok := range palette {
+		if tok.Dark == navy {
+			t.Errorf("dark token %s is navy; navy is never used on dark surfaces", tok.Name)
 		}
 	}
 }
