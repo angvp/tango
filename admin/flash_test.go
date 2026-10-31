@@ -266,9 +266,12 @@ func TestForgedOrAlteredOutcomeFlashIsIgnored(t *testing.T) {
 
 	payload, mac, _ := strings.Cut(genuine, ".")
 	raise := base64.RawURLEncoding.EncodeToString([]byte(`{"k":"admin.bulk.outcome_many","a":["9","crud products"]}`))
-	flipped := mac[:len(mac)-1] + "A"
-	if mac[len(mac)-1] == 'A' {
-		flipped = mac[:len(mac)-1] + "B"
+	// The first character carries six significant bits of the MAC. The last
+	// character can carry only padding bits, so flipping it can leave the
+	// decoded MAC unchanged.
+	flipped := "A" + mac[1:]
+	if mac[0] == 'A' {
+		flipped = "B" + mac[1:]
 	}
 
 	forged := map[string]string{
