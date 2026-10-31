@@ -39,12 +39,12 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				return err
 			}
 
-			rowChrome, err := editChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, instancePtr.Elem())
+			rc, err := rowChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, "", instancePtr.Elem())
 			if err != nil {
 				return err
 			}
 			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOptionsFromRequest(ctx))
-			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: rowChrome, Title: title, Fields: fields, CSRFToken: csrfTokenFromRequest(ctx.Request())})
+			return render(ctx, http.StatusOK, formTemplate, formPageData{chrome: rc, Title: title, Fields: fields, CSRFToken: csrfTokenFromRequest(ctx.Request())})
 
 		case http.MethodPost:
 			existingPtr := reflect.New(meta.Type)
@@ -62,7 +62,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				return forbiddenCSRF(ctx)
 			}
 
-			rowChrome, err := editChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, existingPtr.Elem())
+			rc, err := rowChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, "", existingPtr.Elem())
 			if err != nil {
 				return err
 			}
@@ -73,7 +73,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				formOpts.FieldErrors = fieldErrors
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
-					chrome:    rowChrome,
+					chrome:    rc,
 					Title:     title,
 					Error:     formError,
 					Fields:    fields,
@@ -97,7 +97,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				formOpts.FieldErrors = fieldErrors
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPageData{
-					chrome:    rowChrome,
+					chrome:    rc,
 					Title:     title,
 					Fields:    fields,
 					CSRFToken: csrfTokenFromRequest(ctx.Request()),
@@ -112,12 +112,14 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 	}
 }
 
-// editChrome is the page chrome for a row's pages: the model, then the row's
-// label, each a step of the breadcrumb trail.
-func editChrome(ctx *tango.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, base chrome, basePath string, row reflect.Value) (chrome, error) {
+// rowChrome is the page chrome for a row's pages: the model, the row's label
+// and then any tail steps. The label is a link to rowHref unless that is
+// empty, which makes it the current step when no tail follows.
+func rowChrome(ctx *tango.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, base chrome, basePath, rowHref string, row reflect.Value, tail ...crumb) (chrome, error) {
 	label, err := rowIdentity(ctx.Context(), store, models, adminReg, row, registration.Model, registration.Options)
 	if err != nil {
 		return chrome{}, err
 	}
-	return base.withContext(ctx.Context()).withCrumbs(crumb{Label: registration.Model.Name, Href: basePath}, crumb{Label: label}), nil
+	trail := append([]crumb{{Label: registration.Model.Name, Href: basePath}, {Label: label, Href: rowHref}}, tail...)
+	return base.withContext(ctx.Context()).withCrumbs(trail...), nil
 }

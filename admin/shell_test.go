@@ -3,6 +3,7 @@ package admin_test
 import (
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -58,18 +59,31 @@ func shellPages(t *testing.T) map[string]string {
 	t.Helper()
 	handler, sqlDB := buildProductAdminWithOptions(t, bulkProductOptions())
 	id := idString(seedProduct(t, sqlDB, "Widget", 3))
-	pages := map[string]string{
-		"list":   doRequest(t, handler, http.MethodGet, crudBasePath, nil).Body.String(),
-		"new":    doRequest(t, handler, http.MethodGet, crudBasePath+"new/", nil).Body.String(),
-		"edit":   doRequest(t, handler, http.MethodGet, crudBasePath+id+"/", nil).Body.String(),
-		"delete": doRequest(t, handler, http.MethodGet, crudBasePath+id+"/delete/", nil).Body.String(),
-		"bulk":   doRequest(t, handler, http.MethodPost, crudBasePath+"delete-selected/", url.Values{}).Body.String(),
-		"login":  doRequest(t, buildAdminHandler(t), http.MethodGet, "/admin/login/", nil).Body.String(),
+	requests := []struct {
+		name, method, path string
+		form               url.Values
+		status             int
+		handler            http.Handler
+	}{
+		{"list", http.MethodGet, crudBasePath, nil, http.StatusOK, handler},
+		{"new", http.MethodGet, crudBasePath + "new/", nil, http.StatusOK, handler},
+		{"edit", http.MethodGet, crudBasePath + id + "/", nil, http.StatusOK, handler},
+		{"edit-422", http.MethodPost, crudBasePath + id + "/", url.Values{"Name": {"x"}, "Price": {"abc"}}, http.StatusUnprocessableEntity, handler},
+		{"delete", http.MethodGet, crudBasePath + id + "/delete/", nil, http.StatusOK, handler},
+		{"bulk", http.MethodPost, crudBasePath + "delete-selected/", url.Values{}, http.StatusBadRequest, handler},
+		{"login", http.MethodGet, "/admin/login/", nil, http.StatusOK, buildAdminHandler(t)},
 	}
-	for name, body := range pages {
-		if !strings.Contains(body, "<main") {
-			t.Fatalf("%s page is not an admin page:\n%s", name, body)
+	pages := map[string]string{}
+	for _, r := range requests {
+		response := doRequest(t, r.handler, r.method, r.path, r.form)
+		if response.Code != r.status {
+			t.Fatalf("%s page: status %d, want %d", r.name, response.Code, r.status)
 		}
+		body := response.Body.String()
+		if !strings.Contains(body, "<main") {
+			t.Fatalf("%s page is not an admin page:\n%s", r.name, body)
+		}
+		pages[r.name] = body
 	}
 	return pages
 }
@@ -98,45 +112,47 @@ func TestEveryAdminPageStartsWithASkipLinkToTheMainLandmark(t *testing.T) {
 	}
 }
 
-func TestBreadcrumbsLinkTheModelAndMarkTheCurrentItem(t *testing.T) {
+type crumbLink struct{ href, text string }
+
+func TestBreadcrumbsLinkTheTrailAndMarkTheCurrentItem(t *testing.T) {
 	pages := shellPages(t)
+	model := crumbLink{crudBasePath, "crudProduct"}
 	tests := []struct {
-		page, current string
+		page    string
+		links   []crumbLink
+		current string
 	}{
-		{"edit", "Widget"},
-		{"delete", "Widget"},
-		{"bulk", ""},
+		{"new", []crumbLink{model}, "New crudProduct"},
+		{"edit", []crumbLink{model}, "Widget"},
+		{"edit-422", []crumbLink{model}, "Widget"},
+		{"delete", []crumbLink{model, {crudBasePath + "1/", "Widget"}}, "Delete"},
+		{"bulk", []crumbLink{model}, "Nothing was deleted"},
 	}
 	for _, tt := range tests {
 		doc := parseShell(t, pages[tt.page])
 		navs := findAll(doc, func(n *html.Node) bool {
-			label, _ := attrOf(n, "aria-label")
-			return n.Data == "nav" && label == "Breadcrumb"
+			return n.Data == "nav" && attrValue(n, "aria-label") == "Breadcrumb"
 		})
 		if len(navs) != 1 {
 			t.Fatalf("%s: %d breadcrumb navs, want 1", tt.page, len(navs))
 		}
-		links := findAll(navs[0], func(n *html.Node) bool { return n.Data == "a" })
-		if len(links) != 1 {
-			t.Fatalf("%s: %d breadcrumb links, want 1 (the model)", tt.page, len(links))
+		var links []crumbLink
+		for _, a := range findAll(navs[0], func(n *html.Node) bool { return n.Data == "a" }) {
+			links = append(links, crumbLink{attrValue(a, "href"), textOf(a)})
 		}
-		if href, _ := attrOf(links[0], "href"); href != crudBasePath {
-			t.Errorf("%s: model crumb href = %q, want %q", tt.page, href, crudBasePath)
+		if !reflect.DeepEqual(links, tt.links) {
+			t.Errorf("%s: breadcrumb links = %v, want %v", tt.page, links, tt.links)
 		}
-		if tt.current == "" {
-			continue
-		}
-		current := findAll(navs[0], func(n *html.Node) bool {
-			v, ok := attrOf(n, "aria-current")
-			return ok && v == "page"
-		})
+		current := findAll(navs[0], func(n *html.Node) bool { return attrValue(n, "aria-current") == "page" })
 		if len(current) != 1 || current[0].Data == "a" || textOf(current[0]) != tt.current {
-			t.Errorf("%s: current crumb = %v, want text %q that is not a link", tt.page, current, tt.current)
+			t.Errorf("%s: current crumb = %v, want one non-link with text %q", tt.page, current, tt.current)
 		}
 	}
-	list := parseShell(t, pages["list"])
-	if n := findAll(list, func(n *html.Node) bool { return n.Data == "nav" && attrValue(n, "aria-label") == "Breadcrumb" }); len(n) != 0 {
-		t.Errorf("list page renders breadcrumbs")
+	for _, name := range []string{"list", "login"} {
+		doc := parseShell(t, pages[name])
+		if n := findAll(doc, func(n *html.Node) bool { return n.Data == "nav" && attrValue(n, "aria-label") == "Breadcrumb" }); len(n) != 0 {
+			t.Errorf("%s page renders breadcrumbs", name)
+		}
 	}
 }
 
@@ -159,7 +175,11 @@ func TestPhoneDrawerHasACloseButtonAndAnAnnouncedMenuButton(t *testing.T) {
 		if len(closers) != 1 || textOf(closers[0]) != "Close menu" {
 			t.Errorf("%s: drawer close buttons = %d, want one labelled Close menu", name, len(closers))
 		}
-		for _, opener := range findAll(doc, func(n *html.Node) bool { _, ok := attrOf(n, "data-admin-nav-open"); return ok }) {
+		openers := findAll(doc, func(n *html.Node) bool { _, ok := attrOf(n, "data-admin-nav-open"); return ok })
+		if want := name != "login"; (len(openers) == 1) != want || len(openers) > 1 {
+			t.Errorf("%s: %d menu buttons, want one on every page but login", name, len(openers))
+		}
+		for _, opener := range openers {
 			if attrValue(opener, "aria-expanded") != "false" || attrValue(opener, "aria-controls") != "sidebar" {
 				t.Errorf("%s: menu button lacks aria-expanded=false and aria-controls=sidebar", name)
 			}

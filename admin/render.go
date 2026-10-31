@@ -210,7 +210,7 @@ var bulkRejectedTemplate = cloneWithContent(`{{define "content"}}
 <header class="topbar">
   <div class="inline-row">
     {{template "menuBtn" .}}
-    <div>{{template "breadcrumbs" .}}<h1 class="topbar-title">{{.T "admin.bulk.rejected_title" "Nothing was deleted"}}</h1></div>
+    <div>{{template "breadcrumbs" .}}<h1 class="topbar-title">{{.Title}}</h1></div>
   </div>
 </header>
 <div class="content-body">
@@ -225,6 +225,7 @@ var bulkRejectedTemplate = cloneWithContent(`{{define "content"}}
 
 type bulkRejectedPageData struct {
 	chrome
+	Title    string
 	Message  string
 	BasePath string
 }

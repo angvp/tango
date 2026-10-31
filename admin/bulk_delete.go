@@ -169,8 +169,10 @@ func removeBulkKeys(ctx context.Context, tx *db.Store, meta model.ModelMeta, fie
 // rejectBulk answers a refused bulk delete with an admin page, because the
 // request comes from a form submission a person is looking at.
 func rejectBulk(ctx *tango.Context, nav []navItem, brand Branding, meta model.ModelMeta, basePath, key, fallback string) error {
+	title := i18n.T(ctx.Context(), "admin.bulk.rejected_title", "Nothing was deleted")
 	return render(ctx, http.StatusBadRequest, bulkRejectedTemplate, bulkRejectedPageData{
-		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: meta.Name, Href: basePath}),
+		chrome:   chrome{Nav: nav, Active: meta.Name, Brand: brand}.withContext(ctx.Context()).withCrumbs(crumb{Label: meta.Name, Href: basePath}, crumb{Label: title}),
+		Title:    title,
 		Message:  i18n.T(ctx.Context(), key, fallback),
 		BasePath: basePath,
 	})

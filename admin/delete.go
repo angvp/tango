@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/internal/adminregistry"
 	"github.com/angvp/tango/model"
 )
@@ -38,14 +40,15 @@ func deleteView(store *db.Store, models *model.Registry, adminReg *adminregistry
 				return err
 			}
 
-			rowChrome, err := editChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, instancePtr.Elem())
+			pk := fmt.Sprint(pkValue)
+			rc, err := rowChrome(ctx, store, models, adminReg, registration, pageChrome, basePath, basePath+url.PathEscape(pk)+"/", instancePtr.Elem(), crumb{Label: i18n.T(ctx.Context(), "admin.button.delete", "Delete")})
 			if err != nil {
 				return err
 			}
 			return render(ctx, http.StatusOK, deleteTemplate, deletePageData{
-				chrome:    rowChrome,
+				chrome:    rc,
 				ModelName: meta.Name,
-				PK:        fmt.Sprint(pkValue),
+				PK:        pk,
 				CSRFToken: csrfTokenFromRequest(ctx.Request()),
 			})
 
