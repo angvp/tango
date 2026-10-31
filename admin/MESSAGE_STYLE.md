@@ -1,6 +1,6 @@
 # Admin message style
 
-Every message the admin shows to a user follows these rules. Review checks each new message against them, and the bad-input table test in `message_table_test.go` checks the forbidden text at the HTTP seam.
+Every message the admin shows to a user follows these rules. Review checks each new message against them.
 
 ## Rules
 
@@ -17,7 +17,7 @@ Every message the admin shows to a user follows these rules. Review checks each 
 
 - Every built-in message is an `admin.*` key with an English fallback. A host overrides one key through its own catalog.
 - The key name and its placeholders are part of the compatibility contract. The English wording may change in any release.
-- A catalog string must keep the fallback's format verbs. A translation with a different count of verbs is ignored and the English fallback is used.
+- A catalog string must keep the fallback's format verbs, as the i18n package compares them: the sequence of (argument, verb) pairs must match the fallback's. A string whose pairs differ is ignored and the English fallback is used.
 
 ## Known limit
 
