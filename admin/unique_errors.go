@@ -20,19 +20,28 @@ import (
 // field could own it (a composite index), so the caller shows a form-level
 // message instead.
 func uniqueViolationField(meta model.ModelMeta, err error) (model.FieldMeta, bool) {
+	if !db.IsUniqueConstraintViolation(err) {
+		return model.FieldMeta{}, false
+	}
 	key := uniqueViolationKey(err)
 	if key == "" {
 		return model.FieldMeta{}, false
 	}
 	table := db.ColumnName(meta.Name)
+	// MySQL reports table.index, so the index is also compared after its last
+	// dot. SQLite reports table.column; Postgres reports the index name. The
+	// migration names every unique index uniq_<table>_<column>.
+	index := key
+	if i := strings.LastIndex(key, "."); i >= 0 {
+		index = key[i+1:]
+	}
 	for _, field := range meta.Fields {
 		if !field.Unique {
 			continue
 		}
-		// SQLite names the table and column. Postgres and MySQL name the
-		// index, which the migration creates as uniq_<table>_<column>.
 		column := db.ColumnName(field.Name)
-		if key == table+"."+column || key == "uniq_"+table+"_"+column {
+		indexName := "uniq_" + table + "_" + column
+		if key == table+"."+column || key == indexName || index == indexName {
 			return field, true
 		}
 	}
