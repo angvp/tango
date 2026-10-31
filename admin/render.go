@@ -34,7 +34,7 @@ var listTemplate = cloneWithContent(`{{define "content"}}
           {{if .Message}}<p class="hint-small">{{.Message}}</p>{{end}}
         </div>{{end}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
-        {{if .SearchQuery}}<a href="{{.ClearSearchHref}}" class="btn-ghost">{{.T "admin.list.clear_search" "Clear search"}}</a>{{end}}
+        {{if .SearchQuery}}<a href="{{.ClearSearchHref}}" class="btn-ghost mb-1">{{.T "admin.list.clear_search" "Clear search"}}</a>{{end}}
       </form>
       {{if .AppliedFilters}}<p class="mt-3 text-sm text-ink-muted">{{.T "admin.list.filters_applied" "Filters applied:"}} {{range $i, $f := .AppliedFilters}}{{if $i}}, {{end}}{{$.T "admin.list.filter_pair" "%s: %s" $f.Label $f.Value}}{{end}} <a href="{{.ClearFiltersHref}}" class="btn-ghost">{{.T "admin.list.clear_filters" "Clear filters"}}</a></p>{{end}}
     </div>

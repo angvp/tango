@@ -159,8 +159,8 @@ func TestForeignKeyFilterOffersLabelledAuthorsAndNarrowsRows(t *testing.T) {
 			`<option value="`+strconv.FormatInt(ada, 10)+`">Ada Lovelace</option>`,
 			`<option value="`+strconv.FormatInt(grace, 10)+`">Grace Hopper</option>`,
 		)
-		if !strings.Contains(body, `<label for="filter-author_id"`) {
-			t.Fatalf("FK filter must be labelled:\n%s", body)
+		if !strings.Contains(body, `<label for="filter-author_id" class="field-caption">Author</label>`) {
+			t.Fatalf("FK filter must be labelled with its relation name:\n%s", body)
 		}
 	})
 
@@ -373,10 +373,7 @@ func TestUnlistedFieldParametersAreIgnoredAndEmptyStateExplainsFilters(t *testin
 func TestResultLineStatesTheRangeOfTheRowsOnThePage(t *testing.T) {
 	t.Run("a full first page names the first and last row and the total", func(t *testing.T) {
 		handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
-		author := seedFilterAuthor(t, sqlDB, "Ada")
-		for i := 0; i < 60; i++ {
-			seedBook(t, sqlDB, fmt.Sprintf("Row %02d", i), true, author)
-		}
+		seedRowsAcrossPages(t, sqlDB, 60)
 		body := doRequest(t, handler, "GET", flBookPath, nil).Body.String()
 		if !strings.Contains(body, "Showing 1 to 25 of 60 fl books") {
 			t.Fatalf("first page should state its range:\n%s", body)
@@ -385,10 +382,7 @@ func TestResultLineStatesTheRangeOfTheRowsOnThePage(t *testing.T) {
 
 	t.Run("a partial last page ends at the total", func(t *testing.T) {
 		handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
-		author := seedFilterAuthor(t, sqlDB, "Ada")
-		for i := 0; i < 60; i++ {
-			seedBook(t, sqlDB, fmt.Sprintf("Row %02d", i), true, author)
-		}
+		seedRowsAcrossPages(t, sqlDB, 60)
 		body := doRequest(t, handler, "GET", flBookPath+"?page=3", nil).Body.String()
 		if !strings.Contains(body, "Showing 51 to 60 of 60 fl books") {
 			t.Fatalf("last page should state rows 51 to 60:\n%s", body)
@@ -397,10 +391,7 @@ func TestResultLineStatesTheRangeOfTheRowsOnThePage(t *testing.T) {
 
 	t.Run("an out-of-range page is clamped and states the last page's range", func(t *testing.T) {
 		handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
-		author := seedFilterAuthor(t, sqlDB, "Ada")
-		for i := 0; i < 60; i++ {
-			seedBook(t, sqlDB, fmt.Sprintf("Row %02d", i), true, author)
-		}
+		seedRowsAcrossPages(t, sqlDB, 60)
 		body := doRequest(t, handler, "GET", flBookPath+"?page=99", nil).Body.String()
 		if !strings.Contains(body, "Showing 51 to 60 of 60 fl books") {
 			t.Fatalf("clamped page should state rows 51 to 60:\n%s", body)
@@ -430,7 +421,7 @@ func TestAppliedFilterSummaryNamesEachFilterAndClearsThem(t *testing.T) {
 	t.Run("each applied filter is named with its value", func(t *testing.T) {
 		values := url.Values{"q": {"Engine & Co"}, "filter_published": {"yes"}, "filter_author_id": {strconv.FormatInt(ada, 10)}}
 		body := doRequest(t, handler, "GET", listURL(flBookPath, values), nil).Body.String()
-		for _, want := range []string{"Filters applied:", "Published: Yes", "Author ID: Ada Lovelace"} {
+		for _, want := range []string{"Filters applied:", "Published: Yes", "Author: Ada Lovelace"} {
 			if !strings.Contains(body, want) {
 				t.Fatalf("summary should contain %q:\n%s", want, body)
 			}
@@ -473,9 +464,45 @@ func TestAppliedFilterSummaryNamesEachFilterAndClearsThem(t *testing.T) {
 // hold "&#43;".
 func clearLinkHref(t *testing.T, body, text string) string {
 	t.Helper()
-	m := regexp.MustCompile(`<a href="([^"]*)" class="btn-ghost">` + regexp.QuoteMeta(text) + `</a>`).FindStringSubmatch(body)
+	m := regexp.MustCompile(`<a href="([^"]*)" class="btn-ghost[^"]*">` + regexp.QuoteMeta(text) + `</a>`).FindStringSubmatch(body)
 	if m == nil {
 		t.Fatalf("no %q link in:\n%s", text, body)
 	}
 	return html.UnescapeString(m[1])
+}
+
+// seedRowsAcrossPages adds n books under one author, so a changelist of them
+// runs to more than one page.
+func seedRowsAcrossPages(t *testing.T, sqlDB *sql.DB, n int) {
+	t.Helper()
+	author := seedFilterAuthor(t, sqlDB, "Ada")
+	for i := 0; i < n; i++ {
+		seedBook(t, sqlDB, fmt.Sprintf("Row %02d", i), true, author)
+	}
+}
+
+func TestPaginationKeepsItsLandmarkAndMarksTheCurrentPage(t *testing.T) {
+	handler, sqlDB := buildBookAdmin(t, bookFilterOptions())
+	seedRowsAcrossPages(t, sqlDB, 60)
+
+	for _, tc := range []struct {
+		path    string
+		current string
+	}{
+		{flBookPath, "1"},
+		{flBookPath + "?page=3", "3"},
+	} {
+		body := doRequest(t, handler, "GET", tc.path, nil).Body.String()
+		if !strings.Contains(body, `<nav class="pagination-pages" aria-label="Pagination">`) {
+			t.Fatalf("%s: pagination should keep its Pagination landmark:\n%s", tc.path, body)
+		}
+		want := `<span class="page-link page-link-current" aria-current="page">` + tc.current + `</span>`
+		if !strings.Contains(body, want) {
+			t.Fatalf("%s: current page %s should carry aria-current=\"page\":\n%s", tc.path, tc.current, body)
+		}
+		nav := regexp.MustCompile(`(?s)<nav class="pagination-pages".*?</nav>`).FindString(body)
+		if got := strings.Count(nav, `aria-current="page"`); got != 1 {
+			t.Fatalf("%s: exactly one page in the pagination should be marked current, got %d", tc.path, got)
+		}
+	}
 }

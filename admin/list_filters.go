@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/i18n"
@@ -67,7 +68,7 @@ func resolveListFilters(ctx context.Context, store *db.Store, models *model.Regi
 		if !ok {
 			return listFilters{}, fmt.Errorf("tango admin: filter field %q not found on %s", name, meta.Name)
 		}
-		label := humanizeFieldName(name)
+		label := filterLabel(field, name)
 		if custom, ok := opts.Labels[name]; ok {
 			label = custom
 		}
@@ -82,6 +83,18 @@ func resolveListFilters(ctx context.Context, store *db.Store, models *model.Regi
 		}
 	}
 	return result, nil
+}
+
+// filterLabel is the label a filter shows when the host gives none. A foreign
+// key names its relation, so its ID suffix is dropped: AuthorID reads "Author".
+func filterLabel(field model.FieldMeta, name string) string {
+	label := humanizeFieldName(name)
+	if field.ForeignKey != "" {
+		if trimmed := strings.TrimSuffix(label, " ID"); trimmed != "" {
+			return trimmed
+		}
+	}
+	return label
 }
 
 // resolveListFilter dispatches one filter to its kind's resolver.
@@ -188,17 +201,27 @@ type filterSummary struct {
 func appliedFilterSummary(controls []filterControl) []filterSummary {
 	var summary []filterSummary
 	for _, control := range controls {
-		if control.AppliedValue != "" {
-			summary = append(summary, filterSummary{Label: control.Label, Value: control.Applied})
-			continue
-		}
-		for _, option := range control.Options {
-			if option.Selected && option.Value != filterAny {
-				summary = append(summary, filterSummary{Label: control.Label, Value: option.Text})
-			}
+		if text, ok := control.AppliedText(); ok {
+			summary = append(summary, filterSummary{Label: control.Label, Value: text})
 		}
 	}
 	return summary
+}
+
+// AppliedText is the text of the value the filter applies, and false when it
+// applies none. An over-cap filter keeps the label of its row in Applied; the
+// other filters show the text of their selected option, and "any" applies
+// nothing.
+func (c filterControl) AppliedText() (string, bool) {
+	if c.AppliedValue != "" {
+		return c.Applied, true
+	}
+	for _, option := range c.Options {
+		if option.Selected && option.Value != filterAny {
+			return option.Text, true
+		}
+	}
+	return "", false
 }
 
 // markSelected returns options with the one whose Value is selected marked.
