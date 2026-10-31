@@ -16,7 +16,9 @@ import (
 func TestDeleteViewPostOnReferencedRowIsRefusedWithConflict(t *testing.T) {
 	handler, sqlDB := buildAuthorPostAdmin(t, admin.Options{Label: "Name"})
 	authorID := seedAuthor(t, sqlDB, "Jane Doe")
-	if _, err := sqlDB.Exec(`CREATE TABLE fk_unmanaged_note (id INTEGER PRIMARY KEY, author_id INTEGER REFERENCES fk_author (id))`); err != nil {
+	// A table-level FOREIGN KEY with BIGINT on both sides: MySQL drops an inline
+	// REFERENCES and needs the two column types to match exactly.
+	if _, err := sqlDB.Exec(`CREATE TABLE fk_unmanaged_note (id BIGINT PRIMARY KEY, author_id BIGINT NOT NULL, FOREIGN KEY (author_id) REFERENCES fk_author (id))`); err != nil {
 		t.Fatalf("create unregistered referencing table: %v", err)
 	}
 	if _, err := sqlDB.Exec(`INSERT INTO fk_unmanaged_note (id, author_id) VALUES (1, $1)`, authorID); err != nil {
