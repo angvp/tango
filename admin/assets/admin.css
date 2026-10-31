@@ -2195,66 +2195,6 @@ html, body{
   gap:0.5rem;
 }
 
-/* Deprecated aliases (D52): the status dot shipped before the badges. Removed in the next minor release. */
-
-.status-dot{
-  font-weight:500;
-}
-
-.status-dot::before{
-  margin-right:0.5rem;
-  display:inline-block;
-  height:0.5rem;
-  width:0.5rem;
-  content:var(--tw-content);
-  border-radius:9999px;
-}
-
-.status-dot-success{
-  font-weight:500;
-}
-
-.status-dot-success::before{
-  margin-right:0.5rem;
-  display:inline-block;
-  height:0.5rem;
-  width:0.5rem;
-  border-radius:9999px;
-  content:var(--tw-content);
-  --tw-bg-opacity:1;
-  background-color:rgb(var(--success-fg) / var(--tw-bg-opacity, 1));
-}
-
-.status-dot-danger{
-  font-weight:500;
-}
-
-.status-dot-danger::before{
-  margin-right:0.5rem;
-  display:inline-block;
-  height:0.5rem;
-  width:0.5rem;
-  border-radius:9999px;
-  content:var(--tw-content);
-  --tw-bg-opacity:1;
-  background-color:rgb(var(--danger-fg) / var(--tw-bg-opacity, 1));
-}
-
-.status-dot-neutral{
-  font-weight:500;
-}
-
-.status-dot-neutral::before{
-  margin-right:0.5rem;
-  display:inline-block;
-  height:0.5rem;
-  width:0.5rem;
-  border-radius:9999px;
-  content:var(--tw-content);
-  --tw-bg-opacity:1;
-  background-color:rgb(var(--neutral-fg) / var(--tw-bg-opacity, 1));
-}
-
 .stat-row{
   display:flex;
   align-items:baseline;

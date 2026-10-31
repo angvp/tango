@@ -77,10 +77,7 @@ module.exports = {
   // Host widgets write the token classes the admin guide documents, and the
   // content scan cannot see their markup, so every token's colour utilities
   // are always generated.
-  // Deprecated status-dot aliases (D52) have no use in the admin's templates,
-  // so the content scan drops them; a host that still writes them keeps the dot.
   safelist: [
-    'status-dot', 'status-dot-success', 'status-dot-danger', 'status-dot-neutral',
     {
       pattern: /^(text|bg|border|ring)-(ink|surface|header|line|control-line|accent|ring|selection|danger-solid|sidebar|success|danger|warning|neutral|scrim)(-[a-z]+)*$/,
     },

@@ -135,12 +135,6 @@
   .empty-state-body { @apply text-sm text-ink-faint; }
   .empty-state-actions { @apply mt-3 flex flex-wrap items-center justify-center gap-2; }
 
-  /* Deprecated aliases (D52): the status dot shipped before the badges. Removed in the next minor release. */
-  .status-dot { @apply font-medium before:mr-2 before:inline-block before:h-2 before:w-2 before:rounded-full; }
-  .status-dot-success { @apply status-dot before:bg-success-fg; }
-  .status-dot-danger { @apply status-dot before:bg-danger-fg; }
-  .status-dot-neutral { @apply status-dot before:bg-neutral-fg; }
-
   .stat-row { @apply flex items-baseline justify-between gap-4 px-5 py-2.5 sm:grid sm:grid-cols-[14rem_1fr] sm:justify-start; }
   .stat-label { @apply text-sm text-ink-faint; }
   .stat-value { @apply text-right text-sm text-ink sm:text-left; }
