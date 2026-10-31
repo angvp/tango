@@ -528,8 +528,17 @@ func isAdminPath(path string) bool {
 	return path == "/admin" || strings.HasPrefix(path, "/admin/")
 }
 
+// cspRequestScheme is the scheme the test application is served under. A
+// scheme-relative reference takes it.
+const cspRequestScheme = "https"
+
+// cspOriginKey is the origin of the test application, in the form originKey
+// returns.
+var cspOriginKey = originKey(&url.URL{Scheme: cspRequestScheme, Host: cspRequestHost})
+
 // sameOrigin reports whether a src or href value loads from the test
-// application's own origin.
+// application's own origin. The scheme, host and port must all match, because
+// a different port or scheme is a different origin to the browser.
 func sameOrigin(value string) bool {
 	value = strings.TrimSpace(value)
 	if value == "" || strings.HasPrefix(value, "#") {
@@ -543,9 +552,54 @@ func sameOrigin(value string) bool {
 		return true
 	}
 	if parsed.Scheme == "" {
-		return parsed.Host == cspRequestHost
+		parsed.Scheme = cspRequestScheme
 	}
-	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host == cspRequestHost
+	return originKey(parsed) == cspOriginKey
+}
+
+// defaultPorts is the port an origin uses when its URL omits one.
+var defaultPorts = map[string]string{"http": "80", "https": "443"}
+
+// originKey returns scheme://host:port with the scheme and host lower-cased and
+// the default port spelled out. It returns "" for a scheme other than http or
+// https, so such a URL never matches the application's origin.
+func originKey(u *url.URL) string {
+	scheme := strings.ToLower(u.Scheme)
+	defaultPort, ok := defaultPorts[scheme]
+	if !ok {
+		return ""
+	}
+	port := u.Port()
+	if port == "" {
+		port = defaultPort
+	}
+	return scheme + "://" + strings.ToLower(u.Hostname()) + ":" + port
+}
+
+func TestFrameworkPageAuditSameOriginComparesSchemeHostAndPort(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "fully matching absolute URL", value: "https://example.com/admin/_assets/app.css", want: true},
+		{name: "explicit default port", value: "https://example.com:443/app.css", want: true},
+		{name: "host case is ignored", value: "https://EXAMPLE.com/app.css", want: true},
+		{name: "relative path", value: "app.css", want: true},
+		{name: "scheme-relative host", value: "//example.com/app.css", want: true},
+		{name: "scheme mismatch", value: "http://example.com/app.css", want: false},
+		{name: "scheme-relative port mismatch", value: "//example.com:8443/app.css", want: false},
+		{name: "port mismatch", value: "https://example.com:8443/app.css", want: false},
+		{name: "port mismatch with default scheme port spelled out", value: "http://example.com:443/app.css", want: false},
+		{name: "other host", value: "https://cdn.example.org/app.css", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sameOrigin(tt.value); got != tt.want {
+				t.Fatalf("sameOrigin(%q) = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
 }
 
 func attribute(n *html.Node, name string) *html.Attribute {
