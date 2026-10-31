@@ -48,7 +48,6 @@
   .breadcrumb-item + .breadcrumb-item { @apply before:text-ink-faint before:content-['/']; }
   .breadcrumb-link { @apply inline-flex min-h-6 items-center hover:text-ink hover:underline; }
   .breadcrumb-current { @apply font-medium text-ink; }
-  .topbar-meta { @apply text-sm text-ink-faint hidden sm:block; }
 
   .content { @apply flex-1 min-w-0 flex flex-col; }
   .content-body { @apply flex-1 min-w-0 px-4 py-5 sm:px-6 sm:py-6 max-w-5xl w-full mx-auto; }
