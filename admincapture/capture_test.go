@@ -291,6 +291,18 @@ var signedInShots = []shot{
 			chromedp.Click("[data-bulk-confirm]", chromedp.NodeVisible),
 		}
 	}},
+	// The error pages a person reaches by following a link or submitting a
+	// form. Their ready selector is the sentence each page shows.
+	{name: "error-expired-form", ready: "main p.text-base", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{
+			visit(b, "/admin/capture_book/new/"),
+			chromedp.WaitVisible("main form[method=post]"),
+			script(`(() => { const form = document.querySelector('main form[method=post]'); form.querySelector('input[name=csrf_token]').remove(); form.submit(); })()`),
+		}
+	}},
+	{name: "error-not-found", ready: "main p.text-base", steps: func(b string) []chromedp.Action[chromedp.Void] {
+		return []chromedp.Action[chromedp.Void]{visit(b, "/admin/capture_book/999999/")}
+	}},
 	// Compact density is the last shot: its cookie outlives this step in the
 	// shared browser, so no later shot may depend on the default density.
 	{name: "changelist-rows-compact", ready: ".table-admin tbody tr", steps: func(b string) []chromedp.Action[chromedp.Void] {
