@@ -15,7 +15,8 @@ func SetPreviewTimeoutForTest(d time.Duration) func() {
 // check the served stylesheet against them.
 var TokenPaletteForTest = palette
 
-// SealFlashForTest mints a flash cookie value for sessionToken without the
-// catalog check setFlash applies, so tests can present a genuinely signed
-// value that names an outcome the admin never sets.
-var SealFlashForTest = sealFlash
+// SealFlashAtForTest mints a flash cookie value for sessionToken issued at the
+// given time, without the catalog check setFlash applies, so tests can present
+// a genuinely signed value that names an outcome the admin never sets, or one
+// older than its lifetime.
+var SealFlashAtForTest = sealFlashAt

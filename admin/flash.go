@@ -23,6 +23,15 @@ const flashCookieName = "tango_admin_flash"
 // flashCookieMaxAge bounds how long an unread outcome waits in the browser.
 const flashCookieMaxAge = 300
 
+// flashLifetime is how long a sealed outcome verifies after it was issued. It
+// matches the cookie's MaxAge, so a copy of the cookie stops verifying when the
+// browser would have dropped it.
+const flashLifetime = flashCookieMaxAge * time.Second
+
+// flashClockSkew tolerates a server clock that is slightly behind the clock
+// that issued the value; the same host issues and verifies, so this is small.
+const flashClockSkew = time.Minute
+
 // flashMaxLength rejects an oversized cookie before anything is decoded.
 const flashMaxLength = 1024
 
@@ -49,10 +58,12 @@ var flashOutcomes = map[string]flashOutcome{
 	"admin.bulk.outcome_many": {fallback: "%d %s deleted", args: 2, counted: true},
 }
 
-// flashPayload is the signed content of a flash cookie.
+// flashPayload is the signed content of a flash cookie. Issued is the Unix
+// time the outcome was set, so the server can expire a copy of the cookie.
 type flashPayload struct {
-	Key  string   `json:"k"`
-	Args []string `json:"a"`
+	Key    string   `json:"k"`
+	Args   []string `json:"a"`
+	Issued int64    `json:"t"`
 }
 
 // flashKey derives the MAC key from the session token. The session token is
@@ -70,10 +81,11 @@ func flashMAC(sessionToken string, payload []byte) []byte {
 	return mac.Sum(nil)
 }
 
-// sealFlash encodes a key and its arguments as a flash cookie value signed
-// for sessionToken. It does not check the key; setFlash does.
-func sealFlash(sessionToken, key string, args ...string) (string, error) {
-	raw, err := json.Marshal(flashPayload{Key: key, Args: args})
+// sealFlashAt encodes a key, its arguments and the time it was issued as a
+// flash cookie value signed for sessionToken. It does not check the key;
+// setFlash does.
+func sealFlashAt(sessionToken, key string, issued time.Time, args ...string) (string, error) {
+	raw, err := json.Marshal(flashPayload{Key: key, Args: args, Issued: issued.Unix()})
 	if err != nil {
 		return "", err
 	}
@@ -106,6 +118,9 @@ func openFlash(sessionToken, value string) (key string, args []string, ok bool) 
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return "", nil, false
 	}
+	if age := time.Since(time.Unix(payload.Issued, 0)); age > flashLifetime || age < -flashClockSkew {
+		return "", nil, false
+	}
 	outcome, known := flashOutcomes[payload.Key]
 	if !known || len(payload.Args) != outcome.args {
 		return "", nil, false
@@ -128,7 +143,7 @@ func setFlash(w http.ResponseWriter, r *http.Request, sessionToken, key string, 
 	if sessionToken == "" {
 		return errors.New("tango admin: outcome has no session to bind to")
 	}
-	value, err := sealFlash(sessionToken, key, args...)
+	value, err := sealFlashAt(sessionToken, key, time.Now(), args...)
 	if err != nil {
 		return err
 	}

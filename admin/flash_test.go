@@ -24,6 +24,10 @@ const flashCookieName = "tango_admin_flash"
 // secondSessionToken is a second, active admin session on the same account.
 const secondSessionToken = "second-session-token"
 
+// flashCookieMaxAgeForTest mirrors the server's flash lifetime; the expiry
+// test seals a value just outside it.
+const flashCookieMaxAgeForTest = 300 * time.Second
+
 var statusRegionPattern = regexp.MustCompile(`role="status"`)
 
 // signedRequest sends one request as the session token holds. A form is
@@ -292,7 +296,7 @@ func TestForgedOrAlteredOutcomeFlashIsIgnored(t *testing.T) {
 
 func TestAnUnknownKeyWithAValidMACIsNeverRendered(t *testing.T) {
 	handler, _ := buildProductAdminWithOptions(t, bulkProductOptions())
-	known, err := admin.SealFlashForTest(testSessionToken, "admin.outcome.deleted", "crud product")
+	known, err := admin.SealFlashAtForTest(testSessionToken, "admin.outcome.deleted", time.Now(), "crud product")
 	if err != nil {
 		t.Fatalf("seal known: %v", err)
 	}
@@ -307,7 +311,7 @@ func TestAnUnknownKeyWithAValidMACIsNeverRendered(t *testing.T) {
 		{"unknown key", "admin.never.catalogued", []string{"secret-argument"}},
 		{"known key, wrong arity", "admin.bulk.outcome_many", []string{"secret-argument"}},
 	} {
-		value, err := admin.SealFlashForTest(testSessionToken, tc.key, tc.args...)
+		value, err := admin.SealFlashAtForTest(testSessionToken, tc.key, time.Now(), tc.args...)
 		if err != nil {
 			t.Fatalf("%s: seal: %v", tc.name, err)
 		}
@@ -377,4 +381,28 @@ func orLogin(path string) string {
 		return "/admin/login/"
 	}
 	return path
+}
+
+func TestAnOutcomeOutsideItsLifetimeIsIgnored(t *testing.T) {
+	handler, _ := buildProductAdminWithOptions(t, bulkProductOptions())
+	fresh, err := admin.SealFlashAtForTest(testSessionToken, "admin.outcome.deleted", time.Now(), "crud product")
+	if err != nil {
+		t.Fatalf("seal fresh: %v", err)
+	}
+	if body := signedRequest(handler, http.MethodGet, crudBasePath, testSessionToken, nil, &http.Cookie{Name: flashCookieName, Value: fresh}).Body.String(); !strings.Contains(body, "The crud product was deleted.") {
+		t.Fatal("a fresh outcome was not shown; the rejections below would prove nothing")
+	}
+	for name, issued := range map[string]time.Time{
+		"older than the lifetime": time.Now().Add(-(flashCookieMaxAgeForTest + time.Minute)),
+		"issued in the future":    time.Now().Add(10 * time.Minute),
+	} {
+		stale, err := admin.SealFlashAtForTest(testSessionToken, "admin.outcome.deleted", issued, "crud product")
+		if err != nil {
+			t.Fatalf("%s: seal: %v", name, err)
+		}
+		body := signedRequest(handler, http.MethodGet, crudBasePath, testSessionToken, nil, &http.Cookie{Name: flashCookieName, Value: stale}).Body.String()
+		if strings.Contains(body, "The crud product was deleted.") {
+			t.Errorf("%s: the outcome was shown", name)
+		}
+	}
 }
