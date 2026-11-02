@@ -43,7 +43,7 @@ For coding-agent-oriented recipes, see the root `AGENTS.md` and `docs/agents/`. 
 | `type RouteDoc struct{ Summary, Description string; Tags []string; Body, Query any; Responses map[int]any; Bearer, Deprecated, Hidden bool }`, `func Doc(RouteDoc) RouteOption`, `type DescribedRoute`, `func (*RouteRegistry) Described() []DescribedRoute` | Optional documentation of a route for tools that read the route table, such as `openapi`. | [OpenAPI](guides/openapi.md) |
 | `type Params map[string]string`, `type Reverser interface{ Reverse(name string, params Params) (string, error) }` | Reverse URL lookup. | [routing](guides/routing-and-reverse-lookup.md) |
 | `type Context`, `type View func(*Context) error` | The request/response wrapper every view receives: `Param`, `Query`, `Bind`, `JSON`, `Redirect`, `HTML`, `Request`, `ResponseWriter`, `Context`, `Logger`. `Logger` is request-scoped and enriched with route, method, and request ID when present. | [Context and binding](guides/context-and-binding.md), [observability](guides/observability.md) |
-| `ErrDuplicateApp`, `ErrMalformedPattern`, `ErrDuplicateRouteName`, `ErrRegistrationNotComplete`, `ErrUnknownRouteName`, `ErrMissingParam` | Sentinel errors, checkable via `errors.Is`. | |
+| `ErrDuplicateApp`, `ErrMalformedPattern`, `ErrDuplicateRouteName`, `ErrRegistrationNotComplete`, `ErrUnknownRouteName`, `ErrMissingParam`, `ErrInvalidBody` | Sentinel errors, checkable via `errors.Is`. `ErrInvalidBody` is matched by `Bind`'s error for a malformed request body: a JSON syntax or type error, or an end-of-input error (`io.EOF`, `io.ErrUnexpectedEOF`), from the decoder, a custom `UnmarshalJSON`, or the body reader. | |
 
 ## `observability` (`github.com/angvp/tango/observability`)
 

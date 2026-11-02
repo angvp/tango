@@ -6,7 +6,7 @@ Every `View` is `func(*tango.Context) error`. `Context` wraps one request/respon
 
 - **`Param(name string) string`** — a named path parameter (from the route pattern's `{name}` placeholders), or `""` if absent.
 - **`Query(name string) string`** — a named URL query parameter, or `""` if absent.
-- **`Bind(dst any) error`** — decodes the request body as JSON into `dst`. There is no other content-type support (form values, multipart); read `ctx.Request()` directly for that.
+- **`Bind(dst any) error`** — decodes the request body as JSON into `dst`. A malformed body (a JSON syntax or type error, or an end-of-input error — `io.EOF` or `io.ErrUnexpectedEOF` — anywhere in the error chain, from the decoder, a custom `UnmarshalJSON`, or the body reader) returns an error matching `tango.ErrInvalidBody`; returned unhandled from a View, it is answered `400`. There is no other content-type support (form values, multipart); read `ctx.Request()` directly for that.
 
 ## Writing the response
 

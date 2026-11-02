@@ -9,7 +9,7 @@
 7. Keep metric attributes bounded: route patterns and fixed outcome vocabularies only; never raw URLs, IDs, tokens, or error messages.
 8. Router-generated 404/405 responses (Unmatched requests) are observed only under `Config.MiddlewareScope = tango.MiddlewareScopeAll`, which `tango newproject` sets. They report the fixed route value `"(unmatched)"`; never log the raw path as the route instead. Under the default (`MiddlewareScopeRoutes`), they skip global middleware, access logs and metrics.
 9. The `route` attribute is the registered pattern, trailing slash included (`/items/{id}/`), and is the same in `ctx.Logger()`, View-error, access, panic and request-ID logs and in metrics.
-10. A body rejected by `tango.MaxBodySize` gets `413` and is not logged as a View error: it is the client's error, not an application failure.
+10. A body rejected by `tango.MaxBodySize` gets `413` and a malformed body that `Context.Bind` cannot decode (matching `tango.ErrInvalidBody`) gets `400`. Neither is logged as a View error: both are the client's error, not an application failure.
 
 Canonical explanation and examples: `docs/guides/observability.md`. Runnable proof: `examples/board/main.go` (`slog` logger, `RequestID`/`Recoverer`/`AccessLogger`). Public symbols: `docs/reference.md`.
 

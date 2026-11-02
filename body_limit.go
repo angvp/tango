@@ -44,7 +44,15 @@ func isBodyTooLarge(err error) bool {
 }
 
 func writeBodyTooLarge(w http.ResponseWriter) {
+	writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+}
+
+func writeInvalidBody(w http.ResponseWriter) {
+	writeJSONError(w, http.StatusBadRequest, "invalid request body")
+}
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusRequestEntityTooLarge)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": "request body too large"})
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

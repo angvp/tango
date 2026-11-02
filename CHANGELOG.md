@@ -4,6 +4,14 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- **`tango.ErrInvalidBody`** matches, with `errors.Is`, every error `Context.Bind` returns for a malformed request body. The decoder's error stays reachable through `errors.As`.
+
+### Fixed
+
+- **A malformed request body bound with `Context.Bind` answers `400`, not `500`.** A View that returns the `Bind` error unhandled now gets `400 {"error":"invalid request body"}` and no View-error log. A JSON syntax or type error, or an end-of-input error (`io.EOF`, `io.ErrUnexpectedEOF`), counts as malformed wherever it comes from: the decoder, a custom `UnmarshalJSON`, or the body reader when a client disconnects mid-body. Other `Bind` failures, a body over a `MaxBodySize` limit included, keep their answers (`500`, and `413` respectively).
+
 ## [0.8.0] - 2026-10-31
 
 Host upgrade notes for v0.8.0, upgrading from v0.7.0, are in [docs/upgrading.md](docs/upgrading.md).

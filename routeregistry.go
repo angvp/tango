@@ -216,9 +216,9 @@ func (rr *RouteRegistry) wrapRouter(mux *chi.Mux, recorder observability.Recorde
 	})
 }
 
-// serveView runs view for r as tanGO's View terminal: an error gets the
-// generic 500 and a View-error log, except a body limit's rejection, which
-// gets 413.
+// serveView runs view for r as tanGO's View terminal. An error gets the
+// generic 500 and a View-error log. A body-limit rejection (413) and a
+// malformed request body (400) are the client's errors, so neither is logged.
 func serveView(w http.ResponseWriter, r *http.Request, view View, logger *slog.Logger) {
 	params := make(map[string]string)
 	if chiCtx := chi.RouteContext(r.Context()); chiCtx != nil {
@@ -229,10 +229,12 @@ func serveView(w http.ResponseWriter, r *http.Request, view View, logger *slog.L
 
 	ctx := newContextWithLogger(w, r, params, logger)
 	if err := view(ctx); err != nil {
-		// A body limit's rejection the View didn't handle is the client's
-		// error, not the server's.
 		if isBodyTooLarge(err) {
 			writeBodyTooLarge(w)
+			return
+		}
+		if errors.Is(err, ErrInvalidBody) {
+			writeInvalidBody(w)
 			return
 		}
 		observabilitysafe.Call(func() {

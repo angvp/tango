@@ -134,4 +134,4 @@ url, err := reverser.Reverse("posts:detail", tango.Params{"id": "42"})
 
 ## Error handling
 
-A view returning a non-nil error results in a fixed 500 response with a generic JSON body; the underlying error is logged server-side but never sent to the client. The one exception is a [body limit](#request-body-limits)'s `*http.MaxBytesError`, which gets `413` instead. There's no per-route custom error-handling hook — return a JSON error body yourself (via `ctx.JSON`) for anything a client needs to see.
+A view returning a non-nil error results in a fixed 500 response with a generic JSON body; the underlying error is logged server-side but never sent to the client. Two exceptions are client errors and are not logged: a [body limit](#request-body-limits)'s `*http.MaxBytesError`, which gets `413`, and a malformed request body returned from `ctx.Bind`, which gets `400`. There's no per-route custom error-handling hook — return a JSON error body yourself (via `ctx.JSON`) for anything a client needs to see.
