@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-03
+
 ### Added
 
 - **`tango.ErrInvalidBody`** matches, with `errors.Is`, every error `Context.Bind` returns for a malformed request body. The decoder's error stays reachable through `errors.As`.
@@ -497,7 +499,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/angvp/tango/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/angvp/tango/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/angvp/tango/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/angvp/tango/compare/v0.5.0...v0.6.0
