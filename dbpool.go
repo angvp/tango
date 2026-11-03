@@ -11,7 +11,10 @@ import (
 // defaultDBMaxIdle is how many idle connections ServeContext keeps by
 // default. database/sql keeps 2, so a server handling more than 2 requests
 // at once closed and reopened a database connection on almost every request.
-const defaultDBMaxIdle = 32
+// Connections beyond the idle limit are still closed on release, and each
+// reopened PostgreSQL connection costs a new server process, so the limit sits
+// above the concurrency a single server usually sees.
+const defaultDBMaxIdle = 256
 
 // DBPool sets the limits of the database connection pool. A zero field leaves
 // that setting as the *sql.DB has it (for database/sql: unlimited open
@@ -41,7 +44,7 @@ func (p DBPool) validate() error {
 // *sql.DB instead of the default. Fields left zero are not touched, so
 // WithDBPool(DBPool{}) keeps the database/sql behavior as it is.
 //
-// Without this option ServeContext raises the idle connection limit to 32
+// Without this option ServeContext raises the idle connection limit to 256
 // when the application has not bounded the pool itself with SetMaxOpenConns;
 // a pool the application bounded is left alone.
 func WithDBPool(pool DBPool) ServeOption {

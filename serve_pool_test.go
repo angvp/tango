@@ -107,6 +107,17 @@ func TestServeContextReusesConnectionsAcrossBursts(t *testing.T) {
 	}
 }
 
+func TestServeContextReusesConnectionsAtHighConcurrency(t *testing.T) {
+	sqlDB, connector := openCounted(t)
+	serveWhile(t, sqlDB, func() {
+		burst(t, sqlDB, 128)
+		burst(t, sqlDB, 128)
+	})
+	if got := connector.opened.Load(); got != 128 {
+		t.Fatalf("connections opened = %d, want 128: the second burst should reuse the first one's connections", got)
+	}
+}
+
 func TestWithDBPoolZeroValueKeepsTheDatabaseSQLDefaults(t *testing.T) {
 	sqlDB, connector := openCounted(t)
 	serveWhile(t, sqlDB, func() {

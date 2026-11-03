@@ -8,6 +8,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 - **`tango.ErrInvalidBody`** matches, with `errors.Is`, every error `Context.Bind` returns for a malformed request body. The decoder's error stays reachable through `errors.As`.
 
+### Changed
+
+- **The default database pool keeps up to 256 idle connections, up from 32.** With 32, a server handling more than 32 queries at once closed each connection it released and opened a new one for the next request; on PostgreSQL every new connection starts a server process. Measured on a 36-CPU host, single-pet reads at 128 concurrent clients opened about 1,360 PostgreSQL sessions per second and served half the requests per second of 64 clients. The number of open connections is unchanged (unlimited), and a pool bounded with `SetMaxOpenConns` or set with `tango.WithDBPool` is left as it was. A server that briefly handles up to 256 concurrent queries now keeps that many PostgreSQL connections open afterwards; pass `tango.WithDBPool` with `MaxIdle` or `MaxIdleTime` to hold fewer.
+
 ### Fixed
 
 - **A malformed request body bound with `Context.Bind` answers `400`, not `500`.** A View that returns the `Bind` error unhandled now gets `400 {"error":"invalid request body"}` and no View-error log. A JSON syntax or type error, or an end-of-input error (`io.EOF`, `io.ErrUnexpectedEOF`), counts as malformed wherever it comes from: the decoder, a custom `UnmarshalJSON`, or the body reader when a client disconnects mid-body. Other `Bind` failures, a body over a `MaxBodySize` limit included, keep their answers (`500`, and `413` respectively).
