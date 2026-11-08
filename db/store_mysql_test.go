@@ -75,7 +75,7 @@ func TestOnlyUnboundedUniqueOrIndexedStringsGetTheMySQLBound(t *testing.T) {
 	}
 }
 
-func TestTimesRoundTripInUTCAndAnUnsetTimeStaysUnset(t *testing.T) {
+func TestTimesRoundTripInUTCAndAnUnsetTimeStaysUnsetOnEveryDialect(t *testing.T) {
 	store, meta := openMySQLAccounts(t)
 	ctx := context.Background()
 	zone := time.FixedZone("UTC+9", 9*3600)

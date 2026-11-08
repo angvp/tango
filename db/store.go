@@ -868,12 +868,12 @@ func columnValue(field model.FieldMeta, fieldValue reflect.Value, dialect Dialec
 	return argumentValue(dialect, fieldValue.Interface())
 }
 
-// argumentValue is value as the dialect's driver should receive it. MySQL has
-// no year 0 (its zero date, 0000-00-00, is refused in strict mode), so an
-// unset time.Time is written as NULL, which reads back as the zero time like
-// any other NULL.
+// argumentValue is value as the dialect's driver should receive it. A zero
+// time.Time is written as NULL on every dialect, so an unset time has one
+// stored form, and NULL reads back as the zero time. A zero time is not a
+// year-0001 instant: the zero value and NULL mean the same thing.
 func argumentValue(dialect Dialect, value any) any {
-	if t, ok := value.(time.Time); ok && t.IsZero() && dialect == MySQL {
+	if t, ok := value.(time.Time); ok && t.IsZero() {
 		return nil
 	}
 	return value
