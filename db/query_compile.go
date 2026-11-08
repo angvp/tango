@@ -242,7 +242,7 @@ func validateKnownCondition(field model.FieldMeta, condition Condition, label st
 	if valueType.Kind() != fieldKind || (fieldKind == reflect.Struct && valueType != field.Type) {
 		return field, fail("%svalue for field %q has type %s, want %s", label, field.Name, valueType, field.Type)
 	}
-	return field, nil
+	return field, rejectZeroQueryValue(field, condition.Value, label)
 }
 
 // selectSQL builds the SELECT statement and bind arguments for query. List,

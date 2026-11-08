@@ -100,7 +100,6 @@ func goldenSelect(quote string) string {
 }
 
 func TestQuerySQLGoldens(t *testing.T) {
-	zeroTime := time.Time{}
 	stamp := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
 	type want struct{ sql, args string }
@@ -111,6 +110,13 @@ func TestQuerySQLGoldens(t *testing.T) {
 		postgres want
 		mysql    want
 	}{
+		{
+			name:     "time argument",
+			query:    db.Query{Where: []db.Condition{{Field: "CreatedAt", Op: db.OpGte, Value: stamp}}},
+			sqlite:   want{" WHERE (`created_at` >= ?)", `[time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)]`},
+			postgres: want{` WHERE ("created_at" >= $1)`, `[time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)]`},
+			mysql:    want{" WHERE (`created_at` >= ?)", `[time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)]`},
+		},
 		{
 			name:     "empty query",
 			query:    db.Query{},
@@ -148,13 +154,6 @@ func TestQuerySQLGoldens(t *testing.T) {
 			sqlite:   want{" WHERE (`owner_id` = ?)", `[0]`},
 			postgres: want{` WHERE ("owner_id" = $1)`, `[0]`},
 			mysql:    want{" WHERE (`owner_id` = ?)", `[0]`},
-		},
-		{
-			name:     "time arguments",
-			query:    db.Query{Where: []db.Condition{{Field: "CreatedAt", Op: db.OpGte, Value: stamp}, {Field: "CreatedAt", Op: db.OpLt, Value: zeroTime}}},
-			sqlite:   want{" WHERE (`created_at` >= ? AND `created_at` < ?)", `[time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC), time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC)]`},
-			postgres: want{` WHERE ("created_at" >= $1 AND "created_at" < $2)`, `[time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC), time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC)]`},
-			mysql:    want{" WHERE (`created_at` >= ? AND `created_at` < ?)", `[time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC), <nil>]`},
 		},
 	}
 

@@ -113,7 +113,7 @@ func TestInErrors(t *testing.T) {
 		{"wrong slice type", db.Query{Filter: ptr(db.In("ID", []string{"a"}))}, `tango db: invalid query: IN value 0 for field "ID" has type string, want int64`, false},
 		{"nil element", db.Query{Filter: ptr(db.In("Title", []any{"a", nil}))}, `tango db: invalid query: IN value 1 for field "Title" is nil`, false},
 		{"nil pointer element", db.Query{Filter: ptr(db.In("CreatedAt", []*time.Time{nilTime}))}, `tango db: invalid query: IN value 0 for field "CreatedAt" has type *time.Time, want time.Time`, false},
-		{"zero time", db.Query{Filter: ptr(db.In("CreatedAt", []time.Time{time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), {}}))}, `tango db: invalid query: IN value 1 for field "CreatedAt" is the zero time`, false},
+		{"zero time", db.Query{Filter: ptr(db.In("CreatedAt", []time.Time{time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), {}}))}, `tango db: invalid query: IN value 1 for field "CreatedAt" is the zero time; use db.IsNull or db.IsNotNull to find unset rows`, false},
 		{"too many values", db.Query{Filter: ptr(db.In("ID", tooMany))}, `tango db: invalid query: IN list for field "ID" has 1001 values, limit 1000`, true},
 		{"too many values in Where", db.Query{Where: []db.Condition{{Field: "ID", Op: db.OpIn, Value: tooMany}}}, `tango db: invalid query: IN list for field "ID" has 1001 values, limit 1000`, true},
 		{"unknown field", db.Query{Filter: ptr(db.In("Nope", []int{1}))}, `tango db: invalid query: unknown field "Nope" for model goldenPost`, false},

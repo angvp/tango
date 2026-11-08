@@ -48,7 +48,7 @@ func validateIn(field model.FieldMeta, condition Condition, label string) error 
 			return conditionError(label, "IN value %d for field %q has type %s, want %s", i, field.Name, element.Type(), field.Type)
 		}
 		if field.Type == timeType && element.IsZero() {
-			return conditionError(label, "IN value %d for field %q is the zero time", i, field.Name)
+			return conditionError(label, "IN value %d for field %q is the zero time; use db.IsNull or db.IsNotNull to find unset rows", i, field.Name)
 		}
 	}
 	return nil
