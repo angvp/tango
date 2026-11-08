@@ -16,6 +16,9 @@ import (
 
 var timeType = reflect.TypeOf(time.Time{})
 
+// dateType is the Go type of model.Date, whose column is a DATE.
+var dateType = reflect.TypeFor[model.Date]()
+
 // Model is the SQL-relevant model shape makemigrations needs from an app. It
 // is exported so tango's app-side "-tango-dump-models" JSON payload and CLI can
 // share a type; do not treat it as a hand-authored application API.
@@ -51,6 +54,8 @@ func sqlType(t reflect.Type) string {
 	switch {
 	case t == timeType:
 		return "timestamp"
+	case t == dateType:
+		return "date"
 	case t.Kind() == reflect.String:
 		return "text"
 	case t.Kind() == reflect.Bool:

@@ -253,6 +253,8 @@ func baseTypeSQL(dialect db.Dialect, columnType string, length int) string {
 		return pick(dialect, "REAL", "DOUBLE PRECISION", "DOUBLE")
 	case "timestamp":
 		return pick(dialect, "TIMESTAMP", "TIMESTAMPTZ", "DATETIME(6)")
+	case "date":
+		return "DATE"
 	case "integer":
 		return pick(dialect, "INTEGER", "BIGINT", "BIGINT")
 	default:

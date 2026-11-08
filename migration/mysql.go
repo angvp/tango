@@ -26,7 +26,7 @@ const mysqlIndexableText = "VARCHAR(255)"
 // text (the type tokens Diff writes, with anything unknown stored as text).
 func mysqlUnboundedText(columnType string) bool {
 	switch columnType {
-	case "varchar", "boolean", "real", "timestamp", "integer":
+	case "varchar", "boolean", "real", "timestamp", "date", "integer":
 		return false
 	}
 	return true
