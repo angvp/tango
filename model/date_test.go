@@ -229,3 +229,24 @@ func TestDateOfAndAddDaysRefuseYearsOutsideTheRange(t *testing.T) {
 		t.Errorf("AddDays to the last day = %v, %v", got, err)
 	}
 }
+
+// The text, JSON and database paths refuse a year outside 0001 through 9999
+// with the same error as the constructors.
+func TestDateRangeIsTheSameOnEveryPath(t *testing.T) {
+	var d Date
+	if err := d.Scan(time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)); !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("Scan of year 10000: err = %v, want ErrInvalidDate", err)
+	}
+	if err := d.Scan("0000-01-01"); !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("Scan of year 0000: err = %v, want ErrInvalidDate", err)
+	}
+	if _, err := ParseDate("0000-01-01"); !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("ParseDate of year 0000: err = %v, want ErrInvalidDate", err)
+	}
+	if err := json.Unmarshal([]byte(`"0000-01-01"`), &d); !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("JSON of year 0000: err = %v, want ErrInvalidDate", err)
+	}
+	if err := d.UnmarshalText([]byte("9999-12-32")); !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("text of an invalid day: err = %v, want ErrInvalidDate", err)
+	}
+}
