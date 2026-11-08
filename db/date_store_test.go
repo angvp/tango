@@ -204,3 +204,31 @@ func TestDateUniqueRejectsADuplicateDateAndAcceptsSeveralUnset(t *testing.T) {
 		t.Error("a duplicate nonzero Date was accepted by a unique constraint")
 	}
 }
+
+// TestIsNullFindsUnsetDatesOnEveryDialect: the supported way to find unset
+// rows is IsNull, and IsNotNull finds set ones, on every dialect.
+func TestIsNullFindsUnsetDatesOnEveryDialect(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, dateEvent{})
+	store := db.NewStore(sqlDB, dialect)
+	meta := metaFor(t, registry, dateEvent{})
+	ctx := context.Background()
+	for _, row := range []dateEvent{
+		{Title: "set", Day: model.MustDate(2026, time.March, 1)},
+		{Title: "unset"},
+	} {
+		row := row
+		if err := store.Create(ctx, meta, &row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var unset []dateEvent
+	if err := store.List(ctx, meta, db.Query{Filter: ptr(db.IsNull("Day"))}, &unset); err != nil {
+		t.Fatal(err)
+	}
+	assertTitles(t, unset, "unset")
+	var set []dateEvent
+	if err := store.List(ctx, meta, db.Query{Filter: ptr(db.IsNotNull("Day"))}, &set); err != nil {
+		t.Fatal(err)
+	}
+	assertTitles(t, set, "set")
+}
