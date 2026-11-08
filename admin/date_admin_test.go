@@ -117,3 +117,19 @@ func TestDateFieldShowsYYYYMMDDInTheChangelist(t *testing.T) {
 		t.Errorf("the changelist does not show the date as YYYY-MM-DD")
 	}
 }
+
+// A date is not a filter: a Date in Filters is refused at registration with
+// the same message any non-boolean, non-foreign-key field gets.
+func TestDateInListFiltersIsRefusedAtRegistration(t *testing.T) {
+	registry := tango.NewRegistry()
+	if err := registry.Models().Register(dateCrudEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	err := registry.Admin().Register(dateCrudEvent{}, admin.Options{Filters: []string{"Day"}})
+	if err == nil {
+		err = registry.RunRegistration()
+	}
+	if err == nil || !strings.Contains(err.Error(), "must be a boolean or foreign key") {
+		t.Errorf("Day in Filters: err = %v, want the boolean-or-foreign-key refusal", err)
+	}
+}
