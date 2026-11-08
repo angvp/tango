@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"reflect"
 	"time"
 
@@ -49,4 +50,35 @@ func isZeroCalendarValue(value any) bool {
 		return v.IsZero()
 	}
 	return reflect.ValueOf(value).IsZero()
+}
+
+// rawArguments checks the bind arguments of Store.Query and Store.QueryRow. A
+// zero time or zero model.Date is not a value, so it is refused with
+// ErrInvalidQuery before any SQL runs: a raw statement can compare with it
+// only by binding NULL, which matches nothing. Other arguments are bound as
+// argumentValue gives them. A nil argument is NULL and passes through.
+func rawArguments(dialect Dialect, args []any) ([]any, error) {
+	out := make([]any, len(args))
+	for i, arg := range args {
+		if arg != nil && isCalendarValue(arg) && isZeroCalendarValue(arg) {
+			return nil, fmt.Errorf("%w: argument %d is the zero %s; bind nil for NULL, or use IsNull with the ORM", ErrInvalidQuery, i+1, zeroNounOf(arg))
+		}
+		out[i] = argumentValue(dialect, arg)
+	}
+	return out, nil
+}
+
+func isCalendarValue(value any) bool {
+	switch value.(type) {
+	case time.Time, model.Date:
+		return true
+	}
+	return false
+}
+
+func zeroNounOf(value any) string {
+	if _, ok := value.(model.Date); ok {
+		return "date"
+	}
+	return "time"
 }

@@ -95,6 +95,8 @@ When the CRUD surface isn't enough, `Store` exposes two raw-SQL methods that reu
 - **`QueryRow(ctx, dest any, sql string, args ...any) error`** — one row into `dest`.
 - **`Query(ctx, dest *[]T, sql string, args ...any) error`** — every row appended into `dest`, matching columns to struct fields by name (case-insensitively).
 
+`Query` and `QueryRow` bind their arguments with the same rule as the ORM. A zero `time.Time` or zero `model.Date` passed as an argument returns `ErrInvalidQuery` before any SQL runs, on every dialect. Pass `nil` to bind NULL, or use `IsNull` through the ORM to find unset rows. Other arguments are bound as they are. Writes that set a time or date to unset should go through `Create` or `Update`, which store a zero time or zero date as NULL. A raw `INSERT` that takes a zero time must pass `nil` explicitly.
+
 Raw SQL is yours: `Store` doesn't rewrite it, so use your dialect's placeholders and quote any table or column named after a reserved word yourself (`SELECT "order" FROM "user"` on PostgreSQL, `` SELECT `order` FROM `user` `` on SQLite). `Store`'s own generated SQL already quotes every identifier.
 
 A returned column matches a destination field if it case-insensitively equals *either* the Go field name directly (`title` matches `Title`) *or* `db.ColumnName(field.Name)` — the same snake_case derivation `Store`'s own generated schema uses (`author_id` matches `AuthorID`). This means a raw query selecting tanGO's own generated column names scans straight into the matching Go-named struct with no aliasing required:

@@ -1000,7 +1000,11 @@ func (s *Store) QueryRow(ctx context.Context, dest any, sqlQuery string, args ..
 		return fmt.Errorf("tango db: QueryRow destination must be a non-nil pointer")
 	}
 
-	rows, err := s.conn().QueryContext(ctx, sqlQuery, args...)
+	bound, err := rawArguments(s.dialect, args)
+	if err != nil {
+		return err
+	}
+	rows, err := s.conn().QueryContext(ctx, sqlQuery, bound...)
 	if err != nil {
 		return err
 	}
@@ -1036,7 +1040,11 @@ func (s *Store) Query(ctx context.Context, dest any, sqlQuery string, args ...an
 	sliceValue := value.Elem()
 	elementType := sliceValue.Type().Elem()
 
-	rows, err := s.conn().QueryContext(ctx, sqlQuery, args...)
+	bound, err := rawArguments(s.dialect, args)
+	if err != nil {
+		return err
+	}
+	rows, err := s.conn().QueryContext(ctx, sqlQuery, bound...)
 	if err != nil {
 		return err
 	}
