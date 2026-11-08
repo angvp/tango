@@ -72,7 +72,7 @@ What to do:
 
 Two changes affect code that writes or queries a `time.Time` field. Both are unreleased.
 
-**Writes.** A zero `time.Time` is now stored as `NULL` on SQLite and PostgreSQL, as it was on MySQL. Earlier versions wrote year 0001 on those two databases. Rows written before the change keep year 0001 and still read as the zero `time.Time`; nothing rewrites them. A unique constraint on a time column no longer collides on several unset values, and a NOT NULL time column added with a default receives `NULL` for a zero value.
+**Writes.** A zero `time.Time` is now stored as `NULL` on SQLite and PostgreSQL, as it was on MySQL. Earlier versions wrote year 0001 on those two databases. Rows written before the change keep year 0001 and still read as the zero `time.Time`; nothing rewrites them. A unique constraint on a time column no longer collides on several unset values. A time column declared `NOT NULL` now receives `NULL` for a zero value, which the database rejects, so such a column must allow `NULL`. tanGO ships no `NOT NULL` time column.
 
 **Queries.** A zero `time.Time` is no longer a query value. `=`, `!=`, the range operators and each `IN` element with a zero time return `ErrInvalidQuery` before any SQL runs. To find unset rows, use `db.IsNull` or `db.IsNotNull`:
 
