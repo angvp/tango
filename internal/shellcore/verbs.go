@@ -422,6 +422,15 @@ func coerce(value any, target reflect.Type) (reflect.Value, error) {
 		out.Set(rv)
 		return out, nil
 	}
+	if target == dateType {
+		if text, ok := value.(string); ok {
+			date, err := model.ParseDate(text)
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			return reflect.ValueOf(date), nil
+		}
+	}
 	if isNumber(rv.Kind()) && isNumber(target.Kind()) {
 		out := reflect.New(target).Elem()
 		if ok := setNumber(out, rv); ok {

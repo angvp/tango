@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/angvp/tango/model"
 )
 
 // bytesPrefix is how many bytes of a []byte value are shown.
@@ -69,6 +71,7 @@ func unwrap(rv reflect.Value) reflect.Value {
 
 var (
 	timeType  = reflect.TypeOf(time.Time{})
+	dateType  = reflect.TypeOf(model.Date{})
 	errorType = reflect.TypeOf((*error)(nil)).Elem()
 )
 
@@ -76,6 +79,13 @@ func formatValue(rv reflect.Value) string {
 	rv = unwrap(rv)
 	if !rv.IsValid() || (rv.Kind() == reflect.Interface && rv.IsNil()) {
 		return "nil"
+	}
+	if rv.Type() == dateType {
+		date := rv.Interface().(model.Date)
+		if date.IsZero() {
+			return "nil"
+		}
+		return date.String()
 	}
 	if rv.Type() == timeType {
 		return rv.Interface().(time.Time).Format(time.RFC3339Nano)
