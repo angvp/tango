@@ -40,7 +40,7 @@ func withoutExceptions(body string) string {
 
 // previewCanvas matches the Markdown preview iframe's white canvas class, the
 // only raw palette class an admin page may carry: the iframe's document is
-// rendered outside the theme and stays white in both themes (ADR 0062).
+// rendered outside the theme and stays white in both themes.
 var previewCanvas = regexp.MustCompile(`(<iframe[^>]*?) bg-white`)
 
 func TestRawColourGuardCatchesAClassAndACSSRule(t *testing.T) {

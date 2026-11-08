@@ -70,6 +70,8 @@ Four more commands change an existing account's `IsStaff`/`IsSuperuser` flags, w
 
 `create` and `resetpassword` prompt for the new password on stdin exactly as above; the rest need no password. These flags are handled by `admin.HandleCLI(ctx, store, os.Args[1:], stdin, stdout, stderr)`, which a generated `main.go` calls **before** `flag.Parse()`/`tango.DispatchFlags` — `tango newproject`'s scaffold wires this up for you, so you'd only add it yourself in a hand-rolled `main.go` that isn't built from the scaffold:
 
+On a terminal, the password is read without echo. A pipe or file is read as one line, as before. Setting `TANGO_ADMIN_PASSWORD` to a non-empty value skips the prompt.
+
 ```go
 if handled, err := admin.HandleCLI(context.Background(), store, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled || err != nil {
 	return err

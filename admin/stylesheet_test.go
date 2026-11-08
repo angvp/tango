@@ -74,7 +74,7 @@ var (
 
 // Each theme block must declare every token with its palette value: the light
 // block for the default and for an explicit light choice, the dark block for
-// the system preference and for an explicit dark choice (ADR 0062).
+// the system preference and for an explicit dark choice.
 func TestAdminStylesheetDeclaresEveryTokenInEachThemeBlock(t *testing.T) {
 	_, response := servedAdminStylesheet(t)
 	css := response.Body.String()
