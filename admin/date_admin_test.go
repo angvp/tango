@@ -10,6 +10,8 @@ import (
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
+	"github.com/angvp/tango/i18n"
+	"github.com/angvp/tango/i18n/i18ntest"
 	"github.com/angvp/tango/model"
 )
 
@@ -22,7 +24,7 @@ type dateCrudEvent struct {
 
 const dateEventPath = "/admin/date_crud_event/"
 
-func buildDateEventAdmin(t *testing.T) (http.Handler, *sql.DB) {
+func buildDateEventAdmin(t *testing.T, adminOpts ...admin.Option) (http.Handler, *sql.DB) {
 	t.Helper()
 	registry := tango.NewRegistry()
 	if err := registry.Models().Register(dateCrudEvent{}); err != nil {
@@ -33,7 +35,7 @@ func buildDateEventAdmin(t *testing.T) (http.Handler, *sql.DB) {
 	}
 	sqlDB, store := migratedAdminDB(t, registry)
 	seedAdminAccountAndSession(t, sqlDB, store)
-	if err := registry.Register(admin.New(store)); err != nil {
+	if err := registry.Register(admin.New(store, adminOpts...)); err != nil {
 		t.Fatalf("register admin app: %v", err)
 	}
 	if err := registry.RunRegistration(); err != nil {
@@ -131,5 +133,22 @@ func TestDateInListFiltersIsRefusedAtRegistration(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "must be a boolean or foreign key") {
 		t.Errorf("Day in Filters: err = %v, want the boolean-or-foreign-key refusal", err)
+	}
+}
+
+// The Date message is a translatable key: with a catalog registered for the
+// request's locale, a bad date shows the catalog's text.
+func TestDateErrorTranslatesWithI18nMiddleware(t *testing.T) {
+	i18ntest.Isolate(t)
+	handler, _ := buildDateEventAdmin(t, admin.WithMiddleware(adminI18NMiddleware()))
+	i18n.RegisterCatalog(adminI18NLocale, map[string]string{
+		"admin.error.not_date": "Escribe una fecha con el formato AAAA-MM-DD.",
+	})
+	response := doRequest(t, handler, http.MethodPost, dateEventPath+"new/", url.Values{"Name": {"bad"}, "Day": {"2026-02-30"}})
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), "Escribe una fecha con el formato AAAA-MM-DD.") {
+		t.Errorf("the translated Date message is missing from the form")
 	}
 }
