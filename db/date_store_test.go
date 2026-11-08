@@ -156,8 +156,10 @@ func TestDateStoredAsExactTextOnSQLite(t *testing.T) {
 	if err := store.Create(ctx, meta, &row); err != nil {
 		t.Fatal(err)
 	}
+	// CAST keeps the stored text: a bare DATE column is converted by the driver
+	// to a time.Time on read, which would hide the stored form.
 	var text string
-	if err := sqlDB.QueryRowContext(ctx, `SELECT "day" FROM "date_event" WHERE "id" = ?`, row.ID).Scan(&text); err != nil {
+	if err := sqlDB.QueryRowContext(ctx, `SELECT CAST("day" AS TEXT) FROM "date_event" WHERE "id" = ?`, row.ID).Scan(&text); err != nil {
 		t.Fatal(err)
 	}
 	if text != "2026-03-01" {

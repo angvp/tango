@@ -102,6 +102,16 @@ type valueParseError struct {
 func (e valueParseError) Error() string { return e.err.Error() }
 func (e valueParseError) Unwrap() error { return e.err }
 
+// dateParseError is what the built-in parser returns when a submitted value is
+// not an exact YYYY-MM-DD. It is kept apart from valueParseError so the message
+// names the date form rather than the datetime one.
+type dateParseError struct {
+	err error
+}
+
+func (e dateParseError) Error() string { return e.err.Error() }
+func (e dateParseError) Unwrap() error { return e.err }
+
 // parseErrorMessage is the message beside a field whose submitted value a
 // widget refused. A FieldError keeps its own wording, a value of the wrong
 // type gets the plain form for that type, and any other error gets a generic
@@ -109,6 +119,10 @@ func (e valueParseError) Unwrap() error { return e.err }
 func parseErrorMessage(ctx context.Context, f FieldContext, err error) string {
 	if messages := fieldErrorMessages(ctx, err); len(messages) > 0 {
 		return strings.Join(messages, " ")
+	}
+	var dateErr dateParseError
+	if errors.As(err, &dateErr) {
+		return i18n.T(ctx, "admin.error.not_date", "Enter a date as YYYY-MM-DD.")
 	}
 	var parseErr valueParseError
 	if errors.As(err, &parseErr) {

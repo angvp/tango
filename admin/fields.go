@@ -40,6 +40,26 @@ func humanizeFieldName(name string) string {
 	return b.String()
 }
 
+// dateType is the Go type of model.Date. Date and time.Time are both structs,
+// so the admin chooses a widget by this type, never by reflect.Kind alone.
+var dateType = reflect.TypeFor[model.Date]()
+
+// setDateFromString parses raw into a model.Date field. An empty value is the
+// zero date. Anything other than an exact YYYY-MM-DD is a dateParseError, so
+// the form shows the Date message rather than the datetime one.
+func setDateFromString(fieldValue reflect.Value, raw string) error {
+	if raw == "" {
+		fieldValue.Set(reflect.ValueOf(model.Date{}))
+		return nil
+	}
+	date, err := model.ParseDate(raw)
+	if err != nil {
+		return dateParseError{err: err}
+	}
+	fieldValue.Set(reflect.ValueOf(date))
+	return nil
+}
+
 // inputTypeForKind returns the HTML input type for a supported Go kind.
 func inputTypeForKind(t reflect.Type) string {
 	switch t.Kind() {
@@ -50,6 +70,9 @@ func inputTypeForKind(t reflect.Type) string {
 		reflect.Float32, reflect.Float64:
 		return "number"
 	case reflect.Struct:
+		if t == dateType {
+			return "date"
+		}
 		return "datetime-local"
 	default:
 		return "text"
@@ -232,6 +255,9 @@ func buildFormFields(ctx context.Context, store *db.Store, models *model.Registr
 }
 
 func formatFieldValue(v reflect.Value) string {
+	if d, ok := v.Interface().(model.Date); ok {
+		return d.String()
+	}
 	if t, ok := v.Interface().(time.Time); ok {
 		if t.IsZero() {
 			return ""
@@ -321,6 +347,9 @@ func setFieldFromString(fieldValue reflect.Value, fieldType reflect.Type, raw st
 		}
 		fieldValue.SetFloat(v)
 	case reflect.Struct:
+		if fieldType == dateType {
+			return setDateFromString(fieldValue, raw)
+		}
 		if raw == "" {
 			fieldValue.Set(reflect.ValueOf(time.Time{}))
 			return nil
