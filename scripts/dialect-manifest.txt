@@ -42,6 +42,7 @@ sensitive ./internal/migrationcompat/v0_7_0/migrations
 sensitive ./internal/migrationcompat/v0_8_0/migrations
 sensitive ./internal/migrationcompat/v0_8_1/migrations
 sensitive ./internal/migrationtest
+sensitive ./internal/preflight
 sqlite-only ./internal/observabilitysafe
 sqlite-only ./internal/releasecheck
 sqlite-only ./internal/releasecheck/cmd/releasecheck

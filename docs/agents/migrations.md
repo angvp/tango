@@ -11,7 +11,7 @@ Canonical examples: `examples/api-with-admin/migrations/0001_auto.go`, `examples
 - Confirm the migration's `App` and `Name` are correct.
 - Confirm generated columns, indexes, uniqueness, and foreign-key references match the Go structs.
 - Apply migrations through the project's migrate workflow only after review.
-- When `tango check`, `-migrate`, `tango makemigrations` or the status output reports `conflicting migration names`, renumber one of the conflicting migrations (rename its file and `Name` to the next free number in its app), then run `tango makemigrations` and `tango check` again. Renumber only a migration that no database has applied. The conflict text names the migrations involved.
+- When `tango check`, `-migrate`, `-tango-dump-models`, `tango makemigrations` or the status output reports `conflicting migration names`, renumber one of the conflicting migrations (rename its file and `Name` to the next free number in its app), then run `tango makemigrations` and `tango check` again. Renumber only a migration that no database has applied. The conflict text names the migrations involved.
 
 Typical project commands:
 

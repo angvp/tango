@@ -76,6 +76,64 @@ func TestDashboardViewShowsMigrationConflict(t *testing.T) {
 	}
 }
 
+func TestApplyMenuItemUnavailableOnConflict(t *testing.T) {
+	ok, reason := menuApplyMigrations.availability(tango.ProjectStatus{
+		RegistrationOK:    true,
+		DatabaseReachable: true,
+		MigrationError:    conflictMessage,
+		MigrationsPending: 2,
+	})
+	if ok || reason != reasonMigrationConflict {
+		t.Fatalf("availability = (%v, %q), want (false, %q)", ok, reason, reasonMigrationConflict)
+	}
+}
+
+func TestPlainActionsLineOmitsMigrateActionOnConflict(t *testing.T) {
+	line := lastPlainLine(t, tango.ProjectStatus{RegistrationOK: true, DatabaseReachable: true, MigrationError: conflictMessage})
+	const prefix = "actions available via: "
+	if !strings.HasPrefix(line, prefix) {
+		t.Fatalf("actions line %q lacks prefix %q", line, prefix)
+	}
+	for _, action := range strings.Split(strings.TrimPrefix(line, prefix), " | ") {
+		if action == "tango migrate" {
+			t.Fatalf("actions line offers %q on a conflict: %q", action, line)
+		}
+	}
+}
+
+func TestMigrateActionsKeptWithoutConflict(t *testing.T) {
+	status := tango.ProjectStatus{RegistrationOK: true, DatabaseReachable: true, MigrationsTotal: 2, MigrationsPending: 2}
+
+	if ok, reason := menuApplyMigrations.availability(status); !ok {
+		t.Fatalf("apply unavailable without conflict: %q", reason)
+	}
+	line := lastPlainLine(t, status)
+	if !strings.Contains(line, " | tango migrate | ") {
+		t.Fatalf("actions line %q lacks the standalone migrate action", line)
+	}
+}
+
+func TestDashboardViewShowsConflictReasonNextToApply(t *testing.T) {
+	model := newDashboardModel(tango.ProjectStatus{
+		RegistrationOK:    true,
+		DatabaseReachable: true,
+		MigrationError:    conflictMessage,
+		MigrationsPending: 2,
+	})
+
+	view := model.View()
+	if !strings.Contains(view, "Apply pending migrations ("+reasonMigrationConflict+")") {
+		t.Fatalf("dashboard does not show the conflict reason next to Apply:\n%s", view)
+	}
+	const literal = "Apply pending migrations (unavailable: migration registry has a conflict)"
+	if !strings.Contains(view, literal) {
+		t.Fatalf("dashboard reason text changed; want %q in:\n%s", literal, view)
+	}
+	if !strings.Contains(view, "migrations: CONFLICT (") {
+		t.Fatalf("dashboard lost the CONFLICT line:\n%s", view)
+	}
+}
+
 // The TUI reads status from the -tango-status JSON through tui(), so this
 // drives the same path a user takes in a non-interactive shell: the JSON the
 // project prints must come out as the conflict line, with exit 0.

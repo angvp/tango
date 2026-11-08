@@ -2,11 +2,15 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
-	"maps"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angvp/tango/migration"
 )
@@ -18,6 +22,17 @@ func plantMigration(t *testing.T, dir string, filename string, m migration.Migra
 	path := filepath.Join(dir, "migrations", filename)
 	if err := writeMigrationFile(path, migrationVarName(m.Name), []migration.Migration{m}); err != nil {
 		t.Fatalf("planting %s: %v", filename, err)
+	}
+}
+
+// syncAggregate regenerates migrations.go from the files on disk, as a
+// previous makemigrations run would have left it. Without this the aggregate
+// lags the planted files, and any rewrite of it changes content rather than
+// only its metadata.
+func syncAggregate(t *testing.T, dir string) {
+	t.Helper()
+	if err := regenerateMigrationsAggregate(dir); err != nil {
+		t.Fatalf("syncing aggregate: %v", err)
 	}
 }
 
@@ -73,7 +88,9 @@ func TestMakeMigrationsRefusesSharedNumberAndWritesNothing(t *testing.T) {
 	makeInitialMigration(t, dir, widgetModel(func([]migration.Column) {}))
 	generated := loadedNames(t, dir)[0]
 	plantMigration(t, dir, "branch_phone.go", planted("shop", "0001_phone"))
-	before := migrationsDirContents(t, dir)
+	syncAggregate(t, dir)
+	setOldMtimes(t, dir)
+	before := snapshotTree(t, dir)
 
 	code, stderr := runMakeMigrationsCapturing(t, dir, widgetWithNote())
 
@@ -88,7 +105,9 @@ func TestMakeMigrationsRefusesExactDuplicateNameInOneApp(t *testing.T) {
 	dir := t.TempDir()
 	makeInitialMigration(t, dir, widgetModel(func([]migration.Column) {}))
 	plantMigration(t, dir, "branch_copy.go", planted("shop", loadedNames(t, dir)[0]))
-	before := migrationsDirContents(t, dir)
+	syncAggregate(t, dir)
+	setOldMtimes(t, dir)
+	before := snapshotTree(t, dir)
 
 	code, stderr := runMakeMigrationsCapturing(t, dir, widgetWithNote())
 
@@ -113,10 +132,116 @@ func TestMakeMigrationsAllowsSameNumberInDifferentApps(t *testing.T) {
 	}
 }
 
+// treeEntry is everything observable about one path in the project tree. A
+// rewrite with identical bytes still moves Mod, and a create-then-remove
+// still moves the parent directory's Mod, so both show up here.
+type treeEntry struct {
+	Dir      bool
+	Mode     fs.FileMode
+	ModNs    int64
+	Size     int64
+	Digest   string
+	Children string
+}
+
+// oldMtime is the fixed timestamp fixtures are reset to, so any write during
+// the run leaves a modification time that cannot be mistaken for the setup's.
+var oldMtime = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// setOldMtimes resets every entry under root, directories included, to
+// oldMtime. Call it after the fixture is fully built.
+func setOldMtimes(t *testing.T, root string) {
+	t.Helper()
+	err := filepath.WalkDir(root, func(path string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chtimes(path, oldMtime, oldMtime)
+	})
+	if err != nil {
+		t.Fatalf("resetting mtimes: %v", err)
+	}
+}
+
+// snapshotTree records every entry under root, keyed by slash-relative path.
+// Symlinks are recorded by target, not followed.
+func snapshotTree(t *testing.T, root string) map[string]treeEntry {
+	t.Helper()
+	snapshot := map[string]treeEntry{}
+	err := filepath.WalkDir(root, func(path string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		entry := treeEntry{Mode: info.Mode(), ModNs: info.ModTime().UnixNano(), Size: info.Size()}
+		switch {
+		case info.IsDir():
+			entry.Dir = true
+			names, err := os.ReadDir(path)
+			if err != nil {
+				return err
+			}
+			entry.Children = joinNames(names)
+		case info.Mode()&fs.ModeSymlink != 0:
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			entry.Digest = "symlink:" + target
+		default:
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			sum := sha256.Sum256(content)
+			entry.Digest = hex.EncodeToString(sum[:])
+		}
+		snapshot[filepath.ToSlash(rel)] = entry
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshotting %s: %v", root, err)
+	}
+	return snapshot
+}
+
+func joinNames(entries []fs.DirEntry) string {
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name()
+	}
+	return strings.Join(names, "\n")
+}
+
+// changedPaths lists every path whose entry differs between before and after,
+// including paths present in only one of them.
+func changedPaths(before, after map[string]treeEntry) []string {
+	var changed []string
+	for path, entry := range before {
+		if other, ok := after[path]; !ok || other != entry {
+			changed = append(changed, path)
+		}
+	}
+	for path := range after {
+		if _, ok := before[path]; !ok {
+			changed = append(changed, path)
+		}
+	}
+	return changed
+}
+
 // assertRefusedWithoutWriting checks the refusal shape shared by every
-// conflict case: exit 1, the tango makemigrations prefix, and a migrations
-// directory byte-identical to its state before the run.
-func assertRefusedWithoutWriting(t *testing.T, dir string, before map[string]string, code int, stderr string) {
+// conflict case: exit 1, the tango makemigrations prefix, and a project tree
+// whose snapshot, including mtimes and directory listings, is identical to
+// its state before the run.
+func assertRefusedWithoutWriting(t *testing.T, dir string, before map[string]treeEntry, code int, stderr string) {
 	t.Helper()
 	if code != 1 {
 		t.Fatalf("exit code = %d, want 1; stderr:\n%s", code, stderr)
@@ -124,7 +249,45 @@ func assertRefusedWithoutWriting(t *testing.T, dir string, before map[string]str
 	if !strings.Contains(stderr, "tango makemigrations: ") || !strings.Contains(stderr, "conflicting migration names") {
 		t.Fatalf("stderr %q does not carry the conflict refusal", stderr)
 	}
-	if after := migrationsDirContents(t, dir); !maps.Equal(after, before) {
-		t.Fatalf("migrations dir changed after a refused run:\nbefore %v\nafter  %v", before, after)
+	if changed := changedPaths(before, snapshotTree(t, dir)); len(changed) > 0 {
+		t.Fatalf("project tree changed after a refused run: %v", changed)
 	}
+}
+
+// TestMakeMigrationsSnapshotDetectsWrites is the positive control: with a
+// valid registry the same snapshot comparison must see makemigrations write,
+// or the refusal tests above prove nothing about the instrument.
+func TestMakeMigrationsSnapshotDetectsWrites(t *testing.T) {
+	dir := t.TempDir()
+	makeInitialMigration(t, dir, widgetModel(func([]migration.Column) {}))
+	setOldMtimes(t, dir)
+	before := snapshotTree(t, dir)
+
+	code, stderr := runMakeMigrationsCapturing(t, dir, widgetWithNote())
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 for a valid registry; stderr:\n%s", code, stderr)
+	}
+	changed := changedPaths(before, snapshotTree(t, dir))
+	if !contains(changed, "migrations/migrations.go") {
+		t.Fatalf("snapshot did not see the aggregate rewrite; changed = %v", changed)
+	}
+	created := false
+	for _, path := range changed {
+		if _, ok := before[path]; !ok && strings.HasPrefix(path, "migrations/") {
+			created = true
+		}
+	}
+	if !created {
+		t.Fatalf("snapshot did not see a new migration file; changed = %v", changed)
+	}
+}
+
+func contains(values []string, want string) bool {
+	for _, v := range values {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }

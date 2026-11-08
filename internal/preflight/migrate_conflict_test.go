@@ -1,4 +1,4 @@
-package tango_test
+package preflight
 
 import (
 	"database/sql"

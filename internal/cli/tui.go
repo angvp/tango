@@ -65,7 +65,7 @@ func (m tuiMenuItem) availability(status tango.ProjectStatus) (ok bool, reason s
 		if !statusComplete(status) {
 			return false, reasonStatusIncomplete
 		}
-		if status.MigrationError != "" {
+		if migrationConflict(status) {
 			return false, reasonMigrationConflict
 		}
 		if status.MigrationsPending == 0 {
@@ -95,6 +95,12 @@ const reasonStatusIncomplete = "unavailable: project status is incomplete"
 // reasonMigrationConflict points at the CONFLICT line the dashboard already
 // prints, so the menu does not restate the conflict itself.
 const reasonMigrationConflict = "unavailable: migration registry has a conflict"
+
+// migrationConflict reports whether the migration registry conflicts, which
+// blocks the apply action in both the dashboard and the plain status output.
+func migrationConflict(status tango.ProjectStatus) bool {
+	return status.MigrationError != ""
+}
 
 // statusComplete reports whether registration and the database are in order,
 // the precondition for any migration action.
@@ -184,7 +190,7 @@ func printStatusPlain(w io.Writer, status tango.ProjectStatus) {
 	// A conflicting registry blocks the apply action, so the plain line omits
 	// "tango migrate" too, matching the dashboard.
 	actions := []string{"tango run"}
-	if status.MigrationError == "" {
+	if !migrationConflict(status) {
 		actions = append(actions, "tango migrate")
 	}
 	actions = append(actions, "tango migrate down")

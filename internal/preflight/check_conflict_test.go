@@ -1,4 +1,4 @@
-package tango_test
+package preflight
 
 import (
 	"errors"
@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
 	"github.com/angvp/tango/testdb"
 )
@@ -18,26 +19,6 @@ func validMigrations() []migration.Migration {
 			Up:   []migration.Step{migration.CreateTable{Table: "dc_post", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true}}}},
 			Down: []migration.Step{migration.DropTable{Table: "dc_post"}}},
 	}
-}
-
-// The database is closed before -check runs. -check must not read it, so a
-// database error can never be what the test sees.
-func TestDispatchFlagsCheckFailsOnMigrationConflict(t *testing.T) {
-	sqlDB, dialect := testdb.Open(t)
-	sqlDB.Close()
-
-	withArgs(t, []string{"tango", "-check"}, func() {
-		handled, err := tango.DispatchFlags(tango.Config{}, sqlDB, dialect, conflictingMigrations())
-		if !handled {
-			t.Fatal("handled = false, want true")
-		}
-		if !errors.Is(err, migration.ErrConflictingMigrations) {
-			t.Fatalf("err = %v, want ErrConflictingMigrations", err)
-		}
-		if !strings.HasPrefix(err.Error(), "check failed: ") {
-			t.Fatalf("err = %q, want the check failed: prefix", err.Error())
-		}
-	})
 }
 
 func TestDispatchFlagsCheckReportsConfigAndMigrationFailuresTogether(t *testing.T) {
@@ -62,13 +43,15 @@ func TestDispatchFlagsCheckReportsConfigAndMigrationFailuresTogether(t *testing.
 	})
 }
 
-func TestDispatchFlagsCheckPassesValidRegistryWithoutTouchingDatabase(t *testing.T) {
-	sqlDB, dialect := testdb.Open(t)
-	sqlDB.Close()
+// A valid registry passes -check and makes no database call. The recorder is
+// what shows the zero; a closed handle would show only that the error did not
+// come from the database.
+func TestDispatchFlagsCheckValidRegistryPassesWithoutDatabaseCalls(t *testing.T) {
+	sqlDB, log := newRecordingDB(t)
 
 	withArgs(t, []string{"tango", "-check"}, func() {
 		output, err := captureCheckStdout(t, func() error {
-			handled, err := tango.DispatchFlags(tango.Config{}, sqlDB, dialect, validMigrations())
+			handled, err := tango.DispatchFlags(tango.Config{}, sqlDB, db.SQLite, validMigrations())
 			if !handled {
 				t.Fatal("handled = false, want true")
 			}
@@ -81,10 +64,13 @@ func TestDispatchFlagsCheckPassesValidRegistryWithoutTouchingDatabase(t *testing
 			t.Fatalf("stdout = %q, want check passed", got)
 		}
 	})
+	if calls := log.snapshot(); len(calls) != 0 {
+		t.Fatalf("database calls = %v, want none for a valid -check", calls)
+	}
 }
 
-// captureCheckStdout returns what fn writes to os.Stdout. It is local because
-// captureStdout lives in the package tango test files, not this package.
+// captureCheckStdout returns what fn writes to os.Stdout, so the -check report
+// is asserted as printed.
 func captureCheckStdout(t *testing.T, fn func() error) (string, error) {
 	t.Helper()
 	reader, writer, err := os.Pipe()

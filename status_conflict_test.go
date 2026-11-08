@@ -7,8 +7,28 @@ import (
 	"testing"
 
 	"github.com/angvp/tango"
+	"github.com/angvp/tango/migration"
 	"github.com/angvp/tango/testdb"
 )
+
+func validMigrations() []migration.Migration {
+	return []migration.Migration{
+		{App: "blog", Name: "0001_initial", Reversible: true,
+			Up:   []migration.Step{migration.CreateTable{Table: "dc_post", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true}}}},
+			Down: []migration.Step{migration.DropTable{Table: "dc_post"}}},
+	}
+}
+
+func conflictingMigrations() []migration.Migration {
+	return []migration.Migration{
+		{App: "blog", Name: "0005_add_email", Reversible: true,
+			Up:   []migration.Step{migration.CreateTable{Table: "dc_email", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true}}}},
+			Down: []migration.Step{migration.DropTable{Table: "dc_email"}}},
+		{App: "blog", Name: "0005_add_phone", Reversible: true,
+			Up:   []migration.Step{migration.CreateTable{Table: "dc_phone", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true}}}},
+			Down: []migration.Step{migration.DropTable{Table: "dc_phone"}}},
+	}
+}
 
 func widgetsConfig() tango.Config {
 	return tango.Config{InstalledApps: []tango.App{

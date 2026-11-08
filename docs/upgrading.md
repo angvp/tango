@@ -64,4 +64,6 @@ What to do:
 
 `tango makemigrations` and `tango tui` report the same conflicts, and `tango makemigrations` will not generate a new migration on top of a conflicting registry. There is no flag or environment variable to skip the check. See [migration numbers and conflicts](guides/migrations.md#migration-numbers-and-conflicts) for the full rule.
 
+`-tango-dump-models` also refuses a conflicting registry, whichever other flag is given, and prints no models until the conflict is resolved.
+
 `RollbackLast` (`tango migrate down`) is not subject to this check, so a registry with a conflict can still be rolled back. It now refuses an ambiguous tie or a target registered twice, before any `Down` runs, where it used to guess.

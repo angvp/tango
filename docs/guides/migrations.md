@@ -138,6 +138,9 @@ The check runs in each of these places, and each one refuses without changing an
 | `-check` (`tango check`) | Fails with `check failed: ...` and the conflict text. A configuration failure found in the same run is reported with it. |
 | `-tango-status`, `tango tui` | Reports the conflict in `migrationError`, and shows it on the migrations line as `migrations: CONFLICT (...)`. Status still works. While `migrationError` is set, the TUI does not offer "Apply pending migrations", and shows the conflict as the reason. `-migrate` still refuses, as the safety net. |
 | `tango makemigrations` | Exits 1 with `tango makemigrations: ...` and writes no files. |
+| `-tango-dump-models` | Fails with `check failed: ...` and the conflict text before any model is printed, whatever other flag is given. |
+
+`-migrate -down` (`migration.RollbackLast`) is the one exception and is not listed above: it does not refuse a conflicting registry. See [rolling back](#rolling-back) below.
 
 There is no bypass: no flag, environment variable or configuration option skips the check. The remedy is to renumber one of the migrations.
 
@@ -183,7 +186,7 @@ tango migrate down
 
 Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. Migrations recorded with the same `applied_at` are rolled back in the reverse of the order they were applied in, so another app's table that a foreign key references is dropped only after the table referencing it.
 
-Rollback is exempt from the registry check above, because it is the recovery path, and it has two refusals. Both run before any `Down` step, so a refusal changes nothing:
+Rollback is exempt from the registry check above, because it is the recovery path. It runs against a registry with a conflict, and on a fresh database it creates the `tango_migrations` table if that table is missing, then fails with `no applied migrations to roll back`. Nothing else is written. It has two guards of its own. Both run before any `Down` step, so a refusal changes nothing:
 
 - **Unorderable tie (`ErrUnorderableTie`).** Several rows share the latest `applied_at` and cannot be ordered. That happens when a tied migration is missing from the registry, or when the tied migrations' cross-app foreign keys form a cycle. The error names the tied rows and their shared `applied_at`. A tie that can be ordered rolls back as before.
 - **Ambiguous target (`ErrAmbiguousRollbackTarget`).** The `(App, Name)` to roll back is registered more than once, so the registry does not say which `Down` steps belong to it. Remove the extra registration, as described under [migration numbers and conflicts](#migration-numbers-and-conflicts).

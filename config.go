@@ -207,6 +207,11 @@ func DispatchFlags(config Config, sqlDB *sql.DB, dialect db.Dialect, migrations 
 
 	switch {
 	case *dumpModels:
+		// Validated before any output so a conflicting registry never yields
+		// a model listing that looks like a successful dump.
+		if err := migration.Validate(migrations); err != nil {
+			return true, fmt.Errorf("check failed: %w", err)
+		}
 		models, err := DumpModels(config)
 		if err != nil {
 			return true, err
@@ -369,7 +374,8 @@ type ProjectStatus struct {
 // flag: an app's main.go handling that flag calls Status, JSON-encodes the
 // result to stdout, and exits — mirroring "-check" and "-tango-dump-models".
 func Status(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.Dialect, migrations []migration.Migration) ProjectStatus {
-	status := ProjectStatus{MigrationsTotal: len(migrations)}
+	identities := uniqueMigrationKeys(migrations)
+	status := ProjectStatus{MigrationsTotal: len(identities)}
 
 	if err := Check(config); err != nil {
 		status.RegistrationError = err.Error()
@@ -399,14 +405,31 @@ func Status(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.Dialec
 		return status
 	}
 
-	for _, m := range migrations {
-		if applied[migration.MigrationKey{App: m.App, Name: m.Name}] {
+	for _, key := range identities {
+		if applied[key] {
 			status.MigrationsApplied++
 		}
 	}
 	status.MigrationsPending = status.MigrationsTotal - status.MigrationsApplied
 
 	return status
+}
+
+// uniqueMigrationKeys returns each (App, Name) identity once, in registry
+// order. A duplicate registration shares one tracking row, so it is one
+// migration for counting.
+func uniqueMigrationKeys(migrations []migration.Migration) []migration.MigrationKey {
+	seen := make(map[migration.MigrationKey]bool, len(migrations))
+	keys := make([]migration.MigrationKey, 0, len(migrations))
+	for _, m := range migrations {
+		key := migration.MigrationKey{App: m.App, Name: m.Name}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 // applyPendingReporting applies pending migrations and returns the "app/name"
