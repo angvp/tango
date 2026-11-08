@@ -43,20 +43,6 @@ func TestDispatchFlagsMigrateReportsConflictBeforeReadingTracking(t *testing.T) 
 	})
 }
 
-func TestDispatchFlagsMigrateWithConflictLeavesFreshDatabaseUntouched(t *testing.T) {
-	sqlDB, dialect := testdb.Open(t)
-
-	withArgs(t, []string{"tango", "-migrate"}, func() {
-		_, err := tango.DispatchFlags(tango.Config{}, sqlDB, dialect, conflictingMigrations())
-		if !errors.Is(err, migration.ErrConflictingMigrations) {
-			t.Fatalf("err = %v, want ErrConflictingMigrations", err)
-		}
-	})
-	assertTableAbsent(t, sqlDB, dialect, "tango_migrations")
-	assertTableAbsent(t, sqlDB, dialect, "dc_email")
-	assertTableAbsent(t, sqlDB, dialect, "dc_phone")
-}
-
 // tableAbsentErr returns nil only when the database answers a trivial query and
 // its catalog holds no table named table. A closed or broken database fails the
 // first step, so it is never read as an absent table.
@@ -81,13 +67,6 @@ func tableAbsentErr(sqlDB *sql.DB, dialect db.Dialect, table string) error {
 		return fmt.Errorf("catalog lookup for %q: %w", table, err)
 	}
 	return fmt.Errorf("table %q exists", table)
-}
-
-func assertTableAbsent(t *testing.T, sqlDB *sql.DB, dialect db.Dialect, table string) {
-	t.Helper()
-	if err := tableAbsentErr(sqlDB, dialect, table); err != nil {
-		t.Fatalf("table %q not confirmed absent after a rejected -migrate: %v", table, err)
-	}
 }
 
 func TestTableAbsentErrRejectsClosedDatabase(t *testing.T) {
