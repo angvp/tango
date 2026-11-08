@@ -3,6 +3,7 @@ package db_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -231,4 +232,31 @@ func TestIsNullFindsUnsetDatesOnEveryDialect(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTitles(t, set, "set")
+}
+
+// TestDateColumnIsDeclaredDATEOnEveryDialect reads the type the database
+// recorded for the day column from its catalog. A value check cannot see it:
+// a column of the wrong type can still hold and return a date.
+func TestDateColumnIsDeclaredDATEOnEveryDialect(t *testing.T) {
+	sqlDB, dialect, _ := openTables(t, dateEvent{})
+	var query string
+	switch dialect {
+	case db.Postgres:
+		query = "SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'date_event' AND column_name = 'day'"
+	case db.MySQL:
+		query = "SELECT DATA_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'date_event' AND column_name = 'day'"
+	default:
+		query = "SELECT type FROM pragma_table_info('date_event') WHERE name = 'day'"
+	}
+	var declared string
+	if err := sqlDB.QueryRow(query).Scan(&declared); err != nil {
+		t.Fatalf("read the declared type: %v", err)
+	}
+	want := "DATE"
+	if dialect == db.Postgres || dialect == db.MySQL {
+		want = "date" // information_schema reports the standard name
+	}
+	if !strings.EqualFold(declared, want) {
+		t.Errorf("dialect %d: day is declared %q, want a date column (%s)", dialect, declared, want)
+	}
 }
