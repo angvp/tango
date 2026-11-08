@@ -74,6 +74,9 @@ func TestMenuItemAvailabilityFollowsProjectStatus(t *testing.T) {
 		{"rollback when registration failed", menuRollbackLast, with(func(s *tango.ProjectStatus) { s.RegistrationOK = false }), false, incomplete},
 		{"rollback when the database is unreachable", menuRollbackLast, with(func(s *tango.ProjectStatus) { s.DatabaseReachable = false }), false, incomplete},
 		{"incomplete status wins over nothing to apply", menuApplyMigrations, with(func(s *tango.ProjectStatus) { s.DatabaseReachable = false; s.MigrationsPending = 0 }), false, incomplete},
+		{"apply with a migration conflict", menuApplyMigrations, with(func(s *tango.ProjectStatus) { s.MigrationError = conflictMessage }), false, reasonMigrationConflict},
+		{"rollback with a migration conflict is unaffected", menuRollbackLast, with(func(s *tango.ProjectStatus) { s.MigrationError = conflictMessage }), true, ""},
+		{"run server with a migration conflict is unaffected", menuRunServer, with(func(s *tango.ProjectStatus) { s.MigrationError = conflictMessage }), true, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

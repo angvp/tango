@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
@@ -64,6 +65,9 @@ func (m tuiMenuItem) availability(status tango.ProjectStatus) (ok bool, reason s
 		if !statusComplete(status) {
 			return false, reasonStatusIncomplete
 		}
+		if status.MigrationError != "" {
+			return false, reasonMigrationConflict
+		}
 		if status.MigrationsPending == 0 {
 			return false, "nothing to apply"
 		}
@@ -78,7 +82,19 @@ func (m tuiMenuItem) availability(status tango.ProjectStatus) (ok bool, reason s
 	return true, ""
 }
 
+// writeMigrationConflict prints the CONFLICT line shared by the plain status
+// output and the dashboard. It prints nothing when the registry is clean.
+func writeMigrationConflict(w io.Writer, status tango.ProjectStatus) {
+	if status.MigrationError != "" {
+		fmt.Fprintf(w, "  migrations: CONFLICT (%s)\n", status.MigrationError)
+	}
+}
+
 const reasonStatusIncomplete = "unavailable: project status is incomplete"
+
+// reasonMigrationConflict points at the CONFLICT line the dashboard already
+// prints, so the menu does not restate the conflict itself.
+const reasonMigrationConflict = "unavailable: migration registry has a conflict"
 
 // statusComplete reports whether registration and the database are in order,
 // the precondition for any migration action.
@@ -162,9 +178,17 @@ func printStatusPlain(w io.Writer, status tango.ProjectStatus) {
 	} else {
 		fmt.Fprintf(w, "  database: UNREACHABLE (%s)\n", status.DatabaseError)
 	}
+	writeMigrationConflict(w, status)
 	fmt.Fprintf(w, "  migrations: %d total, %d applied, %d pending\n",
 		status.MigrationsTotal, status.MigrationsApplied, status.MigrationsPending)
-	fmt.Fprintln(w, "actions available via: tango run | tango migrate | tango migrate down")
+	// A conflicting registry blocks the apply action, so the plain line omits
+	// "tango migrate" too, matching the dashboard.
+	actions := []string{"tango run"}
+	if status.MigrationError == "" {
+		actions = append(actions, "tango migrate")
+	}
+	actions = append(actions, "tango migrate down")
+	fmt.Fprintf(w, "actions available via: %s\n", strings.Join(actions, " | "))
 }
 
 // performAction executes item's effect via the exact same command path the

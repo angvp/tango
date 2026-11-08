@@ -84,8 +84,13 @@ func touchedApps(m Migration) []string {
 // app's table runs after the migration creating that table, so cross-app
 // foreign keys work regardless of app names or InstalledApps order. Each
 // app's own migrations always run in Name order. Foreign keys between apps
-// that form a cycle are an error, and nothing is applied.
+// that form a cycle are an error, and nothing is applied. A registry that
+// Validate rejects is refused before any database access, so a conflict never
+// leaves a tracking table or a read behind.
 func ApplyPending(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrations []Migration) error {
+	if err := Validate(migrations); err != nil {
+		return err
+	}
 	if err := EnsureTrackingTable(ctx, sqlDB, dialect); err != nil {
 		return err
 	}

@@ -119,6 +119,7 @@ func (m dashboardModel) View() string {
 	} else {
 		fmt.Fprintf(&b, "  database: UNREACHABLE (%s)\n", m.status.DatabaseError)
 	}
+	writeMigrationConflict(&b, m.status)
 	fmt.Fprintf(&b, "  migrations: %d total, %d applied, %d pending\n\n",
 		m.status.MigrationsTotal, m.status.MigrationsApplied, m.status.MigrationsPending)
 

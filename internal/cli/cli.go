@@ -224,6 +224,14 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 		return 1
 	}
 
+	// Refuse before anything is generated: a conflict here is a merge that
+	// needs a renumber, and generating the next number on top of it would
+	// only hide the collision.
+	if err := migration.Validate(existing); err != nil {
+		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
+		return 1
+	}
+
 	state, err := migration.Replay(existing)
 	if err != nil {
 		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)

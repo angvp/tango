@@ -220,7 +220,9 @@ func DispatchFlags(config Config, sqlDB *sql.DB, dialect db.Dialect, migrations 
 		_, err = os.Stdout.Write(document)
 		return true, err
 	case *check:
-		if err := Check(config); err != nil {
+		// Both checks run before either error is returned, so one run reports
+		// a configuration failure and a migration conflict together.
+		if err := errors.Join(Check(config), migration.Validate(migrations)); err != nil {
 			return true, fmt.Errorf("check failed: %w", err)
 		}
 		fmt.Fprintln(os.Stdout, "check passed")
@@ -353,6 +355,7 @@ func DumpOpenAPI(config Config) ([]byte, error) {
 type ProjectStatus struct {
 	RegistrationOK    bool   `json:"registrationOk"`
 	RegistrationError string `json:"registrationError,omitempty"`
+	MigrationError    string `json:"migrationError,omitempty"`
 	DatabaseReachable bool   `json:"databaseReachable"`
 	DatabaseError     string `json:"databaseError,omitempty"`
 	MigrationsTotal   int    `json:"migrationsTotal"`
@@ -372,6 +375,12 @@ func Status(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.Dialec
 		status.RegistrationError = err.Error()
 	} else {
 		status.RegistrationOK = true
+	}
+
+	// Validation runs before the database checks, which return early. A
+	// conflict must be reported even when the database is unreachable.
+	if err := migration.Validate(migrations); err != nil {
+		status.MigrationError = err.Error()
 	}
 
 	if err := sqlDB.PingContext(ctx); err != nil {
@@ -401,8 +410,13 @@ func Status(ctx context.Context, config Config, sqlDB *sql.DB, dialect db.Dialec
 }
 
 // applyPendingReporting applies pending migrations and returns the "app/name"
-// of each one this call applied, in the order migrations lists them.
+// of each one this call applied, in the order migrations lists them. The
+// registry is validated before the first read so a conflict reaches no
+// database access; ApplyPending repeats the check for every caller.
 func applyPendingReporting(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, migrations []migration.Migration) ([]string, error) {
+	if err := migration.Validate(migrations); err != nil {
+		return nil, err
+	}
 	before, err := migration.AppliedMigrations(ctx, sqlDB)
 	if err != nil && !migration.IsMissingTrackingTable(err) {
 		return nil, err
