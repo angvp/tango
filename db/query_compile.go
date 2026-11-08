@@ -222,7 +222,7 @@ func validateKnownCondition(field model.FieldMeta, condition Condition, label st
 	if condition.Op == OpLike && fieldKind != reflect.String {
 		return field, fail("%soperator %q is only supported for string fields, got %q", label, condition.Op, field.Name)
 	}
-	if condition.Op != OpEq && condition.Op != OpNe && condition.Op != OpLike && field.Type != timeType {
+	if condition.Op != OpEq && condition.Op != OpNe && condition.Op != OpLike && !isCalendarType(field.Type) {
 		switch fieldKind {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
