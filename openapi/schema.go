@@ -8,10 +8,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/angvp/tango/model"
 )
 
 var (
 	timeType      = reflect.TypeOf(time.Time{})
+	dateType      = reflect.TypeFor[model.Date]()
 	rawJSONType   = reflect.TypeOf(json.RawMessage(nil))
 	textMarshaler = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 )
@@ -64,6 +67,8 @@ func (s *schemas) forNonPointer(t reflect.Type) (map[string]any, error) {
 	switch {
 	case t == timeType:
 		return map[string]any{"type": "string", "format": "date-time"}, nil
+	case t == dateType:
+		return map[string]any{"type": "string", "format": "date"}, nil
 	case t == rawJSONType:
 		return map[string]any{}, nil
 	}

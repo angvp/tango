@@ -36,7 +36,7 @@ func queryParameters(sample any, known *schemas) ([]map[string]any, error) {
 		for element.Kind() == reflect.Pointer {
 			element = element.Elem()
 		}
-		if element.Kind() == reflect.Struct && element != timeType {
+		if element.Kind() == reflect.Struct && element != timeType && element != dateType {
 			return nil, fmt.Errorf("%s.%s: a query parameter cannot be a struct", t.Name(), field.Name)
 		}
 		schema, err := known.forType(field.Type)
