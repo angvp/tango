@@ -6,11 +6,16 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Added
 
+- **`model.Date`**, a calendar date with no time of day and no zone. It is a model field with the `unique` and `index` tags (`pk` is rejected), stored as `DATE` on SQLite, PostgreSQL and MySQL. It has `NewDate`, `MustDate`, `ParseDate`, `DateOf`, `In`, `AddDays`, `Compare` and the usual accessors, and it marshals as a `null` or `"YYYY-MM-DD"` JSON value. Its zero value means no date, and several zero dates are several `NULL` values under a unique constraint.
+- **Date support across tanGO.** The admin shows a date input and parses it strictly, the shell prints and accepts `YYYY-MM-DD`, migrations generate a `date` column, and OpenAPI describes it as `format: date`. Date supports `=`, `!=`, the range operators, `IN`, `IS NULL` and `IS NOT NULL`.
+- **`admin.error.not_date`** is the message a Date field shows for a value that is not `YYYY-MM-DD` (English fallback "Enter a date as YYYY-MM-DD.").
 - **`migration.Validate` rejects conflicting migration numbers.** The registry is invalid when one app registers the same `(App, Name)` twice, or two names in one app share a leading four-digit number. The same number in two apps is valid. `Validate` returns `migration.ErrConflictingMigrations`, wrapped with one deterministic error that lists every conflict. The check reads the registry, not the database, and has no bypass. See the [migration numbers and conflicts](docs/guides/migrations.md#migration-numbers-and-conflicts) section of the migrations guide.
 - **`ProjectStatus.MigrationError`** (JSON `migrationError`) carries a registry conflict. Status and `tango tui` report it without failing, and the TUI does not offer to apply migrations while it is set.
 
 ### Changed
 
+- **A zero `time.Time` is stored as `NULL` on SQLite and PostgreSQL, as it already was on MySQL.** Before this change SQLite and PostgreSQL wrote year 0001. Only future writes change. A year-0001 row written earlier still reads as the zero `time.Time`. Before this change an unset time sorted first on SQLite and PostgreSQL. Now NULL ordering is native to each dialect: in ascending order an unset time sorts first on SQLite and MySQL and last on PostgreSQL. See the upgrade notes for the optional cleanup.
+- **A zero `time.Time` or zero `model.Date` is rejected as a query value.** `=`, `!=`, `>`, `>=`, `<`, `<=` and every `IN` element return `ErrInvalidQuery` before any SQL runs, and the message names `db.IsNull` and `db.IsNotNull`. Code that compared against a zero time to find unset rows must use `IsNull`. The interactive shell reports this error instead of an empty result.
 - **`-migrate` and `migration.ApplyPending` refuse a conflicting registry before any database access.** No `tango_migrations` table is created, and nothing is read or applied. A registry that applied before may now be refused until one migration is renumbered. See [upgrading](docs/upgrading.md#unreleased-duplicate-migration-numbers-are-refused).
 - **`tango check` reports migration conflicts with configuration failures**, in the same `check failed: ...` error.
 - **`tango makemigrations` refuses a conflicting registry**, exits 1 with `tango makemigrations: ...`, and writes no files.

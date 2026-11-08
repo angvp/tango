@@ -1,6 +1,6 @@
 # Upgrading
 
-This page lists what a host application changes when it upgrades from v0.7.0 to v0.8.0, and the last section covers the change that is unreleased at the end of this page. Each section names a change, what it affects and what to do about it. The full list of changes is in the v0.8.0 section of the [changelog](../CHANGELOG.md).
+This page lists what a host application changes when it upgrades from v0.7.0 to v0.8.0, and the last sections cover changes that are not yet released. Each section names a change, what it affects and what to do about it. The full list of changes is in the v0.8.0 section of the [changelog](../CHANGELOG.md).
 
 ## admin.Widget takes the request context
 
@@ -67,3 +67,25 @@ What to do:
 `-tango-dump-models` also refuses a conflicting registry, whichever other flag is given, and prints no models until the conflict is resolved.
 
 `RollbackLast` (`tango migrate down`) is not subject to this check, so a registry with a conflict can still be rolled back. It now refuses an ambiguous tie or a target registered twice, before any `Down` runs, where it used to guess.
+
+## A zero time is stored as NULL, and zero times are not query values
+
+Two changes affect code that writes or queries a `time.Time` field. Both are unreleased.
+
+**Writes.** A zero `time.Time` is now stored as `NULL` on SQLite and PostgreSQL, as it was on MySQL. Earlier versions wrote year 0001 on those two databases. Rows written before the change keep year 0001 and still read as the zero `time.Time`; nothing rewrites them. A unique constraint on a time column no longer collides on several unset values, and a NOT NULL time column added with a default receives `NULL` for a zero value.
+
+**Queries.** A zero `time.Time` is no longer a query value. `=`, `!=`, the range operators and each `IN` element with a zero time return `ErrInvalidQuery` before any SQL runs. To find unset rows, use `db.IsNull` or `db.IsNotNull`:
+
+```go
+// before: matched year 0001 on SQLite and PostgreSQL, NULL on MySQL
+db.Query{Where: []db.Condition{{Field: "EmailVerifiedAt", Op: db.OpEq, Value: time.Time{}}}}
+
+// after
+db.Query{Where: []db.Condition{{Field: "EmailVerifiedAt", Op: db.OpIsNull}}}
+```
+
+Ordering by an unset time sorts first in ascending order on SQLite and MySQL and last on PostgreSQL. Use the database's own `NULL` ordering in an application that relied on the earlier year-0001 order.
+
+**Optional cleanup.** The migrations guide has SQL that converts historic year-0001 rows to `NULL` on SQLite and PostgreSQL. It is optional. tanGO does not generate or run it, and historic rows read as the zero time whether or not you run it.
+
+The new `model.Date` type is described in the [models guide](guides/models-and-tags.md#supported-field-kinds).

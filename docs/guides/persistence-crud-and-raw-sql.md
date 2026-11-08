@@ -41,15 +41,15 @@ err := store.List(ctx, meta, db.Query{
 }, &posts)
 ```
 
-The example returns posts in the `[start, end)` time range. `examples/api-with-admin/apps/posts/views.go` shows the same API in a working app view: an `author_id` query param builds a `Where` condition, and a `q` query param builds an `Any` group (`OpLike` across `Title`/`Body`) — combined with AND when both are present.
+The example returns posts in the `[start, end)` time range. If `start` or `end` can be the zero time, check it with `IsZero` first: a zero time is not a query value, and the query returns `ErrInvalidQuery` (see the value rule below). `examples/api-with-admin/apps/posts/views.go` shows the same API in a working app view: an `author_id` query param builds a `Where` condition, and a `q` query param builds an `Any` group (`OpLike` across `Title`/`Body`) — combined with AND when both are present.
 
 | Operator | Meaning | Allowed fields |
 | --- | --- | --- |
 | `db.OpEq`, `db.OpNe` | Equal, not equal | Any supported model field |
-| `db.OpGt`, `db.OpGte`, `db.OpLt`, `db.OpLte` | Greater/less than, inclusive variants | Numeric fields and `time.Time` |
+| `db.OpGt`, `db.OpGte`, `db.OpLt`, `db.OpLte` | Greater/less than, inclusive variants | Numeric fields, `time.Time` and `model.Date` |
 | `db.OpLike` | SQL `LIKE` pattern match | String fields |
 
-`Value` must have the field's Go kind (`time.Time` for a time field). `nil` is rejected; use literal `false`, `0`, or `""` to filter for those values. Nil and empty `Where` slices both mean no filter. Unknown fields, unsupported operators, incompatible field kinds, and mismatched value types return errors before SQL execution. Values are passed as SQL parameters on both SQLite and Postgres.
+`Value` must have the field's Go kind (`time.Time` for a time field, `model.Date` for a date field). `nil` is rejected; use literal `false`, `0`, or `""` to filter for those values. A zero `time.Time` or zero `model.Date` is not a query value: `=`, `!=`, the four range operators and every `IN` element with one return `ErrInvalidQuery` before any SQL runs, and the error names `db.IsNull` and `db.IsNotNull`, which find unset rows. Nil and empty `Where` slices both mean no filter. Unknown fields, unsupported operators, incompatible field kinds, and mismatched value types return errors before SQL execution. Values are passed as SQL parameters on both SQLite and Postgres.
 
 `Any` is one OR group, combined with `Where` using AND. For example, `Where: []db.Condition{{Field: "Active", Op: db.OpEq, Value: true}}` and `Any: []db.Condition{{Field: "Name", Op: db.OpLike, Value: "Al%"}, {Field: "Name", Op: db.OpLike, Value: "Be%"}}` selects active rows whose name matches either pattern. `OpLike` accepts an SQL pattern: `%` and `_` are wildcards. Case matching follows the configured database's `LIKE` behavior, which can differ between SQLite and Postgres. An empty `Any` applies no OR filter.
 
@@ -67,7 +67,7 @@ published := db.And(
 err := store.List(ctx, meta, db.Query{Filter: &published, OrderBy: []string{"-CreatedAt"}}, &posts)
 ```
 
-- **`IN`.** `db.In("ID", []int64{3, 5, 8})` takes any slice or array whose elements have the field's type (`[]any` is accepted when every element does). A nil or empty list matches nothing, whatever the dialect. A list holds at most `db.MaxInValues` (1,000) values, and one query sends at most `db.MaxQueryArgs` (10,000) bind values across `Where`, `Any` and `Filter`. A zero `time.Time` in a list is rejected. `IN` follows the same literal SQL as `=`: a zero foreign key is stored as `NULL`, so `OwnerID IN (0, 3)` does not match unset rows (it matches only owner 3), and it is not rejected. For both assigned IDs and unset rows, say so explicitly: `db.Or(db.In("OwnerID", []int64{3, 5}), db.IsNull("OwnerID"))`. `OpIn` also works in `Where` and `Any`.
+- **`IN`.** `db.In("ID", []int64{3, 5, 8})` takes any slice or array whose elements have the field's type (`[]any` is accepted when every element does). A nil or empty list matches nothing, whatever the dialect. A list holds at most `db.MaxInValues` (1,000) values, and one query sends at most `db.MaxQueryArgs` (10,000) bind values across `Where`, `Any` and `Filter`. A zero `time.Time` or zero `model.Date` in a list is rejected. `IN` follows the same literal SQL as `=`: a zero foreign key is stored as `NULL`, so `OwnerID IN (0, 3)` does not match unset rows (it matches only owner 3), and it is not rejected. For both assigned IDs and unset rows, say so explicitly: `db.Or(db.In("OwnerID", []int64{3, 5}), db.IsNull("OwnerID"))`. `OpIn` also works in `Where` and `Any`.
 - **`NULL`.** `db.IsNull("OwnerID")` and `db.IsNotNull("OwnerID")` (`OpIsNull`, `OpIsNotNull`, no value) work on any field. A foreign key left at zero is stored as `NULL`, so `OwnerID = 0` never matches a row: use `IsNull` for unset keys.
 - **`NOT`.** `db.Not` renders a literal `NOT (...)`, and a comparison with `NULL` is never true, so `Not(Cond("OwnerID", OpEq, 7))` leaves rows with an unset owner out. To include them: `db.Or(db.Not(db.Cond("OwnerID", db.OpEq, 7)), db.IsNull("OwnerID"))`. `Not(In(field, emptyList))` matches every row.
 - **Shape.** A filter holds at most `db.MaxFilterNodes` (100) nodes and nests at most `db.MaxFilterDepth` (8) levels. An empty `And()` or `Or()`, a `Not` without exactly one child, and a malformed node are errors; no filter at all is a nil `Filter`.
@@ -78,9 +78,15 @@ This API does not support automatic wildcard escaping, joins, cross-model filter
 
 ## NULL and zero values
 
-tanGO fields are plain Go values, never pointers or `sql.Null*` wrappers, so `NULL` and a field's zero value mean the same thing. Every read (`Get`, `List`, `Query`, `QueryRow`) turns a `NULL` column into the field's zero value: `""`, `0`, `false`, or the zero `time.Time`. That's what happens to existing rows when a migration adds a column: they read as the zero value until you write something else. A raw query's `LEFT JOIN` with no match reads the same way. Going the other way, a foreign key field left at `0` is written as `NULL` (see [relationships](relationships-and-admin-foreign-keys.md)); other fields are written as their value.
+tanGO fields are plain Go values, never pointers or `sql.Null*` wrappers, so `NULL` and a field's zero value mean the same thing. Every read (`Get`, `List`, `Query`, `QueryRow`) turns a `NULL` column into the field's zero value: `""`, `0`, `false`, the zero `time.Time`, or the zero `model.Date`. That's what happens to existing rows when a migration adds a column: they read as the zero value until you write something else. A raw query's `LEFT JOIN` with no match reads the same way.
 
-A `Where` condition compares with `=`, and `NULL` never equals anything, so filtering on a zero value doesn't match `NULL` rows. Use `db.OpIsNull` (or `db.IsNull` in a `Filter`) to find `NULL` rows. A raw-SQL destination that needs to tell `NULL` from zero can use a pointer or `sql.Null*` field; those keep their usual meaning.
+The write rule is the same on SQLite, PostgreSQL and MySQL. A foreign key field left at `0` is written as `NULL` (see [relationships](relationships-and-admin-foreign-keys.md)). A zero `time.Time` and a zero `model.Date` are written as `NULL` too. Nonzero values, and zero strings, numbers and booleans, keep their normal storage: `""` is stored as an empty string, and `0` as `0`.
+
+Before this rule, a zero `time.Time` was written as year 0001 on SQLite and PostgreSQL and as `NULL` on MySQL. Only writes made after the change are `NULL`. A year-0001 value written earlier still reads as the zero `time.Time`, and nothing rewrites it. The migrations guide describes an optional cleanup.
+
+`model.Date` is a calendar date with no time of day and no zone. It is stored as `DATE`, and its zero value means no date. Several zero dates are several `NULL` values, and they do not conflict under a `unique` constraint.
+
+A `Where` condition compares with `=`, and `NULL` never equals anything. A zero time or zero date is not a value to compare with, so it is rejected rather than matched against `NULL`. Use `db.OpIsNull` (or `db.IsNull` in a `Filter`) to find `NULL` rows, and `db.OpIsNotNull` (or `db.IsNotNull`) to find set ones. A raw-SQL destination that needs to tell `NULL` from zero can use a pointer or `sql.Null*` field; those keep their usual meaning.
 
 ## Raw SQL
 

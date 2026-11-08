@@ -66,7 +66,25 @@ A bounded string (`tango:"varchar=n"`) has two more widening changes, and its va
 | `varchar(n)` | `text` (the tag removed) | the same string |
 | `varchar(n)` | `varchar(m)`, `m > n` | the same string |
 
-`NULL` stays `NULL`. Every other type change — anything from `timestamp`, `text` to anything but a bounded string, and any change to a primary key's type — fails `makemigrations` before anything is written; do it by hand in steps you control (add a new field, copy and convert the data, then rename and drop).
+`NULL` stays `NULL`. Every other type change — anything from `timestamp` or `date`, `text` to anything but a bounded string, and any change to a primary key's type — fails `makemigrations` before anything is written; do it by hand in steps you control (add a new field, copy and convert the data, then rename and drop).
+
+### Dates
+
+A `model.Date` field is a `date` column: `DATE` on SQLite, PostgreSQL and MySQL. Adding one with `AddColumn` supplies no default, so existing rows read as the zero date. `makemigrations` refuses every type change to or from `date`, including `date` to `timestamp`, `timestamp` to `date` and `date` to `text`.
+
+#### Zero times stored as NULL
+
+Earlier versions wrote a zero `time.Time` as year 0001 on SQLite and PostgreSQL. Those rows are not changed by a migration. Historic year-0001 rows still read as the zero `time.Time`. The following SQL converts them to `NULL`. It is optional, tanGO never runs it, and `makemigrations` does not generate it. Run it only after a backup and only on tables where a year-0001 value means "unset":
+
+```sql
+-- SQLite
+UPDATE "event" SET "starts_at" = NULL WHERE "starts_at" LIKE '0001-01-01%';
+
+-- PostgreSQL
+UPDATE "event" SET "starts_at" = NULL WHERE "starts_at" < '0002-01-01';
+```
+
+`ORDER BY` on an unset time sorts first in ascending order on SQLite and MySQL and last on PostgreSQL. A migration does not change that, and no `NULLS FIRST` or `NULLS LAST` is applied by tanGO.
 
 ### Narrowing a string
 

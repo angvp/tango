@@ -96,9 +96,12 @@ func invalidSettings(ctx context.Context, store *db.Store, meta model.ModelMeta)
 - `string`, `bool`
 - All signed and unsigned integer kinds (`int`, `int8`...`int64`, `uint`...`uint64`)
 - `float32`, `float64`
-- `time.Time`
+- `time.Time`, a datetime (`TIMESTAMP`, `TIMESTAMPTZ` or `DATETIME(6)`)
+- `model.Date`, a calendar date with no time of day and no zone (`DATE`)
 
-Anything else — including an embedded/anonymous struct field — fails `Register` with a clear error identifying the offending field. There is no relationship support (foreign keys, joins); see [limitations](../limitations.md).
+A `model.Date` field takes the `unique` and `index` tags. It cannot take `pk`: registration fails with `ErrInvalidFieldTag`, because a zero date is stored as `NULL`. A zero `model.Date` and a zero `time.Time` are both stored as `NULL`, so several unset values do not conflict under a unique constraint. Build dates with `model.NewDate`, `model.MustDate` or `model.ParseDate`; `model.DateOf(t)` takes the calendar date `t` shows in its own location.
+
+Anything else — including an embedded/anonymous struct field — fails `Register` with a clear error identifying the offending field. Foreign keys are supported with `fk=Model`; see [relationships](relationships-and-admin-foreign-keys.md). Joins are written as raw SQL with `Store.Query` or `Store.QueryRow`.
 
 ## Naming
 

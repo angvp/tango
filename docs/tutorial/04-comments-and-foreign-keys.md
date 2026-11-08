@@ -118,7 +118,7 @@ func getPost(store *db.Store, meta model.ModelMeta) tango.View {
 }
 ```
 
-`createPost` gets the same treatment, and fixes something parts 2 and 3 quietly left out: nothing ever set `CreatedAt`, so every post was created at the zero time. A view should also never let the client choose fields the server owns, like the ID:
+`createPost` gets the same treatment, and fixes something parts 2 and 3 quietly left out: nothing ever set `CreatedAt`, so every post was created at the zero time, which is stored as `NULL`. A view should also never let the client choose fields the server owns, like the ID:
 
 ```go
 // apps/posts/views.go (as of part 4)
