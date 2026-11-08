@@ -106,3 +106,34 @@ func TestZeroDateInInIsRejected(t *testing.T) {
 		t.Errorf("zero Date in IN: err = %v, statements = %d; want ErrInvalidQuery and no SQL", err, len(rec.statements()))
 	}
 }
+
+// locatedZeroTime is the zero instant in a named zone. It is IsZero() by
+// time.Time's own rule but not by reflect's, so a check that relies on
+// reflect.Value.IsZero misses it.
+var locatedZeroTime = time.Time{}.In(time.FixedZone("Z0", 0))
+
+// TestLocatedZeroTimeIsRejectedOnEveryOperatorAndIN: a zero instant that
+// carries a location is still the zero time, and is rejected as a query value
+// by every value operator and in every IN element.
+func TestLocatedZeroTimeIsRejectedOnEveryOperatorAndIN(t *testing.T) {
+	for _, dialect := range []db.Dialect{db.SQLite, db.Postgres, db.MySQL} {
+		for _, op := range zeroValueOperators {
+			for _, shape := range zeroValueQueryShapes(op, locatedZeroTime) {
+				rec := &recorder{}
+				store := db.NewStore(sql.OpenDB(rec), dialect)
+				var rows []goldenPost
+				err := store.List(context.Background(), registerGoldenModels(t), shape.query, &rows)
+				if !errors.Is(err, db.ErrInvalidQuery) || len(rec.statements()) != 0 {
+					t.Errorf("dialect %d, %s, %s: err = %v, statements = %d; want ErrInvalidQuery and no SQL", dialect, op, shape.name, err, len(rec.statements()))
+				}
+			}
+		}
+		rec := &recorder{}
+		store := db.NewStore(sql.OpenDB(rec), dialect)
+		var rows []goldenPost
+		err := store.List(context.Background(), registerGoldenModels(t), db.Query{Filter: ptr(db.In("CreatedAt", []time.Time{locatedZeroTime}))}, &rows)
+		if !errors.Is(err, db.ErrInvalidQuery) || len(rec.statements()) != 0 {
+			t.Errorf("dialect %d, IN: err = %v, statements = %d; want ErrInvalidQuery and no SQL", dialect, err, len(rec.statements()))
+		}
+	}
+}

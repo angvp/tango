@@ -47,7 +47,7 @@ func validateIn(field model.FieldMeta, condition Condition, label string) error 
 		if element.Kind() != fieldKind || (fieldKind == reflect.Struct && element.Type() != field.Type) {
 			return conditionError(label, "IN value %d for field %q has type %s, want %s", i, field.Name, element.Type(), field.Type)
 		}
-		if isCalendarType(field.Type) && element.IsZero() {
+		if isCalendarType(field.Type) && isZeroCalendarValue(element.Interface()) {
 			return conditionError(label, "IN value %d for field %q is the zero %s; use db.IsNull or db.IsNotNull to find unset rows", i, field.Name, zeroNoun(field.Type))
 		}
 	}

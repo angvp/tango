@@ -2,6 +2,7 @@ package db
 
 import (
 	"reflect"
+	"time"
 
 	"github.com/angvp/tango/model"
 )
@@ -29,8 +30,23 @@ func zeroNoun(t reflect.Type) string {
 // binding NULL would do so silently. The caller finds unset rows with IsNull
 // or IsNotNull.
 func rejectZeroQueryValue(field model.FieldMeta, value any, label string) error {
-	if !isCalendarType(field.Type) || !reflect.ValueOf(value).IsZero() {
+	if !isCalendarType(field.Type) || !isZeroCalendarValue(value) {
 		return nil
 	}
 	return conditionError(label, "value for field %q is the zero %s; use db.IsNull or db.IsNotNull to find unset rows", field.Name, zeroNoun(field.Type))
+}
+
+// isZeroCalendarValue reports whether value is the zero time or zero date. A
+// time is judged by time.Time.IsZero, which ignores the location: a zero
+// instant in a named zone is still no time. reflect.Value.IsZero would count
+// that location as a value, and would disagree with how the write path stores
+// the same time as NULL.
+func isZeroCalendarValue(value any) bool {
+	switch v := value.(type) {
+	case time.Time:
+		return v.IsZero()
+	case model.Date:
+		return v.IsZero()
+	}
+	return reflect.ValueOf(value).IsZero()
 }
