@@ -17,6 +17,13 @@ type zeroKinds struct {
 	Count int64
 	Flag  bool
 	At    time.Time
+	Owner int64 `tango:"fk=zeroOwner"`
+}
+
+// zeroOwner is the model zeroKinds.Owner references.
+type zeroOwner struct {
+	ID   int64 `tango:"pk"`
+	Name string
 }
 
 // quoteFor quotes a SQL identifier the way the dialect expects.
@@ -40,7 +47,7 @@ func bindFor(dialect db.Dialect) string {
 // zero time must be NULL on every dialect; the zero string, number and
 // boolean must keep their storage.
 func TestZeroValuesAreStoredAsNULLOnEveryDialect(t *testing.T) {
-	sqlDB, dialect, registry := openTables(t, zeroKinds{})
+	sqlDB, dialect, registry := openTables(t, zeroOwner{}, zeroKinds{})
 	store := db.NewStore(sqlDB, dialect)
 	meta := metaFor(t, registry, zeroKinds{})
 	ctx := context.Background()
@@ -55,6 +62,7 @@ func TestZeroValuesAreStoredAsNULLOnEveryDialect(t *testing.T) {
 		isNull bool
 	}{
 		{"at", true},
+		{"owner", true},
 		{"text", false},
 		{"count", false},
 		{"flag", false},
@@ -75,7 +83,7 @@ func TestZeroValuesAreStoredAsNULLOnEveryDialect(t *testing.T) {
 // TestSettingATimeToZeroStoresNULLOnEveryDialect checks the update path: a
 // stored time that is set back to zero is written as NULL, as on create.
 func TestSettingATimeToZeroStoresNULLOnEveryDialect(t *testing.T) {
-	sqlDB, dialect, registry := openTables(t, zeroKinds{})
+	sqlDB, dialect, registry := openTables(t, zeroOwner{}, zeroKinds{})
 	store := db.NewStore(sqlDB, dialect)
 	meta := metaFor(t, registry, zeroKinds{})
 	ctx := context.Background()
@@ -103,7 +111,7 @@ func TestSettingATimeToZeroStoresNULLOnEveryDialect(t *testing.T) {
 // reading as the zero time, and nothing rewrites it.
 func TestHistoricYearOneRowsStillReadAsZeroTime(t *testing.T) {
 	testdb.NotMySQL(t, "MySQL has no year 0001 to store")
-	sqlDB, dialect, registry := openTables(t, zeroKinds{})
+	sqlDB, dialect, registry := openTables(t, zeroOwner{}, zeroKinds{})
 	store := db.NewStore(sqlDB, dialect)
 	meta := metaFor(t, registry, zeroKinds{})
 	ctx := context.Background()
@@ -118,5 +126,42 @@ func TestHistoricYearOneRowsStillReadAsZeroTime(t *testing.T) {
 	}
 	if !got.At.IsZero() {
 		t.Errorf("historic year-0001 row reads as %v, want the zero time", got.At)
+	}
+}
+
+// TestZeroForeignKeyIsStoredAsNULLOnCreateAndUpdate: an unset foreign key is
+// NULL on every dialect, both when created unset and when set back to zero.
+func TestZeroForeignKeyIsStoredAsNULLOnCreateAndUpdate(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, zeroOwner{}, zeroKinds{})
+	store := db.NewStore(sqlDB, dialect)
+	ownerMeta := metaFor(t, registry, zeroOwner{})
+	meta := metaFor(t, registry, zeroKinds{})
+	ctx := context.Background()
+
+	owner := zeroOwner{}
+	if err := store.Create(ctx, ownerMeta, &owner); err != nil {
+		t.Fatal(err)
+	}
+	unset := zeroKinds{}
+	if err := store.Create(ctx, meta, &unset); err != nil {
+		t.Fatal(err)
+	}
+	set := zeroKinds{Owner: owner.ID}
+	if err := store.Create(ctx, meta, &set); err != nil {
+		t.Fatal(err)
+	}
+	set.Owner = 0
+	if err := store.Update(ctx, meta, &set); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{unset.ID, set.ID} {
+		var nulls int
+		query := "SELECT CASE WHEN " + quoteFor(dialect, "owner") + " IS NULL THEN 1 ELSE 0 END FROM " + quoteFor(dialect, "zero_kinds") + " WHERE " + quoteFor(dialect, "id") + " = " + bindFor(dialect)
+		if err := sqlDB.QueryRowContext(ctx, query, id).Scan(&nulls); err != nil {
+			t.Fatal(err)
+		}
+		if nulls != 1 {
+			t.Errorf("dialect %d: zero foreign key on row %d is not NULL", dialect, id)
+		}
 	}
 }
