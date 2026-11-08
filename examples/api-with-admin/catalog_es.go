@@ -133,6 +133,7 @@ var spanish = map[string]string{
 	"admin.error.not_found_title":               "No se encontró esta página",
 	"admin.error.not_found_next":                "Vuelve al inicio del administrador y búscala allí.",
 	"admin.error.not_date_time":                 "Escribe una fecha y hora.",
+	"admin.error.not_date":                      "Escribe una fecha con el formato AAAA-MM-DD.",
 	"admin.error.method_not_allowed_title":      "Esta acción no está disponible",
 	"admin.error.method_not_allowed_next":       "Vuelve atrás y usa el botón de la página.",
 	"admin.error.not_staff_title":               "No tienes acceso",
