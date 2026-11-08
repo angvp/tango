@@ -137,6 +137,9 @@ func (r *Registry) Register(value any) error {
 		tag := field.Tag.Get("tango")
 		primaryKey := hasTagOption(tag, "pk")
 		if primaryKey {
+			if field.Type == dateType {
+				return fmt.Errorf("%w: %s.%s: a model.Date cannot be the primary key, because a zero date is stored as NULL", ErrInvalidFieldTag, name, field.Name)
+			}
 			primaryKeyFields = append(primaryKeyFields, field.Name)
 		}
 
@@ -197,8 +200,8 @@ func (r *Registry) All() []ModelMeta {
 }
 
 // supportedFieldType reports whether t is a kind the metadata layer can
-// describe: string, bool, any integer/float kind, or time.Time as
-// the sole named-struct exception.
+// describe: string, bool, any integer/float kind, or one of the two named
+// struct exceptions, time.Time and Date.
 func supportedFieldType(t reflect.Type) bool {
 	switch t.Kind() {
 	case reflect.String, reflect.Bool,
@@ -207,7 +210,7 @@ func supportedFieldType(t reflect.Type) bool {
 		reflect.Float32, reflect.Float64:
 		return true
 	case reflect.Struct:
-		return t == timeType
+		return t == timeType || t == dateType
 	default:
 		return false
 	}
