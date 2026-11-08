@@ -71,14 +71,10 @@ func ParseDate(text string) (Date, error) {
 }
 
 // DateOf returns the calendar date that t shows in its own location, as
-// t.Date() reports it. It never converts t to UTC. It panics if that year is
-// outside 0001 through 9999, which no database or caller date can hold.
-func DateOf(t time.Time) Date {
-	date, err := dateOfTime(t)
-	if err != nil {
-		panic(err)
-	}
-	return date
+// t.Date() reports it. It never converts t to UTC. It returns ErrInvalidDate
+// when that year is outside 0001 through 9999.
+func DateOf(t time.Time) (Date, error) {
+	return dateOfTime(t)
 }
 
 func dateOfTime(t time.Time) (Date, error) {
@@ -113,10 +109,10 @@ func (d Date) After(other Date) bool  { return d.Compare(other) > 0 }
 func (d Date) Equal(other Date) bool  { return d.Compare(other) == 0 }
 
 // AddDays returns the date n days after d. The zero Date stays zero. It
-// panics if the result leaves years 0001 through 9999.
-func (d Date) AddDays(n int) Date {
+// returns ErrInvalidDate when the result leaves years 0001 through 9999.
+func (d Date) AddDays(n int) (Date, error) {
 	if d.IsZero() {
-		return d
+		return d, nil
 	}
 	return DateOf(time.Date(d.year, d.month, d.day+n, 0, 0, 0, 0, time.UTC))
 }

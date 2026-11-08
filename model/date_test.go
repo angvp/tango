@@ -53,8 +53,9 @@ func TestDateOfMatchesTheCalendarDateInTheTimesOwnLocation(t *testing.T) {
 			time.Date(2026, 3, 1, 0, 30, 0, 0, zone),
 		} {
 			year, month, day := moment.Date()
-			if got := DateOf(moment); got != MustDate(year, month, day) {
-				t.Errorf("DateOf(%v) = %v, want the date %d-%02d-%02d the time shows", moment, got, year, month, day)
+			got, err := DateOf(moment)
+			if err != nil || got != MustDate(year, month, day) {
+				t.Errorf("DateOf(%v) = %v, %v; want the date %d-%02d-%02d the time shows", moment, got, err, year, month, day)
 			}
 		}
 	}
@@ -154,11 +155,11 @@ func TestTextZeroIsEmptyAndEmptyTextIsZero(t *testing.T) {
 }
 
 func TestAddDaysCrossesMonthAndYearBoundaries(t *testing.T) {
-	if got := MustDate(2026, 12, 31).AddDays(1); got != MustDate(2027, 1, 1) {
-		t.Errorf("AddDays across the year end = %v", got)
+	if got, err := MustDate(2026, 12, 31).AddDays(1); err != nil || got != MustDate(2027, 1, 1) {
+		t.Errorf("AddDays across the year end = %v, %v", got, err)
 	}
-	if got := MustDate(2024, 2, 28).AddDays(1); got != MustDate(2024, 2, 29) {
-		t.Errorf("AddDays into a leap day = %v", got)
+	if got, err := MustDate(2024, 2, 28).AddDays(1); err != nil || got != MustDate(2024, 2, 29) {
+		t.Errorf("AddDays into a leap day = %v, %v", got, err)
 	}
 }
 
@@ -204,5 +205,27 @@ func TestRegistrationAcceptsADateWithUniqueAndIndexAndRejectsPK(t *testing.T) {
 	err := NewRegistry().Register(datedKey{})
 	if !errors.Is(err, ErrInvalidFieldTag) || !strings.Contains(err.Error(), "Day") {
 		t.Errorf("pk on a Date: err = %v, want ErrInvalidFieldTag naming the field", err)
+	}
+}
+
+// DateOf and AddDays return an error, not a panic, when the year would leave
+// 0001 through 9999. Both wrap ErrInvalidDate, as the constructors do.
+func TestDateOfAndAddDaysRefuseYearsOutsideTheRange(t *testing.T) {
+	for _, moment := range []time.Time{
+		time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(0, 12, 31, 0, 0, 0, 0, time.UTC),
+	} {
+		if _, err := DateOf(moment); !errors.Is(err, ErrInvalidDate) {
+			t.Errorf("DateOf(%v): err = %v, want ErrInvalidDate", moment, err)
+		}
+	}
+	if _, err := MustDate(9999, 12, 31).AddDays(1); !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("AddDays past 9999: err = %v, want ErrInvalidDate", err)
+	}
+	if _, err := MustDate(1, 1, 1).AddDays(-1); !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("AddDays before 0001: err = %v, want ErrInvalidDate", err)
+	}
+	if got, err := MustDate(9999, 12, 30).AddDays(1); err != nil || got != MustDate(9999, 12, 31) {
+		t.Errorf("AddDays to the last day = %v, %v", got, err)
 	}
 }

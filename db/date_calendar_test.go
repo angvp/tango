@@ -54,7 +54,11 @@ func TestDateCalendarComponentsAreStoredAndReadBackInEveryZone(t *testing.T) {
 				ctx := context.Background()
 
 				moment := boundary.at(zone)
-				row := dateEvent{Title: "boundary", Day: model.DateOf(moment)}
+				day, err := model.DateOf(moment)
+				if err != nil {
+					t.Fatal(err)
+				}
+				row := dateEvent{Title: "boundary", Day: day}
 				if err := store.Create(ctx, meta, &row); err != nil {
 					t.Fatal(err)
 				}
@@ -72,7 +76,7 @@ func TestDateCalendarComponentsAreStoredAndReadBackInEveryZone(t *testing.T) {
 				if err := store.Get(ctx, meta, row.ID, &got); err != nil {
 					t.Fatal(err)
 				}
-				if got.Day != model.DateOf(moment) || got.Day.String() != boundary.want {
+				if got.Day != day || got.Day.String() != boundary.want {
 					t.Errorf("read back %v, want %s", got.Day, boundary.want)
 				}
 			})

@@ -99,7 +99,7 @@ func invalidSettings(ctx context.Context, store *db.Store, meta model.ModelMeta)
 - `time.Time`, a datetime (`TIMESTAMP`, `TIMESTAMPTZ` or `DATETIME(6)`)
 - `model.Date`, a calendar date with no time of day and no zone (`DATE`)
 
-A `model.Date` field takes the `unique` and `index` tags. It cannot take `pk`: registration fails with `ErrInvalidFieldTag`, because a zero date is stored as `NULL`. A zero `model.Date` and a zero `time.Time` are both stored as `NULL`, so several unset values do not conflict under a unique constraint. Build dates with `model.NewDate`, `model.MustDate` or `model.ParseDate`; `model.DateOf(t)` takes the calendar date `t` shows in its own location.
+A `model.Date` field takes the `unique` and `index` tags. It cannot take `pk`: registration fails with `ErrInvalidFieldTag`, because a zero date is stored as `NULL`. A zero `model.Date` and a zero `time.Time` are both stored as `NULL`, so several unset values do not conflict under a unique constraint. Build dates with `model.NewDate`, `model.MustDate` or `model.ParseDate`; `model.DateOf(t)` takes the calendar date `t` shows in its own location, and returns `ErrInvalidDate` for a year outside 0001 through 9999.
 
 Anything else — including an embedded/anonymous struct field — fails `Register` with a clear error identifying the offending field. Foreign keys are supported with `fk=Model`; see [relationships](relationships-and-admin-foreign-keys.md). Joins are written as raw SQL with `Store.Query` or `Store.QueryRow`.
 
