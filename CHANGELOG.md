@@ -4,10 +4,22 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- **`migration.Validate` rejects conflicting migration numbers.** The registry is invalid when one app registers the same `(App, Name)` twice, or two names in one app share a leading four-digit number. The same number in two apps is valid. `Validate` returns `migration.ErrConflictingMigrations`, wrapped with one deterministic error that lists every conflict. The check reads the registry, not the database, and has no bypass. See the [migration numbers and conflicts](docs/guides/migrations.md#migration-numbers-and-conflicts) section of the migrations guide.
+- **`ProjectStatus.MigrationError`** (JSON `migrationError`) carries a registry conflict. Status and `tango tui` report it without failing, and the TUI does not offer to apply migrations while it is set.
+
 ### Changed
 
+- **`-migrate` and `migration.ApplyPending` refuse a conflicting registry before any database access.** No `tango_migrations` table is created, and nothing is read or applied. A registry that applied before may now be refused until one migration is renumbered. See [upgrading](docs/upgrading.md#unreleased-duplicate-migration-numbers-are-refused).
+- **`tango check` reports migration conflicts with configuration failures**, in the same `check failed: ...` error.
+- **`tango makemigrations` refuses a conflicting registry**, exits 1 with `tango makemigrations: ...`, and writes no files.
 - **`tango shell` runs Yaegi v0.16.2, up from v0.16.1, and now runs a range over an integer (`for i := range 3`).** A range over a function still fails, and stays on the shell's list of Go it cannot run.
 - **Dependencies:** `github.com/jackc/pgx/v5` v5.12.0, `modernc.org/sqlite` v1.61.1 and `golang.org/x/net` v0.62.0 in the root module; `google.golang.org/api` v0.310.0 in `storage/gcs`.
+
+### Fixed
+
+- **`RollbackLast` fails before any `Down` on an unorderable tie, and never guesses.** When rows sharing the latest `applied_at` cannot be ordered, it returns `migration.ErrUnorderableTie` where it used to roll back the row with the greatest name. A target registered more than once returns `migration.ErrAmbiguousRollbackTarget`. A tie that can be ordered rolls back as before.
 
 ## [0.8.1] - 2026-11-03
 

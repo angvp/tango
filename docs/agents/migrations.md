@@ -11,6 +11,7 @@ Canonical examples: `examples/api-with-admin/migrations/0001_auto.go`, `examples
 - Confirm the migration's `App` and `Name` are correct.
 - Confirm generated columns, indexes, uniqueness, and foreign-key references match the Go structs.
 - Apply migrations through the project's migrate workflow only after review.
+- When `tango check`, `-migrate`, `tango makemigrations` or the status output reports `conflicting migration names`, renumber one of the conflicting migrations (rename its file and `Name` to the next free number in its app), then run `tango makemigrations` and `tango check` again. Renumber only a migration that no database has applied. The conflict text names the migrations involved.
 
 Typical project commands:
 
@@ -29,6 +30,7 @@ Use the actual project workflow if it wraps these commands differently.
 - Do not assume `makemigrations` applied anything; generation and application are separate steps.
 - When a field or model was renamed, pass `--rename app.Model.Field=NewField` or `--rename app.Model=NewModel` so its data is kept; never `--allow-drop` it. Name a renamed model's fields by the model's old name.
 - Only widening type changes and string narrowings are generated (`integer`→`real`/`text`, `real`→`text`, `boolean`→`integer`/`text`, `varchar(n)`→`text` or a larger `varchar`; `text`→`varchar(n)` or a smaller `varchar`). A narrowing checks the data first and fails without changing anything if a value is too long: shorten that data, then migrate again. A narrowing-only migration is reversible; any widening makes the migration irreversible; for any other, add a new field, copy the data, then rename and drop, rather than editing the generated migration.
+- Do not look for a way around a `conflicting migration names` error. There is no bypass flag, environment variable or option, and `-migrate` refuses by design. Do not delete a migration file that another branch registers, do not edit `tango_migrations`, and do not hand-edit `migrations.go` to hide a duplicate. Renumber one migration.
 - Do not pass `--allow-drop` to get past a refused run unless the model or field really should be deleted with its data; each `--allow-drop` names exactly one `app.Model` or `app.Model.Field`.
 
 ## Check

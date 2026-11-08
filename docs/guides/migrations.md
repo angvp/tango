@@ -111,7 +111,52 @@ Use `--name` when a short description will make the migration easier to understa
 tango makemigrations --name add-author-indexes
 ```
 
-That produces `0002_add_author_indexes.go`; the filename and the migration's `Name` are always identical. Names are lowercased, spaces and hyphens become underscores, and repeated or surrounding underscores are cleaned up. Other characters and empty names are rejected. Existing migration files are never overwritten.
+That produces `0002_add_author_indexes.go`, named after the migration's `Name`. `Validate` checks `Name`, not the file name. Names are lowercased, spaces and hyphens become underscores, and repeated or surrounding underscores are cleaned up. Other characters and empty names are rejected. Existing migration files are never overwritten.
+
+## Migration numbers and conflicts
+
+Within one app, a migration's name starts with a four-digit number followed by an underscore (`^\d{4}_`), as in `0005_add_email`. The registry is checked against these rules:
+
+- An app may not register the same `(App, Name)` twice.
+- Within one app, two different names may not share a number. `0005_add_email` and `0005_add_phone` conflict.
+- The same number in two different apps is valid. Each app keeps its own sequence.
+- Names without the four-digit prefix are not checked for a number, but an exact duplicate of one still fails.
+
+The check reads the registry, not the database. It rejects a conflict even when one of the two migrations is already applied, so it fires in development and CI, not only in production. Every conflict is reported in one error, in a fixed order. A registry with two conflicts looks like this:
+
+```text
+tango migration: conflicting migration names:
+- app "blog": number 0005 is shared by "0005_add_email", "0005_add_phone"; renumber one migration
+- app "blog": name "0007_x" is registered 2 times; remove the duplicate registration or rename one migration
+```
+
+The check runs in each of these places, and each one refuses without changing anything:
+
+| Entry point | Behaviour |
+|---|---|
+| `-migrate`, `migration.ApplyPending` | Refuses before any database access. No `tango_migrations` table is created, and nothing is read or applied. |
+| `-check` (`tango check`) | Fails with `check failed: ...` and the conflict text. A configuration failure found in the same run is reported with it. |
+| `-tango-status`, `tango tui` | Reports the conflict in `migrationError`, and shows it on the migrations line as `migrations: CONFLICT (...)`. Status still works. While `migrationError` is set, the TUI does not offer "Apply pending migrations", and shows the conflict as the reason. `-migrate` still refuses, as the safety net. |
+| `tango makemigrations` | Exits 1 with `tango makemigrations: ...` and writes no files. |
+
+There is no bypass: no flag, environment variable or configuration option skips the check. The remedy is to renumber one of the migrations.
+
+### Renumbering after a merge
+
+When two branches each add a migration, the merged registry contains a conflict. To resolve it:
+
+1. Read the error. It names the app, the shared number or the duplicated name, and every migration involved.
+2. Choose one of the conflicting migrations, rename its file to the next free number in that app, and set its `Name` to the same value. `Validate` checks `Name`, and `makemigrations` names new files after it.
+3. Run `tango makemigrations` so that `migrations/migrations.go` is regenerated to match the files on disk. Do not edit `migrations.go` by hand.
+4. Run `tango check` until it passes, then `tango migrate`.
+
+Renumber only a migration that no database has applied. Applied state is keyed on `(App, Name)`, so renaming an applied migration makes it look unapplied, and `tango migrate` runs it again. If both migrations have been applied somewhere, the database already holds both; resolve that with a new migration, not a rename.
+
+A duplicated registration of the same `(App, Name)` is usually a file included twice, or a migration copied without changing its name. Remove the extra registration, or rename one migration if the two are genuinely different.
+
+### Order and the tracking table
+
+`tango_migrations` has no sequence column. It records only `(app, name, applied_at)`, so the order in which migrations were applied is not stored as a sequence. Rows that share an `applied_at` are ordered by the registry's apply order when rolling back, as described under [rolling back](#rolling-back). Adding a sequence column would change the tracking schema and needs an upgrade path for existing databases, so it is not part of this rule.
 
 ## Applying
 
@@ -136,7 +181,14 @@ If foreign keys between apps form a cycle (app A's initial migration references 
 tango migrate down
 ```
 
-Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. Migrations recorded with the same `applied_at` are rolled back in the reverse of the order they were applied in, so another app's table that a foreign key references is dropped only after the table referencing it. `Down` steps are generated automatically for reversible operations (`CreateTable`↔`DropTable`, `AddColumn`↔`DropColumn`, `CreateIndex`↔`DropIndex`). A migration containing a lossy step (`DropColumn`, `DropTable`) or a widening type change (`AlterColumnType`) is marked **irreversible**: `tango migrate down` on it fails explicitly with a clear error rather than attempting to "restore" data it can no longer recover.
+Runs the most recently applied migration's `Down` steps and removes its `tango_migrations` row. Migrations recorded with the same `applied_at` are rolled back in the reverse of the order they were applied in, so another app's table that a foreign key references is dropped only after the table referencing it.
+
+Rollback is exempt from the registry check above, because it is the recovery path, and it has two refusals. Both run before any `Down` step, so a refusal changes nothing:
+
+- **Unorderable tie (`ErrUnorderableTie`).** Several rows share the latest `applied_at` and cannot be ordered. That happens when a tied migration is missing from the registry, or when the tied migrations' cross-app foreign keys form a cycle. The error names the tied rows and their shared `applied_at`. A tie that can be ordered rolls back as before.
+- **Ambiguous target (`ErrAmbiguousRollbackTarget`).** The `(App, Name)` to roll back is registered more than once, so the registry does not say which `Down` steps belong to it. Remove the extra registration, as described under [migration numbers and conflicts](#migration-numbers-and-conflicts).
+
+A repeated number with different names does not block rollback. The identity that matters here is `(App, Name)`. `Down` steps are generated automatically for reversible operations (`CreateTable`↔`DropTable`, `AddColumn`↔`DropColumn`, `CreateIndex`↔`DropIndex`). A migration containing a lossy step (`DropColumn`, `DropTable`) or a widening type change (`AlterColumnType`) is marked **irreversible**: `tango migrate down` on it fails explicitly with a clear error rather than attempting to "restore" data it can no longer recover.
 
 ## Migration identity
 

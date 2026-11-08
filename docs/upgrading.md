@@ -1,6 +1,6 @@
 # Upgrading
 
-This page lists what a host application changes when it upgrades from v0.7.0 to v0.8.0. Each section names a change, what it affects and what to do about it. The full list of changes is in the v0.8.0 section of the [changelog](../CHANGELOG.md).
+This page lists what a host application changes when it upgrades from v0.7.0 to v0.8.0, and the last section covers the change that is unreleased at the end of this page. Each section names a change, what it affects and what to do about it. The full list of changes is in the v0.8.0 section of the [changelog](../CHANGELOG.md).
 
 ## admin.Widget takes the request context
 
@@ -51,3 +51,17 @@ Widget markup must then carry no inline `style` attribute, no inline event handl
 ## Renamed and removed admin message keys
 
 Some `admin.*` message keys are renamed, replaced or removed. The [catalog impact](../CHANGELOG.md#catalog-impact) table in the changelog lists each key with what changed. Read the table before updating a host catalog.
+
+## Unreleased: duplicate migration numbers are refused
+
+A migration registry that contains two migrations with the same number in one app, or the same `(App, Name)` twice, is now refused. Before this change such a registry applied, with the order of the two migrations decided by name. Two branches that each added a migration with the same number and merged cleanly now fail until one of them is renumbered.
+
+What to do:
+
+1. Run `tango check`. It prints `check failed:` followed by `tango migration: conflicting migration names:` and one line per conflict, each naming the app and the migrations involved.
+2. Rename one migration in each conflict to the next free number in its app, and set its `Name` to match the filename. Renumber only a migration that no database has applied: applied state is keyed on `(App, Name)`, so a renamed applied migration runs again.
+3. Run `tango makemigrations` to regenerate `migrations/migrations.go`, then `tango check` until it passes, then `tango migrate`.
+
+`tango makemigrations` and `tango tui` report the same conflicts, and `tango makemigrations` will not generate a new migration on top of a conflicting registry. There is no flag or environment variable to skip the check. See [migration numbers and conflicts](guides/migrations.md#migration-numbers-and-conflicts) for the full rule.
+
+`RollbackLast` (`tango migrate down`) is not subject to this check, so a registry with a conflict can still be rolled back. It now refuses an ambiguous tie or a target registered twice, before any `Down` runs, where it used to guess.
