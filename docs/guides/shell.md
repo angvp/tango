@@ -67,7 +67,7 @@ There is no raw SQL helper.
 
 | Key | Meaning |
 |---|---|
-| `"where"` | A `map[string]any` of field name to value. Every pair must match (equality only). |
+| `"where"` | A `map[string]any` of field name to value. Every pair must match (equality only). For a `model.Date` field the value is a `YYYY-MM-DD` string, and any other text is an error. A `model.Date` is printed as `YYYY-MM-DD`, and an unset one as `nil`. |
 | `"order"` | A `[]string` of field names; a leading `-` means descending, as in `"-ID"`. |
 | `"limit"` | At most this many rows. |
 | `"offset"` | Skip this many rows first. |
