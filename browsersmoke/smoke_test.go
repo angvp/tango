@@ -386,7 +386,10 @@ func (s *smoke) visit(label, path string, actions ...chromedp.Action[chromedp.Vo
 	s.t.Helper()
 	s.t.Logf("%s: GET %s", label, path)
 	s.rec.begin(label)
-	steps := append([]chromedp.Action[chromedp.Void]{chromedp.Navigate(s.base + path), chromedp.WaitReady("body")}, actions...)
+	steps := append([]chromedp.Action[chromedp.Void]{
+		named("Navigate "+path, chromedp.Navigate(s.base+path)),
+		named("WaitReady body", chromedp.WaitReady("body")),
+	}, actions...)
 	if err := s.do(steps...); err != nil {
 		s.t.Fatalf("%s (%s): %v", label, path, err)
 	}
@@ -1350,5 +1353,17 @@ func (s *smoke) report() {
 	defer s.rec.mu.Unlock()
 	for _, f := range s.rec.findings {
 		s.t.Errorf("%s: %s: %s", f.page, f.source, f.detail)
+	}
+}
+
+// named labels an action so a failure names it. The label is what a stall
+// reports, since the step deadline is shared by every action in the step.
+func named(label string, a chromedp.Action[chromedp.Void]) chromedp.Action[chromedp.Void] {
+	return func(ctx context.Context, t *chromedp.Target) (chromedp.Void, error) {
+		v, err := a(ctx, t)
+		if err != nil {
+			return v, fmt.Errorf("action %q: %w", label, err)
+		}
+		return v, nil
 	}
 }

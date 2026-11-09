@@ -79,11 +79,11 @@ const layoutScript = `(function () {
 // and submits it, leaving the field errors and the summary on the page.
 func failedCreateSave() []chromedp.Action[chromedp.Void] {
 	return []chromedp.Action[chromedp.Void]{
-		chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible),
-		chromedp.SetValue("#field-Label", "toolong"),
-		chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible),
-		chromedp.WaitVisible("#form-summary"),
-		chromedp.WaitReady(".field-error"),
+		named(`SetValue #field-Code`, chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible)),
+		named(`SetValue #field-Label`, chromedp.SetValue("#field-Label", "toolong")),
+		named(`Click form[method=post] button.btn-primary`, chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible)),
+		named(`WaitVisible #form-summary`, chromedp.WaitVisible("#form-summary")),
+		named(`WaitReady .field-error`, chromedp.WaitReady(".field-error")),
 	}
 }
 
