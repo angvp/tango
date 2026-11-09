@@ -47,6 +47,11 @@ func (s *schemas) forType(t reflect.Type) (map[string]any, error) {
 	for t.Kind() == reflect.Pointer {
 		t, nullable = t.Elem(), true
 	}
+	// A zero model.Date marshals as null and the decoder reads null back as
+	// the zero Date, so every position that carries a Date allows null.
+	if t == dateType {
+		nullable = true
+	}
 	schema, err := s.forNonPointer(t)
 	if err != nil {
 		return nil, err

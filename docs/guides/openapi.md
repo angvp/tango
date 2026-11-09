@@ -71,7 +71,7 @@ Pass a zero value or a pointer to one; only its Go type is read. A `nil` respons
 
 ### How Go types become schemas
 
-Schemas follow `encoding/json`. A field is named by its `json` tag, left out by `json:"-"`, optional when it is a pointer or its tag says `omitempty` or `omitzero`, and required otherwise. Named structs are described once under `components/schemas` and referenced; recursive types work. Slices and arrays are `array`; `map[string]T` is an object with `additionalProperties`; `time.Time` is a `date-time` string; `[]byte` is a `byte` string; `json.RawMessage` and `any` accept anything; a pointer allows `null`. `tango:"varchar=n"` becomes `maxLength`.
+Schemas follow `encoding/json`. A field is named by its `json` tag, left out by `json:"-"`, optional when it is a pointer or its tag says `omitempty` or `omitzero`, and required otherwise. Named structs are described once under `components/schemas` and referenced; recursive types work. Slices and arrays are `array`; `map[string]T` is an object with `additionalProperties`; `time.Time` is a `date-time` string; a `model.Date` is a `date` string that also allows `null`, because a zero `Date` marshals as `null` and a request body accepts `null` for it; `[]byte` is a `byte` string; `json.RawMessage` and `any` accept anything; a pointer allows `null`. A `model.Date` query parameter is a non-nullable `date` string, since a query value is never an unset date. `tango:"varchar=n"` becomes `maxLength`.
 
 A type picks its schema's name with a `SchemaName() string` method; otherwise the Go type name is used, qualified by its package when two types share a name.
 

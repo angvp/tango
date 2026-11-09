@@ -27,8 +27,8 @@ func TestDateIsAStringDateAndTimeStaysDateTime(t *testing.T) {
 	}
 	body := schemas["datedBody"].(map[string]any)
 	properties := body["properties"].(map[string]any)
-	equal(t, properties["day"], map[string]any{"type": "string", "format": "date"})
-	equal(t, properties["other"], map[string]any{"type": "string", "format": "date"})
+	equal(t, properties["day"], map[string]any{"type": []any{"string", "null"}, "format": "date"})
+	equal(t, properties["other"], map[string]any{"type": []any{"string", "null"}, "format": "date"})
 	equal(t, properties["born"], map[string]any{"type": "string", "format": "date-time"})
 }
 

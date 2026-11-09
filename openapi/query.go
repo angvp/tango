@@ -39,7 +39,7 @@ func queryParameters(sample any, known *schemas) ([]map[string]any, error) {
 		if element.Kind() == reflect.Struct && element != timeType && element != dateType {
 			return nil, fmt.Errorf("%s.%s: a query parameter cannot be a struct", t.Name(), field.Name)
 		}
-		schema, err := known.forType(field.Type)
+		schema, err := known.forQueryType(field.Type)
 		if err != nil {
 			return nil, fmt.Errorf("%s.%s: %w", t.Name(), field.Name, err)
 		}
@@ -48,4 +48,17 @@ func queryParameters(sample any, known *schemas) ([]map[string]any, error) {
 		})
 	}
 	return out, nil
+}
+
+// forQueryType is forType for a query parameter. A query value is a string
+// and is never an unset date, so a Date is not nullable here.
+func (s *schemas) forQueryType(t reflect.Type) (map[string]any, error) {
+	base := t
+	for base.Kind() == reflect.Pointer {
+		base = base.Elem()
+	}
+	if base == dateType {
+		return s.forNonPointer(base)
+	}
+	return s.forType(t)
 }
