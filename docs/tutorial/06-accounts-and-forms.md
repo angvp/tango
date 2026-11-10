@@ -23,7 +23,7 @@ InstalledApps: []tango.App{
 A post now belongs to the account that wrote it — another foreign key, this time pointing at a model from a different app:
 
 ```go
-// apps/posts/models.go
+// apps/posts/models.go (as of part 6)
 type Post struct {
 	ID        int64 `tango:"pk"`
 	Title     string
@@ -49,6 +49,172 @@ tango migrate
 ```
 
 This writes and applies two migrations: the `accounts` tables, and a new `account_id` column on `post`. The posts you created in earlier parts have no owner, so their `account_id` is `NULL`. tanGO fields are never nil: a `NULL` column reads back as the field's zero value, so those posts load with `AccountID` 0. That's the same "unset" a foreign key has when you leave it at zero, which tanGO also stores as `NULL`. The old posts keep working everywhere; they just don't belong to anyone.
+
+## Show who wrote each post
+
+The front page shows a byline under each title. The summaries query stays the raw SQL it was in part 5, and gains the owner's key. The byline is then one more statement for the whole list: `Related` takes the rows, reads their `AccountID`, and returns each distinct account once, so ten posts by two people cost one account query, not ten.
+
+```go
+package posts
+
+import (
+	"time"
+
+	"github.com/angvp/tango/accounts"
+)
+
+type Post struct {
+	ID        int64 `tango:"pk"`
+	Title     string
+	Body      string
+	AccountID int64 `tango:"fk=Account,index"`
+	// Account and Comments are read only with Query.Preload, and are never
+	// written. They are not columns, so they need no migration. Their JSON
+	// tags are "-": a response shapes them itself, so the password hash
+	// cannot leave through a post.
+	Account   *accounts.Account `tango:"belongs_to=AccountID" json:"-"`
+	Comments  []Comment         `tango:"has_many=PostID" json:"-"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID        int64 `tango:"pk"`
+	PostID    int64 `tango:"fk=Post,index"`
+	Author    string
+	Body      string
+	CreatedAt time.Time
+}
+```
+
+Each owner's name comes from `Summaries`, which now takes the account's metadata:
+
+```go
+package posts
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/angvp/tango/accounts"
+	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/model"
+)
+
+// PostSummary is one post plus how many comments it has and the name of
+// whoever wrote it. It isn't a registered model — just a shape to scan query
+// results into. AccountID is the key the byline is loaded by; it stays out
+// of the JSON, and Byline is the only owner field a reader sees.
+type PostSummary struct {
+	ID           int64
+	Title        string
+	CreatedAt    time.Time
+	CommentCount int
+	AccountID    int64 `json:"-"`
+	Byline       string
+}
+
+// Summaries returns every post, newest first, with its comment count and
+// byline. The byline is one more statement for the whole list: Related loads
+// each distinct account once, however many posts it wrote.
+func Summaries(ctx context.Context, store *db.Store, accountMeta model.ModelMeta) ([]PostSummary, error) {
+	var posts []PostSummary
+	err := store.Query(ctx, &posts, `
+		SELECT p.id, p.title, p.created_at, p.account_id, COUNT(c.id) AS comment_count
+		FROM post p
+		LEFT JOIN comment c ON c.post_id = p.id
+		GROUP BY p.id, p.title, p.created_at, p.account_id
+		ORDER BY p.created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+
+	owners := make(map[int64]accounts.Account)
+	if err := store.Related(ctx, posts, "AccountID", accountMeta, owners); err != nil {
+		return nil, err
+	}
+	for i, post := range posts {
+		if owner, ok := owners[post.AccountID]; ok {
+			posts[i].Byline = bylineName(owner.Email)
+		}
+	}
+	return posts, nil
+}
+
+// bylineName is the public name of an account: the part of its email before
+// the @. A post with no owner has no byline.
+func bylineName(email string) string {
+	name, _, _ := strings.Cut(email, "@")
+	return name
+}
+```
+
+The `Account` and `Comments` fields are relations, not columns, so they need no migration. They are filled only when a query asks for them with `Query.Preload`, and `json:"-"` keeps them out of a post's own JSON. The new `GET /posts/recent/` read asks for both, with a page of at most twenty posts, and shapes the response itself so the account's password hash never leaves the server:
+
+```go
+// recentPageSize bounds the recent read to one page.
+const recentPageSize = 20
+
+// recentPost is one post of the recent read. Its account carries only the
+// public fields: the ID and the byline name, never the email or password hash.
+type recentPost struct {
+	ID        int64          `json:"id"`
+	Title     string         `json:"title"`
+	Body      string         `json:"body"`
+	CreatedAt time.Time      `json:"created_at"`
+	Account   *publicAccount `json:"account"`
+	Comments  []Comment      `json:"comments"`
+}
+
+type publicAccount struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// listRecent returns the newest page of posts, each with its account and its
+// comments: three statements for the page, whatever its size.
+func listRecent(store *db.Store, postMeta model.ModelMeta) tango.View {
+	return func(ctx *tango.Context) error {
+		var recent []Post
+		err := store.List(ctx.Context(), postMeta, db.Query{
+			OrderBy: []string{"-CreatedAt", "-ID"},
+			Limit:   recentPageSize,
+			Preload: []string{"Account", "Comments"},
+		}, &recent)
+		if err != nil {
+			return err
+		}
+		shaped := make([]recentPost, 0, len(recent))
+		for _, post := range recent {
+			shaped = append(shaped, recentFrom(post))
+		}
+		return ctx.JSON(http.StatusOK, shaped)
+	}
+}
+
+func recentFrom(post Post) recentPost {
+	out := recentPost{
+		ID:        post.ID,
+		Title:     post.Title,
+		Body:      post.Body,
+		CreatedAt: post.CreatedAt,
+		Comments:  post.Comments,
+	}
+	if post.Account != nil {
+		out.Account = &publicAccount{ID: post.Account.ID, Name: bylineName(post.Account.Email)}
+	}
+	return out
+}
+```
+
+Three statements serve the page: the posts, their accounts, and their comments. The route is one line in `apps/posts/app.go`:
+
+```go
+			tango.Path("GET", "/", listPosts(store, accountMeta), tango.Name("list")),
+			tango.Path("GET", "/recent/", listRecent(store, postMeta), tango.Name("recent")),
+```
+
+The home template prints the byline when there is one. A post with no owner has none.
 
 ## Who is posting?
 

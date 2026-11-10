@@ -13,14 +13,68 @@ import (
 	"board/apps/live"
 )
 
-func listPosts(store *db.Store) tango.View {
+func listPosts(store *db.Store, accountMeta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
-		posts, err := Summaries(ctx.Context(), store)
+		posts, err := Summaries(ctx.Context(), store, accountMeta)
 		if err != nil {
 			return err
 		}
 		return ctx.JSON(http.StatusOK, posts)
 	}
+}
+
+// recentPageSize bounds the recent read to one page.
+const recentPageSize = 20
+
+// recentPost is one post of the recent read. Its account carries only the
+// public fields: the ID and the byline name, never the email or password hash.
+type recentPost struct {
+	ID        int64          `json:"id"`
+	Title     string         `json:"title"`
+	Body      string         `json:"body"`
+	CreatedAt time.Time      `json:"created_at"`
+	Account   *publicAccount `json:"account"`
+	Comments  []Comment      `json:"comments"`
+}
+
+type publicAccount struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// listRecent returns the newest page of posts, each with its account and its
+// comments: three statements for the page, whatever its size.
+func listRecent(store *db.Store, postMeta model.ModelMeta) tango.View {
+	return func(ctx *tango.Context) error {
+		var recent []Post
+		err := store.List(ctx.Context(), postMeta, db.Query{
+			OrderBy: []string{"-CreatedAt", "-ID"},
+			Limit:   recentPageSize,
+			Preload: []string{"Account", "Comments"},
+		}, &recent)
+		if err != nil {
+			return err
+		}
+		shaped := make([]recentPost, 0, len(recent))
+		for _, post := range recent {
+			shaped = append(shaped, recentFrom(post))
+		}
+		return ctx.JSON(http.StatusOK, shaped)
+	}
+}
+
+func recentFrom(post Post) recentPost {
+	out := recentPost{
+		ID:        post.ID,
+		Title:     post.Title,
+		Body:      post.Body,
+		CreatedAt: post.CreatedAt,
+		Comments:  post.Comments,
+	}
+	if post.Account != nil {
+		out.Account = &publicAccount{ID: post.Account.ID, Name: bylineName(post.Account.Email)}
+	}
+	return out
 }
 
 func getPost(store *db.Store, meta model.ModelMeta) tango.View {

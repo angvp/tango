@@ -52,7 +52,8 @@ func New(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.App {
 		commentMeta, _ := registry.Models().Get("Comment")
 		accountMeta, _ := registry.Models().Get("Account")
 		return registry.Routes().Include("/posts/", tango.URLs{
-			tango.Path("GET", "/", listPosts(store), tango.Name("list")),
+			tango.Path("GET", "/", listPosts(store, accountMeta), tango.Name("list")),
+			tango.Path("GET", "/recent/", listRecent(store, postMeta), tango.Name("recent")),
 			tango.Path("POST", "/", jwt.Require(createPost(store, postMeta, accountMeta, feed)),
 				tango.Name("create"),
 				tango.Use(ratelimit.Middleware(postLimiter, accountKey))),

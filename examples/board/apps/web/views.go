@@ -51,7 +51,7 @@ func (p *pages) notFound(ctx *tango.Context) error {
 }
 
 func (p *pages) home(ctx *tango.Context) error {
-	summaries, err := posts.Summaries(ctx.Context(), p.store)
+	summaries, err := posts.Summaries(ctx.Context(), p.store, p.accountMeta)
 	if err != nil {
 		return err
 	}

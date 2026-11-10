@@ -29,7 +29,7 @@ InstalledApps: []tango.App{
 The front page needs the same "posts with comment counts" query as `GET /posts/`. Move it out of the view into an exported function in `apps/posts/queries.go`, so both apps call it:
 
 ```go
-// apps/posts/queries.go
+// apps/posts/queries.go (as of part 5)
 package posts
 
 import (
@@ -64,7 +64,7 @@ func Summaries(ctx context.Context, store *db.Store) ([]PostSummary, error) {
 Then replace `postSummary` and `listPosts` in `apps/posts/views.go` with the shorter version:
 
 ```go
-// apps/posts/views.go
+// apps/posts/views.go (as of part 5)
 func listPosts(store *db.Store) tango.View {
 	return func(ctx *tango.Context) error {
 		posts, err := Summaries(ctx.Context(), store)

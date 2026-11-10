@@ -12,6 +12,10 @@ The HTML admin shows the boolean and foreign key filters from the admin guide's 
 
 Posts and Comments set `BulkDelete: true`, so their changelists offer checkboxes and a **Delete selected** button that deletes the checked rows of the page after a confirmation. Deleting a Post also deletes its Comments, exactly as the single-row delete does. `TestAdminBulkDeleteRemovesSelectedPostsAndTheirComments` in `admin_bulk_delete_test.go` covers it over HTTP.
 
+## Bylines and the recent read
+
+The front page and `GET /posts/` show each post's author name. `Store.Related` loads the authors of the whole list in one statement. `GET /posts/recent/` returns the newest twenty posts, each with its account (public fields only) and its comments, through `Query.Preload`: three statements for the page. `byline_preload_test.go` asserts those statement counts with the counting wrapper in `statement_count_test.go`.
+
 ## Run locally
 
 ```sh
