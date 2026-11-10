@@ -80,6 +80,7 @@ type Post struct {
 - **`has_many=PostID`** goes on a slice of named structs. `PostID` is a foreign key of the child, declared `fk=Post`, where `Post` is the struct that holds the field. The relation is every child whose key matches.
 - A relation tag must be the field's only `tango` option.
 - The foreign key's Go type must equal the primary key type of the model it refers to. A named type, such as `type AuthorID int64`, does not match `int64`, even with the same underlying type. `Registry.ValidateRelations` checks this and the names above at startup, and `Related` and `RelatedMany` check it again at call time.
+- The relation field's struct must be the registered model's Go type, not only a type with the same name. A same-named struct from another package is refused by `Registry.ValidateRelations` with `ErrInvalidRelation`, which names the model and the field.
 
 A relation field is not a column. It never appears in `ModelMeta.Fields`, so it generates no migration and the shell and migrations do not see it. `Store.Create` and `Store.Update` ignore it, so there are no nested writes: set the foreign key, not the relation. The host controls the JSON form with `json` tags. OpenAPI describes a `belongs_to` pointer as a nullable object and a `has_many` slice as an array, because it walks the struct's exported fields.
 
@@ -111,7 +112,7 @@ err = store.RelatedMany(ctx, posts, "ID", commentMeta, "PostID", db.Query{}, com
 ```
 
 - `Related` fills a `map` from the related primary key to one related row. The key field must be an exported field directly on the row type whose type equals the related primary key type.
-- `RelatedMany` fills a `map` from the key to a slice of children. Its `query` supplies `Where`, `Any`, `Filter` and `OrderBy` for the children. `Limit` and `Offset` are refused with a `*QueryError`, because they would cut across parents. The caller's `query` is never modified.
+- `RelatedMany` fills a `map` from the key to a slice of children. Its `query` supplies `Where`, `Any`, `Filter` and `OrderBy` for the children. `Limit` and `Offset` are refused with a `*QueryError`, because they would cut across parents, and `Preload` is refused too, because it belongs to `List` and `First`. The refusals come before any statement is sent. The caller's `query` is never modified.
 - Both write the destination only after every statement has succeeded. On any error the destination is left as it was passed.
 - Both read through the transaction when called on a `Store` bound to one, such as the callback of `InTx`.
 - Neither checks that the key field is declared `fk=`. The type check is the only check on the key.

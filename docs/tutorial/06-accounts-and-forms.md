@@ -52,7 +52,7 @@ This writes and applies two migrations: the `accounts` tables, and a new `accoun
 
 ## Show who wrote each post
 
-The front page shows a byline under each title. The summaries query stays the raw SQL it was in part 5, and gains the owner's key. The byline is then one more statement for the whole list: `Related` takes the rows, reads their `AccountID`, and returns each distinct account once, so ten posts by two people cost one account query, not ten.
+The front page shows a byline under each title. The summaries query is raw SQL, and it selects the owner's key with each post. The byline is then one more statement for the whole list: `Related` takes the rows, reads their `AccountID`, and returns each distinct account once, so ten posts by two people cost one account query, not ten.
 
 ```go
 package posts

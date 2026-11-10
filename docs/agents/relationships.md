@@ -47,7 +47,7 @@ Canonical relation declarations: `examples/api-with-admin/apps/posts/models.go` 
 - Do not write a relation field. `Create` and `Update` ignore it; set the foreign key instead.
 - Do not combine `belongs_to` or `has_many` with another `tango` option: `Register` refuses it with `model.ErrInvalidRelation`. Do not give a key a named type that differs from the primary key type, such as `type AuthorID int64` for an `int64` key: the startup check refuses it with `model.ErrInvalidRelation`.
 - Do not expect lazy loading. A relation is loaded only when a query names it.
-- Do not expect `Count` or `Exists` to load relations, and do not put `Limit` or `Offset` on `Store.RelatedMany`; it refuses them.
+- Do not expect `Count` or `Exists` to load relations, and do not put `Limit`, `Offset` or `Preload` on `Store.RelatedMany`; it refuses them.
 - Do not treat a nil `has_many` slice as "no children". A nil slice means the relation was not requested; a loaded relation with no children is an empty slice.
 - Do not use a dotted `Preload` path on SQLite where other writers must not wait: the nested read holds a shared lock and blocks writers for its duration.
 

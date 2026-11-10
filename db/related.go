@@ -38,20 +38,33 @@ func (s *Store) Related(ctx context.Context, rows any, keyField string, related 
 	}
 
 	loaded := reflect.MakeMap(destValue.Type())
-	for _, chunk := range keyChunks(distinctKeys(rowsValue, keyIndex), primaryKey.Type) {
-		query := Query{Where: []Condition{{Field: primaryKey.Name, Op: OpIn, Value: chunk.Interface()}}}
-		found := reflect.New(reflect.SliceOf(related.Type))
-		if err := s.List(ctx, related, query, found.Interface()); err != nil {
-			return err
-		}
-		for i := 0; i < found.Elem().Len(); i++ {
-			row := found.Elem().Index(i)
-			loaded.SetMapIndex(row.FieldByName(primaryKey.Name), row)
-		}
+	err = s.listChunks(ctx, related, distinctKeys(rowsValue, keyIndex), primaryKey.Type, func(chunk reflect.Value) Query {
+		return Query{Where: []Condition{{Field: primaryKey.Name, Op: OpIn, Value: chunk.Interface()}}}
+	}, func(row reflect.Value) {
+		loaded.SetMapIndex(row.FieldByName(primaryKey.Name), row)
+	})
+	if err != nil {
+		return err
 	}
 
 	for _, key := range loaded.MapKeys() {
 		destValue.SetMapIndex(key, loaded.MapIndex(key))
+	}
+	return nil
+}
+
+// listChunks runs one List of meta per chunk of at most MaxInValues keys, in
+// order. queryFor builds the query of a chunk, and visit receives every row
+// each chunk returns. The first failed List stops the loop and is returned.
+func (s *Store) listChunks(ctx context.Context, meta model.ModelMeta, keys []reflect.Value, keyType reflect.Type, queryFor func(chunk reflect.Value) Query, visit func(row reflect.Value)) error {
+	for _, chunk := range keyChunks(keys, keyType) {
+		found := reflect.New(reflect.SliceOf(meta.Type))
+		if err := s.List(ctx, meta, queryFor(chunk), found.Interface()); err != nil {
+			return err
+		}
+		for i := 0; i < found.Elem().Len(); i++ {
+			visit(found.Elem().Index(i))
+		}
 	}
 	return nil
 }

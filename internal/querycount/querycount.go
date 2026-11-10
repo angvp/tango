@@ -2,9 +2,6 @@
 // driver. It wraps the database testdb opens for the test on any of the three
 // test dialects, so a count is taken at the same point on each. It is test-only
 // and internal: production code and hosts never see it.
-//
-// A zero from a Counter is a measurement only beside a known positive from the
-// same Counter, so tests pair every count with a run that must record statements.
 package querycount
 
 import (

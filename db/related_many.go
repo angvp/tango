@@ -23,62 +23,86 @@ import (
 // after every statement has succeeded, so on any error it is left as passed.
 // RelatedMany reads through the transaction when called on a Store bound to one.
 func (s *Store) RelatedMany(ctx context.Context, rows any, keyField string, child model.ModelMeta, childField string, query Query, dest any) error {
-	if query.Limit != 0 || query.Offset != 0 {
-		return &QueryError{Model: child.Name, Reason: "Limit and Offset are not supported by RelatedMany: they would cut across parents"}
-	}
-	if len(query.Preload) != 0 {
-		return &QueryError{Model: child.Name, Reason: "Preload is not supported by RelatedMany: it belongs to List and First"}
-	}
-	primaryKey, err := findPrimaryKeyField(child)
-	if err != nil {
-		return &QueryError{Model: child.Name, Reason: err.Error()}
-	}
-	rowsValue, err := batchRows(child.Name, rows)
+	plan, err := planRelatedMany(rows, keyField, child, childField, query, dest)
 	if err != nil {
 		return err
 	}
-	keyIndex, keyType, err := batchKeyField(child.Name, rowsValue.Type().Elem(), keyField)
-	if err != nil {
-		return err
-	}
-	foreignKey, err := fieldNamed(child, childField)
-	if err != nil {
-		return err
-	}
-	if err := sameFieldType(child.Name, childField, foreignKey.Type, keyType); err != nil {
-		return err
-	}
-	destValue, err := batchDest(child.Name, dest, keyType, reflect.SliceOf(child.Type))
-	if err != nil {
-		return err
-	}
-
-	if len(query.OrderBy) == 0 {
-		query.OrderBy = []string{primaryKey.Name} // query is a copy; the caller's slice is untouched
-	}
-	loaded := reflect.MakeMap(destValue.Type())
-	for _, chunk := range keyChunks(distinctKeys(rowsValue, keyIndex), keyType) {
-		chunkQuery := query
-		chunkQuery.Where = slices.Concat(query.Where, []Condition{{Field: foreignKey.Name, Op: OpIn, Value: chunk.Interface()}})
-		found := reflect.New(reflect.SliceOf(child.Type))
-		if err := s.List(ctx, child, chunkQuery, found.Interface()); err != nil {
-			return err
+	loaded := reflect.MakeMap(plan.dest.Type())
+	err = s.listChunks(ctx, child, plan.parentKeys, plan.keyType, func(chunk reflect.Value) Query {
+		narrowed := plan.query
+		narrowed.Where = slices.Concat(plan.query.Where, []Condition{{Field: plan.foreignKey.Name, Op: OpIn, Value: chunk.Interface()}})
+		return narrowed
+	}, func(row reflect.Value) {
+		key := row.FieldByName(plan.foreignKey.Name)
+		group := loaded.MapIndex(key)
+		if !group.IsValid() {
+			group = reflect.MakeSlice(reflect.SliceOf(child.Type), 0, 0)
 		}
-		for i := 0; i < found.Elem().Len(); i++ {
-			row := found.Elem().Index(i)
-			key := row.FieldByName(foreignKey.Name)
-			group := loaded.MapIndex(key)
-			if !group.IsValid() {
-				group = reflect.MakeSlice(reflect.SliceOf(child.Type), 0, 0)
-			}
-			loaded.SetMapIndex(key, reflect.Append(group, row))
-		}
+		loaded.SetMapIndex(key, reflect.Append(group, row))
+	})
+	if err != nil {
+		return err
 	}
 
 	for _, key := range loaded.MapKeys() {
-		destValue.SetMapIndex(key, loaded.MapIndex(key))
+		plan.dest.SetMapIndex(key, loaded.MapIndex(key))
 	}
 	return nil
+}
+
+// relatedManyPlan is a validated RelatedMany request: the distinct parent keys,
+// the child field they match, the query every chunk starts from, and the
+// destination map.
+type relatedManyPlan struct {
+	parentKeys []reflect.Value
+	keyType    reflect.Type
+	foreignKey model.FieldMeta
+	query      Query
+	dest       reflect.Value
+}
+
+// planRelatedMany checks every argument of RelatedMany before any SQL is sent,
+// and fills in the default OrderBy on a copy of query.
+func planRelatedMany(rows any, keyField string, child model.ModelMeta, childField string, query Query, dest any) (relatedManyPlan, error) {
+	if query.Limit != 0 || query.Offset != 0 {
+		return relatedManyPlan{}, &QueryError{Model: child.Name, Reason: "Limit and Offset are not supported by RelatedMany: they would cut across parents"}
+	}
+	if len(query.Preload) != 0 {
+		return relatedManyPlan{}, &QueryError{Model: child.Name, Reason: "Preload is not supported by RelatedMany: it belongs to List and First"}
+	}
+	primaryKey, err := findPrimaryKeyField(child)
+	if err != nil {
+		return relatedManyPlan{}, &QueryError{Model: child.Name, Reason: err.Error()}
+	}
+	rowsValue, err := batchRows(child.Name, rows)
+	if err != nil {
+		return relatedManyPlan{}, err
+	}
+	keyIndex, keyType, err := batchKeyField(child.Name, rowsValue.Type().Elem(), keyField)
+	if err != nil {
+		return relatedManyPlan{}, err
+	}
+	foreignKey, err := fieldNamed(child, childField)
+	if err != nil {
+		return relatedManyPlan{}, err
+	}
+	if err := sameFieldType(child.Name, childField, foreignKey.Type, keyType); err != nil {
+		return relatedManyPlan{}, err
+	}
+	destValue, err := batchDest(child.Name, dest, keyType, reflect.SliceOf(child.Type))
+	if err != nil {
+		return relatedManyPlan{}, err
+	}
+	if len(query.OrderBy) == 0 {
+		query.OrderBy = []string{primaryKey.Name} // query is a copy; the caller's slice is untouched
+	}
+	return relatedManyPlan{
+		parentKeys: distinctKeys(rowsValue, keyIndex),
+		keyType:    keyType,
+		foreignKey: foreignKey,
+		query:      query,
+		dest:       destValue,
+	}, nil
 }
 
 // fieldNamed returns the metadata of the field name on meta, or a QueryError
