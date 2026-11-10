@@ -2,10 +2,106 @@ package db_test
 
 import (
 	"context"
+	"errors"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/querycount"
 )
+
+func TestRelatedManyAppliesAnyAndFilter(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, relatedAccount{}, relatedPost{})
+	accounts := metaFor(t, registry, relatedAccount{})
+	posts := metaFor(t, registry, relatedPost{})
+	store := db.NewStore(sqlDB, dialect)
+	ctx := context.Background()
+
+	owner := createRelatedAccount(t, store, accounts, "owner")
+	for _, title := range []string{"keep-1", "drop", "keep-2"} {
+		post := relatedPost{Title: title, AccountID: owner.ID}
+		if err := store.Create(ctx, posts, &post); err != nil {
+			t.Fatalf("create %s: %v", title, err)
+		}
+	}
+	parents := []relatedAccount{owner}
+
+	titlesFor := func(query db.Query) []string {
+		t.Helper()
+		dest := map[int64][]relatedPost{}
+		if err := store.RelatedMany(ctx, parents, "ID", posts, "AccountID", query, dest); err != nil {
+			t.Fatalf("RelatedMany: %v", err)
+		}
+		var out []string
+		for _, child := range dest[owner.ID] {
+			out = append(out, child.Title)
+		}
+		return out
+	}
+
+	// Control: with no narrowing every child comes back.
+	if got := titlesFor(db.Query{}); len(got) != 3 {
+		t.Fatalf("default query returned %v, want all three children", got)
+	}
+	anyTitles := titlesFor(db.Query{Any: []db.Condition{
+		{Field: "Title", Op: db.OpEq, Value: "drop"},
+		{Field: "Title", Op: db.OpEq, Value: "keep-2"},
+	}})
+	if want := []string{"drop", "keep-2"}; !slices.Equal(anyTitles, want) {
+		t.Errorf("Any narrowed children to %v, want %v", anyTitles, want)
+	}
+	filter := db.Cond("Title", db.OpEq, "drop")
+	filterTitles := titlesFor(db.Query{Filter: &filter})
+	if want := []string{"drop"}; !slices.Equal(filterTitles, want) {
+		t.Errorf("Filter narrowed children to %v, want %v", filterTitles, want)
+	}
+}
+
+func TestRelatedManyLeavesDestUntouchedWhenALaterChunkFails(t *testing.T) {
+	counter := querycount.Attach(t)
+	sqlDB, dialect, registry := openTables(t, relatedAccount{}, relatedPost{})
+	accounts := metaFor(t, registry, relatedAccount{})
+	posts := metaFor(t, registry, relatedPost{})
+	store := db.NewStore(sqlDB, dialect)
+	ctx := context.Background()
+
+	seeded := seedRelatedAccounts(t, store, accounts, db.MaxInValues+1)
+	first := relatedPost{Title: "first", AccountID: seeded[0].ID}
+	if err := store.Create(ctx, posts, &first); err != nil {
+		t.Fatalf("create child: %v", err)
+	}
+	parents := seeded
+	const fragment = "related_post"
+
+	// Control: the same read succeeds and sends two chunked statements.
+	counter.Reset()
+	if err := store.RelatedMany(ctx, parents, "ID", posts, "AccountID", db.Query{}, map[int64][]relatedPost{}); err != nil {
+		t.Fatalf("control RelatedMany: %v", err)
+	}
+	if n := counter.Matching(fragment); n != 2 {
+		t.Fatalf("control sent %d statements for %q, want 2 chunks", n, fragment)
+	}
+
+	// The second chunk fails; the first chunk has already loaded seeded[0]'s
+	// child, which must not reach dest.
+	counter.Reset()
+	counter.FailNthMatching(fragment, 2, errInjectedChunk)
+	old := []relatedPost{{Title: "old"}}
+	dest := map[int64][]relatedPost{seeded[0].ID: old}
+	want := map[int64][]relatedPost{seeded[0].ID: old}
+
+	err := store.RelatedMany(ctx, parents, "ID", posts, "AccountID", db.Query{}, dest)
+	if !errors.Is(err, errInjectedChunk) {
+		t.Fatalf("RelatedMany error = %v, want the injected chunk failure", err)
+	}
+	if n := counter.Matching(fragment); n != 1 {
+		t.Fatalf("recorded %d statements before the failure, want 1 (the first chunk)", n)
+	}
+	if !reflect.DeepEqual(dest, want) {
+		t.Errorf("dest changed on a later-chunk failure: got %v, want %v", dest, want)
+	}
+}
 
 func TestRelatedManyGroupsChildrenByParent(t *testing.T) {
 	sqlDB, dialect, registry := openTables(t, relatedAccount{}, relatedPost{})

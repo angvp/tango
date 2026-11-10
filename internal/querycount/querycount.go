@@ -28,6 +28,9 @@ type Counter struct {
 type injectedFailure struct {
 	fragment string
 	err      error
+	skip     int  // matching statements to let through before this failure fires
+	once     bool // the failure is spent after it fires once
+	spent    bool
 }
 
 // Attach routes the database testdb opens for t through a recording driver
@@ -78,6 +81,16 @@ func (c *Counter) FailMatching(fragment string, err error) {
 	c.failures = append(c.failures, injectedFailure{fragment: fragment, err: err})
 }
 
+// FailNthMatching makes the nth later statement (1-based) that contains
+// fragment fail with err before it reaches the driver, and lets every other
+// statement through. It exists so a test can fail a later chunk of a read
+// whose earlier chunks must succeed.
+func (c *Counter) FailNthMatching(fragment string, n int, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.failures = append(c.failures, injectedFailure{fragment: fragment, err: err, skip: max(n-1, 0), once: true})
+}
+
 func (c *Counter) record(query string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -88,10 +101,19 @@ func (c *Counter) record(query string) {
 func (c *Counter) injected(query string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, f := range c.failures {
-		if strings.Contains(query, f.fragment) {
-			return f.err
+	for i := range c.failures {
+		f := &c.failures[i]
+		if f.spent || !strings.Contains(query, f.fragment) {
+			continue
 		}
+		if f.skip > 0 {
+			f.skip--
+			continue
+		}
+		if f.once {
+			f.spent = true
+		}
+		return f.err
 	}
 	return nil
 }
@@ -118,8 +140,17 @@ func (c countingConnector) Driver() driver.Driver { return c.inner.Driver() }
 // when it reaches the inner driver, never when the driver declines it with
 // ErrSkip, so a fallback path is not counted twice.
 type countingConn struct {
-	inner   driver.Conn
-	counter *Counter
+	inner    driver.Conn
+	counter  *Counter
+	declined bool // the inner driver declined the last Exec or Query with ErrSkip, so the prepared fallback follows
+}
+
+// takeDeclined reports whether the last statement was declined at connection
+// level and clears the flag, so the prepared fallback can inherit its decision.
+func (c *countingConn) takeDeclined() bool {
+	declined := c.declined
+	c.declined = false
+	return declined
 }
 
 func (c *countingConn) Prepare(query string) (driver.Stmt, error) {
@@ -127,7 +158,7 @@ func (c *countingConn) Prepare(query string) (driver.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &countingStmt{inner: stmt, query: query, counter: c.counter}, nil
+	return &countingStmt{inner: stmt, query: query, counter: c.counter, decided: c.takeDeclined()}, nil
 }
 
 func (c *countingConn) Close() error { return c.inner.Close() }
@@ -151,7 +182,7 @@ func (c *countingConn) PrepareContext(ctx context.Context, query string) (driver
 	if err != nil {
 		return nil, err
 	}
-	return &countingStmt{inner: stmt, query: query, counter: c.counter}, nil
+	return &countingStmt{inner: stmt, query: query, counter: c.counter, decided: c.takeDeclined()}, nil
 }
 
 func (c *countingConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
@@ -159,11 +190,13 @@ func (c *countingConn) ExecContext(ctx context.Context, query string, args []dri
 	if !ok {
 		return nil, driver.ErrSkip
 	}
+	c.declined = false
 	if err := c.counter.injected(query); err != nil {
 		return nil, err
 	}
 	result, err := ec.ExecContext(ctx, query, args)
 	if err == driver.ErrSkip {
+		c.declined = true
 		return nil, err
 	}
 	c.counter.record(query)
@@ -175,11 +208,13 @@ func (c *countingConn) QueryContext(ctx context.Context, query string, args []dr
 	if !ok {
 		return nil, driver.ErrSkip
 	}
+	c.declined = false
 	if err := c.counter.injected(query); err != nil {
 		return nil, err
 	}
 	rows, err := qc.QueryContext(ctx, query, args)
 	if err == driver.ErrSkip {
+		c.declined = true
 		return nil, err
 	}
 	c.counter.record(query)
@@ -222,13 +257,25 @@ type countingStmt struct {
 	inner   driver.Stmt
 	query   string
 	counter *Counter
+	decided bool // the connection already applied injection to this statement
+}
+
+// inject applies the armed failures to one execution. A statement the
+// connection declined with ErrSkip was decided there, so its prepared fallback
+// must not decide it again: one statement consumes one armed skip.
+func (s *countingStmt) inject() error {
+	if s.decided {
+		s.decided = false
+		return nil
+	}
+	return s.counter.injected(s.query)
 }
 
 func (s *countingStmt) Close() error  { return s.inner.Close() }
 func (s *countingStmt) NumInput() int { return s.inner.NumInput() }
 
 func (s *countingStmt) Exec(args []driver.Value) (driver.Result, error) { //nolint:staticcheck // legacy path, reached only without ExecContext
-	if err := s.counter.injected(s.query); err != nil {
+	if err := s.inject(); err != nil {
 		return nil, err
 	}
 	s.counter.record(s.query)
@@ -236,7 +283,7 @@ func (s *countingStmt) Exec(args []driver.Value) (driver.Result, error) { //noli
 }
 
 func (s *countingStmt) Query(args []driver.Value) (driver.Rows, error) { //nolint:staticcheck // legacy path, reached only without QueryContext
-	if err := s.counter.injected(s.query); err != nil {
+	if err := s.inject(); err != nil {
 		return nil, err
 	}
 	s.counter.record(s.query)
@@ -248,7 +295,7 @@ func (s *countingStmt) ExecContext(ctx context.Context, args []driver.NamedValue
 	if !ok {
 		return nil, driver.ErrSkip
 	}
-	if err := s.counter.injected(s.query); err != nil {
+	if err := s.inject(); err != nil {
 		return nil, err
 	}
 	result, err := sc.ExecContext(ctx, args)
@@ -264,7 +311,7 @@ func (s *countingStmt) QueryContext(ctx context.Context, args []driver.NamedValu
 	if !ok {
 		return nil, driver.ErrSkip
 	}
-	if err := s.counter.injected(s.query); err != nil {
+	if err := s.inject(); err != nil {
 		return nil, err
 	}
 	rows, err := sc.QueryContext(ctx, args)
