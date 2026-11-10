@@ -362,6 +362,8 @@ type smoke struct {
 	rec  *recorder
 	// frameCtx is attached to the preview frame's target on first use.
 	frameCtx context.Context
+	// reqs is what the server saw, for the report a failed step makes.
+	reqs *requestLog
 }
 
 // do runs steps under a deadline derived from the session context. The
@@ -391,7 +393,7 @@ func (s *smoke) visit(label, path string, actions ...chromedp.Action[chromedp.Vo
 		named("WaitReady body", chromedp.WaitReady("body")),
 	}, actions...)
 	if err := s.do(steps...); err != nil {
-		s.t.Fatalf("%s (%s): %v", label, path, err)
+		s.t.Fatalf("%s (%s): %v\npage at failure: %s", label, path, err, s.pageState())
 	}
 	s.settle()
 }
@@ -429,10 +431,79 @@ func (s *smoke) pageState() string {
 	defer cancel()
 	state, err := chromedp.Run(ctx, chromedp.Evaluate[string](pageStateScript))
 	if err != nil {
-		return fmt.Sprintf("unreadable: %v", err)
+		state = fmt.Sprintf("unreadable: %v", err)
 	}
-	return state
+	return state + "\nserver at failure: " + s.reqs.String()
 }
+
+// requestLog records what the server was asked, so a stalled step can say
+// whether the browser never sent a request, the server never answered it, or
+// the server answered something the step did not expect.
+type requestLog struct {
+	mu       sync.Mutex
+	inFlight map[int]string
+	recent   []string
+	next     int
+}
+
+const recentRequests = 8
+
+// wrap records every request next serves.
+func (l *requestLog) wrap(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		line := r.Method + " " + r.URL.RequestURI()
+		start := time.Now()
+		l.mu.Lock()
+		if l.inFlight == nil {
+			l.inFlight = map[int]string{}
+		}
+		id := l.next
+		l.next++
+		l.inFlight[id] = line + " since " + start.Format("15:04:05.000")
+		l.mu.Unlock()
+
+		status := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		defer func() {
+			l.mu.Lock()
+			delete(l.inFlight, id)
+			l.recent = append(l.recent, fmt.Sprintf("%s -> %d in %s", line, status.status, time.Since(start).Round(time.Millisecond)))
+			if len(l.recent) > recentRequests {
+				l.recent = l.recent[len(l.recent)-recentRequests:]
+			}
+			l.mu.Unlock()
+		}()
+		next.ServeHTTP(status, r)
+	})
+}
+
+// String lists the requests still being served and the last ones answered.
+func (l *requestLog) String() string {
+	if l == nil {
+		return "not recorded"
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	waiting := make([]string, 0, len(l.inFlight))
+	for _, line := range l.inFlight {
+		waiting = append(waiting, line)
+	}
+	slices.Sort(waiting)
+	return fmt.Sprintf("unanswered %q; last answered %q", waiting, l.recent)
+}
+
+// statusWriter remembers the status a handler wrote.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+// Unwrap lets http.ResponseController reach the writer underneath.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (s *smoke) eval(expr string) bool {
 	s.t.Helper()
@@ -1274,7 +1345,8 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 		t.Skip("no Chrome or Chromium found locally; the headless CSP smoke did not run (set TANGO_BROWSER_PATH, or TANGO_REQUIRE_BROWSER=1 to fail instead)")
 	}
 
-	server := httptest.NewServer(composedSite(t))
+	reqs := &requestLog{}
+	server := httptest.NewServer(reqs.wrap(composedSite(t)))
 
 	// The headers are checked over HTTP as well, so a page the browser loads
 	// under the wrong policy fails as a header mismatch, not only as a
@@ -1321,7 +1393,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 		t.Fatalf("install the reporter script: %v", err)
 	}
 
-	s := &smoke{t: t, ctx: browserCtx, base: server.URL, rec: rec}
+	s := &smoke{t: t, ctx: browserCtx, base: server.URL, rec: rec, reqs: reqs}
 	s.positiveControl()
 
 	s.visit("accounts login", "/accounts/login/")

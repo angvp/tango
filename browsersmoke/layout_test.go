@@ -101,7 +101,8 @@ func TestAdminLayoutAtPhoneWidths(t *testing.T) {
 		t.Skip("no Chrome or Chromium found locally; the layout measurement did not run")
 	}
 
-	server := httptest.NewServer(composedSite(t))
+	reqs := &requestLog{}
+	server := httptest.NewServer(reqs.wrap(composedSite(t)))
 	browserCtx, cancelBrowser := startBrowser(t, binary)
 	t.Cleanup(func() {
 		cancelBrowser()
@@ -111,7 +112,7 @@ func TestAdminLayoutAtPhoneWidths(t *testing.T) {
 	if _, err := chromedp.Run(browserCtx, chromedp.Navigate("about:blank")); err != nil {
 		t.Fatalf("start the browser: %v", err)
 	}
-	s := &smoke{t: t, ctx: browserCtx, base: server.URL, rec: &recorder{origin: server.URL}}
+	s := &smoke{t: t, ctx: browserCtx, base: server.URL, rec: &recorder{origin: server.URL}, reqs: reqs}
 	s.rec.begin("setup")
 	// Headless windows are not focused, so :focus styles do not apply unless
 	// focus emulation is on. The skip link is measured in its focused state.
