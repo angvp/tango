@@ -488,3 +488,107 @@ func TestListPreloadNestedRevisitedModelLoadsEachLevel(t *testing.T) {
 		t.Fatalf("revisited comment body = %q, want c1", body)
 	}
 }
+
+func TestListPreloadNestedReadJoinsRollbackFailure(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	accounts := metaFor(t, registry, preloadAccount{})
+	posts := metaFor(t, registry, preloadPost{})
+	comments := metaFor(t, registry, preloadComment{})
+	alpha := createPreloadAccount(t, store, accounts, "alpha")
+	p1 := createPreloadPost(t, store, posts, "p1", alpha.ID)
+	createPreloadComment(t, store, comments, p1.ID, "c1")
+	counter.Reset()
+	errRollback := errors.New("injected rollback failure")
+
+	// Control: the same nested read succeeds and rolls back nothing.
+	if err := store.List(ctx, posts, db.Query{Preload: []string{"Comments.Post"}}, &[]preloadPost{}); err != nil {
+		t.Fatalf("control List: %v", err)
+	}
+	if kinds := transactionKinds(counter.Events()); len(kinds) != 2 || kinds[1] != querycount.KindCommit {
+		t.Fatalf("control recorded %v, want begin then commit", kinds)
+	}
+
+	counter.Reset()
+	counter.FailNthMatching("preload_post", 2, errPreloadRead)
+	counter.FailNextRollback(errRollback)
+	err := store.List(ctx, posts, db.Query{Preload: []string{"Comments.Post"}}, &[]preloadPost{})
+	if !errors.Is(err, errPreloadRead) {
+		t.Fatalf("err = %v, want the read failure kept", err)
+	}
+	if !errors.Is(err, errRollback) {
+		t.Fatalf("err = %v, want the rollback failure joined in", err)
+	}
+}
+
+func TestListPreloadNestedReadIgnoresTxDoneOnRollback(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	accounts := metaFor(t, registry, preloadAccount{})
+	posts := metaFor(t, registry, preloadPost{})
+	comments := metaFor(t, registry, preloadComment{})
+	alpha := createPreloadAccount(t, store, accounts, "alpha")
+	p1 := createPreloadPost(t, store, posts, "p1", alpha.ID)
+	createPreloadComment(t, store, comments, p1.ID, "c1")
+	counter.Reset()
+
+	// database/sql reports sql.ErrTxDone when the transaction was already
+	// finished, as it is after a cancelled context; that is not a second failure.
+	counter.FailNthMatching("preload_post", 2, errPreloadRead)
+	counter.FailNextRollback(sql.ErrTxDone)
+	err := store.List(ctx, posts, db.Query{Preload: []string{"Comments.Post"}}, &[]preloadPost{})
+	if !errors.Is(err, errPreloadRead) {
+		t.Fatalf("err = %v, want the read failure", err)
+	}
+	if errors.Is(err, sql.ErrTxDone) {
+		t.Fatalf("err = %v, want the rollback's ErrTxDone dropped", err)
+	}
+}
+
+func TestListPreloadNestedHasManyRowsOwnTheirCopies(t *testing.T) {
+	sqlDB, dialect, registry, _ := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	accounts := metaFor(t, registry, preloadAccount{})
+	posts := metaFor(t, registry, preloadPost{})
+	comments := metaFor(t, registry, preloadComment{})
+	alpha := createPreloadAccount(t, store, accounts, "alpha")
+	p1 := createPreloadPost(t, store, posts, "p1", alpha.ID)
+	p2 := createPreloadPost(t, store, posts, "p2", alpha.ID)
+	createPreloadComment(t, store, comments, p1.ID, "c1")
+	createPreloadComment(t, store, comments, p1.ID, "c2")
+	createPreloadComment(t, store, comments, p2.ID, "c3")
+
+	var got []preloadPost
+	if err := store.List(ctx, posts, db.Query{OrderBy: []string{"ID"}, Preload: []string{"Comments.Post.Comments"}}, &got); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 2 || len(got[0].Comments) != 2 || len(got[1].Comments) != 1 {
+		t.Fatalf("loaded shape = %+v, want two posts with 2 and 1 comments", got)
+	}
+
+	// Control: each grandchild is reachable through its own row, with the value
+	// the database holds.
+	if body := got[1].Comments[0].Post.Comments[0].Body; body != "c3" {
+		t.Fatalf("control grandchild body = %q, want c3", body)
+	}
+
+	// Mutate one child and one grandchild under the first row. Every other row,
+	// and every sibling under the same parent, must keep the stored value.
+	got[0].Comments[0].Body = "child-changed"
+	got[0].Comments[0].Post.Comments[0].Body = "grandchild-changed"
+	if body := got[0].Comments[1].Post.Comments[0].Body; body != "c1" {
+		t.Errorf("sibling grandchild body = %q, want c1: the nested copy is shared", body)
+	}
+	if body := got[1].Comments[0].Post.Comments[0].Body; body != "c3" {
+		t.Errorf("other row grandchild body = %q, want c3: the nested copy is shared", body)
+	}
+	if body := got[1].Comments[0].Body; body != "c3" {
+		t.Errorf("other row child body = %q, want c3", body)
+	}
+}

@@ -21,11 +21,12 @@ import (
 // Counter records each statement that reaches the driver, in order. Statements
 // sent through a transaction count the same as any other.
 type Counter struct {
-	mu         sync.Mutex
-	statements []string
-	events     []Event
-	failures   []injectedFailure
-	hooks      []beforeHook
+	mu          sync.Mutex
+	statements  []string
+	events      []Event
+	failures    []injectedFailure
+	rollbackErr error // returned by the next rollback after the driver has rolled back
+	hooks       []beforeHook
 }
 
 type beforeHook struct {
@@ -133,6 +134,15 @@ func (c *Counter) FailNthMatching(fragment string, n int, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.failures = append(c.failures, injectedFailure{fragment: fragment, err: err, skip: max(n-1, 0), once: true})
+}
+
+// FailNextRollback makes the next rollback the database is asked for roll the
+// transaction back in the driver and then return err, so a test can drive the
+// path where a deferred rollback fails. It is armed once.
+func (c *Counter) FailNextRollback(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rollbackErr = err
 }
 
 // RunBeforeMatching calls fn once, just before the nth later statement
@@ -285,7 +295,20 @@ func (t *countingTx) Commit() error {
 
 func (t *countingTx) Rollback() error {
 	t.counter.recordEvent(Event{Kind: KindRollback})
-	return t.inner.Rollback()
+	err := t.inner.Rollback()
+	if armed := t.counter.takeRollbackErr(); armed != nil {
+		return armed
+	}
+	return err
+}
+
+// takeRollbackErr returns the error armed by FailNextRollback and disarms it.
+func (c *Counter) takeRollbackErr() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	err := c.rollbackErr
+	c.rollbackErr = nil
+	return err
 }
 
 func (c *countingConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {

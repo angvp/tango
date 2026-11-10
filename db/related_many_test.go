@@ -236,3 +236,71 @@ func TestRelatedManyLoadsKeysAcrossChunks(t *testing.T) {
 		}
 	}
 }
+
+func TestRelatedManyRefusesPreloadBeforeAnySQL(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	posts := metaFor(t, registry, preloadPost{})
+	comments := metaFor(t, registry, preloadComment{})
+	post := createPreloadPost(t, store, posts, "p", 0)
+	createPreloadComment(t, store, comments, post.ID, "c")
+	parents := []preloadPost{post}
+	const fragment = "preload_comment"
+
+	// Control: the same read without Preload sends a statement.
+	counter.Reset()
+	if err := store.RelatedMany(ctx, parents, "ID", comments, "PostID", db.Query{}, map[int64][]preloadComment{}); err != nil {
+		t.Fatalf("control RelatedMany: %v", err)
+	}
+	if n := counter.Matching(fragment); n != 1 {
+		t.Fatalf("control sent %d statements for %q, want 1", n, fragment)
+	}
+
+	// Preload names a valid relation of preloadComment, so the refusal must
+	// come from RelatedMany itself, not from an unknown relation.
+	counter.Reset()
+	dest := map[int64][]preloadComment{}
+	err := store.RelatedMany(ctx, parents, "ID", comments, "PostID", db.Query{Preload: []string{"Post"}}, dest)
+	var queryErr *db.QueryError
+	if !errors.As(err, &queryErr) {
+		t.Fatalf("RelatedMany with Preload error = %v, want a *db.QueryError", err)
+	}
+	if n := len(counter.Statements()); n != 0 {
+		t.Fatalf("Preload was refused after sending %d statements, want none", n)
+	}
+	if len(dest) != 0 {
+		t.Errorf("dest changed on refusal: %v", dest)
+	}
+}
+
+func TestRelatedManyAcceptsSliceOrPointerToSlice(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, relatedAccount{}, relatedPost{})
+	accounts := metaFor(t, registry, relatedAccount{})
+	posts := metaFor(t, registry, relatedPost{})
+	store := db.NewStore(sqlDB, dialect)
+	ctx := context.Background()
+
+	owner := createRelatedAccount(t, store, accounts, "owner")
+	if err := store.Create(ctx, posts, &relatedPost{Title: "p", AccountID: owner.ID}); err != nil {
+		t.Fatalf("create child: %v", err)
+	}
+	parents := []relatedAccount{owner}
+
+	fromSlice := map[int64][]relatedPost{}
+	if err := store.RelatedMany(ctx, parents, "ID", posts, "AccountID", db.Query{}, fromSlice); err != nil {
+		t.Fatalf("RelatedMany with a slice: %v", err)
+	}
+	if len(fromSlice[owner.ID]) != 1 {
+		t.Fatalf("slice form loaded %v, want the one child", fromSlice)
+	}
+
+	fromPointer := map[int64][]relatedPost{}
+	if err := store.RelatedMany(ctx, &parents, "ID", posts, "AccountID", db.Query{}, fromPointer); err != nil {
+		t.Fatalf("RelatedMany with a pointer to a slice: %v", err)
+	}
+	if !reflect.DeepEqual(fromPointer, fromSlice) {
+		t.Errorf("pointer form loaded %v, want %v", fromPointer, fromSlice)
+	}
+}

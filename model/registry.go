@@ -399,6 +399,9 @@ func (r *Registry) validateRelation(owner ModelMeta, relation RelationMeta) erro
 	if !registered {
 		return invalidRelation(owner.Name, relation.Name, "targets %q, which is not a registered model", relation.Target)
 	}
+	if relation.TargetType != target.Type {
+		return invalidRelation(owner.Name, relation.Name, "targets a %s that is not the registered model %s", relation.TargetType, target.Name)
+	}
 
 	switch relation.Direction {
 	case "belongs_to":

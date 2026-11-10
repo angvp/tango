@@ -192,3 +192,34 @@ func TestRelatedReadsInsideTransaction(t *testing.T) {
 		t.Errorf("after rollback dest = %v, want no entries", dest)
 	}
 }
+
+func TestRelatedAcceptsSliceOrPointerToSlice(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, relatedAccount{}, relatedPost{})
+	accounts := metaFor(t, registry, relatedAccount{})
+	posts := metaFor(t, registry, relatedPost{})
+	store := db.NewStore(sqlDB, dialect)
+	ctx := context.Background()
+
+	owner := createRelatedAccount(t, store, accounts, "owner")
+	child := relatedPost{Title: "p", AccountID: owner.ID}
+	if err := store.Create(ctx, posts, &child); err != nil {
+		t.Fatalf("create child: %v", err)
+	}
+	rows := []relatedPost{child}
+
+	fromSlice := map[int64]relatedAccount{}
+	if err := store.Related(ctx, rows, "AccountID", accounts, fromSlice); err != nil {
+		t.Fatalf("Related with a slice: %v", err)
+	}
+	if got, ok := fromSlice[owner.ID]; !ok || got.Name != "owner" {
+		t.Fatalf("slice form loaded %v, want owner under its key", fromSlice)
+	}
+
+	fromPointer := map[int64]relatedAccount{}
+	if err := store.Related(ctx, &rows, "AccountID", accounts, fromPointer); err != nil {
+		t.Fatalf("Related with a pointer to a slice: %v", err)
+	}
+	if !reflect.DeepEqual(fromPointer, fromSlice) {
+		t.Errorf("pointer form loaded %v, want %v", fromPointer, fromSlice)
+	}
+}

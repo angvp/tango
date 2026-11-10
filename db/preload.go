@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -122,7 +123,7 @@ var preloadTxOptions = &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOn
 // path, made on a Store not already bound to a transaction, runs read in one
 // transaction of its own and commits it when read succeeds. Any other request
 // runs read directly, with no transaction.
-func (s *Store) withPreloadTx(ctx context.Context, tree preloadTree, read func(*Store) error) error {
+func (s *Store) withPreloadTx(ctx context.Context, tree preloadTree, read func(*Store) error) (err error) {
 	if !tree.nested || s.tx != nil {
 		return read(s)
 	}
@@ -132,8 +133,13 @@ func (s *Store) withPreloadTx(ctx context.Context, tree preloadTree, read func(*
 	}
 	committed := false
 	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+		if committed {
+			return
+		}
+		// sql.ErrTxDone means the transaction already ended, as it does after
+		// a cancelled context; the read error is then the only failure.
+		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("roll back preload read: %w", rbErr))
 		}
 	}()
 	if err := read(&Store{db: s.db, tx: tx, dialect: s.dialect, models: s.models}); err != nil {

@@ -18,12 +18,16 @@ import (
 // query's Where, Any, Filter and OrderBy narrow and order the children; query
 // is never modified. Without OrderBy the children of each key come in child
 // primary-key order, ascending. Limit and Offset are refused, because they would
-// cut across parents. A key with no children adds no entry. dest is written only
+// cut across parents, and Preload is refused because it belongs to List and
+// First. A key with no children adds no entry. dest is written only
 // after every statement has succeeded, so on any error it is left as passed.
 // RelatedMany reads through the transaction when called on a Store bound to one.
 func (s *Store) RelatedMany(ctx context.Context, rows any, keyField string, child model.ModelMeta, childField string, query Query, dest any) error {
 	if query.Limit != 0 || query.Offset != 0 {
 		return &QueryError{Model: child.Name, Reason: "Limit and Offset are not supported by RelatedMany: they would cut across parents"}
+	}
+	if len(query.Preload) != 0 {
+		return &QueryError{Model: child.Name, Reason: "Preload is not supported by RelatedMany: it belongs to List and First"}
 	}
 	primaryKey, err := findPrimaryKeyField(child)
 	if err != nil {

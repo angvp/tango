@@ -181,3 +181,43 @@ func registerAll(t *testing.T, values ...any) *Registry {
 	}
 	return registry
 }
+
+type relPostOK struct {
+	ID        int64       `tango:"pk"`
+	AccountID int64       `tango:"fk=relAccount"`
+	Account   *relAccount `tango:"belongs_to=AccountID"`
+}
+
+// shadowedAccountPost returns a model whose belongs_to target is a different
+// struct type from the registered relAccount: both are named relAccount, and
+// only the registered one is the model.
+func shadowedAccountPost() any {
+	type relAccount struct {
+		ID int64 `tango:"pk"`
+	}
+	type relShadowPost struct {
+		ID        int64       `tango:"pk"`
+		AccountID int64       `tango:"fk=relAccount"`
+		Account   *relAccount `tango:"belongs_to=AccountID"`
+	}
+	return relShadowPost{}
+}
+
+func TestRelationTargetMustBeTheRegisteredType(t *testing.T) {
+	// Control: the registered type itself is accepted as the target.
+	control := registerAll(t, relAccount{}, relPostOK{})
+	if err := control.ValidateRelations(); err != nil {
+		t.Fatalf("control ValidateRelations: %v", err)
+	}
+
+	registry := registerAll(t, shadowedAccountPost(), relAccount{})
+	err := registry.ValidateRelations()
+	if !errors.Is(err, ErrInvalidRelation) {
+		t.Fatalf("ValidateRelations error = %v, want it to wrap ErrInvalidRelation", err)
+	}
+	for _, substr := range []string{"relShadowPost", "Account"} {
+		if !strings.Contains(err.Error(), substr) {
+			t.Errorf("error = %q, want it to contain %q", err.Error(), substr)
+		}
+	}
+}
