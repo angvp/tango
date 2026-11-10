@@ -19,11 +19,18 @@ func (s *Store) First(ctx context.Context, meta model.ModelMeta, query Query, de
 	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Type() != meta.Type {
 		return fmt.Errorf("tango db: First destination must be a non-nil pointer to %s", meta.Type)
 	}
-	plans, err := s.resolvePreload(meta, query.Preload)
+	tree, err := s.resolvePreload(meta, query.Preload)
 	if err != nil {
 		return err
 	}
+	return s.withPreloadTx(ctx, tree, func(read *Store) error {
+		return read.firstInto(ctx, meta, query, value, tree)
+	})
+}
 
+// firstInto runs the read First makes and assigns dest only after every
+// relation in tree has loaded. s is the Store the read runs on.
+func (s *Store) firstInto(ctx context.Context, meta model.ModelMeta, query Query, value reflect.Value, tree preloadTree) error {
 	if len(query.OrderBy) == 0 {
 		primaryKey, err := findPrimaryKeyField(meta)
 		if err != nil {
@@ -61,7 +68,7 @@ func (s *Store) First(ctx context.Context, meta model.ModelMeta, query Query, de
 	}
 	loaded := reflect.MakeSlice(reflect.SliceOf(meta.Type), 1, 1)
 	loaded.Index(0).Set(row)
-	if err := s.preloadRows(ctx, meta, loaded, plans); err != nil {
+	if err := s.preloadRows(ctx, meta, loaded, tree.roots); err != nil {
 		return err
 	}
 	value.Elem().Set(loaded.Index(0))

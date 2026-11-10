@@ -25,6 +25,14 @@ type Counter struct {
 	statements []string
 	events     []Event
 	failures   []injectedFailure
+	hooks      []beforeHook
+}
+
+type beforeHook struct {
+	fragment string
+	skip     int // matching statements to let through before the hook fires
+	fn       func()
+	spent    bool
 }
 
 // Kind says what an Event records.
@@ -125,6 +133,40 @@ func (c *Counter) FailNthMatching(fragment string, n int, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.failures = append(c.failures, injectedFailure{fragment: fragment, err: err, skip: max(n-1, 0), once: true})
+}
+
+// RunBeforeMatching calls fn once, just before the nth later statement
+// (1-based) that contains fragment reaches the driver. fn runs on the
+// statement's goroutine and may use another connection of the same database to
+// change the data, so a test can commit a write between two statements of one
+// read at a chosen point, without sleeping.
+func (c *Counter) RunBeforeMatching(fragment string, n int, fn func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.hooks = append(c.hooks, beforeHook{fragment: fragment, skip: max(n-1, 0), fn: fn})
+}
+
+// runHooks fires each armed hook that query matches. The hooks run after the
+// counter's lock is released, because they issue statements of their own.
+func (c *Counter) runHooks(query string) {
+	c.mu.Lock()
+	var due []func()
+	for i := range c.hooks {
+		h := &c.hooks[i]
+		if h.spent || !strings.Contains(query, h.fragment) {
+			continue
+		}
+		if h.skip > 0 {
+			h.skip--
+			continue
+		}
+		h.spent = true
+		due = append(due, h.fn)
+	}
+	c.mu.Unlock()
+	for _, fn := range due {
+		fn()
+	}
 }
 
 func (c *Counter) record(query string) {
@@ -264,6 +306,7 @@ func (c *countingConn) ExecContext(ctx context.Context, query string, args []dri
 		return nil, driver.ErrSkip
 	}
 	c.declined = false
+	c.counter.runHooks(query)
 	if err := c.counter.injected(query); err != nil {
 		return nil, err
 	}
@@ -282,6 +325,7 @@ func (c *countingConn) QueryContext(ctx context.Context, query string, args []dr
 		return nil, driver.ErrSkip
 	}
 	c.declined = false
+	c.counter.runHooks(query)
 	if err := c.counter.injected(query); err != nil {
 		return nil, err
 	}

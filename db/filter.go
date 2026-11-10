@@ -63,6 +63,10 @@ func (e *QueryLimitError) Error() string {
 		return fmt.Sprintf("%v: filter has %d nodes, limit %d", ErrInvalidQuery, e.Got, e.Max)
 	case limitFilterDepth:
 		return fmt.Sprintf("%v: filter is %d levels deep, limit %d", ErrInvalidQuery, e.Got, e.Max)
+	case limitPreloadDepth:
+		return fmt.Sprintf("%v: Preload path is %d segments deep, limit MaxPreloadDepth %d", ErrInvalidQuery, e.Got, e.Max)
+	case limitPreloadPaths:
+		return fmt.Sprintf("%v: Preload requests %d relation reads, limit MaxPreloadPaths %d", ErrInvalidQuery, e.Got, e.Max)
 	case limitInValues:
 		return fmt.Sprintf("%v: IN list for field %q has %d values, limit %d", ErrInvalidQuery, e.Field, e.Got, e.Max)
 	case limitBindValues:
@@ -77,8 +81,10 @@ func (e *QueryLimitError) Is(target error) bool {
 }
 
 const (
-	limitFilterNodes = "filter nodes"
-	limitFilterDepth = "filter depth"
+	limitFilterNodes  = "filter nodes"
+	limitFilterDepth  = "filter depth"
+	limitPreloadDepth = "preload depth"
+	limitPreloadPaths = "preload paths"
 )
 
 // ExprOp says what kind of node an Expr is.

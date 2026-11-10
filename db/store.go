@@ -797,11 +797,19 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Kind() != reflect.Slice {
 		return fmt.Errorf("tango db: List destination must be a non-nil pointer to a slice")
 	}
-	plans, err := s.resolvePreload(meta, query.Preload)
+	tree, err := s.resolvePreload(meta, query.Preload)
 	if err != nil {
 		return err
 	}
-	sliceValue := value.Elem()
+	return s.withPreloadTx(ctx, tree, func(read *Store) error {
+		return read.listInto(ctx, meta, query, value.Elem(), tree)
+	})
+}
+
+// listInto runs the read List makes and assigns sliceValue only after every
+// relation in tree has loaded. s is the Store the read runs on, which is the
+// transaction a dotted request reads in.
+func (s *Store) listInto(ctx context.Context, meta model.ModelMeta, query Query, sliceValue reflect.Value, tree preloadTree) error {
 	elementType := sliceValue.Type().Elem()
 
 	sqlQuery, args, err := s.selectSQL(meta, query)
@@ -831,7 +839,7 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 	if err := rows.Close(); err != nil {
 		return err
 	}
-	if err := s.preloadRows(ctx, meta, result, plans); err != nil {
+	if err := s.preloadRows(ctx, meta, result, tree.roots); err != nil {
 		return err
 	}
 
