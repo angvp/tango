@@ -22,6 +22,8 @@ curl -X POST http://localhost:8000/posts/ \
 curl 'http://localhost:8000/posts/?author_id=1'
 ```
 
+The list embeds each post's `author` object, loaded in the same request by `Query.Preload`, so a client needs no second request per author. A post with no author has no `author` member.
+
 `go test .` runs the same flow against a fresh database.
 
 ## The operator dashboard

@@ -10,7 +10,7 @@ import (
 
 func listPosts(store *db.Store, meta model.ModelMeta) tango.View {
 	return func(ctx *tango.Context) error {
-		query := db.Query{OrderBy: []string{"-CreatedAt"}}
+		query := db.Query{OrderBy: []string{"-CreatedAt"}, Preload: []string{"Author"}}
 		if authorID := ctx.Query("author_id"); authorID != "" {
 			parsedID, err := strconv.ParseInt(authorID, 10, 64)
 			if err != nil {
@@ -52,6 +52,9 @@ func createPost(store *db.Store, meta model.ModelMeta) tango.View {
 		if err := ctx.Bind(&post); err != nil {
 			return err
 		}
+		// A relation is read, never written: a client-sent author object is
+		// dropped, so the response cannot echo it back.
+		post.Author = nil
 		if err := store.Create(ctx.Context(), meta, &post); err != nil {
 			return err
 		}
