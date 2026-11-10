@@ -28,9 +28,8 @@ func relatedOwnerSelect(quote string) string {
 	return "SELECT " + quote + "id" + quote + ", " + quote + "name" + quote + " FROM " + quote + "golden_owner" + quote
 }
 
-// relatedInClause is the WHERE clause of an IN list over n values of the
-// owner's primary key.
-func relatedInClause(dialect db.Dialect, quote string, n int) string {
+// relatedInClause is the WHERE clause of an IN list over n values of column.
+func relatedInClause(dialect db.Dialect, quote, column string, n int) string {
 	placeholders := make([]string, n)
 	for i := range placeholders {
 		if dialect == db.Postgres {
@@ -39,7 +38,7 @@ func relatedInClause(dialect db.Dialect, quote string, n int) string {
 			placeholders[i] = "?"
 		}
 	}
-	return " WHERE (" + quote + "id" + quote + " IN (" + strings.Join(placeholders, ", ") + "))"
+	return " WHERE (" + quote + column + quote + " IN (" + strings.Join(placeholders, ", ") + "))"
 }
 
 // relatedArgs renders bind values the way the recorder does.
@@ -94,7 +93,7 @@ func TestRelatedSQLGoldens(t *testing.T) {
 					t.Fatal(err)
 				}
 				assertStatement(t, rec,
-					relatedOwnerSelect(tc.quote)+relatedInClause(tc.dialect, tc.quote, 2),
+					relatedOwnerSelect(tc.quote)+relatedInClause(tc.dialect, tc.quote, "id", 2),
 					relatedArgs(2, 1))
 			})
 
@@ -109,7 +108,7 @@ func TestRelatedSQLGoldens(t *testing.T) {
 					values[i] = int64(i + 1)
 				}
 				assertStatement(t, rec,
-					relatedOwnerSelect(tc.quote)+relatedInClause(tc.dialect, tc.quote, 1000),
+					relatedOwnerSelect(tc.quote)+relatedInClause(tc.dialect, tc.quote, "id", 1000),
 					relatedArgs(values...))
 			})
 
@@ -129,8 +128,8 @@ func TestRelatedSQLGoldens(t *testing.T) {
 				for i := range first {
 					first[i] = int64(i + 1)
 				}
-				wantFirst := relatedOwnerSelect(tc.quote) + relatedInClause(tc.dialect, tc.quote, 1000)
-				wantSecond := relatedOwnerSelect(tc.quote) + relatedInClause(tc.dialect, tc.quote, 1)
+				wantFirst := relatedOwnerSelect(tc.quote) + relatedInClause(tc.dialect, tc.quote, "id", 1000)
+				wantSecond := relatedOwnerSelect(tc.quote) + relatedInClause(tc.dialect, tc.quote, "id", 1)
 				if got[0].SQL != wantFirst || got[0].Args != relatedArgs(first...) {
 					t.Errorf("first statement differs\n got: %s %s", got[0].SQL, got[0].Args)
 				}

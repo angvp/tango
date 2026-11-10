@@ -25,8 +25,11 @@ func (s *Store) Related(ctx context.Context, rows any, keyField string, related 
 	if err != nil {
 		return err
 	}
-	keyIndex, err := batchKeyField(related.Name, rowsValue.Type().Elem(), keyField, primaryKey.Type)
+	keyIndex, keyType, err := batchKeyField(related.Name, rowsValue.Type().Elem(), keyField)
 	if err != nil {
+		return err
+	}
+	if err := sameFieldType(related.Name, keyField, keyType, primaryKey.Type); err != nil {
 		return err
 	}
 	destValue, err := batchDest(related.Name, dest, primaryKey.Type, related.Type)
@@ -66,20 +69,25 @@ func batchRows(modelName string, rows any) (reflect.Value, error) {
 	return value, nil
 }
 
-// batchKeyField returns the index of the direct, exported field name on the
-// row type, checking that its type is keyType.
-func batchKeyField(modelName string, rowType reflect.Type, name string, keyType reflect.Type) (int, error) {
+// batchKeyField returns the index and type of the direct, exported field name
+// on the row type.
+func batchKeyField(modelName string, rowType reflect.Type, name string) (int, reflect.Type, error) {
 	field, ok := rowType.FieldByName(name)
 	if !ok || len(field.Index) != 1 {
-		return 0, &QueryError{Model: modelName, Field: name, Reason: fmt.Sprintf("key field %q is not a direct field of %s", name, rowType)}
+		return 0, nil, &QueryError{Model: modelName, Field: name, Reason: fmt.Sprintf("key field %q is not a direct field of %s", name, rowType)}
 	}
 	if !field.IsExported() {
-		return 0, &QueryError{Model: modelName, Field: name, Reason: fmt.Sprintf("key field %q of %s is not exported", name, rowType)}
+		return 0, nil, &QueryError{Model: modelName, Field: name, Reason: fmt.Sprintf("key field %q of %s is not exported", name, rowType)}
 	}
-	if field.Type != keyType {
-		return 0, &QueryError{Model: modelName, Field: name, Reason: fmt.Sprintf("key field %q has type %s, want %s", name, field.Type, keyType)}
+	return field.Index[0], field.Type, nil
+}
+
+// sameFieldType reports a QueryError unless got is want.
+func sameFieldType(modelName, name string, got, want reflect.Type) error {
+	if got != want {
+		return &QueryError{Model: modelName, Field: name, Reason: fmt.Sprintf("field %q has type %s, want %s", name, got, want)}
 	}
-	return field.Index[0], nil
+	return nil
 }
 
 // batchDest checks that dest is a non-nil map from keyType to valueType and
