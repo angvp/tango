@@ -37,9 +37,6 @@ func (s *Store) resolvePreload(meta model.ModelMeta, names []string) ([]preloadP
 		if !ok {
 			return nil, &QueryError{Model: meta.Name, Field: name, Reason: fmt.Sprintf("unknown relation %q for model %s", name, meta.Name)}
 		}
-		if relation.Direction != "belongs_to" {
-			return nil, &QueryError{Model: meta.Name, Field: name, Reason: fmt.Sprintf("relation %q is %s, which Preload does not load yet", name, relation.Direction)}
-		}
 		target, ok := s.models.Get(relation.Target)
 		if !ok {
 			return nil, &QueryError{Model: meta.Name, Field: name, Reason: fmt.Sprintf("relation %q targets %s, which is not registered", name, relation.Target)}
@@ -69,6 +66,8 @@ func (s *Store) preloadRows(ctx context.Context, meta model.ModelMeta, rows refl
 		switch plan.relation.Direction {
 		case "belongs_to":
 			err = s.preloadBelongsTo(ctx, rows, plan)
+		case "has_many":
+			err = s.preloadHasMany(ctx, meta, rows, plan)
 		default:
 			err = &QueryError{Model: meta.Name, Field: plan.relation.Name, Reason: fmt.Sprintf("unsupported relation direction %q", plan.relation.Direction)}
 		}
