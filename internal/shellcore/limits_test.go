@@ -80,7 +80,7 @@ func TestAFailureInASessionPrintsTheErrorThenOneHint(t *testing.T) {
 
 func TestHelpAndUsageShareTheLimitationsTable(t *testing.T) {
 	table := limitationsTable()
-	if !strings.Contains(table, "Yaegi v0.16.1") {
+	if !strings.Contains(table, "Yaegi v0.16.2") {
 		t.Fatalf("the table does not name the interpreter version:\n%s", table)
 	}
 	for _, l := range Limitations {

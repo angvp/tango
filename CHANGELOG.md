@@ -4,6 +4,11 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Changed
+
+- **`tango shell` runs Yaegi v0.16.2, up from v0.16.1, and now runs a range over an integer (`for i := range 3`).** A range over a function still fails, and stays on the shell's list of Go it cannot run.
+- **Dependencies:** `github.com/jackc/pgx/v5` v5.12.0, `modernc.org/sqlite` v1.61.1 and `golang.org/x/net` v0.62.0 in the root module; `google.golang.org/api` v0.310.0 in `storage/gcs`.
+
 ## [0.8.1] - 2026-11-03
 
 ### Added

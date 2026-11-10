@@ -145,14 +145,14 @@ Only plain values are supported across this boundary: numbers, strings, booleans
 
 ## What the interpreter cannot run
 
-The shell interprets Go with [Yaegi](https://github.com/traefik/yaegi), pinned at v0.16.1, which understands Go 1.21 and 1.22. Your project is on a newer Go, so valid current Go can fail at the prompt. `tango shell` does not pretend otherwise: it prints the failure, one hint pointing here, and keeps the session.
+The shell interprets Go with [Yaegi](https://github.com/traefik/yaegi), pinned at v0.16.2, which understands Go 1.21 and 1.22. Your project is on a newer Go, so valid current Go can fail at the prompt. `tango shell` does not pretend otherwise: it prints the failure, one hint pointing here, and keeps the session.
 
 | Does not work | Write this instead |
 |---|---|
 | The min and max builtins | compare with if, or write a small function |
 | The clear builtin | delete the keys in a loop: for k := range m { delete(m, k) } |
 | Inferring the type arguments of a generic function whose result type differs from its argument types | give the type arguments explicitly, as in Map[int, string](xs, f) |
-| Ranging over a function, or over an integer (for i := range 3) | use a counting for loop, or call the function with a callback |
+| Ranging over a function | call the function with a callback |
 
 Two more things to know:
 

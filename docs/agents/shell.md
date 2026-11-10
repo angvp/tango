@@ -8,7 +8,7 @@ Canonical files: `shell/shell.go`, `internal/shellcore/run.go`, `internal/shellc
 
 - **The shell** for a quick look or a one-off fix on a development database: counting rows, reading one, correcting a field, trying a query shape, calling a project helper. It is a local tool that runs with the project's credentials, so use it on a database you may change, and add `--readonly` when you only need to read.
 - **A test** (`testdb`, see `docs/agents/testing.md`) when the answer should stay true: it is repeatable and checked in CI.
-- **A temporary `main` package** only when you need Go the interpreter cannot run (the `min`, `max` and `clear` builtins, generics it cannot infer, ranging over a function or an integer) or your own types with their methods.
+- **A temporary `main` package** only when you need Go the interpreter cannot run (the `min`, `max` and `clear` builtins, generics it cannot infer, ranging over a function) or your own types with their methods.
 
 ## Use it without a terminal
 

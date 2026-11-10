@@ -116,7 +116,7 @@ func TestShellGuideCarriesTheTestedSnippetsAndTables(t *testing.T) {
 			t.Errorf("the guide's \"what the interpreter cannot run\" table lacks the row %q", row)
 		}
 	}
-	if !strings.Contains(guide, "pinned at v0.16.1") {
+	if !strings.Contains(guide, "pinned at v0.16.2") {
 		t.Errorf("the guide does not name the pinned interpreter version")
 	}
 
