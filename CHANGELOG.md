@@ -20,13 +20,10 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 - **`Store.Query` and `Store.QueryRow` reject a zero `time.Time` or zero `model.Date` argument** with `ErrInvalidQuery`, before any SQL runs. Bind `nil` for NULL.
 - **A zero `time.Time` or zero `model.Date` is rejected as a query value.** `=`, `!=`, `>`, `>=`, `<`, `<=` and every `IN` element return `ErrInvalidQuery` before any SQL runs, and the message names `db.IsNull` and `db.IsNotNull`. Code that compared against a zero time to find unset rows must use `IsNull`.
 - **The admin changelist loads each labelled foreign-key column with one related read per page.** Before, it looked up each cell's label on its own, up to 26 reads per foreign-key column on a page. A failed label read is still logged and the column shows the raw keys.
-- **`-migrate` and `migration.ApplyPending` refuse a conflicting registry before any database access.** No `tango_migrations` table is created, and nothing is read or applied. A registry that applied before may now be refused until one migration is renumbered. See [upgrading](docs/upgrading.md#unreleased-duplicate-migration-numbers-are-refused).
+- **`-migrate` and `migration.ApplyPending` refuse a conflicting registry before any database access.** No `tango_migrations` table is created, and nothing is read or applied. A registry that applied before may now be refused until one migration is renumbered. See [upgrading](docs/upgrading.md#duplicate-migration-numbers-are-refused).
 - **`tango check` reports migration conflicts with configuration failures**, in the same `check failed: ...` error.
 - **`tango makemigrations` refuses a conflicting registry**, exits 1 with `tango makemigrations: ...`, and writes no files.
 - **`-tango-dump-models` refuses a conflicting registry** with `check failed: ...`, whatever other flag is given, and prints no models. `-migrate -down` is the exception: it is the recovery path, is not subject to this check, and on a fresh database may create the tracking table before it reports that there is nothing to roll back.
-
-### Changed
-
 - **`tango shell` runs Yaegi v0.16.2, up from v0.16.1, and now runs a range over an integer (`for i := range 3`).** A range over a function still fails, and stays on the shell's list of Go it cannot run.
 - **Dependencies:** `github.com/jackc/pgx/v5` v5.12.0, `modernc.org/sqlite` v1.61.1 and `golang.org/x/net` v0.62.0 in the root module; `google.golang.org/api` v0.310.0 in `storage/gcs`.
 
