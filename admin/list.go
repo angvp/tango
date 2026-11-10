@@ -118,7 +118,7 @@ func buildRows(ctx context.Context, store *db.Store, models *model.Registry, adm
 		return nil, err
 	}
 
-	cells := newListRenderer(ctx, store, models, adminReg, meta, opts)
+	cells := newListRenderer(ctx, store, models, adminReg, meta, opts).preloadLabels(sliceValue)
 	rows := make([]listRow, 0, sliceValue.Len())
 	for i := 0; i < sliceValue.Len(); i++ {
 		elem := sliceValue.Index(i)

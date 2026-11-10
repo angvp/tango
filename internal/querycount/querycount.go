@@ -22,6 +22,12 @@ import (
 type Counter struct {
 	mu         sync.Mutex
 	statements []string
+	failures   []injectedFailure
+}
+
+type injectedFailure struct {
+	fragment string
+	err      error
 }
 
 // Attach routes the database testdb opens for t through a recording driver
@@ -63,10 +69,31 @@ func (c *Counter) Matching(fragment string) int {
 	return n
 }
 
+// FailMatching makes each later statement that contains fragment fail with err
+// before it reaches the driver, and does not record it. It exists so a test can
+// drive an error path that the database would not produce on its own.
+func (c *Counter) FailMatching(fragment string, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.failures = append(c.failures, injectedFailure{fragment: fragment, err: err})
+}
+
 func (c *Counter) record(query string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.statements = append(c.statements, query)
+}
+
+// injected returns the error armed for query, or nil when none matches.
+func (c *Counter) injected(query string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, f := range c.failures {
+		if strings.Contains(query, f.fragment) {
+			return f.err
+		}
+	}
+	return nil
 }
 
 // countingConnector opens connections that record every statement.
@@ -132,6 +159,9 @@ func (c *countingConn) ExecContext(ctx context.Context, query string, args []dri
 	if !ok {
 		return nil, driver.ErrSkip
 	}
+	if err := c.counter.injected(query); err != nil {
+		return nil, err
+	}
 	result, err := ec.ExecContext(ctx, query, args)
 	if err == driver.ErrSkip {
 		return nil, err
@@ -144,6 +174,9 @@ func (c *countingConn) QueryContext(ctx context.Context, query string, args []dr
 	qc, ok := c.inner.(driver.QueryerContext)
 	if !ok {
 		return nil, driver.ErrSkip
+	}
+	if err := c.counter.injected(query); err != nil {
+		return nil, err
 	}
 	rows, err := qc.QueryContext(ctx, query, args)
 	if err == driver.ErrSkip {
@@ -195,11 +228,17 @@ func (s *countingStmt) Close() error  { return s.inner.Close() }
 func (s *countingStmt) NumInput() int { return s.inner.NumInput() }
 
 func (s *countingStmt) Exec(args []driver.Value) (driver.Result, error) { //nolint:staticcheck // legacy path, reached only without ExecContext
+	if err := s.counter.injected(s.query); err != nil {
+		return nil, err
+	}
 	s.counter.record(s.query)
 	return s.inner.Exec(args) //nolint:staticcheck // legacy path, reached only without ExecContext
 }
 
 func (s *countingStmt) Query(args []driver.Value) (driver.Rows, error) { //nolint:staticcheck // legacy path, reached only without QueryContext
+	if err := s.counter.injected(s.query); err != nil {
+		return nil, err
+	}
 	s.counter.record(s.query)
 	return s.inner.Query(args) //nolint:staticcheck // legacy path, reached only without QueryContext
 }
@@ -208,6 +247,9 @@ func (s *countingStmt) ExecContext(ctx context.Context, args []driver.NamedValue
 	sc, ok := s.inner.(driver.StmtExecContext)
 	if !ok {
 		return nil, driver.ErrSkip
+	}
+	if err := s.counter.injected(s.query); err != nil {
+		return nil, err
 	}
 	result, err := sc.ExecContext(ctx, args)
 	if err == driver.ErrSkip {
@@ -221,6 +263,9 @@ func (s *countingStmt) QueryContext(ctx context.Context, args []driver.NamedValu
 	sc, ok := s.inner.(driver.StmtQueryContext)
 	if !ok {
 		return nil, driver.ErrSkip
+	}
+	if err := s.counter.injected(s.query); err != nil {
+		return nil, err
 	}
 	rows, err := sc.QueryContext(ctx, args)
 	if err == driver.ErrSkip {

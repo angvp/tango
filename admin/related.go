@@ -118,3 +118,71 @@ func relatedChoiceText(row reflect.Value, labelField, value string) string {
 	}
 	return formatFieldValue(row.FieldByName(labelField))
 }
+
+// foreignKeyField returns the model field named column when it is a foreign
+// key, and false otherwise.
+func (r listRenderer) foreignKeyField(column string) (model.FieldMeta, bool) {
+	for _, field := range r.meta.Fields {
+		if field.Name == column && field.ForeignKey != "" {
+			return field, true
+		}
+	}
+	return model.FieldMeta{}, false
+}
+
+// preloadLabels loads the labels of each labelled foreign-key column of the
+// changelist rows, with one related read per column instead of one lookup per
+// row. A column whose target has no Label, or that a Display function owns,
+// is left out and renders as it always has. A failed read is logged and its
+// column shows raw keys, so a label lookup never fails the page.
+func (r listRenderer) preloadLabels(rows reflect.Value) listRenderer {
+	labels := make(map[string]map[any]string)
+	for _, column := range r.columns {
+		if _, custom := r.display[column]; custom {
+			continue
+		}
+		field, ok := r.foreignKeyField(column)
+		if !ok {
+			continue
+		}
+		labelField := labelFieldFor(r.adminReg, field.ForeignKey)
+		relatedMeta, found := r.models.Get(field.ForeignKey)
+		if labelField == "" || !found {
+			continue
+		}
+		labels[column] = r.loadLabels(rows, field.Name, relatedMeta, labelField)
+	}
+	r.labels = labels
+	return r
+}
+
+// loadLabels returns the label text of each related row, keyed by its primary
+// key, for the keys the rows hold in keyField. It returns nil after logging when
+// the read fails.
+func (r listRenderer) loadLabels(rows reflect.Value, keyField string, relatedMeta model.ModelMeta, labelField string) map[any]string {
+	pkField, err := primaryKeyField(relatedMeta)
+	if err != nil {
+		slog.ErrorContext(r.ctx, "admin: related model has no primary key for changelist labels", "model", relatedMeta.Name, "error", err)
+		return nil
+	}
+	loaded := reflect.MakeMap(reflect.MapOf(pkField.Type, relatedMeta.Type))
+	if err := r.store.Related(r.ctx, rows.Interface(), keyField, relatedMeta, loaded.Interface()); err != nil {
+		slog.ErrorContext(r.ctx, "admin: loading related labels for a changelist column failed", "model", relatedMeta.Name, "field", keyField, "error", err)
+		return nil
+	}
+	labels := make(map[any]string, loaded.Len())
+	iter := loaded.MapRange()
+	for iter.Next() {
+		labels[iter.Key().Interface()] = formatFieldValue(iter.Value().FieldByName(labelField))
+	}
+	return labels
+}
+
+// labelFor returns the preloaded label for value. It returns value's own text
+// when the target row is missing or the labels could not be loaded.
+func labelFor(labels map[any]string, value any) string {
+	if label, ok := labels[value]; ok {
+		return label
+	}
+	return fmt.Sprint(value)
+}

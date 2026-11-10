@@ -70,6 +70,10 @@ type listRenderer struct {
 	meta     model.ModelMeta
 	display  map[string]DisplayFunc
 	columns  []string
+	// labels holds the labels preloaded for each foreign-key column of a page,
+	// keyed by the column name. A column absent from labels is looked up one
+	// row at a time, which is what a renderer built for a single row does.
+	labels map[string]map[any]string
 }
 
 func newListRenderer(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, meta model.ModelMeta, opts adminregistry.Options) listRenderer {
@@ -107,13 +111,14 @@ func (r listRenderer) cell(row reflect.Value, column string) listCell {
 		return displayCell(r.ctx, fn, row.Addr())
 	}
 	fieldValue := row.FieldByName(column)
-	for _, field := range r.meta.Fields {
-		if field.Name == column && field.ForeignKey != "" {
-			if fieldValue.IsZero() {
-				return plainCell(emptyCellText)
-			}
-			return plainCell(relatedLabel(r.ctx, r.store, r.models, r.adminReg, field.ForeignKey, fieldValue.Interface()))
+	if field, ok := r.foreignKeyField(column); ok {
+		if fieldValue.IsZero() {
+			return plainCell(emptyCellText)
 		}
+		if labels, preloaded := r.labels[column]; preloaded {
+			return plainCell(labelFor(labels, fieldValue.Interface()))
+		}
+		return plainCell(relatedLabel(r.ctx, r.store, r.models, r.adminReg, field.ForeignKey, fieldValue.Interface()))
 	}
 	return plainCell(formatFieldValue(fieldValue))
 }
