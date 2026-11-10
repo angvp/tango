@@ -8,6 +8,7 @@ import (
 
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/internal/sqlbind"
+	"github.com/angvp/tango/internal/testdbhook"
 	"github.com/go-sql-driver/mysql"
 )
 
@@ -51,7 +52,7 @@ func openMySQL(t testing.TB, source string) *sql.DB {
 	if err != nil {
 		t.Fatalf("testdb: mysql connector: %v", err)
 	}
-	sqlDB := sql.OpenDB(rebindConnector{connector})
+	sqlDB := sql.OpenDB(rebindConnector{testdbhook.Wrap(t, connector)})
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	return sqlDB
 }

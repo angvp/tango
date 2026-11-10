@@ -39,6 +39,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -47,6 +48,7 @@ import (
 	"time"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/testdbhook"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
@@ -98,10 +100,19 @@ func openSQLite(t testing.TB) *sql.DB {
 	if err != nil {
 		t.Fatalf("testdb: %v", err)
 	}
-	sqlDB, err := sql.Open(parsed.Driver, parsed.Source)
+	probe, err := sql.Open(parsed.Driver, parsed.Source)
 	if err != nil {
 		t.Fatalf("testdb: open sqlite: %v", err)
 	}
+	drv := probe.Driver()
+	if err := probe.Close(); err != nil {
+		t.Fatalf("testdb: close sqlite probe: %v", err)
+	}
+	connector, err := connectorFor(drv, parsed.Source)
+	if err != nil {
+		t.Fatalf("testdb: open sqlite: %v", err)
+	}
+	sqlDB := sql.OpenDB(testdbhook.Wrap(t, connector))
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	if inMemory {
 		// Each connection to :memory: is its own empty database, so the
@@ -141,10 +152,30 @@ func openPostgres(t testing.TB, dsn string) *sql.DB {
 
 	scoped := config.Copy()
 	scoped.RuntimeParams["search_path"] = schema
-	sqlDB := stdlib.OpenDB(*scoped)
+	sqlDB := sql.OpenDB(testdbhook.Wrap(t, stdlib.GetConnector(*scoped)))
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	return sqlDB
 }
+
+// connectorFor returns the connector sql.Open would use for dsn on drv: the
+// driver's own when it has one, otherwise one that calls Open for each
+// connection.
+func connectorFor(drv driver.Driver, dsn string) (driver.Connector, error) {
+	if dc, ok := drv.(driver.DriverContext); ok {
+		return dc.OpenConnector(dsn)
+	}
+	return dsnConnector{drv: drv, dsn: dsn}, nil
+}
+
+// dsnConnector opens connections with a driver's Open, for drivers that do not
+// provide their own connector.
+type dsnConnector struct {
+	drv driver.Driver
+	dsn string
+}
+
+func (c dsnConnector) Connect(context.Context) (driver.Conn, error) { return c.drv.Open(c.dsn) }
+func (c dsnConnector) Driver() driver.Driver                        { return c.drv }
 
 // newSchemaName returns a schema name no other test, run, or concurrent
 // process will pick.

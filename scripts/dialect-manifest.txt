@@ -43,6 +43,7 @@ sensitive ./internal/migrationcompat/v0_8_0/migrations
 sensitive ./internal/migrationcompat/v0_8_1/migrations
 sensitive ./internal/migrationtest
 sensitive ./internal/preflight
+sensitive ./internal/querycount
 sqlite-only ./internal/observabilitysafe
 sqlite-only ./internal/releasecheck
 sqlite-only ./internal/releasecheck/cmd/releasecheck
@@ -51,6 +52,7 @@ sqlite-only ./internal/security
 sensitive ./internal/shellcore
 sensitive ./internal/sqlbind
 sensitive ./internal/sqlident
+sqlite-only ./internal/testdbhook
 sqlite-only ./internal/storagekit
 sqlite-only ./mail
 sqlite-only ./mail/mailtest
