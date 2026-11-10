@@ -129,6 +129,12 @@ type Query struct {
 	Limit   int
 	Offset  int
 	OrderBy []string
+	// Preload names relation fields to load onto each returned row, one
+	// bounded read per relation. List and First honour it; Count and Exists
+	// ignore it. A name that is not a declared relation, or is repeated, is a
+	// *QueryError before any SQL, as is any request on a Store without
+	// UseModels.
+	Preload []string
 }
 
 // Store is tanGO's persistence boundary over a database/sql connection.
@@ -791,6 +797,10 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Kind() != reflect.Slice {
 		return fmt.Errorf("tango db: List destination must be a non-nil pointer to a slice")
 	}
+	plans, err := s.resolvePreload(meta, query.Preload)
+	if err != nil {
+		return err
+	}
 	sliceValue := value.Elem()
 	elementType := sliceValue.Type().Elem()
 
@@ -814,6 +824,14 @@ func (s *Store) List(ctx context.Context, meta model.ModelMeta, query Query, des
 		result = reflect.Append(result, element)
 	}
 	if err := rows.Err(); err != nil {
+		return err
+	}
+	// The row read must close before any relation read starts on the same
+	// connection; the caller's slice is assigned only after every relation loads.
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := s.preloadRows(ctx, meta, result, plans); err != nil {
 		return err
 	}
 

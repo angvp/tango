@@ -19,6 +19,10 @@ func (s *Store) First(ctx context.Context, meta model.ModelMeta, query Query, de
 	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Type() != meta.Type {
 		return fmt.Errorf("tango db: First destination must be a non-nil pointer to %s", meta.Type)
 	}
+	plans, err := s.resolvePreload(meta, query.Preload)
+	if err != nil {
+		return err
+	}
 
 	if len(query.OrderBy) == 0 {
 		primaryKey, err := findPrimaryKeyField(meta)
@@ -52,7 +56,15 @@ func (s *Store) First(ctx context.Context, meta model.ModelMeta, query Query, de
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	value.Elem().Set(row)
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	loaded := reflect.MakeSlice(reflect.SliceOf(meta.Type), 1, 1)
+	loaded.Index(0).Set(row)
+	if err := s.preloadRows(ctx, meta, loaded, plans); err != nil {
+		return err
+	}
+	value.Elem().Set(loaded.Index(0))
 	return nil
 }
 
