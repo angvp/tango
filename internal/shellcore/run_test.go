@@ -65,7 +65,7 @@ func TestAnErrorPrintsAndStopsNonInteractiveInput(t *testing.T) {
 	}
 }
 
-// Yaegi v0.16.1 panics on a range over a function; the session survives it.
+// Yaegi v0.16.2 panics on a range over a function; the session survives it.
 func TestAPanicIsRecoveredAndTheSessionKeepsWorking(t *testing.T) {
 	var out, errOut bytes.Buffer
 	s, err := NewSession(strings.NewReader(""), &out, &errOut, 0)

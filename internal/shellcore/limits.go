@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Limitation is a piece of Go the interpreter (Yaegi, pinned at v0.16.1)
+// Limitation is a piece of Go the interpreter (Yaegi, pinned at v0.16.2)
 // cannot run, which a person can reasonably type. The table of these is the
 // single source for the hint printed after a failure, for help(), for
 // `tango shell --help` and for the regression test that notices when a
@@ -66,11 +66,10 @@ var Limitations = []Limitation{
 		matches: func(code string, err error) bool { return genericInference.MatchString(err.Error()) },
 	},
 	{
-		Feature:    "ranging over a function, or over an integer (for i := range 3)",
-		Workaround: "use a counting for loop, or call the function with a callback",
+		Feature:    "ranging over a function",
+		Workaround: "call the function with a callback",
 		Examples: []Example{
 			{Code: "for v := range func(yield func(int) bool) { yield(1) } { _ = v }"},
-			{Code: "for i := range 3 { _ = i }"},
 		},
 		matches: func(code string, err error) bool {
 			p, panicked := err.(*PanicError)
@@ -102,7 +101,7 @@ func capitalize(s string) string {
 // limitationsTable is the "what the interpreter cannot run" text.
 func limitationsTable() string {
 	var b strings.Builder
-	b.WriteString("What the interpreter cannot run (Yaegi v0.16.1 understands Go 1.21 and 1.22):\n")
+	b.WriteString("What the interpreter cannot run (Yaegi v0.16.2 understands Go 1.21 and 1.22):\n")
 	for _, l := range Limitations {
 		fmt.Fprintf(&b, "  - %s: %s.\n", capitalize(l.Feature), l.Workaround)
 	}
