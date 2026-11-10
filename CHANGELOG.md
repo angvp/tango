@@ -32,6 +32,7 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ### Fixed
 
+- **The admin's phone drawer no longer slides shut when a page loads.** A page styled before `nav.js` ran animated the drawer from open to closed on load. The drawer now takes its closed place without a transition, and opening and closing animate as before.
 - **`RollbackLast` fails before any `Down` on an unorderable tie, and never guesses.** When rows sharing the latest `applied_at` cannot be ordered, it returns `migration.ErrUnorderableTie` where it used to roll back the row with the greatest name. A target registered more than once returns `migration.ErrAmbiguousRollbackTarget`. A tie that can be ordered rolls back as before.
 
 ## [0.8.1] - 2026-11-03

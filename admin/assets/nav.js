@@ -6,7 +6,8 @@
 // page behind it, the skip link included, is inert and Tab stays inside the
 // drawer. The script marks the document with nav-js; the stylesheet applies the
 // phone drawer only under that mark, so without the script the model list
-// stays in the page.
+// stays in the page. The drawer's transitions wait for a second mark,
+// nav-ready, so marking the document never animates it.
 (function () {
   "use strict";
 
@@ -17,6 +18,10 @@
   }
 
   document.documentElement.classList.add("nav-js");
+  // Reading the style applies the closed drawer while transitions are off;
+  // nav-ready then turns them on for opening and closing.
+  void getComputedStyle(sidebar).visibility;
+  document.documentElement.classList.add("nav-ready");
 
   var main = document.getElementById("main");
   var skipLink = document.querySelector(".skip-link");

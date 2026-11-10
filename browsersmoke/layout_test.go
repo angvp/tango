@@ -75,6 +75,12 @@ const layoutScript = `(function () {
 	return JSON.stringify(out);
 })()`
 
+// runningAnimations lists each running animation as its target and property.
+const runningAnimations = `JSON.stringify(document.getAnimations().map(function (a) {
+	var t = a.effect && a.effect.target;
+	return (t ? (t.id || t.tagName.toLowerCase()) : '?') + ' ' + (a.transitionProperty || a.animationName);
+}))`
+
 // failedCreateSave fills the create form with two values the widget refuses
 // and submits it, leaving the field errors and the summary on the page.
 func failedCreateSave() []chromedp.Action[chromedp.Void] {
@@ -147,9 +153,15 @@ func TestAdminLayoutAtPhoneWidths(t *testing.T) {
 	for _, w := range widths {
 		s.setWidth(w.width, w.height)
 		for _, p := range pages {
-			s.visit(w.name+" "+p.label, p.path, p.actions...)
-			// A page can load with the drawer still sliding shut, and a
-			// sliding drawer counts as visible, so its controls would be
+			var atLoad string
+			record := chromedp.Func(func(c context.Context, tg *chromedp.Target) error {
+				v, err := chromedp.Evaluate[string](runningAnimations)(c, tg)
+				atLoad = v
+				return err
+			})
+			s.visit(w.name+" "+p.label, p.path, append([]chromedp.Action[chromedp.Void]{record}, p.actions...)...)
+			s.check(atLoad == "[]", "%s %s: animations were running when the page loaded: %s", w.name, p.label, atLoad)
+			// A sliding drawer counts as visible, so its controls would be
 			// measured.
 			s.check(s.evalSettled(`document.getAnimations().length === 0`), "%s %s: an animation was still running when measured", w.name, p.label)
 			rows = append(rows, s.checkLayout(p.label, w.name, s.layout()))

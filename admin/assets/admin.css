@@ -967,6 +967,16 @@ html, body{
   }
 }
 
+/* Until nav.js adds nav-ready, the drawer moves to its closed place without a transition, so a page that was styled before the script ran does not slide it shut on load. */
+
+.nav-js:not(.nav-ready) .sidebar{
+  transition:none;
+}
+
+.nav-js:not(.nav-ready) .\!sidebar{
+  transition:none;
+}
+
 .sidebar-backdrop{
   position:fixed;
   inset:0px;

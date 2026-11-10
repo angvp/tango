@@ -634,6 +634,7 @@ func (s *smoke) adminNavToggle() {
 	s.t.Helper()
 	s.run("admin nav open", clickStable(".menu-btn"))
 	s.expectOpen()
+	s.check(s.eval(`getComputedStyle(document.getElementById('sidebar')).transitionDuration.split(',').some(function (d) { return parseFloat(d) > 0; })`), "the drawer opens without a transition: nav.js did not add nav-ready")
 
 	ctx, cancel := context.WithTimeout(s.ctx, stepTimeout)
 	defer cancel()
