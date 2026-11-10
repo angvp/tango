@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-10
+
 ### Added
 
 - **`model.Date`**, a calendar date with no time of day and no zone. It is a model field with the `unique` and `index` tags (`pk` is rejected), stored as `DATE` on SQLite, PostgreSQL and MySQL. It has `NewDate`, `MustDate`, `ParseDate`, `DateOf`, `In`, `AddDays`, `Compare` and the usual accessors, and it marshals as a `null` or `"YYYY-MM-DD"` JSON value. Its zero value means no date, and several zero dates are several `NULL` values under a unique constraint.
@@ -527,7 +529,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/angvp/tango/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/angvp/tango/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/angvp/tango/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/angvp/tango/compare/v0.6.0...v0.7.0
