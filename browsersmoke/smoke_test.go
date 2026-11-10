@@ -401,9 +401,37 @@ func (s *smoke) run(label string, steps ...chromedp.Action[chromedp.Void]) {
 	s.t.Logf("%s", label)
 	s.rec.begin(label)
 	if err := s.do(steps...); err != nil {
-		s.t.Fatalf("%s: %v", label, err)
+		s.t.Fatalf("%s: %v\npage at failure: %s", label, err, s.pageState())
 	}
 	s.settle()
+}
+
+// pageStateScript describes the document the browser holds: where it is, how
+// far it loaded, and the start of what it shows.
+const pageStateScript = `(function () {
+	var field = document.getElementById('field-Code');
+	var text = document.body ? document.body.innerText.replace(/\s+/g, ' ').slice(0, 400) : '';
+	return [
+		'url=' + location.href,
+		'readyState=' + document.readyState,
+		'title=' + document.title,
+		'field-Code=' + (field ? 'value ' + JSON.stringify(field.value) + ', aria-invalid ' + field.getAttribute('aria-invalid') : 'absent'),
+		'text=' + text
+	].join(' | ');
+})()`
+
+// pageState reports the document a failed step left behind. A step that stalls
+// says only which wait gave up; the page says why, for example a login page or
+// an error page where a form was expected. It has its own short deadline, and
+// reports its own failure, because the page may be the thing that hangs.
+func (s *smoke) pageState() string {
+	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
+	defer cancel()
+	state, err := chromedp.Run(ctx, chromedp.Evaluate[string](pageStateScript))
+	if err != nil {
+		return fmt.Sprintf("unreadable: %v", err)
+	}
+	return state
 }
 
 func (s *smoke) eval(expr string) bool {
@@ -1149,11 +1177,11 @@ func (s *smoke) adminFormSummary() {
 	// skips the invalid control of the page this step navigates away from, so
 	// the form it fills is the fresh one.
 	s.run("admin create form with one problem",
-		chromedp.Navigate(s.base+"/admin/smoke_code/new/"),
-		chromedp.WaitVisible("#field-Code:not([aria-invalid])"),
-		chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible),
-		chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible),
-		chromedp.WaitVisible("#field-Code[aria-invalid]"),
+		named("Navigate /admin/smoke_code/new/", chromedp.Navigate(s.base+"/admin/smoke_code/new/")),
+		named("WaitVisible #field-Code:not([aria-invalid])", chromedp.WaitVisible("#field-Code:not([aria-invalid])")),
+		named("SetValue #field-Code", chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible)),
+		named("Click form[method=post] button.btn-primary", chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible)),
+		named("WaitVisible #field-Code[aria-invalid]", chromedp.WaitVisible("#field-Code[aria-invalid]")),
 	)
 	s.check(!s.eval(`!!document.getElementById('form-summary')`), "a single field problem should have no summary")
 	s.check(s.evalString(active) == "field-Code", "focus after one field problem is on %q, want the invalid control", s.evalString(active))
