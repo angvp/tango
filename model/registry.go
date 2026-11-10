@@ -43,6 +43,13 @@ var ErrUnknownForeignKeyTarget = errors.New("tango: foreign key targets an unreg
 // names the model and field.
 var ErrInvalidFieldTag = errors.New("tango: invalid field tag")
 
+// ErrInvalidRelation is returned by Registry.Register when a belongs_to or
+// has_many tag sits on a field of the wrong Go type, is combined with another
+// tango option, or has no value; and by Registry.ValidateRelations when a
+// declared relation names a target or foreign key that does not match it. The
+// error names the model and field.
+var ErrInvalidRelation = errors.New("tango: invalid relation")
+
 // MaxVarcharLength is the largest length tango:"varchar=n" accepts: the
 // largest VARCHAR(n) PostgreSQL allows, so tanGO adds no ceiling of its own.
 const MaxVarcharLength = 10485760
@@ -55,6 +62,23 @@ type ModelMeta struct {
 	App    string
 	Type   reflect.Type
 	Fields []FieldMeta
+	// Relations are the fields declared with tango:"belongs_to=…" or
+	// tango:"has_many=…". They are not columns and never appear in Fields.
+	Relations []RelationMeta
+}
+
+// RelationMeta describes a relation field: a pointer to a struct tagged
+// belongs_to, or a slice of structs tagged has_many.
+type RelationMeta struct {
+	Name      string // Go field name, e.g. "Account"
+	Direction string // the tag keyword: "belongs_to" or "has_many"
+	// ForeignKey is the field the tag names. For belongs_to it is the owner's
+	// field holding the target's key; for has_many it is the target's field
+	// that refers back to the owner.
+	ForeignKey string
+	Target     string       // target model name, the Go type name of the related struct
+	Type       reflect.Type // the field's Go type: *Account or []Comment
+	TargetType reflect.Type // the related struct type: Account or Comment
 }
 
 // FieldMeta describes an exported Go struct field.
@@ -128,6 +152,15 @@ func (r *Registry) Register(value any) error {
 
 		if field.Anonymous {
 			return fmt.Errorf("%w: field %q", ErrEmbeddedField, field.Name)
+		}
+
+		relation, isRelation, err := relationTag(name, field)
+		if err != nil {
+			return err
+		}
+		if isRelation {
+			meta.Relations = append(meta.Relations, relation)
+			continue
 		}
 
 		if !supportedFieldType(field.Type) {
@@ -342,4 +375,137 @@ func (r *Registry) ValidateForeignKeys() error {
 		}
 	}
 	return nil
+}
+
+// ValidateRelations checks every relation recorded in ModelMeta.Relations
+// against the registered models: the target must be registered, a belongs_to
+// key must be an fk= to that target, a has_many key must be an fk= back to the
+// owner, and each key's Go type must equal the primary key type it refers to.
+// Like ValidateForeignKeys it runs once, after every installed app has
+// registered, so registration order does not matter.
+func (r *Registry) ValidateRelations() error {
+	for _, meta := range r.All() {
+		for _, relation := range meta.Relations {
+			if err := r.validateRelation(meta, relation); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (r *Registry) validateRelation(owner ModelMeta, relation RelationMeta) error {
+	target, registered := r.models[relation.Target]
+	if !registered {
+		return invalidRelation(owner.Name, relation.Name, "targets %q, which is not a registered model", relation.Target)
+	}
+
+	switch relation.Direction {
+	case "belongs_to":
+		key, ok := fieldNamed(owner, relation.ForeignKey)
+		if !ok {
+			return invalidRelation(owner.Name, relation.Name, "names %q, which is not a field of %s", relation.ForeignKey, owner.Name)
+		}
+		if key.ForeignKey != target.Name {
+			return invalidRelation(owner.Name, relation.Name, "%s.%s is not an fk= to %s", owner.Name, key.Name, target.Name)
+		}
+		targetKey := primaryKey(target)
+		if key.Type != targetKey.Type {
+			return invalidRelation(owner.Name, relation.Name, "foreign key %s.%s has type %s, but %s.%s has type %s", owner.Name, key.Name, key.Type, target.Name, targetKey.Name, targetKey.Type)
+		}
+	case "has_many":
+		key, ok := fieldNamed(target, relation.ForeignKey)
+		if !ok {
+			return invalidRelation(owner.Name, relation.Name, "names %q, which is not a field of %s", relation.ForeignKey, target.Name)
+		}
+		if key.ForeignKey != owner.Name {
+			return invalidRelation(owner.Name, relation.Name, "%s.%s is not an fk= to %s", target.Name, key.Name, owner.Name)
+		}
+		ownerKey := primaryKey(owner)
+		if key.Type != ownerKey.Type {
+			return invalidRelation(owner.Name, relation.Name, "foreign key %s.%s has type %s, but %s.%s has type %s", target.Name, key.Name, key.Type, owner.Name, ownerKey.Name, ownerKey.Type)
+		}
+	}
+	return nil
+}
+
+// relationTag reads a belongs_to or has_many tag from field, which belongs to
+// the model named model. The boolean is false when the field carries neither
+// tag. A relation tag must be the field's only tango option and must name a
+// field, and the Go type must match the direction: belongs_to a pointer to a
+// struct, has_many a slice of structs.
+func relationTag(model string, field reflect.StructField) (RelationMeta, bool, error) {
+	parts := strings.Split(field.Tag.Get("tango"), ",")
+	var keyword, value string
+	declared := 0
+	for _, part := range parts {
+		name, val, _ := strings.Cut(strings.TrimSpace(part), "=")
+		name = strings.TrimSpace(name)
+		if name != "belongs_to" && name != "has_many" {
+			continue
+		}
+		declared++
+		keyword, value = name, strings.TrimSpace(val)
+	}
+	switch {
+	case declared == 0:
+		return RelationMeta{}, false, nil
+	case declared > 1:
+		return RelationMeta{}, true, invalidRelation(model, field.Name, "belongs_to and has_many cannot both be declared on one field")
+	case len(parts) > 1:
+		return RelationMeta{}, true, invalidRelation(model, field.Name, "%s cannot be combined with other tango options", keyword)
+	case value == "":
+		return RelationMeta{}, true, invalidRelation(model, field.Name, "%s needs the name of the foreign key field, as %s=FieldName", keyword, keyword)
+	}
+
+	var target reflect.Type
+	switch keyword {
+	case "belongs_to":
+		if field.Type.Kind() != reflect.Pointer || !isModelStruct(field.Type.Elem()) {
+			return RelationMeta{}, true, invalidRelation(model, field.Name, "belongs_to needs a pointer to a named struct, got %s", field.Type)
+		}
+		target = field.Type.Elem()
+	case "has_many":
+		if field.Type.Kind() != reflect.Slice || !isModelStruct(field.Type.Elem()) {
+			return RelationMeta{}, true, invalidRelation(model, field.Name, "has_many needs a slice of named structs, got %s", field.Type)
+		}
+		target = field.Type.Elem()
+	}
+
+	return RelationMeta{
+		Name:       field.Name,
+		Direction:  keyword,
+		ForeignKey: value,
+		Target:     target.Name(),
+		Type:       field.Type,
+		TargetType: target,
+	}, true, nil
+}
+
+// isModelStruct reports whether t can be the related struct of a relation: a
+// named struct that is not one of the column types time.Time or Date.
+func isModelStruct(t reflect.Type) bool {
+	return t.Kind() == reflect.Struct && t.Name() != "" && t != timeType && t != dateType
+}
+
+func invalidRelation(model, field, format string, args ...any) error {
+	return fmt.Errorf("%w: %s.%s: %s", ErrInvalidRelation, model, field, fmt.Sprintf(format, args...))
+}
+
+func fieldNamed(meta ModelMeta, name string) (FieldMeta, bool) {
+	for _, field := range meta.Fields {
+		if field.Name == name {
+			return field, true
+		}
+	}
+	return FieldMeta{}, false
+}
+
+func primaryKey(meta ModelMeta) FieldMeta {
+	for _, field := range meta.Fields {
+		if field.PrimaryKey {
+			return field
+		}
+	}
+	return FieldMeta{}
 }

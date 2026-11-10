@@ -281,6 +281,10 @@ func Check(config Config) error {
 		return err
 	}
 
+	if err := registry.Models().ValidateRelations(); err != nil {
+		return err
+	}
+
 	if _, err := registry.Routes().Handler(); err != nil {
 		return err
 	}
