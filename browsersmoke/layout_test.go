@@ -81,7 +81,7 @@ func failedCreateSave() []chromedp.Action[chromedp.Void] {
 	return []chromedp.Action[chromedp.Void]{
 		named(`SetValue #field-Code`, chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible)),
 		named(`SetValue #field-Label`, chromedp.SetValue("#field-Label", "toolong")),
-		named(`Click form[method=post] button.btn-primary`, chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible)),
+		named(`Click form[method=post] button.btn-primary`, clickStable("form[method=post] button.btn-primary")),
 		named(`WaitVisible #form-summary`, chromedp.WaitVisible("#form-summary")),
 		named(`WaitReady .field-error`, chromedp.WaitReady(".field-error")),
 	}
@@ -148,6 +148,10 @@ func TestAdminLayoutAtPhoneWidths(t *testing.T) {
 		s.setWidth(w.width, w.height)
 		for _, p := range pages {
 			s.visit(w.name+" "+p.label, p.path, p.actions...)
+			// A page can load with the drawer still sliding shut, and a
+			// sliding drawer counts as visible, so its controls would be
+			// measured.
+			s.check(s.evalSettled(`document.getAnimations().length === 0`), "%s %s: an animation was still running when measured", w.name, p.label)
 			rows = append(rows, s.checkLayout(p.label, w.name, s.layout()))
 		}
 	}
@@ -159,7 +163,7 @@ func TestAdminLayoutAtPhoneWidths(t *testing.T) {
 		})
 		return err
 	}))
-	s.visit("drawer reduced motion", "/admin/", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	s.visit("drawer reduced motion", "/admin/", clickStable(".menu-btn"))
 	s.expectOpen()
 	s.check(s.evalString(`String(getComputedStyle(document.getElementById('sidebar')).transitionDuration.split(',').every(function (d) { return parseFloat(d) === 0; }))`) == "true", "the drawer keeps a non-zero transition under prefers-reduced-motion: reduce")
 

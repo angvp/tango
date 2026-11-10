@@ -516,6 +516,24 @@ func (s *smoke) eval(expr string) bool {
 	return ok
 }
 
+// settleTimeout bounds how long evalSettled waits for a CSS transition.
+const settleTimeout = 5 * time.Second
+
+// evalSettled is eval for a state a CSS transition arrives at: a single read
+// can land mid-transition, so it reads until expr holds or settleTimeout
+// passes.
+func (s *smoke) evalSettled(expr string) bool {
+	s.t.Helper()
+	deadline := time.Now().Add(settleTimeout)
+	for !s.eval(expr) {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(clickPoll)
+	}
+	return true
+}
+
 // positiveControl proves the instruments see a violation in this browser. It
 // injects an inline script the strict policy refuses and checks that the page
 // reported it through both the listener and the Log security entries. The
@@ -604,7 +622,7 @@ func (s *smoke) expectOpen() {
 	s.check(s.eval(menuButtonExpanded), "the open drawer did not set aria-expanded on the menu button")
 	s.check(s.eval(`document.activeElement === document.querySelector('#sidebar button[data-admin-nav-close]')`), "focus did not move to the drawer's Close button")
 	s.check(s.eval(backgroundInert), "the page behind the open drawer, skip link included, is not inert")
-	s.check(s.eval(drawerVisibleOnScreen), "the open drawer is not visible on screen")
+	s.check(s.evalSettled(drawerVisibleOnScreen), "the open drawer is not visible on screen")
 	s.check(s.eval(`/, 0\.6\)$/.test(getComputedStyle(document.getElementById('sidebar-backdrop')).backgroundColor)`), "the drawer scrim is not drawn at 60 percent")
 }
 
@@ -614,7 +632,7 @@ func (s *smoke) expectOpen() {
 // element the script binds to, not on whatever sits under the point.
 func (s *smoke) adminNavToggle() {
 	s.t.Helper()
-	s.run("admin nav open", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	s.run("admin nav open", clickStable(".menu-btn"))
 	s.expectOpen()
 
 	ctx, cancel := context.WithTimeout(s.ctx, stepTimeout)
@@ -635,12 +653,12 @@ func (s *smoke) adminNavToggle() {
 	s.run("admin nav backdrop close", chromedp.MouseClickXY(point[0], point[1]))
 	s.expectClosed("a backdrop click")
 
-	s.run("admin nav reopen for Close", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	s.run("admin nav reopen for Close", clickStable(".menu-btn"))
 	s.expectOpen()
-	s.run("admin nav close button", chromedp.Click("#sidebar button[data-admin-nav-close]", chromedp.NodeVisible))
+	s.run("admin nav close button", clickStable("#sidebar button[data-admin-nav-close]"))
 	s.expectClosed("the Close button")
 
-	s.run("admin nav reopen for Escape", chromedp.Click(".menu-btn", chromedp.NodeVisible))
+	s.run("admin nav reopen for Escape", clickStable(".menu-btn"))
 	s.expectOpen()
 	s.run("admin nav escape", chromedp.KeyEvent(kb.Escape))
 	s.expectClosed("Escape")
@@ -877,17 +895,17 @@ const rowActionsInViewport = `(function () {
 // cancelled, so no row is deleted.
 func (s *smoke) bulkConfirmFollowsCount() {
 	s.t.Helper()
-	s.run("bulk select first row", chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible))
-	s.run("bulk open with one row", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	s.run("bulk select first row", clickStable(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]"))
+	s.run("bulk open with one row", clickStable("[data-bulk-open]"))
 	one := s.evalString(confirmText)
 	oneWant := s.evalString(`document.querySelector('[data-bulk-delete]').getAttribute('data-msg-confirm-one') || ''`)
-	s.run("bulk cancel with one row", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
+	s.run("bulk cancel with one row", clickStable("[data-bulk-cancel]"))
 
-	s.run("bulk select second row", chromedp.Click(".table-admin tbody tr:nth-child(2) input[data-bulk-pk]", chromedp.NodeVisible))
-	s.run("bulk open with two rows", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	s.run("bulk select second row", clickStable(".table-admin tbody tr:nth-child(2) input[data-bulk-pk]"))
+	s.run("bulk open with two rows", clickStable("[data-bulk-open]"))
 	many := s.evalString(confirmText)
 	manyWant := strings.ReplaceAll(s.evalString(`document.querySelector('[data-bulk-delete]').getAttribute('data-msg-confirm-many') || ''`), "{count}", "2")
-	s.run("bulk cancel with two rows", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
+	s.run("bulk cancel with two rows", clickStable("[data-bulk-cancel]"))
 
 	if oneWant == "" || manyWant == "" {
 		s.t.Fatal("the bulk dialog carries no confirm message: bulk.js or its data-msg attributes are missing")
@@ -915,14 +933,14 @@ func (s *smoke) bulkBarFollowsSelection() {
 	s.check(s.evalString("String("+open+".disabled)") == "true", "Delete selected is enabled with no row picked")
 	s.check(s.evalString("String("+open+".getAttribute('aria-describedby') === 'bulk-count')") == "true", "Delete selected is not described by the reason with no row picked")
 
-	s.run("bulk bar select first row", chromedp.Click(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]", chromedp.NodeVisible))
+	s.run("bulk bar select first row", clickStable(".table-admin tbody tr:nth-child(1) input[data-bulk-pk]"))
 	one := strings.ReplaceAll(s.evalString(meta+`.getAttribute('data-msg-selected') || ''`), "{count}", "1")
 	s.check(s.evalString(count) == one, "with one row picked the count slot reads %q, want %q", s.evalString(count), one)
 	s.check(s.evalString("String("+open+".disabled)") == "false", "Delete selected is disabled with one row picked")
 	s.check(s.evalString("String("+open+".hasAttribute('aria-describedby'))") == "false", "Delete selected is still described by the reason with one row picked")
 	s.check(s.evalString(`String(document.querySelector('[data-bulk-select-all]').indeterminate)`) == "true", "select-all is not indeterminate with one of several rows picked")
 
-	s.run("bulk bar open dialog", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	s.run("bulk bar open dialog", clickStable("[data-bulk-open]"))
 	wantTitle := s.evalString(meta + `.getAttribute('data-msg-title-one') || ''`)
 	s.check(s.evalString(`document.querySelector('[data-bulk-title]').textContent`) == wantTitle, "the dialog title is not the singular count copy %q", wantTitle)
 	s.check(s.evalString(`String(document.activeElement && document.activeElement.hasAttribute('data-bulk-cancel'))`) == "true", "the dialog did not open with Cancel focused")
@@ -943,9 +961,9 @@ func (s *smoke) bulkListCapAndPhoneSelectAll() {
 	startHeight := s.evalString(`String(window.innerHeight)`)
 
 	s.setWidth(1280, 800)
-	s.run("bulk select all at desktop width", chromedp.Click(".table-admin thead input[data-bulk-select-all]", chromedp.NodeVisible))
+	s.run("bulk select all at desktop width", clickStable(".table-admin thead input[data-bulk-select-all]"))
 	rows := s.evalString(`String(document.querySelectorAll('[data-bulk-pk]').length)`)
-	s.run("bulk open with every row", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	s.run("bulk open with every row", clickStable("[data-bulk-open]"))
 	limit := s.evalString(meta + `.getAttribute('data-bulk-limit') || ''`)
 	listed := s.evalString(`String(document.querySelectorAll('[data-bulk-list] li').length)`)
 	s.check(listed == "11", "the dialog lists %s items for %s rows, want the cap of %s and one more line", listed, rows, limit)
@@ -953,30 +971,30 @@ func (s *smoke) bulkListCapAndPhoneSelectAll() {
 	s.check(s.evalString(`document.querySelector('[data-bulk-list] li:last-child').textContent`) == more, "the last line of the dialog is not %q", more)
 	wantTitleMany := strings.ReplaceAll(s.evalString(meta+`.getAttribute('data-msg-title-many') || ''`), "{count}", rows)
 	s.check(s.evalString(`document.querySelector('[data-bulk-title]').textContent`) == wantTitleMany, "the dialog title is not the plural count copy %q", wantTitleMany)
-	s.run("bulk cancel after cap", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
+	s.run("bulk cancel after cap", clickStable("[data-bulk-cancel]"))
 
-	s.run("bulk clear every row", chromedp.Click(".table-admin thead input[data-bulk-select-all]", chromedp.NodeVisible))
+	s.run("bulk clear every row", clickStable(".table-admin thead input[data-bulk-select-all]"))
 	for i := 1; i <= atoi(limit)+1; i++ {
-		s.run(fmt.Sprintf("bulk pick row %d", i), chromedp.Click(fmt.Sprintf(".table-admin tbody tr:nth-child(%d) input[data-bulk-pk]", i), chromedp.NodeVisible))
+		s.run(fmt.Sprintf("bulk pick row %d", i), clickStable(fmt.Sprintf(".table-admin tbody tr:nth-child(%d) input[data-bulk-pk]", i)))
 	}
-	s.run("bulk open one over the cap", chromedp.Click("[data-bulk-open]", chromedp.NodeVisible))
+	s.run("bulk open one over the cap", clickStable("[data-bulk-open]"))
 	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-list] li').length)`) == "11", "the dialog with one row past the cap did not list the cap and one more line")
 	oneMore := s.evalString(meta + `.getAttribute('data-msg-more-one') || ''`)
 	s.check(s.evalString(`document.querySelector('[data-bulk-list] li:last-child').textContent`) == oneMore, "the last line for one row past the cap is not %q", oneMore)
 	titleOver := strings.ReplaceAll(s.evalString(meta+`.getAttribute('data-msg-title-many') || ''`), "{count}", fmt.Sprint(atoi(limit)+1))
 	s.check(s.evalString(`document.querySelector('[data-bulk-title]').textContent`) == titleOver, "the dialog title for one row past the cap is not %q", titleOver)
-	s.run("bulk cancel one over the cap", chromedp.Click("[data-bulk-cancel]", chromedp.NodeVisible))
-	s.run("bulk select the page again", chromedp.Click(".table-admin thead input[data-bulk-select-all]", chromedp.NodeVisible))
+	s.run("bulk cancel one over the cap", clickStable("[data-bulk-cancel]"))
+	s.run("bulk select the page again", clickStable(".table-admin thead input[data-bulk-select-all]"))
 	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-pk]:not(:checked)').length)`) == "0", "the desktop select-all did not pick every row after the one-over-cap case")
 
 	s.setWidth(390, 844)
 	const phoneAll = "[data-bulk-bar] label input[data-bulk-select-all]"
-	s.run("bulk phone select all clears the page", chromedp.Click(phoneAll, chromedp.NodeVisible))
+	s.run("bulk phone select all clears the page", clickStable(phoneAll))
 	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-pk]:checked').length)`) == "0", "the phone select-all control did not clear every row from a full selection")
 	none := s.evalString(meta + `.getAttribute('data-msg-none') || ''`)
 	s.check(s.evalString(`document.querySelector('[data-bulk-count]').textContent`) == none, "after clearing every row the count slot did not return to the reason %q", none)
 	s.check(s.evalString("String("+open+".disabled)") == "true", "Delete selected is enabled after clearing every row")
-	s.run("bulk phone select all picks the page", chromedp.Click(phoneAll, chromedp.NodeVisible))
+	s.run("bulk phone select all picks the page", clickStable(phoneAll))
 	s.check(s.evalString(`String(document.querySelectorAll('[data-bulk-pk]:not(:checked)').length)`) == "0", "the phone select-all control did not pick every row")
 	s.check(s.evalString(`String(document.querySelector('[data-bulk-open]').disabled)`) == "false", "Delete selected is disabled after the phone select-all")
 	s.check(s.evalString(`(function () { var r = document.querySelector('[data-bulk-bar] label').getBoundingClientRect(); return String(r.width >= 24 && r.height >= 24 && r.right <= window.innerWidth); })()`) == "true", "the phone select-all control is under 24px or outside the viewport")
@@ -1013,6 +1031,11 @@ func (s *smoke) adminLogin() {
 		chromedp.SendKeys("#field-username", smokeAdminUser),
 		chromedp.SendKeys("#field-password", smokeAdminPassword),
 		chromedp.Submit("#field-password"),
+		// The login page carries the layout's sidebar too, so the sidebar
+		// alone would match before the POST is answered, and the next
+		// navigation would cancel it. The password field is on the login
+		// page only.
+		chromedp.WaitNotPresent("#field-password"),
 		chromedp.WaitVisible("#sidebar"),
 	)
 }
@@ -1148,7 +1171,7 @@ func (s *smoke) adminMarkdownPreview() {
 	s.t.Helper()
 	s.run("admin markdown preview",
 		chromedp.SetValue("#field-Body", "# Hello", chromedp.NodeVisible),
-		chromedp.Click("#field-Body-tab-preview", chromedp.NodeVisible),
+		clickStable("#field-Body-tab-preview"),
 	)
 	deadline := time.Now().Add(10 * time.Second)
 	last := ""
@@ -1236,12 +1259,12 @@ func (s *smoke) adminFormSummary() {
 	s.run("admin create form with two problems",
 		chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible),
 		chromedp.SetValue("#field-Label", "toolong"),
-		chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible),
+		clickStable("form[method=post] button.btn-primary"),
 		chromedp.WaitVisible("#form-summary"),
 	)
 	const active = `document.activeElement ? document.activeElement.id : ''`
 	s.check(s.evalString(active) == "form-summary", "focus after a failed save is on %q, want the summary heading", s.evalString(active))
-	s.run("summary link to the first field", chromedp.Click(`.alert-error a[href="#field-Code"]`, chromedp.NodeVisible))
+	s.run("summary link to the first field", clickStable(`.alert-error a[href="#field-Code"]`))
 	s.check(s.evalString(active) == "field-Code", "focus after the summary link is on %q, want the field", s.evalString(active))
 
 	// One problem has no summary, so its control takes focus. The first wait
@@ -1251,7 +1274,7 @@ func (s *smoke) adminFormSummary() {
 		named("Navigate /admin/smoke_code/new/", chromedp.Navigate(s.base+"/admin/smoke_code/new/")),
 		named("WaitVisible #field-Code:not([aria-invalid])", chromedp.WaitVisible("#field-Code:not([aria-invalid])")),
 		named("SetValue #field-Code", chromedp.SetValue("#field-Code", "toolong", chromedp.NodeVisible)),
-		named("Click form[method=post] button.btn-primary", chromedp.Click("form[method=post] button.btn-primary", chromedp.NodeVisible)),
+		named("Click form[method=post] button.btn-primary", clickStable("form[method=post] button.btn-primary")),
 		named("WaitVisible #field-Code[aria-invalid]", chromedp.WaitVisible("#field-Code[aria-invalid]")),
 	)
 	s.check(!s.eval(`!!document.getElementById('form-summary')`), "a single field problem should have no summary")
@@ -1454,6 +1477,80 @@ func (s *smoke) report() {
 	for _, f := range s.rec.findings {
 		s.t.Errorf("%s: %s: %s", f.page, f.source, f.detail)
 	}
+}
+
+// clickPointScript finds where a pointer click on the first element matching
+// sel would land and what is under that point. It scrolls only when the
+// element cannot be hit where it is.
+const clickPointScript = `function (sel) {
+	var el = document.querySelector(sel);
+	if (!el) return JSON.stringify({found: false});
+	function look() {
+		// The first box, not the bounding box: a link that wraps over two
+		// lines has a bounding box whose middle can lie outside the link.
+		var r = el.getClientRects()[0] || {left: 0, top: 0, width: 0, height: 0};
+		var x = r.left + r.width / 2, y = r.top + r.height / 2;
+		var hit = document.elementFromPoint(x, y);
+		var label = el.closest('label');
+		var onTarget = r.width > 0 && r.height > 0 && !!hit &&
+			(hit === el || el.contains(hit) || hit.control === el || (!!label && label.contains(hit)));
+		var under = hit ? hit.tagName.toLowerCase() + (hit.id ? '#' + hit.id : '') + (hit.className && hit.className.baseVal === undefined ? '.' + String(hit.className).trim().split(/\s+/).join('.') : '') : 'nothing';
+		return {found: true, x: x, y: y, onTarget: onTarget, under: under};
+	}
+	var point = look();
+	if (!point.onTarget) {
+		el.scrollIntoView({block: 'center', inline: 'center', behavior: 'instant'});
+		point = look();
+	}
+	return JSON.stringify(point);
+}`
+
+// clickPoint is what clickPointScript reports.
+type clickPoint struct {
+	Found    bool    `json:"found"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	OnTarget bool    `json:"onTarget"`
+	Under    string  `json:"under"`
+}
+
+// clickPoll is the pause between two looks at a click target.
+const clickPoll = 50 * time.Millisecond
+
+// clickStable clicks the first element matching sel once two looks in a row
+// find it at the same point with nothing over it. A pointer click sent while
+// the page is still moving the element, or while something covers it, lands
+// elsewhere and is lost without an error; this waits that out, and when the
+// step's deadline passes it says what was under the point instead.
+func clickStable(sel string) chromedp.Action[chromedp.Void] {
+	return chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
+		quoted, err := json.Marshal(sel)
+		if err != nil {
+			return err
+		}
+		expr := "(" + clickPointScript + ")(" + string(quoted) + ")"
+		var last clickPoint
+		for {
+			raw, err := chromedp.Evaluate[string](expr)(ctx, t)
+			if err != nil {
+				return fmt.Errorf("click %s: %w", sel, err)
+			}
+			var point clickPoint
+			if err := json.Unmarshal([]byte(raw), &point); err != nil {
+				return fmt.Errorf("click %s: read %q: %w", sel, raw, err)
+			}
+			if point.OnTarget && last.OnTarget && point.X == last.X && point.Y == last.Y {
+				_, err := chromedp.MouseClickXY(point.X, point.Y)(ctx, t)
+				return err
+			}
+			last = point
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("click %s: %w; the last look found %s", sel, ctx.Err(), raw)
+			case <-time.After(clickPoll):
+			}
+		}
+	})
 }
 
 // named labels an action so a failure names it. The label is what a stall
