@@ -25,6 +25,8 @@ The `tango` struct tag takes a comma-separated list of options:
 | `varchar=n` | A bounded string: at most `n` characters, `n` from 1 to 10,485,760. Only on a `string` field. See [bounded strings](#bounded-strings). |
 | `text` | An explicit unbounded string, the same as a bare `string` field. Only on a `string` field; it cannot be combined with `varchar=n`. |
 | `json` | A string that holds JSON text, checked whenever the model is written. Only on a `string` field; it cannot be combined with `varchar=n`, `text`, `pk`, `fk`, `unique` or `index`. See [JSON fields](#json-fields). |
+| `belongs_to=Field` | A relation field: a pointer to a named struct, holding the one related row that the owner's foreign key `Field` points at. It is not a column, and it is the field's only tango option. Loaded by `Query.Preload` or `Store.Related`. See [loading related rows](relationships-and-admin-foreign-keys.md#loading-related-rows). |
+| `has_many=Field` | A relation field: a slice of named structs, holding the children whose foreign key `Field` refers back to this model. It is not a column, and it is the field's only tango option. Loaded by `Query.Preload` or `Store.RelatedMany`. See [loading related rows](relationships-and-admin-foreign-keys.md#loading-related-rows). |
 
 Combine them: `tango:"pk,unique"` is valid, though redundant (a primary key is already unique).
 
@@ -101,7 +103,7 @@ func invalidSettings(ctx context.Context, store *db.Store, meta model.ModelMeta)
 
 A `model.Date` field takes the `unique` and `index` tags. It cannot take `pk`: registration fails with `ErrInvalidFieldTag`, because a zero date is stored as `NULL`. A zero `model.Date` and a zero `time.Time` are both stored as `NULL`, so several unset values do not conflict under a unique constraint. Build dates with `model.NewDate`, `model.MustDate` or `model.ParseDate`; `model.DateOf(t)` takes the calendar date `t` shows in its own location, and returns `ErrInvalidDate` for a year outside 0001 through 9999.
 
-Anything else — including an embedded/anonymous struct field — fails `Register` with a clear error identifying the offending field. Foreign keys are supported with `fk=Model`; see [relationships](relationships-and-admin-foreign-keys.md). Joins are written as raw SQL with `Store.Query` or `Store.QueryRow`.
+Anything else — including an embedded/anonymous struct field — fails `Register` with a clear error identifying the offending field. Foreign keys are supported with `fk=Model`, and relation fields with `belongs_to=Field` and `has_many=Field`; see [relationships](relationships-and-admin-foreign-keys.md). Joins are written as raw SQL with `Store.Query` or `Store.QueryRow`.
 
 ## Naming
 

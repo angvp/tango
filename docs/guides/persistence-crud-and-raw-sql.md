@@ -1,6 +1,6 @@
 # Guide: database CRUD and raw SQL
 
-`db.Store` is tanGO's persistence boundary — metadata-driven CRUD for the common case, with raw SQL always available as an escape hatch. It is not a full ORM: no lazy loading and no query builder DSL; relationship-aware behavior is deliberately limited to foreign-key integrity, cascade delete, and admin support.
+`db.Store` is tanGO's persistence boundary — metadata-driven CRUD for the common case, with raw SQL always available as an escape hatch. It is not a full ORM: no lazy loading and no query builder DSL; relationship-aware behavior is deliberately limited to foreign-key integrity, cascade delete, explicit loading of related rows with `Query.Preload`, `Store.Related` and `Store.RelatedMany`, and admin support. See [loading related rows](relationships-and-admin-foreign-keys.md#loading-related-rows).
 
 ```go
 store := db.NewStore(sqlDB, db.SQLite) // or db.Postgres, db.MySQL
@@ -74,7 +74,7 @@ err := store.List(ctx, meta, db.Query{Filter: &published, OrderBy: []string{"-Cr
 - **Errors.** Every malformed query matches `errors.Is(err, db.ErrInvalidQuery)` (`errors.As` with `*db.QueryError` for the model and field); a query over a limit also matches `db.ErrQueryLimit` (`*db.QueryLimitError`). Nothing reaches the database first. `Query`, `Filter` and the lists in it are never modified.
 - **`LIKE` and case.** `OpLike` is case-insensitive on SQLite and MySQL with default collations and case-sensitive on PostgreSQL.
 
-This API does not support automatic wildcard escaping, joins, cross-model filtering, or filtering `Store.Get`. Use raw SQL below for queries outside this scope.
+This API does not support automatic wildcard escaping, joins, cross-model filtering, or filtering `Store.Get`. Related rows come only from `Query.Preload`, `Store.Related` and `Store.RelatedMany`, never from a filter on another model. Use raw SQL below for queries outside this scope.
 
 ## NULL and zero values
 
@@ -135,7 +135,7 @@ err := store.InTx(ctx, func(tx *db.Store) error {
 
 It commits when `fn` returns nil and rolls back when `fn` returns an error, which `InTx` returns unchanged. A panic rolls back and is re-raised with the same value, so a programmer error is never turned into a returned error. Use `tx`, not the outer store, inside `fn`: the outer store is a different connection and does not see the transaction's writes.
 
-Nesting is flat. `InTx` on a store that is already in a transaction joins it, with no savepoints, so an inner error rolls the work back only if it propagates out of the outermost `fn`. An operation that opens its own transaction when called directly, such as a PostgreSQL insert with an explicit ID or a cascading `Delete`, runs on the enclosing one. 
+Nesting is flat. `InTx` on a store that is already in a transaction joins it, with no savepoints, so an inner error rolls the work back only if it propagates out of the outermost `fn`. An operation that opens its own transaction when called directly, such as a PostgreSQL insert with an explicit ID or a cascading `Delete`, runs on the enclosing one. A `List` or `First` with a dotted `Query.Preload` path, and the `Related` and `RelatedMany` reads, do the same: inside `InTx` they read through the caller's transaction. See [loading related rows](relationships-and-admin-foreign-keys.md#nesting).
 
 ## Errors
 
