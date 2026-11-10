@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/querycount"
 	"github.com/angvp/tango/model"
 )
 
@@ -253,5 +254,138 @@ func TestPreloadHasManySQLGoldens(t *testing.T) {
 				t.Errorf("Preload changed the parent statement:\n got  %+v\n want %+v", got[0], want[0])
 			}
 		})
+	}
+}
+
+func TestListPreloadHasManyOneLevelOpensNoTransaction(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	posts := metaFor(t, registry, preloadPost{})
+	comments := metaFor(t, registry, preloadComment{})
+	post := preloadPost{Title: "p"}
+	if err := store.Create(ctx, posts, &post); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+	createPreloadComment(t, store, comments, post.ID, "c1")
+	counter.Reset()
+
+	var got []preloadPost
+	if err := store.List(ctx, posts, db.Query{Preload: []string{"Comments"}}, &got); err != nil {
+		t.Fatalf("List with Preload: %v", err)
+	}
+	if n := len(counter.Statements()); n != 2 {
+		t.Fatalf("sent %d statements, want 2", n)
+	}
+	if kinds := transactionKinds(counter.Events()); len(kinds) != 0 {
+		t.Fatalf("one-level Preload recorded transaction events %v, want none", kinds)
+	}
+
+	// Known positive: the same counter records the transaction InTx opens.
+	counter.Reset()
+	err := store.InTx(ctx, func(tx *db.Store) error {
+		return tx.List(ctx, posts, db.Query{Preload: []string{"Comments"}}, &got)
+	})
+	if err != nil {
+		t.Fatalf("InTx: %v", err)
+	}
+	if kinds := transactionKinds(counter.Events()); len(kinds) != 2 || kinds[0] != querycount.KindBegin || kinds[1] != querycount.KindCommit {
+		t.Fatalf("InTx recorded %v, want begin then commit", kinds)
+	}
+}
+
+func TestListPreloadHasManySingleChunkAtThousandParents(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	posts := metaFor(t, registry, preloadPost{})
+	comments := metaFor(t, registry, preloadComment{})
+
+	const count = db.MaxInValues
+	postIDs := make([]int64, 0, count)
+	err := store.InTx(ctx, func(tx *db.Store) error {
+		for i := 0; i < count; i++ {
+			post := preloadPost{Title: "p"}
+			if err := tx.Create(ctx, posts, &post); err != nil {
+				return err
+			}
+			postIDs = append(postIDs, post.ID)
+			comment := preloadComment{PostID: post.ID, Body: "only"}
+			if err := tx.Create(ctx, comments, &comment); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	counter.Reset()
+	var got []preloadPost
+	if err := store.List(ctx, posts, db.Query{OrderBy: []string{"ID"}, Preload: []string{"Comments"}}, &got); err != nil {
+		t.Fatalf("List with Preload: %v", err)
+	}
+	if n := len(counter.Statements()); n != 2 {
+		t.Fatalf("sent %d statements, want 2: the rows and one child read for %d parents", n, count)
+	}
+	if n := counter.Matching("preload_comment"); n != 1 {
+		t.Fatalf("child reads = %d, want 1", n)
+	}
+	if len(got) != count {
+		t.Fatalf("List returned %d parents, want %d", len(got), count)
+	}
+	for i, post := range got {
+		if post.ID != postIDs[i] || len(post.Comments) != 1 || post.Comments[0].PostID != post.ID {
+			t.Fatalf("parent %d (id %d): children %+v, want its one comment", i, post.ID, post.Comments)
+		}
+	}
+}
+
+// preloadCommentStatement is the statement a has-many preload sends for the
+// children of a parent page, on each dialect. It is pinned from the live text
+// each dialect's test database receives.
+func preloadCommentStatement(dialect db.Dialect) string {
+	switch dialect {
+	case db.SQLite:
+		return "SELECT `id`, `post_id`, `body` FROM `preload_comment` WHERE (`post_id` IN (?, ?)) ORDER BY `id` ASC"
+	case db.Postgres:
+		return `SELECT "id", "post_id", "body" FROM "preload_comment" WHERE ("post_id" IN ($1, $2)) ORDER BY "id" ASC`
+	case db.MySQL:
+		return "SELECT `id`, `post_id`, `body` FROM `preload_comment` WHERE (`post_id` IN (?, ?)) ORDER BY `id` ASC"
+	}
+	return ""
+}
+
+func TestListPreloadHasManyRelationStatementPinnedPerDialect(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	posts := metaFor(t, registry, preloadPost{})
+	comments := metaFor(t, registry, preloadComment{})
+	first := preloadPost{Title: "first"}
+	second := preloadPost{Title: "second"}
+	if err := store.Create(ctx, posts, &first); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+	if err := store.Create(ctx, posts, &second); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+	createPreloadComment(t, store, comments, first.ID, "c1")
+	counter.Reset()
+
+	var got []preloadPost
+	if err := store.List(ctx, posts, db.Query{OrderBy: []string{"ID"}, Preload: []string{"Comments"}}, &got); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	statements := counter.Statements()
+	if len(statements) != 2 {
+		t.Fatalf("sent %d statements, want 2", len(statements))
+	}
+	if want := preloadCommentStatement(dialect); statements[1] != want {
+		t.Errorf("child statement:\n got  %s\n want %s", statements[1], want)
 	}
 }

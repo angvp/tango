@@ -9,6 +9,7 @@ package querycount
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"strings"
 	"sync"
@@ -22,7 +23,33 @@ import (
 type Counter struct {
 	mu         sync.Mutex
 	statements []string
+	events     []Event
 	failures   []injectedFailure
+}
+
+// Kind says what an Event records.
+type Kind string
+
+const (
+	// KindStatement is a statement that reached the driver.
+	KindStatement Kind = "statement"
+	// KindBegin is a transaction the driver began.
+	KindBegin Kind = "begin"
+	// KindCommit is a transaction the driver was asked to commit.
+	KindCommit Kind = "commit"
+	// KindRollback is a transaction the driver was asked to roll back.
+	KindRollback Kind = "rollback"
+)
+
+// Event is one entry in the order the driver saw it. A statement event
+// carries its SQL text. A begin event carries the isolation level and the
+// read-only flag the transaction was opened with; the other kinds carry
+// neither.
+type Event struct {
+	Kind      Kind
+	Statement string
+	Isolation sql.IsolationLevel
+	ReadOnly  bool
 }
 
 type injectedFailure struct {
@@ -51,6 +78,15 @@ func (c *Counter) Reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.statements = nil
+	c.events = nil
+}
+
+// Events returns every statement and transaction boundary recorded so far, in
+// the order the driver saw them. Statements is the statement subset of it.
+func (c *Counter) Events() []Event {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]Event(nil), c.events...)
 }
 
 // Statements returns the SQL text of each recorded statement, in order.
@@ -95,6 +131,13 @@ func (c *Counter) record(query string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.statements = append(c.statements, query)
+	c.events = append(c.events, Event{Kind: KindStatement, Statement: query})
+}
+
+func (c *Counter) recordEvent(event Event) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, event)
 }
 
 // injected returns the error armed for query, or nil when none matches.
@@ -163,14 +206,44 @@ func (c *countingConn) Prepare(query string) (driver.Stmt, error) {
 
 func (c *countingConn) Close() error { return c.inner.Close() }
 
-func (c *countingConn) Begin() (driver.Tx, error) { return c.inner.Begin() } //nolint:staticcheck // database/sql calls BeginTx when present
+func (c *countingConn) Begin() (driver.Tx, error) { //nolint:staticcheck // database/sql calls BeginTx when present
+	tx, err := c.inner.Begin() //nolint:staticcheck // database/sql calls BeginTx when present
+	return c.begun(tx, err, driver.TxOptions{})
+}
 
 func (c *countingConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	bc, ok := c.inner.(driver.ConnBeginTx)
 	if !ok {
 		return nil, driver.ErrSkip
 	}
-	return bc.BeginTx(ctx, opts)
+	tx, err := bc.BeginTx(ctx, opts)
+	return c.begun(tx, err, opts)
+}
+
+// begun records a transaction the driver began and wraps it so its commit and
+// rollback are recorded in order with the statements.
+func (c *countingConn) begun(tx driver.Tx, err error, opts driver.TxOptions) (driver.Tx, error) {
+	if err != nil {
+		return nil, err
+	}
+	c.counter.recordEvent(Event{Kind: KindBegin, Isolation: sql.IsolationLevel(opts.Isolation), ReadOnly: opts.ReadOnly})
+	return &countingTx{inner: tx, counter: c.counter}, nil
+}
+
+// countingTx records the commit or rollback it forwards.
+type countingTx struct {
+	inner   driver.Tx
+	counter *Counter
+}
+
+func (t *countingTx) Commit() error {
+	t.counter.recordEvent(Event{Kind: KindCommit})
+	return t.inner.Commit()
+}
+
+func (t *countingTx) Rollback() error {
+	t.counter.recordEvent(Event{Kind: KindRollback})
+	return t.inner.Rollback()
 }
 
 func (c *countingConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {

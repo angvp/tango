@@ -443,3 +443,190 @@ func TestListPreloadInsideTransactionUsesCallerTransaction(t *testing.T) {
 		t.Fatalf("InTx: %v", err)
 	}
 }
+
+// transactionKinds returns the begin, commit and rollback events, in order,
+// without the statements between them.
+func transactionKinds(events []querycount.Event) []querycount.Kind {
+	var kinds []querycount.Kind
+	for _, event := range events {
+		if event.Kind != querycount.KindStatement {
+			kinds = append(kinds, event.Kind)
+		}
+	}
+	return kinds
+}
+
+func TestListPreloadOneLevelOpensNoTransaction(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	accounts := metaFor(t, registry, preloadAccount{})
+	posts := metaFor(t, registry, preloadPost{})
+	alpha := createPreloadAccount(t, store, accounts, "alpha")
+	createPreloadPost(t, store, posts, "a1", alpha.ID)
+	counter.Reset()
+
+	var got []preloadPost
+	if err := store.List(ctx, posts, db.Query{Preload: []string{"Account"}}, &got); err != nil {
+		t.Fatalf("List with Preload: %v", err)
+	}
+	if n := len(counter.Statements()); n != 2 {
+		t.Fatalf("sent %d statements, want 2", n)
+	}
+	if kinds := transactionKinds(counter.Events()); len(kinds) != 0 {
+		t.Fatalf("one-level Preload recorded transaction events %v, want none", kinds)
+	}
+
+	// Known positive: the same counter records the transaction InTx opens,
+	// with the default isolation and no read-only flag.
+	counter.Reset()
+	err := store.InTx(ctx, func(tx *db.Store) error {
+		return tx.List(ctx, posts, db.Query{Preload: []string{"Account"}}, &got)
+	})
+	if err != nil {
+		t.Fatalf("InTx: %v", err)
+	}
+	events := counter.Events()
+	if kinds := transactionKinds(events); len(kinds) != 2 || kinds[0] != querycount.KindBegin || kinds[1] != querycount.KindCommit {
+		t.Fatalf("InTx recorded %v, want begin then commit", kinds)
+	}
+	if first := events[0]; first.Isolation != sql.LevelDefault || first.ReadOnly {
+		t.Fatalf("InTx begin recorded isolation %v read-only %v, want default and false", first.Isolation, first.ReadOnly)
+	}
+}
+
+func TestListPreloadParentAnyFilterOffsetApplyToParentsOnly(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	accounts := metaFor(t, registry, preloadAccount{})
+	posts := metaFor(t, registry, preloadPost{})
+	alpha := createPreloadAccount(t, store, accounts, "alpha")
+	beta := createPreloadAccount(t, store, accounts, "beta")
+	createPreloadPost(t, store, posts, "a1", alpha.ID)
+	createPreloadPost(t, store, posts, "a2", alpha.ID)
+	createPreloadPost(t, store, posts, "b1", beta.ID)
+	createPreloadPost(t, store, posts, "b2", beta.ID)
+	counter.Reset()
+
+	// Any keeps a1, b1 and b2; Filter drops b1, leaving a1 and b2; Offset 1
+	// then skips a1. Only b2 is returned, so only beta is read.
+	query := db.Query{
+		Any: []db.Condition{
+			{Field: "Title", Op: db.OpEq, Value: "a1"},
+			{Field: "Title", Op: db.OpEq, Value: "b1"},
+			{Field: "Title", Op: db.OpEq, Value: "b2"},
+		},
+		Filter:  ptrExpr(db.Not(db.Cond("Title", db.OpEq, "b1"))),
+		OrderBy: []string{"ID"},
+		Offset:  1,
+		Preload: []string{"Account"},
+	}
+	var got []preloadPost
+	if err := store.List(ctx, posts, query, &got); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].Title != "b2" || got[0].Account == nil || got[0].Account.Name != "beta" {
+		t.Fatalf("got %+v, want only b2 with beta", got)
+	}
+	if n := counter.Matching("preload_account"); n != 1 {
+		t.Fatalf("account read sent %d times, want 1 for the one returned row", n)
+	}
+}
+
+// ptrExpr returns a pointer to e, the form Query.Filter takes.
+func ptrExpr(e db.Expr) *db.Expr { return &e }
+
+func TestListPreloadSetKeyWithNoRelatedRowLeavesNil(t *testing.T) {
+	sqlDB, dialect, registry := openTables(t, preloadAccount{}, preloadPost{}, preloadComment{})
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	accounts := metaFor(t, registry, preloadAccount{})
+	posts := metaFor(t, registry, preloadPost{})
+	alpha := createPreloadAccount(t, store, accounts, "alpha")
+	createPreloadPost(t, store, posts, "linked", alpha.ID)
+
+	// The schema's foreign key refuses a dangling key, so the key is written
+	// with constraint checks off for this one connection. The pool is pinned
+	// to that connection so every later statement runs under the same setting.
+	sqlDB.SetMaxOpenConns(1)
+	if _, err := sqlDB.ExecContext(ctx, disableForeignKeyChecks(dialect)); err != nil {
+		t.Fatalf("disable foreign key checks: %v", err)
+	}
+	const dangling = int64(999)
+	if _, err := sqlDB.ExecContext(ctx, "INSERT INTO preload_post (title, account_id) VALUES ('dangling', 999)"); err != nil {
+		t.Fatalf("insert dangling post: %v", err)
+	}
+
+	var got []preloadPost
+	if err := store.List(ctx, posts, db.Query{OrderBy: []string{"ID"}, Preload: []string{"Account"}}, &got); err != nil {
+		t.Fatalf("List with a dangling key: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("List returned %d rows, want 2", len(got))
+	}
+	if got[0].Account == nil || got[0].Account.Name != "alpha" {
+		t.Errorf("linked row loaded %+v, want alpha", got[0].Account)
+	}
+	if got[1].AccountID != dangling || got[1].Account != nil {
+		t.Errorf("dangling row has key %d and Account %+v, want key %d and nil", got[1].AccountID, got[1].Account, dangling)
+	}
+}
+
+// disableForeignKeyChecks returns the statement that turns foreign key
+// enforcement off for the session it runs in on dialect.
+func disableForeignKeyChecks(dialect db.Dialect) string {
+	switch dialect {
+	case db.SQLite:
+		return "PRAGMA foreign_keys = OFF"
+	case db.Postgres:
+		return "SET session_replication_role = replica"
+	case db.MySQL:
+		return "SET FOREIGN_KEY_CHECKS = 0"
+	}
+	return ""
+}
+
+// preloadAccountStatement is the statement a belongs-to preload sends for the
+// related accounts of two distinct keys, on each dialect. It is pinned from
+// the live text each dialect's test database receives.
+func preloadAccountStatement(dialect db.Dialect) string {
+	switch dialect {
+	case db.SQLite:
+		return "SELECT `id`, `name` FROM `preload_account` WHERE (`id` IN (?, ?))"
+	case db.Postgres:
+		return `SELECT "id", "name" FROM "preload_account" WHERE ("id" IN ($1, $2))`
+	case db.MySQL:
+		return "SELECT `id`, `name` FROM `preload_account` WHERE (`id` IN (?, ?))"
+	}
+	return ""
+}
+
+func TestListPreloadRelationStatementPinnedPerDialect(t *testing.T) {
+	sqlDB, dialect, registry, counter := preloadFixture(t)
+	store := db.NewStore(sqlDB, dialect)
+	store.UseModels(registry)
+	ctx := context.Background()
+	accounts := metaFor(t, registry, preloadAccount{})
+	posts := metaFor(t, registry, preloadPost{})
+	alpha := createPreloadAccount(t, store, accounts, "alpha")
+	beta := createPreloadAccount(t, store, accounts, "beta")
+	createPreloadPost(t, store, posts, "a1", alpha.ID)
+	createPreloadPost(t, store, posts, "b1", beta.ID)
+	counter.Reset()
+
+	var got []preloadPost
+	if err := store.List(ctx, posts, db.Query{OrderBy: []string{"ID"}, Preload: []string{"Account"}}, &got); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	statements := counter.Statements()
+	if len(statements) != 2 {
+		t.Fatalf("sent %d statements, want 2", len(statements))
+	}
+	if want := preloadAccountStatement(dialect); statements[1] != want {
+		t.Errorf("relation statement:\n got  %s\n want %s", statements[1], want)
+	}
+}
