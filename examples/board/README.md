@@ -14,7 +14,7 @@ Posts and Comments set `BulkDelete: true`, so their changelists offer checkboxes
 
 ## Bylines and the recent read
 
-The front page and `GET /posts/` show each post's author name. `Store.Related` loads the authors of the whole list in one statement. `GET /posts/recent/` returns the newest twenty posts, each with its account (public fields only) and its comments, through `Query.Preload`: three statements for the page. `byline_preload_test.go` asserts those statement counts with the counting wrapper in `statement_count_test.go`.
+The front page and `GET /posts/` show each post's byline, the part of its account's email before the `@`: an account registered as `ada@example.com` shows as `ada`. `Store.Related` loads the authors of the whole list in one statement. `GET /posts/recent/` returns the newest twenty posts, each with its account (public fields only) and its comments, through `Query.Preload`: three statements for the page. `byline_preload_test.go` asserts those statement counts with the counting wrapper in `statement_count_test.go`.
 
 ## Run locally
 

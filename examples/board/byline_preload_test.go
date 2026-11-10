@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -168,31 +169,61 @@ func TestPostListCarriesBylinesAndNoPrivateFields(t *testing.T) {
 	}
 }
 
-// TestPostListIsTwoStatements: the raw summary query, then one statement for
-// the bylines of the whole page. The known-positive control issues one lookup
-// per post on the same counter and must register one statement per post.
-func TestPostListIsTwoStatements(t *testing.T) {
-	app, counter := newCountingApp(t)
-	seedBylines(t, app)
-	accountMeta := mustMeta(t, app, "Account")
-
-	before := counter.Count()
-	getBody(t, app, "/posts/")
-	if got := counter.Count() - before; got != 2 {
-		t.Fatalf("list counted %d statements, want 2 (summaries, then bylines)", got)
-	}
-
-	const postCount = 3
+// seedBylinesOfSize signs up two accounts and stores size posts that alternate
+// between them and no account, so every size has posts with and without a byline.
+func seedBylinesOfSize(t *testing.T, app *testApp, size int) int64 {
+	t.Helper()
+	app.signUp(t, "ada@example.com", "correct horse")
+	app.signUp(t, "grace@example.com", "correct horse")
 	adaID := accountID(t, app, "ada@example.com")
-	before = counter.Count()
-	for range postCount {
-		var account accounts.Account
-		if err := app.store.Get(t.Context(), accountMeta, adaID, &account); err != nil {
+	graceID := accountID(t, app, "grace@example.com")
+	postMeta := mustMeta(t, app, "Post")
+	base := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	owners := []int64{adaID, graceID, 0}
+	for i := range size {
+		p := posts.Post{Title: fmt.Sprintf("post-%d", i), Body: "b", AccountID: owners[i%len(owners)], CreatedAt: base.Add(time.Duration(i) * time.Minute)}
+		if err := app.store.Create(t.Context(), postMeta, &p); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if got := counter.Count() - before; got != postCount {
-		t.Fatalf("per-post control counted %d statements, want %d", got, postCount)
+	return adaID
+}
+
+// TestPostListIsTwoStatementsAtEverySize: the raw summary query, then one
+// statement for the bylines of the whole page, at each size. The known-positive
+// control issues one lookup per post on the same counter and must register one
+// statement per post.
+func TestPostListIsTwoStatementsAtEverySize(t *testing.T) {
+	for _, size := range []int{1, 3, 50} {
+		t.Run(fmt.Sprintf("%d posts", size), func(t *testing.T) {
+			app, counter := newCountingApp(t)
+			adaID := seedBylinesOfSize(t, app, size)
+			accountMeta := mustMeta(t, app, "Account")
+
+			before := counter.Count()
+			listed := getBody(t, app, "/posts/")
+			var rows []summaryJSON
+			if err := json.Unmarshal([]byte(listed), &rows); err != nil {
+				t.Fatal(err)
+			}
+			if len(rows) != size {
+				t.Fatalf("listed %d posts, want %d", len(rows), size)
+			}
+			if got := counter.Count() - before; got != 2 {
+				t.Fatalf("list counted %d statements, want 2 (summaries, then bylines)", got)
+			}
+
+			before = counter.Count()
+			for range size {
+				var account accounts.Account
+				if err := app.store.Get(t.Context(), accountMeta, adaID, &account); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := counter.Count() - before; got != int64(size) {
+				t.Fatalf("per-post control counted %d statements, want %d", got, size)
+			}
+		})
 	}
 }
 
@@ -234,34 +265,43 @@ func TestRecentPostsCarryAccountAndCommentsWithoutPrivateFields(t *testing.T) {
 	}
 }
 
-// TestRecentPostsIsThreeStatements counts the page's statements, then runs a
-// per-post comment lookup on the same counter as the known-positive control.
-func TestRecentPostsIsThreeStatements(t *testing.T) {
-	app, counter := newCountingApp(t)
-	seedBylines(t, app)
-	commentMeta := mustMeta(t, app, "Comment")
-	postMeta := mustMeta(t, app, "Post")
+// TestRecentPostsIsThreeStatementsAtEverySize counts the page's statements at
+// sizes below and above the page bound, then runs a per-post comment lookup for
+// every stored post on the same counter as the known-positive control. The
+// page is bounded, so its count holds even when more posts are stored.
+func TestRecentPostsIsThreeStatementsAtEverySize(t *testing.T) {
+	for _, size := range []int{1, 3, 25} {
+		t.Run(fmt.Sprintf("%d posts", size), func(t *testing.T) {
+			app, counter := newCountingApp(t)
+			seedBylinesOfSize(t, app, size)
+			commentMeta := mustMeta(t, app, "Comment")
+			postMeta := mustMeta(t, app, "Post")
 
-	before := counter.Count()
-	getBody(t, app, "/posts/recent/")
-	if got := counter.Count() - before; got != 3 {
-		t.Fatalf("recent page counted %d statements, want 3 (posts, accounts, comments)", got)
-	}
+			before := counter.Count()
+			getBody(t, app, "/posts/recent/")
+			if got := counter.Count() - before; got != 3 {
+				t.Fatalf("recent page counted %d statements, want 3 (posts, accounts, comments)", got)
+			}
 
-	var listed []posts.Post
-	if err := app.store.List(t.Context(), postMeta, db.Query{}, &listed); err != nil {
-		t.Fatal(err)
-	}
-	before = counter.Count()
-	for _, p := range listed {
-		var comments []posts.Comment
-		query := db.Query{Where: []db.Condition{{Field: "PostID", Op: db.OpEq, Value: p.ID}}}
-		if err := app.store.List(t.Context(), commentMeta, query, &comments); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := counter.Count() - before; got != int64(len(listed)) {
-		t.Fatalf("per-post control counted %d statements, want %d", got, len(listed))
+			var stored []posts.Post
+			if err := app.store.List(t.Context(), postMeta, db.Query{}, &stored); err != nil {
+				t.Fatal(err)
+			}
+			if len(stored) != size {
+				t.Fatalf("stored %d posts, want %d", len(stored), size)
+			}
+			before = counter.Count()
+			for _, p := range stored {
+				var comments []posts.Comment
+				query := db.Query{Where: []db.Condition{{Field: "PostID", Op: db.OpEq, Value: p.ID}}}
+				if err := app.store.List(t.Context(), commentMeta, query, &comments); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := counter.Count() - before; got != int64(len(stored)) {
+				t.Fatalf("per-post control counted %d statements, want %d", got, len(stored))
+			}
+		})
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -118,29 +119,62 @@ func TestPostListEmbedsEachPostsAuthor(t *testing.T) {
 	}
 }
 
-// TestPostListIsTwoStatements is the count claim, paired with a known-positive
-// control on the same counter: one lookup per post must count one per post.
-func TestPostListIsTwoStatements(t *testing.T) {
-	handler, store, registry, counter := newCountingServer(t)
-	ada, _ := seedAuthorsAndPosts(t, store, registry)
+// seedPostsOfSize creates two authors and size posts that alternate between
+// them and no author, so every size has posts with and without an author.
+func seedPostsOfSize(t *testing.T, store *db.Store, registry *tango.Registry, size int) authors.Author {
+	t.Helper()
+	ctx := t.Context()
 	authorMeta, _ := registry.Models().Get("Author")
-
-	before := counter.Count()
-	getJSON[[]listedPost](t, handler, "/posts/")
-	if got := counter.Count() - before; got != 2 {
-		t.Fatalf("list counted %d statements, want 2 (rows, then authors)", got)
+	postMeta, _ := registry.Models().Get("Post")
+	ada := authors.Author{Name: "Ada", Email: "ada@example.com"}
+	grace := authors.Author{Name: "Grace", Email: "grace@example.com"}
+	if err := store.Create(ctx, authorMeta, &ada); err != nil {
+		t.Fatal(err)
 	}
-
-	postCount := 3
-	before = counter.Count()
-	for range postCount {
-		var author authors.Author
-		if err := store.Get(t.Context(), authorMeta, ada.ID, &author); err != nil {
+	if err := store.Create(ctx, authorMeta, &grace); err != nil {
+		t.Fatal(err)
+	}
+	owners := []int64{ada.ID, grace.ID, 0}
+	for i := range size {
+		post := posts.Post{Title: fmt.Sprintf("post-%d", i), Body: "b", AuthorID: owners[i%len(owners)]}
+		if err := store.Create(ctx, postMeta, &post); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if got := counter.Count() - before; got != int64(postCount) {
-		t.Fatalf("per-post control counted %d statements, want %d", got, postCount)
+	return ada
+}
+
+// TestPostListIsTwoStatementsAtEverySize is the count claim at several list
+// sizes. At each size the list must send two statements, rows then authors,
+// and a known-positive control on the same counter must count one statement
+// per post for the same rows read one at a time.
+func TestPostListIsTwoStatementsAtEverySize(t *testing.T) {
+	for _, size := range []int{1, 3, 50} {
+		t.Run(fmt.Sprintf("%d posts", size), func(t *testing.T) {
+			handler, store, registry, counter := newCountingServer(t)
+			ada := seedPostsOfSize(t, store, registry, size)
+			authorMeta, _ := registry.Models().Get("Author")
+
+			before := counter.Count()
+			listed := getJSON[[]listedPost](t, handler, "/posts/")
+			if len(listed) != size {
+				t.Fatalf("listed %d posts, want %d", len(listed), size)
+			}
+			if got := counter.Count() - before; got != 2 {
+				t.Fatalf("list counted %d statements, want 2 (rows, then authors)", got)
+			}
+
+			before = counter.Count()
+			for range size {
+				var author authors.Author
+				if err := store.Get(t.Context(), authorMeta, ada.ID, &author); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := counter.Count() - before; got != int64(size) {
+				t.Fatalf("per-post control counted %d statements, want %d", got, size)
+			}
+		})
 	}
 }
 
