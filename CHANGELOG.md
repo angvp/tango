@@ -4,6 +4,18 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- **Exact-schema tag options.** `int4` (a 4-byte integer, `SERIAL` for a PostgreSQL key), `naive` (`timestamp without time zone`), `notnull`, `default=v` (a string, boolean or integer) and `unique=name` / `index=name` (explicit index names) let a migration describe an existing database exactly. They are opt-in: a model that uses none generates what it did before. A tag that uses any of them is parsed strictly. See [exact schema](docs/guides/models-and-tags.md#exact-schema).
+- **Migration steps** `AlterColumnNotNull`, `AlterColumnDefault` and `RenameIndex`, an optional `Name` on `CreateIndex`, `DropIndex` and `AlterColumnUnique`, and width, time-zone and typed-default fields on `AlterColumnType`. `tango makemigrations` generates them for changes to the options above instead of refusing, including an irreversible `int4` to bigint widening (which also moves a PostgreSQL sequence to `bigint`) and a `naive` to time-zone widening (values read as UTC). Setting `NOT NULL` checks for `NULL` rows before any DDL. See [exact-schema changes](docs/guides/migrations.md#exact-schema-changes).
+- **`migration.ValidateModels`**, run by `tango.Check` and `tango.DumpModels`, refuses a foreign key whose width differs from the key it references (MySQL rejects the mix) and an index name used twice in the schema.
+- **A handshake between `tango makemigrations` and the app.** The CLI passes `tango-exact-schema-v1` after `-tango-dump-models`; an app whose models use the new options refuses to dump without it, so an older CLI cannot drop them silently. `makemigrations` also warns when the app's `go.mod` requires tango below v0.10.0.
+
+### Changed
+
+- **Migration files that use an exact-schema attribute are written under `V2` step kinds**, which a reader older than v0.10.0 refuses by name. Files that use none are written as before.
+- **`makemigrations` refuses a `--rename` of a field or model with an explicitly named index,** and a new `notnull` field with no default on an existing table.
+
 ## [0.9.0] - 2026-11-10
 
 ### Added

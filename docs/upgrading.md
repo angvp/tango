@@ -1,6 +1,16 @@
 # Upgrading
 
-This page lists what a host application changes when it upgrades from v0.8.x to v0.9.0, and, after it, from v0.7.0 to v0.8.0. Each section names a change, what it affects and what to do about it. The full list of changes is in each version's section of the [changelog](../CHANGELOG.md).
+This page lists what a host application changes when it upgrades from v0.9.x to v0.10.0, from v0.8.x to v0.9.0, and, after those, from v0.7.0 to v0.8.0. Each section names a change, what it affects and what to do about it. The full list of changes is in each version's section of the [changelog](../CHANGELOG.md).
+
+## v0.9.x to v0.10.0
+
+### The exact-schema tag options are opt-in
+
+`int4`, `naive`, `notnull`, `default=`, `unique=name` and `index=name` change nothing for a model that does not use them, and no migration is generated for existing models. See [exact schema](guides/models-and-tags.md#exact-schema).
+
+### Upgrade the library and the CLI together
+
+A v0.9.0 library ignores the new tag options without a warning, so a model that uses them generates a migration that silently lacks them. `tango makemigrations` warns when your `go.mod` requires tango below v0.10.0. In the other direction, a v0.9.0 `tango` CLI run against an app that uses the options now fails with an error naming the field, and a migration file that uses them needs v0.10.0 or later to be read.
 
 ## v0.8.x to v0.9.0
 

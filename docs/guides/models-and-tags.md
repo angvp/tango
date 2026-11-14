@@ -25,10 +25,23 @@ The `tango` struct tag takes a comma-separated list of options:
 | `varchar=n` | A bounded string: at most `n` characters, `n` from 1 to 10,485,760. Only on a `string` field. See [bounded strings](#bounded-strings). |
 | `text` | An explicit unbounded string, the same as a bare `string` field. Only on a `string` field; it cannot be combined with `varchar=n`. |
 | `json` | A string that holds JSON text, checked whenever the model is written. Only on a `string` field; it cannot be combined with `varchar=n`, `text`, `pk`, `fk`, `unique` or `index`. See [JSON fields](#json-fields). |
+| `int4` | A 4-byte integer column (`INTEGER`; `SERIAL` for the primary key on PostgreSQL). Only on a signed integer field. A foreign key and the key it references must both be `int4` or neither. See [exact schema](#exact-schema). |
+| `naive` | A timestamp without time zone (`TIMESTAMP` on PostgreSQL). Only on a `time.Time` field. |
+| `notnull` | `NOT NULL`. Not on a primary key, which is always `NOT NULL`. |
+| `default=v` | A column default: a string, `true`/`false`, or a base-10 integer, whichever fits the field. Not on a primary key or a foreign key, and no backslash or NUL in a string. |
+| `unique=name`, `index=name` | The same as `unique` and `index`, with an explicit index name instead of `uniq_<table>_<column>` or `idx_<table>_<column>`. `[A-Za-z_][A-Za-z0-9_]*`, at most 63 bytes, unique across the schema. |
 | `belongs_to=Field` | A relation field: a pointer to a named struct, holding the one related row that the owner's foreign key `Field` points at. It is not a column, and it is the field's only tango option. Loaded by `Query.Preload` or `Store.Related`. See [loading related rows](relationships-and-admin-foreign-keys.md#loading-related-rows). |
 | `has_many=Field` | A relation field: a slice of named structs, holding the children whose foreign key `Field` refers back to this model. It is not a column, and it is the field's only tango option. Loaded by `Query.Preload` or `Store.RelatedMany`. See [loading related rows](relationships-and-admin-foreign-keys.md#loading-related-rows). |
 
 Combine them: `tango:"pk,unique"` is valid, though redundant (a primary key is already unique).
+
+## Exact schema
+
+`int4`, `naive`, `notnull`, `default=` and named indexes let a migration describe a database that already exists, such as one an earlier tool created with `SERIAL` keys and `timestamp without time zone` columns, without changing it. They are opt-in: a model that uses none of them generates exactly what it did before.
+
+A tag that uses any of them is parsed strictly: an unrecognized part, a doubled comma, or an option given twice fails `Register` with `model.ErrInvalidFieldTag`. A tag that uses none keeps the older rule that an unknown key is ignored.
+
+A migration made with them needs tango v0.10.0 or later to apply. See the [migrations guide](migrations.md#exact-schema-changes) for changing them on a table that exists.
 
 ## Bounded strings
 

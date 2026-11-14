@@ -102,6 +102,30 @@ A migration with a widening type change is **irreversible**, even if it also ren
 
 Reversibility is decided per migration, and only length changes of a string can reverse. A migration whose type changes are all narrowings (`text` to `varchar(n)`, or a smaller `varchar`) is reversible: its `Down` widens each column again, which is always safe. A migration with any widening step (`varchar` to `text`, a larger `varchar`, or any change in the table above) is irreversible as a whole and has no `Down`, even when it also holds a narrowing. Rolling one back is refused, because values longer than the old limit may have been written since; to go back, change the tag and run `makemigrations`, which generates an explicit narrowing that checks the data first.
 
+## Exact-schema changes
+
+Changing `notnull`, `default=`, an index name, or an `int4` or `naive` tag on a field that already has a column generates a step, in the order type, unique, index, `NOT NULL`, default:
+
+| Model change | Step | Reversible |
+|---|---|---|
+| `notnull` added or removed | `AlterColumnNotNull` | yes |
+| `default=` added, changed or removed | `AlterColumnDefault` | yes |
+| the name in `unique=name` or `index=name` changed | `RenameIndex` | yes |
+| `unique` or `index` added or removed | `AlterColumnUnique`, `CreateIndex`, `DropIndex`, now carrying the explicit `Name` | yes |
+| `int4` removed (4-byte to 8-byte integer) | `AlterColumnType` | no |
+| `naive` removed (a timestamp gains its time zone) | `AlterColumnType` | no |
+
+Applying `AlterColumnNotNull` checks first, before any DDL, that no row holds `NULL`, and fails naming the count if one does; nothing is rewritten. Widening `int4` on PostgreSQL also moves the key's sequence to `bigint`, so ids past 2,147,483,647 work. Giving a timestamp its time zone reads the stored values as UTC.
+
+`makemigrations` refuses, naming the field and writing nothing:
+
+- a narrowing (`int8` to `int4`, a time zone to `naive`), and `int4` to `text` or `real`: widen to `integer` first, then change the Go type in a second run;
+- a primary key whose type changes, except `int4` to `integer`, and that only while no foreign key references the table;
+- a type change on a field whose typed default does not fit the new type: drop the default first;
+- a new `notnull` field on an existing table with no `default=`, since existing rows could not be filled;
+- a `notnull` or default change on a column that carries a raw `Default` from a hand-written step;
+- a `--rename` of a field or model whose index has an explicit name: drop the explicit name, rename, then add it back.
+
 ## Dropping a model or field
 
 A migration that drops a model's table or a field's column destroys its data, so `tango makemigrations` never writes one on its own. If your models no longer have a model or field that migration history does, the run fails, lists each one, and writes nothing:

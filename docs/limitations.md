@@ -49,9 +49,18 @@ tanGO is still early. This page is the honest summary of where it stops, so you 
 
 See the [SQLite, PostgreSQL and MySQL setup guide](guides/sqlite-and-postgresql-setup.md) for the full list. In short: placeholder syntax, `ALTER TABLE` behavior (SQLite rebuilds a table to drop a column, keeping everything else about it; Postgres and MySQL alter directly), and timestamp column types differ. None of this should be visible in your model or migration code — only in what DDL actually runs, and in raw SQL you write yourself.
 
+## Exact-schema limits
+
+- An `int4` column widens only to `integer` (bigint). To reach `text` or `real`, drop a typed default if it has one, remove the `int4` tag and run `tango makemigrations`, then change the Go type and run it again.
+- A foreign key and the key it references must have the same width. MySQL refuses an `INT` column referencing a `BIGINT` key (error 3780), so tango checks it for every dialect.
+- A primary key that other tables reference cannot be widened from `int4` by a generated migration.
+- On MySQL, a `TEXT` default is written as a parenthesized expression, and a `TEXT` column's default is changed with `MODIFY COLUMN` rather than `SET DEFAULT`.
+- A `--rename` of a field or model with an explicitly named index is refused, because the rename would rename that index wrongly.
+- Giving a `naive` timestamp its time zone reads the stored values as UTC.
+
 ## Irreversible migrations
 
-A migration containing `DropColumn`, `DropTable` or a widening `AlterColumnType` is marked irreversible; one whose only type changes are string narrowings is reversible. `tango migrate down` on one fails explicitly with a clear error rather than attempting to restore data it has no way to recover. If you need to test a rollback path, do it in a disposable database before applying the same migration to data you care about.
+A migration containing `DropColumn`, `DropTable` or a widening `AlterColumnType` (including an `int4` or `naive` widening) is marked irreversible; one whose only type changes are string narrowings is reversible. `tango migrate down` on one fails explicitly with a clear error rather than attempting to restore data it has no way to recover. If you need to test a rollback path, do it in a disposable database before applying the same migration to data you care about.
 
 ## Observability boundaries
 
