@@ -203,3 +203,53 @@ func TestApplyStepExactSchemaPostgresCatalog(t *testing.T) {
 		}
 	}
 }
+
+// TestApplyStepExactSchemaNonASCIIDefaults checks a non-ASCII default reaches
+// the database unchanged on a text and on a varchar column, whatever the
+// connection character set.
+func TestApplyStepExactSchemaNonASCIIDefaults(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
+	ctx := context.Background()
+	step := CreateTable{Table: "greetings", Columns: []Column{
+		{Name: "id", Type: "integer", PrimaryKey: true, Width: 32},
+		{Name: "short", Type: "varchar", Length: 20, DefaultKind: "string", DefaultValue: "ñandú ✓"},
+		{Name: "long", Type: "text", DefaultKind: "string", DefaultValue: "ñandú ✓"},
+	}}
+	if err := ApplyStep(ctx, sqlDB, dialect, step); err != nil {
+		t.Fatalf("ApplyStep: %v", err)
+	}
+	if _, err := sqlDB.ExecContext(ctx, "INSERT INTO greetings (id) VALUES (1)"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	var short, long string
+	if err := sqlDB.QueryRowContext(ctx, selectGreetings(dialect)).Scan(&short, &long); err != nil {
+		t.Fatalf("select: %v", err)
+	}
+	if short != "ñandú ✓" || long != "ñandú ✓" {
+		t.Fatalf("defaults = (%q, %q), want both %q", short, long, "ñandú ✓")
+	}
+}
+
+func selectGreetings(dialect db.Dialect) string {
+	if dialect == db.MySQL {
+		return "SELECT `short`, `long` FROM greetings"
+	}
+	return `SELECT "short", "long" FROM greetings`
+}
+
+// TestApplyStepExactSchemaForeignKeyWidth checks an int4 foreign key to an
+// int4 key is accepted on every dialect, the case ValidateModels allows.
+func TestApplyStepExactSchemaForeignKeyWidth(t *testing.T) {
+	sqlDB, dialect := testdb.Open(t)
+	ctx := context.Background()
+	parent := CreateTable{Table: "parents", Columns: []Column{{Name: "id", Type: "integer", PrimaryKey: true, Width: 32}}}
+	child := CreateTable{Table: "children", Columns: []Column{
+		{Name: "id", Type: "integer", PrimaryKey: true, Width: 32},
+		{Name: "parent_id", Type: "integer", Width: 32, NotNull: true, References: "parents"},
+	}}
+	for _, step := range []Step{parent, child} {
+		if err := ApplyStep(ctx, sqlDB, dialect, step); err != nil {
+			t.Fatalf("ApplyStep(%T): %v", step, err)
+		}
+	}
+}
