@@ -3,9 +3,14 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/angvp/tango/internal/schemaattr"
 	"github.com/angvp/tango/migration"
 )
+
+// v2Suffix marks a step kind that carries an exact-schema attribute.
+const v2Suffix = "V2"
 
 type encodedMigration struct {
 	App        string        `json:"app"`
@@ -29,6 +34,17 @@ type encodedStep struct {
 	ToLength   int    `json:"toLength,omitempty"`
 	FromLength int    `json:"fromLength,omitempty"`
 	Default    string `json:"default,omitempty"`
+
+	// The fields below are the exact-schema additions; an older reader
+	// refuses the V2 kinds that carry them rather than ignore them.
+	Name         string `json:"name,omitempty"`
+	NotNull      bool   `json:"notNull,omitempty"`
+	DefaultKind  string `json:"defaultKind,omitempty"`
+	DefaultValue string `json:"defaultValue,omitempty"`
+	FromWidth    int    `json:"fromWidth,omitempty"`
+	ToWidth      int    `json:"toWidth,omitempty"`
+	FromNaive    bool   `json:"fromNaive,omitempty"`
+	ToNaive      bool   `json:"toNaive,omitempty"`
 }
 
 func encodeMigrations(migrations []migration.Migration) ([]encodedMigration, error) {
@@ -83,61 +99,110 @@ func decodeMigrations(data []byte) ([]migration.Migration, error) {
 func encodeSteps(steps []migration.Step) ([]encodedStep, error) {
 	encoded := make([]encodedStep, len(steps))
 	for i, step := range steps {
-		switch s := step.(type) {
-		case migration.CreateTable:
-			encoded[i] = encodedStep{Kind: "CreateTable", Table: s.Table, Columns: s.Columns}
-		case migration.DropTable:
-			encoded[i] = encodedStep{Kind: "DropTable", Table: s.Table}
-		case migration.AddColumn:
-			encoded[i] = encodedStep{Kind: "AddColumn", Table: s.Table, Def: s.Column}
-		case migration.DropColumn:
-			encoded[i] = encodedStep{Kind: "DropColumn", Table: s.Table, Column: s.Column}
-		case migration.AlterColumnUnique:
-			encoded[i] = encodedStep{Kind: "AlterColumnUnique", Table: s.Table, Column: s.Column, Unique: s.Unique}
-		case migration.CreateIndex:
-			encoded[i] = encodedStep{Kind: "CreateIndex", Table: s.Table, Column: s.Column}
-		case migration.DropIndex:
-			encoded[i] = encodedStep{Kind: "DropIndex", Table: s.Table, Column: s.Column}
-		case migration.RenameColumn:
-			encoded[i] = encodedStep{Kind: "RenameColumn", Table: s.Table, Column: s.From, To: s.To}
-		case migration.RenameTable:
-			encoded[i] = encodedStep{Kind: "RenameTable", Table: s.From, To: s.To}
-		case migration.AlterColumnType:
-			encoded[i] = encodedStep{Kind: "AlterColumnType", Table: s.Table, Column: s.Column, From: s.From, To: s.To, FromLength: s.FromLength, ToLength: s.ToLength, Default: s.Default}
-		default:
-			return nil, fmt.Errorf("unsupported migration step type %T", step)
+		e, err := encodeStep(step)
+		if err != nil {
+			return nil, err
 		}
+		if schemaattr.StepUses(step) && !isNewStepKind(e.Kind) {
+			e.Kind += v2Suffix
+		}
+		encoded[i] = e
 	}
 	return encoded, nil
+}
+
+// isNewStepKind reports whether kind exists only from v0.10.0, so it needs no
+// V2 suffix to be refused by an older reader.
+func isNewStepKind(kind string) bool {
+	switch kind {
+	case "AlterColumnNotNull", "AlterColumnDefault", "RenameIndex":
+		return true
+	}
+	return false
+}
+
+func encodeStep(step migration.Step) (encodedStep, error) {
+	switch s := step.(type) {
+	case migration.CreateTable:
+		return encodedStep{Kind: "CreateTable", Table: s.Table, Columns: s.Columns}, nil
+	case migration.DropTable:
+		return encodedStep{Kind: "DropTable", Table: s.Table}, nil
+	case migration.AddColumn:
+		return encodedStep{Kind: "AddColumn", Table: s.Table, Def: s.Column}, nil
+	case migration.DropColumn:
+		return encodedStep{Kind: "DropColumn", Table: s.Table, Column: s.Column}, nil
+	case migration.AlterColumnUnique:
+		return encodedStep{Kind: "AlterColumnUnique", Table: s.Table, Column: s.Column, Unique: s.Unique, Name: s.Name}, nil
+	case migration.CreateIndex:
+		return encodedStep{Kind: "CreateIndex", Table: s.Table, Column: s.Column, Name: s.Name}, nil
+	case migration.DropIndex:
+		return encodedStep{Kind: "DropIndex", Table: s.Table, Column: s.Column, Name: s.Name}, nil
+	case migration.RenameColumn:
+		return encodedStep{Kind: "RenameColumn", Table: s.Table, Column: s.From, To: s.To}, nil
+	case migration.RenameTable:
+		return encodedStep{Kind: "RenameTable", Table: s.From, To: s.To}, nil
+	case migration.AlterColumnType:
+		return encodedStep{
+			Kind: "AlterColumnType", Table: s.Table, Column: s.Column, From: s.From, To: s.To,
+			FromLength: s.FromLength, ToLength: s.ToLength, Default: s.Default,
+			FromWidth: s.FromWidth, ToWidth: s.ToWidth, FromNaive: s.FromNaive, ToNaive: s.ToNaive,
+			DefaultKind: s.DefaultKind, DefaultValue: s.DefaultValue,
+		}, nil
+	case migration.AlterColumnNotNull:
+		return encodedStep{Kind: "AlterColumnNotNull", Table: s.Table, Column: s.Column, NotNull: s.NotNull, DefaultKind: s.DefaultKind, DefaultValue: s.DefaultValue}, nil
+	case migration.AlterColumnDefault:
+		return encodedStep{Kind: "AlterColumnDefault", Table: s.Table, Column: s.Column, DefaultKind: s.DefaultKind, DefaultValue: s.DefaultValue}, nil
+	case migration.RenameIndex:
+		return encodedStep{Kind: "RenameIndex", Table: s.Table, Column: s.Column, Unique: s.Unique, From: s.From, To: s.To}, nil
+	}
+	return encodedStep{}, fmt.Errorf("unsupported migration step type %T", step)
 }
 
 func decodeSteps(steps []encodedStep) ([]migration.Step, error) {
 	decoded := make([]migration.Step, len(steps))
 	for i, step := range steps {
-		switch step.Kind {
-		case "CreateTable":
-			decoded[i] = migration.CreateTable{Table: step.Table, Columns: step.Columns}
-		case "DropTable":
-			decoded[i] = migration.DropTable{Table: step.Table}
-		case "AddColumn":
-			decoded[i] = migration.AddColumn{Table: step.Table, Column: step.Def}
-		case "DropColumn":
-			decoded[i] = migration.DropColumn{Table: step.Table, Column: step.Column}
-		case "AlterColumnUnique":
-			decoded[i] = migration.AlterColumnUnique{Table: step.Table, Column: step.Column, Unique: step.Unique}
-		case "CreateIndex":
-			decoded[i] = migration.CreateIndex{Table: step.Table, Column: step.Column}
-		case "DropIndex":
-			decoded[i] = migration.DropIndex{Table: step.Table, Column: step.Column}
-		case "RenameColumn":
-			decoded[i] = migration.RenameColumn{Table: step.Table, From: step.Column, To: step.To}
-		case "RenameTable":
-			decoded[i] = migration.RenameTable{From: step.Table, To: step.To}
-		case "AlterColumnType":
-			decoded[i] = migration.AlterColumnType{Table: step.Table, Column: step.Column, From: step.From, To: step.To, FromLength: step.FromLength, ToLength: step.ToLength, Default: step.Default}
-		default:
-			return nil, fmt.Errorf("unknown migration step kind %q", step.Kind)
+		d, err := decodeStep(step)
+		if err != nil {
+			return nil, err
 		}
+		decoded[i] = d
 	}
 	return decoded, nil
+}
+
+func decodeStep(step encodedStep) (migration.Step, error) {
+	switch strings.TrimSuffix(step.Kind, v2Suffix) {
+	case "CreateTable":
+		return migration.CreateTable{Table: step.Table, Columns: step.Columns}, nil
+	case "DropTable":
+		return migration.DropTable{Table: step.Table}, nil
+	case "AddColumn":
+		return migration.AddColumn{Table: step.Table, Column: step.Def}, nil
+	case "DropColumn":
+		return migration.DropColumn{Table: step.Table, Column: step.Column}, nil
+	case "AlterColumnUnique":
+		return migration.AlterColumnUnique{Table: step.Table, Column: step.Column, Unique: step.Unique, Name: step.Name}, nil
+	case "CreateIndex":
+		return migration.CreateIndex{Table: step.Table, Column: step.Column, Name: step.Name}, nil
+	case "DropIndex":
+		return migration.DropIndex{Table: step.Table, Column: step.Column, Name: step.Name}, nil
+	case "RenameColumn":
+		return migration.RenameColumn{Table: step.Table, From: step.Column, To: step.To}, nil
+	case "RenameTable":
+		return migration.RenameTable{From: step.Table, To: step.To}, nil
+	case "AlterColumnType":
+		return migration.AlterColumnType{
+			Table: step.Table, Column: step.Column, From: step.From, To: step.To,
+			FromLength: step.FromLength, ToLength: step.ToLength, Default: step.Default,
+			FromWidth: step.FromWidth, ToWidth: step.ToWidth, FromNaive: step.FromNaive, ToNaive: step.ToNaive,
+			DefaultKind: step.DefaultKind, DefaultValue: step.DefaultValue,
+		}, nil
+	case "AlterColumnNotNull":
+		return migration.AlterColumnNotNull{Table: step.Table, Column: step.Column, NotNull: step.NotNull, DefaultKind: step.DefaultKind, DefaultValue: step.DefaultValue}, nil
+	case "AlterColumnDefault":
+		return migration.AlterColumnDefault{Table: step.Table, Column: step.Column, DefaultKind: step.DefaultKind, DefaultValue: step.DefaultValue}, nil
+	case "RenameIndex":
+		return migration.RenameIndex{Table: step.Table, Column: step.Column, Unique: step.Unique, From: step.From, To: step.To}, nil
+	}
+	return nil, fmt.Errorf("unknown migration step kind %q", step.Kind)
 }

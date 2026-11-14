@@ -206,3 +206,66 @@ func nameLabel(name string) string {
 	}
 	return name
 }
+
+// validateAlterExact checks the width and time-zone fields at both ends of an
+// AlterColumnType, and its carried typed default.
+func validateAlterExact(s AlterColumnType) error {
+	ends := []struct {
+		label string
+		typ   string
+		width int
+		naive bool
+	}{
+		{"from", s.From, s.FromWidth, s.FromNaive},
+		{"to", s.To, s.ToWidth, s.ToNaive},
+	}
+	for _, end := range ends {
+		switch {
+		case end.width != 0 && end.width != int4Width:
+			return fmt.Errorf("tango migration: %s.%s: %s width must be 0 or %d, got %d", s.Table, s.Column, end.label, int4Width, end.width)
+		case end.width != 0 && end.typ != "integer":
+			return fmt.Errorf("tango migration: %s.%s: %s width applies to integer, not %s", s.Table, s.Column, end.label, end.typ)
+		case end.naive && end.typ != "timestamp":
+			return fmt.Errorf("tango migration: %s.%s: %s naive applies to timestamp, not %s", s.Table, s.Column, end.label, end.typ)
+		}
+	}
+	return validateTypedDefault(s.Table, s.Column, s.DefaultKind, s.DefaultValue)
+}
+
+// validateTypedDefault checks a typed default carried by a step: a known kind
+// with a value of that kind. The column type is not known to the step, so the
+// kind-to-type fit is checked where the column is.
+func validateTypedDefault(table, column, kind, value string) error {
+	switch kind {
+	case "":
+		if value != "" {
+			return fmt.Errorf("tango migration: %s.%s: DefaultValue needs a DefaultKind", table, column)
+		}
+	case "string":
+		if strings.ContainsAny(value, "\\\x00") {
+			return fmt.Errorf("tango migration: %s.%s: default %q contains a backslash or NUL", table, column, value)
+		}
+	case "boolean":
+		if value != "true" && value != "false" {
+			return fmt.Errorf("tango migration: %s.%s: a boolean default must be true or false, got %q", table, column, value)
+		}
+	case "integer":
+		if _, err := strconv.ParseInt(value, 10, 64); err != nil {
+			return fmt.Errorf("tango migration: %s.%s: an integer default must be a base-10 integer, got %q", table, column, value)
+		}
+	default:
+		return fmt.Errorf("tango migration: %s.%s: unknown default kind %q", table, column, kind)
+	}
+	return nil
+}
+
+// validateIndexName checks an optional explicit index name on a step.
+func validateIndexName(table, column, name string) error {
+	if name == "" {
+		return nil
+	}
+	if !indexNameRE.MatchString(name) || len(name) > maxIndexNameBytes {
+		return fmt.Errorf("tango migration: %s.%s: index name %q must match [A-Za-z_][A-Za-z0-9_]* and be at most %d bytes", table, column, name, maxIndexNameBytes)
+	}
+	return nil
+}

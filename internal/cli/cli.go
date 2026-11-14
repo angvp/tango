@@ -558,11 +558,11 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 	case migration.DropColumn:
 		fmt.Fprintf(builder, "migration.DropColumn{Table: %q, Column: %q},\n", s.Table, s.Column)
 	case migration.AlterColumnUnique:
-		fmt.Fprintf(builder, "migration.AlterColumnUnique{Table: %q, Column: %q, Unique: %t},\n", s.Table, s.Column, s.Unique)
+		fmt.Fprintf(builder, "migration.AlterColumnUnique{Table: %q, Column: %q, Unique: %t%s},\n", s.Table, s.Column, s.Unique, nameField(s.Name))
 	case migration.CreateIndex:
-		fmt.Fprintf(builder, "migration.CreateIndex{Table: %q, Column: %q},\n", s.Table, s.Column)
+		fmt.Fprintf(builder, "migration.CreateIndex{Table: %q, Column: %q%s},\n", s.Table, s.Column, nameField(s.Name))
 	case migration.DropIndex:
-		fmt.Fprintf(builder, "migration.DropIndex{Table: %q, Column: %q},\n", s.Table, s.Column)
+		fmt.Fprintf(builder, "migration.DropIndex{Table: %q, Column: %q%s},\n", s.Table, s.Column, nameField(s.Name))
 	case migration.RenameColumn:
 		fmt.Fprintf(builder, "migration.RenameColumn{Table: %q, From: %q, To: %q},\n", s.Table, s.From, s.To)
 	case migration.RenameTable:
@@ -579,8 +579,49 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 		if s.Default != "" {
 			fmt.Fprintf(builder, ", Default: %q", s.Default)
 		}
+		writeAlterTypeExactFields(builder, s)
 		builder.WriteString("},\n")
+	case migration.AlterColumnNotNull:
+		fmt.Fprintf(builder, "migration.AlterColumnNotNull{Table: %q, Column: %q, NotNull: %t%s},\n", s.Table, s.Column, s.NotNull, defaultFields(s.DefaultKind, s.DefaultValue))
+	case migration.AlterColumnDefault:
+		fmt.Fprintf(builder, "migration.AlterColumnDefault{Table: %q, Column: %q%s},\n", s.Table, s.Column, defaultFields(s.DefaultKind, s.DefaultValue))
+	case migration.RenameIndex:
+		fmt.Fprintf(builder, "migration.RenameIndex{Table: %q, Column: %q, Unique: %t, From: %q, To: %q},\n", s.Table, s.Column, s.Unique, s.From, s.To)
 	}
+}
+
+// nameField is ", Name: ..." for an explicit index name and nothing otherwise.
+func nameField(name string) string {
+	if name == "" {
+		return ""
+	}
+	return fmt.Sprintf(", Name: %q", name)
+}
+
+// defaultFields is the typed-default fields of a step, or nothing.
+func defaultFields(kind, value string) string {
+	if kind == "" && value == "" {
+		return ""
+	}
+	return fmt.Sprintf(", DefaultKind: %q, DefaultValue: %q", kind, value)
+}
+
+// writeAlterTypeExactFields writes the exact-schema fields of an
+// AlterColumnType that are set.
+func writeAlterTypeExactFields(builder *strings.Builder, s migration.AlterColumnType) {
+	if s.FromWidth != 0 {
+		fmt.Fprintf(builder, ", FromWidth: %d", s.FromWidth)
+	}
+	if s.ToWidth != 0 {
+		fmt.Fprintf(builder, ", ToWidth: %d", s.ToWidth)
+	}
+	if s.FromNaive {
+		builder.WriteString(", FromNaive: true")
+	}
+	if s.ToNaive {
+		builder.WriteString(", ToNaive: true")
+	}
+	builder.WriteString(defaultFields(s.DefaultKind, s.DefaultValue))
 }
 
 // writeColumnFields writes a migration.Column literal's field list,

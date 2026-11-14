@@ -34,5 +34,8 @@ func validateAlterLengths(s AlterColumnType) error {
 	if err := validateLength(s.Table, s.Column, s.From, s.FromLength); err != nil {
 		return err
 	}
-	return validateLength(s.Table, s.Column, s.To, s.ToLength)
+	if err := validateLength(s.Table, s.Column, s.To, s.ToLength); err != nil {
+		return err
+	}
+	return validateAlterExact(s)
 }

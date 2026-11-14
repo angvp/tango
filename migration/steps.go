@@ -88,6 +88,10 @@ type AlterColumnUnique struct {
 	Table  string
 	Column string
 	Unique bool
+	// Name is the explicit name of the unique index; empty means the derived
+	// uniq_<table>_<column>. It is additive: files written without it mean
+	// what they always meant.
+	Name string `json:",omitempty"`
 }
 
 // CreateIndex creates a plain index for a table column. It is exported for
@@ -95,6 +99,9 @@ type AlterColumnUnique struct {
 type CreateIndex struct {
 	Table  string
 	Column string
+	// Name is the explicit index name; empty means the derived
+	// idx_<table>_<column>.
+	Name string `json:",omitempty"`
 }
 
 // DropIndex removes a plain index for a table column. It is exported for
@@ -102,6 +109,9 @@ type CreateIndex struct {
 type DropIndex struct {
 	Table  string
 	Column string
+	// Name is the explicit index name; empty means the derived
+	// idx_<table>_<column>.
+	Name string `json:",omitempty"`
 }
 
 // RenameColumn renames a column, keeping its data, constraints and indexes
@@ -141,6 +151,54 @@ type AlterColumnType struct {
 	To         string
 	ToLength   int `json:",omitempty"`
 	Default    string
+
+	// FromWidth and ToWidth are 32 for a 4-byte integer and 0 otherwise;
+	// FromNaive and ToNaive mark a timestamp without time zone. They let a
+	// width or time-zone change be expressed as a type change. DefaultKind
+	// and DefaultValue are the column's typed default in effect when the
+	// step runs, which MySQL needs to restate when it rewrites the column.
+	// All are additive.
+	FromWidth    int    `json:",omitempty"`
+	ToWidth      int    `json:",omitempty"`
+	FromNaive    bool   `json:",omitempty"`
+	ToNaive      bool   `json:",omitempty"`
+	DefaultKind  string `json:",omitempty"`
+	DefaultValue string `json:",omitempty"`
+}
+
+// AlterColumnNotNull sets or drops a column's NOT NULL. Setting it checks,
+// before any DDL, that no row holds NULL. DefaultKind and DefaultValue are the
+// column's typed default in effect when the step runs, carried so MySQL can
+// restate it when it rewrites the column. It is exported for generated
+// migration files; application code should use the tango CLI.
+type AlterColumnNotNull struct {
+	Table        string
+	Column       string
+	NotNull      bool
+	DefaultKind  string `json:",omitempty"`
+	DefaultValue string `json:",omitempty"`
+}
+
+// AlterColumnDefault sets a column's typed default, or drops it when
+// DefaultKind is empty. It is exported for generated migration files;
+// application code should use the tango CLI.
+type AlterColumnDefault struct {
+	Table        string
+	Column       string
+	DefaultKind  string `json:",omitempty"`
+	DefaultValue string `json:",omitempty"`
+}
+
+// RenameIndex renames the unique (Unique) or plain index of a column from
+// From to To, both effective names. Column and Unique let SQLite, which has no
+// rename for an index, create it again. It is exported for generated
+// migration files; application code should use the tango CLI.
+type RenameIndex struct {
+	Table  string
+	Column string
+	Unique bool
+	From   string
+	To     string
 }
 
 // Migration groups the up/down steps for one generated migration file. It is
@@ -154,13 +212,16 @@ type Migration struct {
 	Reversible bool
 }
 
-func (CreateTable) isMigrationStep()       {}
-func (DropTable) isMigrationStep()         {}
-func (AddColumn) isMigrationStep()         {}
-func (DropColumn) isMigrationStep()        {}
-func (AlterColumnUnique) isMigrationStep() {}
-func (CreateIndex) isMigrationStep()       {}
-func (DropIndex) isMigrationStep()         {}
-func (RenameColumn) isMigrationStep()      {}
-func (AlterColumnType) isMigrationStep()   {}
-func (RenameTable) isMigrationStep()       {}
+func (CreateTable) isMigrationStep()        {}
+func (DropTable) isMigrationStep()          {}
+func (AddColumn) isMigrationStep()          {}
+func (DropColumn) isMigrationStep()         {}
+func (AlterColumnUnique) isMigrationStep()  {}
+func (CreateIndex) isMigrationStep()        {}
+func (DropIndex) isMigrationStep()          {}
+func (RenameColumn) isMigrationStep()       {}
+func (AlterColumnType) isMigrationStep()    {}
+func (RenameTable) isMigrationStep()        {}
+func (AlterColumnNotNull) isMigrationStep() {}
+func (AlterColumnDefault) isMigrationStep() {}
+func (RenameIndex) isMigrationStep()        {}

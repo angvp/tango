@@ -126,6 +126,7 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 			return err
 		}
 		table.Columns[index].Unique = s.Unique
+		table.Columns[index].UniqueName = explicitName(s.Unique, s.Name, uniqueIndexName(s.Table, s.Column))
 		state.Tables[s.Table] = table
 
 	case CreateIndex:
@@ -134,6 +135,7 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 			return err
 		}
 		table.Columns[index].Indexed = true
+		table.Columns[index].IndexName = explicitName(true, s.Name, indexName(s.Table, s.Column))
 		state.Tables[s.Table] = table
 
 	case DropIndex:
@@ -142,6 +144,7 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 			return err
 		}
 		table.Columns[index].Indexed = false
+		table.Columns[index].IndexName = ""
 		state.Tables[s.Table] = table
 
 	case RenameTable:
@@ -164,7 +167,44 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		}
 		columns[index].Type = s.To
 		columns[index].Length = s.ToLength
+		columns[index].Width = s.ToWidth
+		columns[index].Naive = s.ToNaive
 		columns[index].Default = s.Default
+		table.Columns = columns
+		state.Tables[s.Table] = table
+
+	case AlterColumnNotNull:
+		table, index, err := requireColumn(state, s.Table, s.Column)
+		if err != nil {
+			return err
+		}
+		columns := append([]ColumnState(nil), table.Columns...)
+		columns[index].NotNull = s.NotNull
+		table.Columns = columns
+		state.Tables[s.Table] = table
+
+	case AlterColumnDefault:
+		table, index, err := requireColumn(state, s.Table, s.Column)
+		if err != nil {
+			return err
+		}
+		columns := append([]ColumnState(nil), table.Columns...)
+		columns[index].DefaultKind = s.DefaultKind
+		columns[index].DefaultValue = s.DefaultValue
+		table.Columns = columns
+		state.Tables[s.Table] = table
+
+	case RenameIndex:
+		table, index, err := requireColumn(state, s.Table, s.Column)
+		if err != nil {
+			return err
+		}
+		columns := append([]ColumnState(nil), table.Columns...)
+		if s.Unique {
+			columns[index].UniqueName = explicitName(true, s.To, uniqueIndexName(s.Table, s.Column))
+		} else {
+			columns[index].IndexName = explicitName(true, s.To, indexName(s.Table, s.Column))
+		}
 		table.Columns = columns
 		state.Tables[s.Table] = table
 
@@ -215,4 +255,13 @@ func columnIndex(columns []ColumnState, name string) int {
 		}
 	}
 	return -1
+}
+
+// explicitName is the name a column state records for an index: nothing when
+// the index is absent or carries the derived name, the explicit name otherwise.
+func explicitName(present bool, name, derived string) string {
+	if !present || name == derived {
+		return ""
+	}
+	return name
 }

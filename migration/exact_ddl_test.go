@@ -253,3 +253,76 @@ func TestApplyStepExactSchemaForeignKeyWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateAlterColumnTypeExactFields(t *testing.T) {
+	testdb.SQLiteOnly(t, "pure validation test")
+	bad := []struct {
+		name string
+		step AlterColumnType
+		want string
+	}{
+		{"from width 64", AlterColumnType{Table: "t", Column: "c", From: "integer", To: "integer", FromWidth: 64}, "from width"},
+		{"to width on text", AlterColumnType{Table: "t", Column: "c", From: "integer", To: "text", ToWidth: 32}, "to width"},
+		{"naive on integer", AlterColumnType{Table: "t", Column: "c", From: "integer", To: "integer", FromNaive: true}, "naive"},
+		{"bad default kind", AlterColumnType{Table: "t", Column: "c", From: "integer", To: "text", DefaultKind: "float", DefaultValue: "1"}, "unknown default kind"},
+		{"value without kind", AlterColumnType{Table: "t", Column: "c", From: "integer", To: "text", DefaultValue: "1"}, "needs a DefaultKind"},
+		{"bad boolean", AlterColumnType{Table: "t", Column: "c", From: "boolean", To: "text", DefaultKind: "boolean", DefaultValue: "yes"}, "true or false"},
+	}
+	for _, tc := range bad {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAlterLengths(tc.step)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("validateAlterLengths = %v, want error containing %q", err, tc.want)
+			}
+		})
+	}
+	ok := AlterColumnType{Table: "t", Column: "c", From: "integer", To: "integer", FromWidth: 32, DefaultKind: "integer", DefaultValue: "0"}
+	if err := validateAlterLengths(ok); err != nil {
+		t.Errorf("validateAlterLengths(valid) = %v", err)
+	}
+}
+
+func TestReplayNewStepsUpdateColumnState(t *testing.T) {
+	testdb.SQLiteOnly(t, "pure replay test")
+	create := CreateTable{Table: "users", Columns: []Column{
+		{Name: "id", Type: "integer", PrimaryKey: true, Width: 32},
+		{Name: "email", Type: "varchar", Length: 255, Unique: true, UniqueName: "idx_users_email"},
+		{Name: "created_at", Type: "timestamp", Naive: true},
+	}}
+	state, err := Replay([]Migration{{App: "a", Name: "0001", Up: []Step{
+		create,
+		AlterColumnNotNull{Table: "users", Column: "email", NotNull: true},
+		AlterColumnDefault{Table: "users", Column: "created_at", DefaultKind: "string", DefaultValue: "x"},
+		RenameIndex{Table: "users", Column: "email", Unique: true, From: "idx_users_email", To: "idx_users_mail"},
+		AlterColumnType{Table: "users", Column: "id", From: "integer", To: "integer", FromWidth: 32},
+		AlterColumnType{Table: "users", Column: "created_at", From: "timestamp", To: "timestamp", FromNaive: true},
+	}}})
+	if err != nil {
+		t.Fatalf("Replay: %v", err)
+	}
+	cols := map[string]ColumnState{}
+	for _, c := range state.Tables["users"].Columns {
+		cols[c.Name] = c
+	}
+	if !cols["email"].NotNull || cols["email"].UniqueName != "idx_users_mail" {
+		t.Errorf("email = %+v, want NotNull and UniqueName idx_users_mail", cols["email"])
+	}
+	if c := cols["created_at"]; c.DefaultKind != "string" || c.Naive {
+		t.Errorf("created_at = %+v, want the default set and Naive cleared", c)
+	}
+	if cols["id"].Width != 0 {
+		t.Errorf("id.Width = %d, want 0 after widening", cols["id"].Width)
+	}
+
+	// Renaming an index to the derived name records no explicit name.
+	state, err = Replay([]Migration{{App: "a", Name: "0001", Up: []Step{
+		create,
+		RenameIndex{Table: "users", Column: "email", Unique: true, From: "idx_users_email", To: "uniq_users_email"},
+	}}})
+	if err != nil {
+		t.Fatalf("Replay: %v", err)
+	}
+	if name := state.Tables["users"].Columns[1].UniqueName; name != "" {
+		t.Errorf("UniqueName = %q, want empty for the derived name", name)
+	}
+}
