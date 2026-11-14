@@ -60,14 +60,29 @@ func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		}
 		return unsupportedDialect(dialect)
 	case AlterColumnUnique:
-		return applyUniqueIndex(ctx, sqlDB, dialect, s.Table, s.Column, s.Unique)
+		if err := validateIndexName(s.Table, s.Column, s.Name); err != nil {
+			return err
+		}
+		return applyUniqueIndex(ctx, sqlDB, dialect, s.Table, s.Column, s.Unique, explicitOr(s.Name, uniqueIndexName(s.Table, s.Column)))
 	case CreateIndex:
+		if err := validateIndexName(s.Table, s.Column, s.Name); err != nil {
+			return err
+		}
 		if err := ensureIndexable(ctx, sqlDB, dialect, s.Table, s.Column); err != nil {
 			return err
 		}
-		return exec(ctx, sqlDB, createIndexSQL(dialect, false, indexName(s.Table, s.Column), s.Table, s.Column))
+		return exec(ctx, sqlDB, createIndexSQL(dialect, false, explicitOr(s.Name, indexName(s.Table, s.Column)), s.Table, s.Column))
 	case DropIndex:
-		return exec(ctx, sqlDB, dropIndexSQL(dialect, indexName(s.Table, s.Column), s.Table))
+		if err := validateIndexName(s.Table, s.Column, s.Name); err != nil {
+			return err
+		}
+		return exec(ctx, sqlDB, dropIndexSQL(dialect, explicitOr(s.Name, indexName(s.Table, s.Column)), s.Table))
+	case AlterColumnNotNull:
+		return alterColumnNotNull(ctx, sqlDB, dialect, s, dataChecked)
+	case AlterColumnDefault:
+		return alterColumnDefault(ctx, sqlDB, dialect, s)
+	case RenameIndex:
+		return renameIndexStep(ctx, sqlDB, dialect, s)
 	case RenameColumn:
 		return renameColumn(ctx, sqlDB, dialect, s)
 	case AlterColumnType:
@@ -128,8 +143,7 @@ func createIndexSQL(dialect db.Dialect, unique bool, name, table, column string)
 // applyUniqueIndex enforces (or lifts) uniqueness via a unique index rather
 // than a table constraint, so it applies identically and directly on both
 // SQLite and Postgres with no table-rebuild required.
-func applyUniqueIndex(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, table, column string, unique bool) error {
-	name := uniqueIndexName(table, column)
+func applyUniqueIndex(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, table, column string, unique bool, name string) error {
 	if unique {
 		if err := ensureIndexable(ctx, sqlDB, dialect, table, column); err != nil {
 			return err

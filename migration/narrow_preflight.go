@@ -104,7 +104,7 @@ func describeKey(column string, key any) string {
 	}
 }
 
-// preflightMigration checks every narrowing in steps against the database as
+// preflightMigration checks every narrowing, and every NOT NULL gained, in steps against the database as
 // it is now, before the migration runs any DDL, so a refused narrowing leaves
 // the schema as well as the data unchanged. A step names its table and column
 // as they are after the earlier steps, so earlier renames are undone to find
@@ -112,17 +112,30 @@ func describeKey(column string, key any) string {
 // creates has no existing data and is skipped.
 func preflightMigration(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, steps []Step) error {
 	for i, step := range steps {
-		s, ok := step.(AlterColumnType)
-		if !ok || !isNarrowing(s.From, s.FromLength, s.To, s.ToLength) {
-			continue
-		}
-		table, column, created := physicalNames(steps[:i], s.Table, s.Column)
-		if created {
-			continue
-		}
-		s.Table, s.Column = table, column
-		if err := preflightNarrowing(ctx, sqlDB, dialect, s); err != nil {
-			return err
+		switch s := step.(type) {
+		case AlterColumnType:
+			if !isNarrowing(s.From, s.FromLength, s.To, s.ToLength) {
+				continue
+			}
+			table, column, created := physicalNames(steps[:i], s.Table, s.Column)
+			if created {
+				continue
+			}
+			s.Table, s.Column = table, column
+			if err := preflightNarrowing(ctx, sqlDB, dialect, s); err != nil {
+				return err
+			}
+		case AlterColumnNotNull:
+			if !s.NotNull {
+				continue
+			}
+			table, column, created := physicalNames(steps[:i], s.Table, s.Column)
+			if created {
+				continue
+			}
+			if err := preflightNotNull(ctx, sqlDB, dialect, table, column); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

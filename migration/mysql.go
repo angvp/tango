@@ -159,18 +159,24 @@ type mysqlColumnInfo struct {
 	// it has none.
 	defaultText string
 	hasDefault  bool
+	// columnType is the full type as MySQL writes it ("varchar(255)", "int"),
+	// and autoIncrement whether the column generates its own values; MODIFY
+	// COLUMN drops both unless they are restated.
+	columnType    string
+	autoIncrement bool
 }
 
 func mysqlColumn(ctx context.Context, sqlDB queryRower, table, column string) (mysqlColumnInfo, error) {
 	var info mysqlColumnInfo
-	var nullable string
+	var nullable, extra string
 	var columnDefault sql.NullString
-	err := sqlDB.QueryRowContext(ctx, `SELECT data_type, is_nullable, column_default FROM information_schema.columns
-		WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`, table, column).Scan(&info.dataType, &nullable, &columnDefault)
+	err := sqlDB.QueryRowContext(ctx, `SELECT data_type, is_nullable, column_default, column_type, extra FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`, table, column).Scan(&info.dataType, &nullable, &columnDefault, &info.columnType, &extra)
 	if errors.Is(err, sql.ErrNoRows) {
 		return info, fmt.Errorf("tango migration: column %q does not exist on table %q", column, table)
 	}
 	info.nullable = nullable == "YES"
+	info.autoIncrement = strings.Contains(strings.ToLower(extra), "auto_increment")
 	info.defaultText, info.hasDefault = columnDefault.String, columnDefault.Valid
 	return info, err
 }

@@ -49,6 +49,7 @@ sqlite-only ./internal/observabilitysafe
 sqlite-only ./internal/releasecheck
 sqlite-only ./internal/releasecheck/cmd/releasecheck
 sqlite-only ./internal/releasescripts
+sqlite-only ./internal/schemaattr  # pure string/reflect helpers; no SQL
 sqlite-only ./internal/security
 sensitive ./internal/shellcore
 sensitive ./internal/sqlbind
