@@ -357,6 +357,46 @@ func TestCheckAndDumpModelsRefuseForeignKeyWidthMismatch(t *testing.T) {
 	}
 }
 
+// TestDumpModelsGivesExactSchemaModelsOnlyToACLIThatKnowsThem checks the
+// handshake: a CLI older than v0.10.0 passes no token and would drop int4
+// silently, so the dump refuses, naming the field; plain models need no token.
+func TestDumpModelsGivesExactSchemaModelsOnlyToACLIThatKnowsThem(t *testing.T) {
+	exact := tango.Config{InstalledApps: []tango.App{tango.NewApp("exact", func(registry *tango.Registry) error {
+		return registry.Models().Register(exactAuthor{})
+	})}}
+	plain := tango.Config{InstalledApps: []tango.App{tango.NewApp("widgets", func(registry *tango.Registry) error {
+		return registry.Models().Register(dumpModelsWidget{})
+	})}}
+
+	withArgs(t, []string{"app", "-tango-dump-models"}, func() {
+		_, err := tango.DumpModels(exact)
+		if err == nil || !strings.Contains(err.Error(), "exact.exactAuthor.ID") || !strings.Contains(err.Error(), "v0.10.0") {
+			t.Fatalf("DumpModels without the token = %v, want a refusal naming exact.exactAuthor.ID and v0.10.0", err)
+		}
+		if _, err := tango.DumpModels(plain); err != nil {
+			t.Fatalf("DumpModels of plain models without the token: %v", err)
+		}
+	})
+	for _, spelling := range []string{"--tango-dump-models", "-tango-dump-models=true"} {
+		withArgs(t, []string{"app", spelling}, func() {
+			if _, err := tango.DumpModels(exact); err == nil {
+				t.Fatalf("DumpModels under %s without the token returned no error", spelling)
+			}
+		})
+	}
+	// No dump flag at all: not a dump a CLI reads, so nothing is gated.
+	withArgs(t, []string{"app", "-check"}, func() {
+		if _, err := tango.DumpModels(exact); err != nil {
+			t.Fatalf("DumpModels without the dump flag: %v", err)
+		}
+	})
+	withArgs(t, []string{"app", "-tango-dump-models", "tango-exact-schema-v1"}, func() {
+		if _, err := tango.DumpModels(exact); err != nil {
+			t.Fatalf("DumpModels with the token: %v", err)
+		}
+	})
+}
+
 func TestCheckReturnsRouteCompileError(t *testing.T) {
 	first := tango.NewApp("one", func(registry *tango.Registry) error {
 		return registry.Routes().Include("/users/", tango.URLs{

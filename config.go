@@ -8,10 +8,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/internal/schemaattr"
 	"github.com/angvp/tango/migration"
 )
 
@@ -333,7 +335,32 @@ func DumpModels(config Config) ([]migration.Model, error) {
 	if err := migration.ValidateModels(models); err != nil {
 		return nil, err
 	}
+	// A tango CLI older than v0.10.0 would drop the exact-schema attributes
+	// silently, so the models are only released to a CLI that says it knows
+	// them by passing the handshake token after -tango-dump-models.
+	if field, ok := schemaattr.ModelField(models); ok && dumpFlagGiven(os.Args[1:]) && !slices.Contains(os.Args[1:], schemaattr.HandshakeArg) {
+		return nil, fmt.Errorf("tango: %s uses an exact-schema attribute (int4, naive, notnull, default=, unique= or index= with a name) that this tango CLI cannot read; install tango CLI v0.10.0 or later and run tango makemigrations again", field)
+	}
 	return models, nil
+}
+
+// dumpFlagGiven reports whether args ask for the model dump, in any spelling
+// the flag package accepts. A direct DumpModels call under an argv without it,
+// as a test makes, is not a dump a CLI reads, so it is not gated.
+func dumpFlagGiven(args []string) bool {
+	for _, arg := range args {
+		name, value, hasValue := strings.Cut(strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-"), "=")
+		if name != "tango-dump-models" || !strings.HasPrefix(arg, "-") {
+			continue
+		}
+		if !hasValue {
+			return true
+		}
+		if on, err := strconv.ParseBool(value); err == nil && on {
+			return true
+		}
+	}
+	return false
 }
 
 // OpenAPIProvider is implemented by an installed app that can produce the

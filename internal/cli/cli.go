@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/angvp/tango/internal/schemaattr"
 	"github.com/angvp/tango/migration"
 )
 
@@ -212,6 +213,7 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 		}
 	}
 
+	warnOldLibrary(dir, stderr)
 	models, err := dumpModels(ctx, runner, dir, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "tango makemigrations: %v\n", err)
@@ -308,7 +310,7 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 
 func dumpModels(ctx context.Context, runner Runner, dir string, stderr io.Writer) ([]migration.Model, error) {
 	var stdout bytes.Buffer
-	if err := runner.Run(ctx, dir, "go", []string{"run", ".", "-tango-dump-models"}, &stdout, stderr); err != nil {
+	if err := runner.Run(ctx, dir, "go", []string{"run", ".", "-tango-dump-models", schemaattr.HandshakeArg}, &stdout, stderr); err != nil {
 		return nil, err
 	}
 
