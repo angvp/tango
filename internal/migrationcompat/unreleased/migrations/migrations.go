@@ -111,4 +111,73 @@ var Migrations = []migration.Migration{
 		},
 		Down: []migration.Step{},
 	},
+	{App: "blog", Name: "0014_add_ledger", Reversible: true,
+		Up: []migration.Step{
+			migration.CreateTable{Table: "ledger", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false, Width: 32}, {Name: "code", Type: "varchar", Length: 20, PrimaryKey: false, Unique: true, Indexed: false, UniqueName: "idx_ledger_code"}, {Name: "note", Type: "varchar", Length: 40, PrimaryKey: false, Unique: false, Indexed: false, DefaultKind: "string", DefaultValue: "none"}, {Name: "at", Type: "timestamp", PrimaryKey: false, Unique: false, Indexed: false, Naive: true, NotNull: true}, {Name: "qty", Type: "integer", PrimaryKey: false, Unique: false, Indexed: false, Width: 32}}},
+		},
+		Down: []migration.Step{
+			migration.DropTable{Table: "ledger"},
+		},
+	},
+	{App: "blog", Name: "0015_add_notnull_column", Reversible: true,
+		Up: []migration.Step{
+			migration.AddColumn{Table: "ledger", Column: migration.Column{Name: "tag", Type: "varchar", Length: 20, PrimaryKey: false, Unique: false, Indexed: false, NotNull: true, DefaultKind: "string", DefaultValue: "x"}},
+		},
+		Down: []migration.Step{
+			migration.DropColumn{Table: "ledger", Column: "tag"},
+		},
+	},
+	{App: "blog", Name: "0016_set_notnull", Reversible: true,
+		Up: []migration.Step{
+			migration.AlterColumnNotNull{Table: "ledger", Column: "qty", NotNull: true},
+		},
+		Down: []migration.Step{
+			migration.AlterColumnNotNull{Table: "ledger", Column: "qty", NotNull: false},
+		},
+	},
+	{App: "blog", Name: "0017_drop_notnull", Reversible: true,
+		Up: []migration.Step{
+			migration.AlterColumnNotNull{Table: "ledger", Column: "qty", NotNull: false},
+		},
+		Down: []migration.Step{
+			migration.AlterColumnNotNull{Table: "ledger", Column: "qty", NotNull: true},
+		},
+	},
+	{App: "blog", Name: "0018_change_default", Reversible: true,
+		Up: []migration.Step{
+			migration.AlterColumnDefault{Table: "ledger", Column: "note", DefaultKind: "string", DefaultValue: "unknown"},
+		},
+		Down: []migration.Step{
+			migration.AlterColumnDefault{Table: "ledger", Column: "note", DefaultKind: "string", DefaultValue: "none"},
+		},
+	},
+	{App: "blog", Name: "0019_drop_default", Reversible: true,
+		Up: []migration.Step{
+			migration.AlterColumnDefault{Table: "ledger", Column: "note"},
+		},
+		Down: []migration.Step{
+			migration.AlterColumnDefault{Table: "ledger", Column: "note", DefaultKind: "string", DefaultValue: "unknown"},
+		},
+	},
+	{App: "blog", Name: "0020_rename_unique", Reversible: true,
+		Up: []migration.Step{
+			migration.RenameIndex{Table: "ledger", Column: "code", Unique: true, From: "idx_ledger_code", To: "uniq_ledger_code"},
+		},
+		Down: []migration.Step{
+			migration.RenameIndex{Table: "ledger", Column: "code", Unique: true, From: "uniq_ledger_code", To: "idx_ledger_code"},
+		},
+	},
+	{App: "blog", Name: "0021_widen_int4", Reversible: false,
+		Up: []migration.Step{
+			migration.AlterColumnType{Table: "ledger", Column: "id", From: "integer", To: "integer", FromWidth: 32},
+			migration.AlterColumnType{Table: "ledger", Column: "qty", From: "integer", To: "integer", FromWidth: 32},
+		},
+		Down: []migration.Step{},
+	},
+	{App: "blog", Name: "0022_widen_naive", Reversible: false,
+		Up: []migration.Step{
+			migration.AlterColumnType{Table: "ledger", Column: "at", From: "timestamp", To: "timestamp", FromNaive: true},
+		},
+		Down: []migration.Step{},
+	},
 }

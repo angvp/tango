@@ -26,6 +26,7 @@ func TestWarnOldLibrary(t *testing.T) {
 		{"above", "module x\nrequire github.com/angvp/tango v0.11.0\n", false},
 		{"pseudo of exact", "module x\nrequire github.com/angvp/tango v0.10.0-0.20260101000000-abcdefabcdef\n", false},
 		{"replace only", "module x\nreplace github.com/angvp/tango => ../tango\n", false},
+		{"require with replace", "module x\nrequire github.com/angvp/tango v0.0.0\nreplace github.com/angvp/tango => ../tango\n", false},
 		{"replace block", "module x\nreplace (\n\tgithub.com/angvp/tango v0.9.0 => ../tango\n)\n", false},
 		{"no requirement", "module x\nrequire github.com/other/z v1.0.0\n", false},
 		{"unparsable", "module x\nrequire github.com/angvp/tango vNEXT\n", false},

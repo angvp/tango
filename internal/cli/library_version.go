@@ -22,7 +22,7 @@ var exactSchemaRelease = [3]int{0, 10, 0}
 // unparsable version.
 func warnOldLibrary(dir string, stderr io.Writer) {
 	version, ok := requiredTangoVersion(dir)
-	if !ok {
+	if !ok || version == "" {
 		return
 	}
 	parsed, ok := parseSemver(version)
@@ -54,6 +54,11 @@ func requiredTangoVersion(dir string) (string, bool) {
 // single-line or in a block. Other directives (replace, exclude, retract) are
 // skipped.
 func tangoRequirement(gomod string) (string, bool) {
+	if replacesTango(gomod) {
+		// A replace points at a checkout or a fork whose version go.mod
+		// does not say; stay silent rather than guess.
+		return "", true
+	}
 	block := ""
 	for _, line := range strings.Split(gomod, "\n") {
 		if i := strings.Index(line, "//"); i >= 0 {
@@ -107,6 +112,29 @@ func semverLess(a, b [3]int) bool {
 	for i := range a {
 		if a[i] != b[i] {
 			return a[i] < b[i]
+		}
+	}
+	return false
+}
+
+// replacesTango reports whether go.mod has a replace directive for tango.
+func replacesTango(gomod string) bool {
+	inBlock := false
+	for _, line := range strings.Split(gomod, "\n") {
+		if i := strings.Index(line, "//"); i >= 0 {
+			line = line[:i]
+		}
+		fields := strings.Fields(line)
+		switch {
+		case len(fields) == 0:
+		case inBlock && fields[0] == ")":
+			inBlock = false
+		case inBlock && fields[0] == tangoModule:
+			return true
+		case len(fields) == 2 && fields[0] == "replace" && fields[1] == "(":
+			inBlock = true
+		case len(fields) >= 2 && fields[0] == "replace" && fields[1] == tangoModule:
+			return true
 		}
 	}
 	return false

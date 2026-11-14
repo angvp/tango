@@ -48,10 +48,18 @@ v0.0.1 | v0.0.2) extended=false ;;
 *) extended=true ;;
 esac
 
-# Bounded strings (tango:"varchar=n") arrive in v0.4.0.
+# Bounded strings (tango:"varchar=n") arrive in v0.4.0, and every later
+# release has them.
 case $version in
-unreleased | v0.4.*) bounded=true ;;
+unreleased | v0.[4-9].* | v0.[1-9][0-9].*) bounded=true ;;
 *) bounded=false ;;
+esac
+
+# The exact-schema tag options (int4, naive, notnull, default=, unique=<name>)
+# and the ALTER steps for them arrive in v0.10.0.
+case $version in
+unreleased | v0.[1-9][0-9].*) exact=true ;;
+*) exact=false ;;
 esac
 
 cat >main.go <<'EOF'
@@ -67,7 +75,8 @@ import (
 
 // main only answers -tango-dump-models, the one flag makemigrations runs.
 func main() {
-	if len(os.Args) != 2 || os.Args[1] != "-tango-dump-models" {
+	// The CLI of v0.10.0 and later adds a handshake token after the flag.
+	if len(os.Args) < 2 || os.Args[1] != "-tango-dump-models" {
 		fmt.Fprintln(os.Stderr, "usage: compatapp -tango-dump-models")
 		os.Exit(2)
 	}
@@ -468,8 +477,318 @@ type Comment struct {
 func models() []any { return []any{Writer{}, Post{}, Comment{}} }'
 fi
 
+# Exact schema: one migration per capability, so a refused step can be skipped
+# on one dialect without losing the rest. The two irreversible widenings are
+# last.
+if $exact; then
+	stage add_ledger '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk,int4"`
+	Code string `tango:"varchar=20,unique=idx_ledger_code"`
+	Note string `tango:"varchar=40,default=none"`
+	At   time.Time `tango:"naive,notnull"`
+	Qty  int `tango:"int4"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	stage add_notnull_column '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk,int4"`
+	Code string `tango:"varchar=20,unique=idx_ledger_code"`
+	Note string `tango:"varchar=40,default=none"`
+	At   time.Time `tango:"naive,notnull"`
+	Qty  int `tango:"int4"`
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	stage set_notnull '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk,int4"`
+	Code string `tango:"varchar=20,unique=idx_ledger_code"`
+	Note string `tango:"varchar=40,default=none"`
+	At   time.Time `tango:"naive,notnull"`
+	Qty  int `tango:"int4,notnull"`
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	stage drop_notnull '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk,int4"`
+	Code string `tango:"varchar=20,unique=idx_ledger_code"`
+	Note string `tango:"varchar=40,default=none"`
+	At   time.Time `tango:"naive,notnull"`
+	Qty  int `tango:"int4"`
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	stage change_default '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk,int4"`
+	Code string `tango:"varchar=20,unique=idx_ledger_code"`
+	Note string `tango:"varchar=40,default=unknown"`
+	At   time.Time `tango:"naive,notnull"`
+	Qty  int `tango:"int4"`
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	stage drop_default '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk,int4"`
+	Code string `tango:"varchar=20,unique=idx_ledger_code"`
+	Note string `tango:"varchar=40"`
+	At   time.Time `tango:"naive,notnull"`
+	Qty  int `tango:"int4"`
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	stage rename_unique '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk,int4"`
+	Code string `tango:"varchar=20,unique"`
+	Note string `tango:"varchar=40"`
+	At   time.Time `tango:"naive,notnull"`
+	Qty  int `tango:"int4"`
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	stage widen_int4 '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk"`
+	Code string `tango:"varchar=20,unique"`
+	Note string `tango:"varchar=40"`
+	At   time.Time `tango:"naive,notnull"`
+	Qty  int
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	stage widen_naive '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk"`
+	Code string `tango:"varchar=20,unique"`
+	Note string `tango:"varchar=40"`
+	At   time.Time `tango:"notnull"`
+	Qty  int
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+fi
+
 command rm -rf "$out"
 mkdir -p "$out"
 cp -R migrations "$out/migrations"
-go run . -tango-dump-models >"$out/models.json"
+go run . -tango-dump-models tango-exact-schema-v1 >"$out/models.json"
 echo "wrote $out" >&2
