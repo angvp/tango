@@ -60,6 +60,10 @@ var wideningConversions = map[wideningKey]wideningConversion{
 	{"varchar", "varchar"}: unchangedValues,
 	// Narrowing copies values too; applying it first runs preflightNarrowing.
 	{"text", "varchar"}: unchangedValues,
+	// An int4 becoming bigint and a naive timestamp gaining a time zone keep
+	// every value; alterColumnReshape does the work.
+	{"int4", "integer"}:              unchangedValues,
+	{"timestamp_naive", "timestamp"}: unchangedValues,
 	{"boolean", "integer"}: {
 		sql: map[db.Dialect]func(string) string{
 			db.SQLite:   booleanTo("1", "0"),
@@ -166,9 +170,16 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 	if dialect == db.Postgres {
 		column := quote(dialect, s.Column)
 		actions := []string{fmt.Sprintf("ALTER COLUMN %s TYPE %s USING %s", column, baseTypeSQL(dialect, s.To, s.ToLength), convert(column))}
-		if s.Default != "" {
+		switch {
+		case s.Default != "":
 			actions = append([]string{"ALTER COLUMN " + column + " DROP DEFAULT"}, actions...)
 			actions = append(actions, "ALTER COLUMN "+column+" SET DEFAULT "+s.Default)
+		case s.DefaultKind != "":
+			// The typed default is rewritten for the new type, so a column
+			// ends as a fresh one of that type would (PostgreSQL otherwise
+			// keeps 'en'::character varying on a text column).
+			actions = append([]string{"ALTER COLUMN " + column + " DROP DEFAULT"}, actions...)
+			actions = append(actions, "ALTER COLUMN "+column+" SET DEFAULT "+defaultSQL(dialect, baseTypeSQL(dialect, s.To, s.ToLength), s.DefaultKind, s.DefaultValue))
 		}
 		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s %s", quote(dialect, s.Table), strings.Join(actions, ", ")))
 	}

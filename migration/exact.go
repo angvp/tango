@@ -146,44 +146,33 @@ func validateDefault(c Column) error {
 	return nil
 }
 
-// exactChanges describes the changes to the exact-schema attributes of an
-// existing column that no step can express yet. A column carrying any of
-// them also cannot change type, uniqueness or indexing: those steps would
-// drop its explicit index names, default or NOT NULL.
-func exactChanges(name string, current ColumnState, column Column) []string {
-	var changes []string
-	add := func(what string, from, to any) {
-		changes = append(changes, fmt.Sprintf("%s changes %s from %v to %v, which no migration step supports yet", name, what, from, to))
+// typeToken names a column's type for the widening rules: an int4 and a
+// timestamp without time zone are distinct types there.
+func typeToken(columnType string, width int, naive bool) string {
+	switch {
+	case columnType == "integer" && width == int4Width:
+		return "int4"
+	case columnType == "timestamp" && naive:
+		return "timestamp_naive"
 	}
-	if current.Width != column.Width {
-		add("integer width", widthLabel(current.Width), widthLabel(column.Width))
-	}
-	if current.Naive != column.Naive {
-		add("naive (timestamp without time zone)", current.Naive, column.Naive)
-	}
-	if current.NotNull != column.NotNull {
-		add("NOT NULL", current.NotNull, column.NotNull)
-	}
-	if current.DefaultKind != column.DefaultKind || current.DefaultValue != column.DefaultValue {
-		add("its default", defaultLabel(current.DefaultKind, current.DefaultValue), defaultLabel(column.DefaultKind, column.DefaultValue))
-	}
-	if current.UniqueName != column.UniqueName {
-		add("its unique index name", nameLabel(current.UniqueName), nameLabel(column.UniqueName))
-	}
-	if current.IndexName != column.IndexName {
-		add("its index name", nameLabel(current.IndexName), nameLabel(column.IndexName))
-	}
-	if len(changes) > 0 || !hasExactAttributes(column) {
-		return changes
-	}
-	if current.Type != column.Type || current.Length != column.Length || current.Unique != column.Unique || current.Indexed != column.Indexed {
-		changes = append(changes, fmt.Sprintf("%s changes type, uniqueness or indexing while it declares int4, naive, notnull, default or an index name, which no migration step supports yet", name))
-	}
-	return changes
+	return columnType
 }
 
-func hasExactAttributes(c Column) bool {
-	return c.Width != 0 || c.Naive || c.NotNull || c.DefaultKind != "" || c.UniqueName != "" || c.IndexName != ""
+func tokenLabel(token string, length int) string {
+	if token == "timestamp_naive" {
+		return "naive timestamp"
+	}
+	return typeLabel(token, length)
+}
+
+func columnToken(c Column) string     { return typeToken(c.Type, c.Width, c.Naive) }
+func stateToken(c ColumnState) string { return typeToken(c.Type, c.Width, c.Naive) }
+
+// typeChanged reports whether a column's type, length, integer width or time
+// zone differs from its replayed state.
+func typeChanged(current ColumnState, column Column) bool {
+	return current.Type != column.Type || current.Length != column.Length ||
+		current.Width != column.Width || current.Naive != column.Naive
 }
 
 func widthLabel(width int) string {

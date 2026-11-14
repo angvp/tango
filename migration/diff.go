@@ -187,6 +187,7 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 	}
 	createOrder := referencedFirst(desiredReferences)
 
+	referenced := referencedBy(state)
 	var unsupported []string
 	for _, table := range createOrder {
 		meta := desiredTables[table]
@@ -201,7 +202,7 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 
 		m := appMigration(meta.App)
 		columns := applyRenames(m, table, existing.Columns, columnRenames)
-		unsupported = append(unsupported, unsupportedChanges(meta, columns)...)
+		unsupported = append(unsupported, unsupportedChanges(meta, columns, referenced)...)
 		diffColumns(m, table, meta.Columns, columns)
 	}
 	if len(unsupported) > 0 {
@@ -248,25 +249,57 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 	return result, nil
 }
 
+// referencedBy maps each table some column of the state names in References
+// to its first referrer as "table.column", taking tables and columns in name
+// order so a message is deterministic.
+func referencedBy(state SchemaState) map[string]string {
+	tables := make([]string, 0, len(state.Tables))
+	for name := range state.Tables {
+		tables = append(tables, name)
+	}
+	sort.Strings(tables)
+	referenced := map[string]string{}
+	for _, table := range tables {
+		columns := append([]ColumnState(nil), state.Tables[table].Columns...)
+		sort.Slice(columns, func(i, j int) bool { return columns[i].Name < columns[j].Name })
+		for _, c := range columns {
+			if _, seen := referenced[c.References]; c.References != "" && !seen {
+				referenced[c.References] = table + "." + c.Name
+			}
+		}
+	}
+	return referenced
+}
+
 // typeChangeProblems explains why current cannot become column's type, or
 // returns nothing for a Widening type change whose default converts.
-func typeChangeProblems(name string, current ColumnState, column Column) []string {
-	switch {
-	case current.PrimaryKey || column.PrimaryKey:
-		return []string{fmt.Sprintf("%s changes type from %s to %s, but a primary key's type cannot change", name, current.Type, column.Type)}
-	case !isWidening(current.Type, current.Length, column.Type, column.Length) &&
-		!isNarrowing(current.Type, current.Length, column.Type, column.Length):
-		return []string{fmt.Sprintf("%s changes type from %s to %s, which is not a widening type change", name, typeLabel(current.Type, current.Length), typeLabel(column.Type, column.Length))}
+func typeChangeProblems(name, table string, current ColumnState, column Column, referenced map[string]string) []string {
+	from, to := stateToken(current), columnToken(column)
+	fromLabel, toLabel := tokenLabel(from, current.Length), tokenLabel(to, column.Length)
+	if current.PrimaryKey || column.PrimaryKey {
+		if !(current.PrimaryKey && column.PrimaryKey && from == "int4" && to == "integer") {
+			return []string{fmt.Sprintf("%s changes type from %s to %s, but a primary key's type cannot change", name, fromLabel, toLabel)}
+		}
+		if referrer := referenced[table]; referrer != "" {
+			return []string{fmt.Sprintf("%s widens its primary key from int4, but %s references it and a foreign key must match the key's width; widen %s first", name, referrer, referrer)}
+		}
+		return nil
 	}
-	if _, ok := convertDefault(current.Type, column.Type, current.Default); !ok {
-		return []string{fmt.Sprintf("%s changes type from %s to %s, but its default %s cannot be converted", name, current.Type, column.Type, current.Default)}
+	if !isWidening(from, current.Length, to, column.Length) && !isNarrowing(from, current.Length, to, column.Length) {
+		return []string{fmt.Sprintf("%s changes type from %s to %s, which is not a widening type change", name, fromLabel, toLabel)}
+	}
+	if current.DefaultKind != "" && defaultKindForType[column.Type] != current.DefaultKind {
+		return []string{fmt.Sprintf("%s changes type from %s to %s, but its default kind %s does not fit the new type; drop the default first", name, fromLabel, toLabel, current.DefaultKind)}
+	}
+	if _, ok := convertDefault(from, to, current.Default); !ok {
+		return []string{fmt.Sprintf("%s changes type from %s to %s, but its default %s cannot be converted", name, fromLabel, toLabel, current.Default)}
 	}
 	return nil
 }
 
 // unsupportedChanges describes each change between model's columns and the
 // same columns in history that no step can express.
-func unsupportedChanges(model Model, existing []ColumnState) []string {
+func unsupportedChanges(model Model, existing []ColumnState, referenced map[string]string) []string {
 	existingByName := make(map[string]ColumnState, len(existing))
 	for _, c := range existing {
 		existingByName[c.Name] = c
@@ -274,16 +307,18 @@ func unsupportedChanges(model Model, existing []ColumnState) []string {
 	var changes []string
 	for _, column := range model.Columns {
 		current, exists := existingByName[column.Name]
-		if !exists {
-			continue
-		}
 		name := model.fieldName(column.Name)
-		if exact := exactChanges(name, current, column); len(exact) > 0 {
-			changes = append(changes, exact...)
+		if !exists {
+			if column.NotNull && column.DefaultKind == "" {
+				changes = append(changes, name+" is a new NOT NULL column with no default, so existing rows cannot be filled; give it a default= or add it nullable first")
+			}
 			continue
 		}
-		if current.Type != column.Type || current.Length != column.Length {
-			changes = append(changes, typeChangeProblems(name, current, column)...)
+		if typeChanged(current, column) {
+			changes = append(changes, typeChangeProblems(name, model.Name, current, column, referenced)...)
+		}
+		if current.Default != "" && (current.NotNull != column.NotNull || current.DefaultKind != column.DefaultKind || current.DefaultValue != column.DefaultValue) {
+			changes = append(changes, name+" changes NOT NULL or its default while it carries a legacy default, which the migration could not restate; clear the legacy default first")
 		}
 		switch {
 		case current.PrimaryKey && !column.PrimaryKey:
@@ -389,42 +424,7 @@ func diffColumns(m *Migration, table string, columns []Column, existing []Column
 			continue
 		}
 
-		if current.Type != column.Type || current.Length != column.Length {
-			def, _ := convertDefault(current.Type, column.Type, current.Default)
-			step := AlterColumnType{
-				Table: table, Column: column.Name,
-				From: current.Type, FromLength: current.Length,
-				To: column.Type, ToLength: column.Length,
-				Default: def,
-			}
-			m.Up = append(m.Up, step)
-			if isNarrowing(step.From, step.FromLength, step.To, step.ToLength) {
-				// Widening again is always safe, so a narrowing reverses.
-				m.Down = append(m.Down, AlterColumnType{
-					Table: table, Column: column.Name,
-					From: step.To, FromLength: step.ToLength,
-					To: step.From, ToLength: step.FromLength,
-					Default: def,
-				})
-			} else {
-				m.Reversible = false
-			}
-		}
-
-		if current.Unique != column.Unique {
-			m.Up = append(m.Up, AlterColumnUnique{Table: table, Column: column.Name, Unique: column.Unique})
-			m.Down = append(m.Down, AlterColumnUnique{Table: table, Column: column.Name, Unique: current.Unique})
-		}
-
-		if current.Indexed != column.Indexed {
-			if column.Indexed {
-				m.Up = append(m.Up, CreateIndex{Table: table, Column: column.Name})
-				m.Down = append(m.Down, DropIndex{Table: table, Column: column.Name})
-			} else {
-				m.Up = append(m.Up, DropIndex{Table: table, Column: column.Name})
-				m.Down = append(m.Down, CreateIndex{Table: table, Column: column.Name})
-			}
-		}
+		diffExistingColumn(m, table, column, current)
 	}
 
 	columnNames := make([]string, 0, len(existing))
@@ -440,4 +440,85 @@ func diffColumns(m *Migration, table string, columns []Column, existing []Column
 		m.Up = append(m.Up, DropColumn{Table: table, Column: name})
 		m.Reversible = false
 	}
+}
+
+// diffExistingColumn appends the steps that bring current to column, in the
+// order type, unique, index, NOT NULL, default, and each step's inverse.
+func diffExistingColumn(m *Migration, table string, column Column, current ColumnState) {
+	if typeChanged(current, column) {
+		diffTypeChange(m, table, column, current)
+	}
+	diffIndexAttribute(m, table, column.Name, true, current.Unique, current.UniqueName, column.Unique, column.UniqueName)
+	diffIndexAttribute(m, table, column.Name, false, current.Indexed, current.IndexName, column.Indexed, column.IndexName)
+	if current.NotNull != column.NotNull {
+		m.Up = append(m.Up, AlterColumnNotNull{Table: table, Column: column.Name, NotNull: column.NotNull, DefaultKind: current.DefaultKind, DefaultValue: current.DefaultValue})
+		m.Down = append(m.Down, AlterColumnNotNull{Table: table, Column: column.Name, NotNull: current.NotNull, DefaultKind: current.DefaultKind, DefaultValue: current.DefaultValue})
+	}
+	if current.DefaultKind != column.DefaultKind || current.DefaultValue != column.DefaultValue {
+		m.Up = append(m.Up, AlterColumnDefault{Table: table, Column: column.Name, DefaultKind: column.DefaultKind, DefaultValue: column.DefaultValue})
+		m.Down = append(m.Down, AlterColumnDefault{Table: table, Column: column.Name, DefaultKind: current.DefaultKind, DefaultValue: current.DefaultValue})
+	}
+}
+
+func diffTypeChange(m *Migration, table string, column Column, current ColumnState) {
+	from, to := stateToken(current), columnToken(column)
+	def, _ := convertDefault(from, to, current.Default)
+	step := AlterColumnType{
+		Table: table, Column: column.Name,
+		From: current.Type, FromLength: current.Length, FromWidth: current.Width, FromNaive: current.Naive,
+		To: column.Type, ToLength: column.Length, ToWidth: column.Width, ToNaive: column.Naive,
+		Default: def, DefaultKind: current.DefaultKind, DefaultValue: current.DefaultValue,
+	}
+	m.Up = append(m.Up, step)
+	if isNarrowing(from, step.FromLength, to, step.ToLength) {
+		// Widening again is always safe, so a narrowing reverses.
+		m.Down = append(m.Down, AlterColumnType{
+			Table: table, Column: column.Name,
+			From: step.To, FromLength: step.ToLength, FromWidth: step.ToWidth, FromNaive: step.ToNaive,
+			To: step.From, ToLength: step.FromLength, ToWidth: step.FromWidth, ToNaive: step.FromNaive,
+			Default: def, DefaultKind: current.DefaultKind, DefaultValue: current.DefaultValue,
+		})
+		return
+	}
+	m.Reversible = false
+}
+
+// diffIndexAttribute handles one of a column's two index attributes, unique
+// (a unique index) or plain: gaining or losing it, or, when it stays, a
+// change of its explicit name. fromName and toName are "" for the derived name.
+func diffIndexAttribute(m *Migration, table, column string, unique, had bool, fromName string, has bool, toName string) {
+	create := func(name string) Step {
+		if unique {
+			return AlterColumnUnique{Table: table, Column: column, Unique: true, Name: name}
+		}
+		return CreateIndex{Table: table, Column: column, Name: name}
+	}
+	drop := func(name string) Step {
+		if unique {
+			return AlterColumnUnique{Table: table, Column: column, Unique: false, Name: name}
+		}
+		return DropIndex{Table: table, Column: column, Name: name}
+	}
+	switch {
+	case !had && has:
+		m.Up = append(m.Up, create(toName))
+		m.Down = append(m.Down, drop(toName))
+	case had && !has:
+		m.Up = append(m.Up, drop(fromName))
+		m.Down = append(m.Down, create(fromName))
+	case had && has && fromName != toName:
+		from, to := effectiveIndexName(table, column, unique, fromName), effectiveIndexName(table, column, unique, toName)
+		m.Up = append(m.Up, RenameIndex{Table: table, Column: column, Unique: unique, From: from, To: to})
+		m.Down = append(m.Down, RenameIndex{Table: table, Column: column, Unique: unique, From: to, To: from})
+	}
+}
+
+func effectiveIndexName(table, column string, unique bool, explicit string) string {
+	switch {
+	case explicit != "":
+		return explicit
+	case unique:
+		return uniqueIndexName(table, column)
+	}
+	return indexName(table, column)
 }

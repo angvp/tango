@@ -119,6 +119,9 @@ func tableRenameProblems(r Rename, modelsByTable map[string]Model, state SchemaS
 		return []string{fmt.Sprintf("%s: table %s belongs to app %s", r.source(), r.Table, table.App)}
 	}
 	var problems []string
+	for _, c := range table.Columns {
+		problems = append(problems, explicitIndexRenameProblems(r.source(), c)...)
+	}
 	if old, ok := modelsByTable[r.Table]; ok {
 		problems = append(problems, fmt.Sprintf("%s: the %s model still has table %s, so it was not renamed", r.source(), old.structName(), r.Table))
 	}
@@ -167,6 +170,9 @@ func columnRenameProblems(r Rename, modelTable string, modelsByTable map[string]
 	}
 
 	var problems []string
+	if i := columnIndex(table.Columns, r.Column); i != -1 {
+		problems = append(problems, explicitIndexRenameProblems(r.source(), table.Columns[i])...)
+	}
 	if columnIndex(table.Columns, r.Column) == -1 {
 		problems = append(problems, fmt.Sprintf("%s is not in migration history (table %s has columns %s)", r.source(), r.Table, stateColumnList(table.Columns)))
 	}
@@ -294,4 +300,18 @@ func renameTableInState(state *SchemaState, from, to string) {
 			state.Tables[name] = t
 		}
 	}
+}
+
+// explicitIndexRenameProblems refuses a rename that would touch an explicitly
+// named index: renameColumn and renameTable rename the derived idx_ and uniq_
+// names blindly, which would rename an explicit one wrongly or, on SQLite,
+// recreate a unique index as a plain one.
+func explicitIndexRenameProblems(source string, c ColumnState) []string {
+	var problems []string
+	for _, name := range []string{c.UniqueName, c.IndexName} {
+		if name != "" {
+			problems = append(problems, fmt.Sprintf("%s: column %s has the explicit index name %s, which a rename would rename wrongly; drop the explicit name, rename, then add it back", source, c.Name, name))
+		}
+	}
+	return problems
 }

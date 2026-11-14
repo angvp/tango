@@ -285,6 +285,8 @@ func mysqlAlterColumnType(ctx context.Context, sqlDB *sql.DB, s AlterColumnType)
 	defaultLiteral := s.Default
 	if defaultLiteral != "" {
 		defaultLiteral = defaultLiteralSQL(db.MySQL, target, defaultLiteral)
+	} else if s.DefaultKind != "" {
+		defaultLiteral = defaultSQL(db.MySQL, target, s.DefaultKind, s.DefaultValue)
 	}
 	if err := exec(ctx, sqlDB, mysqlModifySQL(s.Table, s.Column, target, info.nullable, defaultLiteral)); err != nil {
 		return err
