@@ -137,6 +137,12 @@ func alterColumnType(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s A
 	if err := validateAlterLengths(s); err != nil {
 		return err
 	}
+	if isReshape(s) {
+		if err := checkDialect(dialect); err != nil {
+			return err
+		}
+		return alterColumnReshape(ctx, sqlDB, dialect, s)
+	}
 	conversion, ok := wideningConversions[wideningKey{s.From, s.To}]
 	narrowing := isNarrowing(s.From, s.FromLength, s.To, s.ToLength)
 	if !ok || !(narrowing || isWidening(s.From, s.FromLength, s.To, s.ToLength)) {
