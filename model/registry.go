@@ -39,8 +39,10 @@ var ErrUnknownForeignKeyTarget = errors.New("tango: foreign key targets an unreg
 // ErrInvalidFieldTag is returned by Registry.Register when a field's tango
 // tag declares a string length wrongly: varchar without a positive length, a
 // length beyond MaxVarcharLength, varchar together with text, a repeated
-// varchar or text, or either on a field that is not a string. The error
-// names the model and field.
+// varchar or text, or either on a field that is not a string. It is also
+// returned for a malformed exact-schema option (int4, naive, notnull,
+// default=, unique=, index=) and by migration.ValidateModels for an
+// exact-schema rule that spans models. The error names the model and field.
 var ErrInvalidFieldTag = errors.New("tango: invalid field tag")
 
 // ErrInvalidRelation is returned by Registry.Register when a belongs_to or
@@ -97,6 +99,23 @@ type FieldMeta struct {
 	// text, which Store.Create and Store.Update check is valid. The column is
 	// ordinary text.
 	JSON bool
+	// Int4 is true for an integer field declared tango:"int4": a 32-bit
+	// column (INTEGER, or SERIAL for the primary key on PostgreSQL).
+	Int4 bool
+	// Naive is true for a time.Time field declared tango:"naive": a
+	// timestamp without time zone on PostgreSQL.
+	Naive bool
+	// NotNull is true for a field declared tango:"notnull".
+	NotNull bool
+	// DefaultKind and DefaultValue are the typed column default from
+	// tango:"default=v": kind "string", "boolean" or "integer", and "" for
+	// no default.
+	DefaultKind  string
+	DefaultValue string
+	// UniqueName and IndexName are explicit index names from
+	// tango:"unique=name" and tango:"index=name"; "" means the derived name.
+	UniqueName string
+	IndexName  string
 }
 
 // Registry stores model metadata by Go type name.
@@ -188,16 +207,28 @@ func (r *Registry) Register(value any) error {
 			return fmt.Errorf("%w: %s.%s: %v", ErrInvalidFieldTag, name, field.Name, err)
 		}
 
+		attrs, err := schemaTags(tag, field.Type, maxLength)
+		if err != nil {
+			return fmt.Errorf("%w: %s.%s: %v", ErrInvalidFieldTag, name, field.Name, err)
+		}
+
 		meta.Fields = append(meta.Fields, FieldMeta{
-			Name:       field.Name,
-			Type:       field.Type,
-			PrimaryKey: primaryKey,
-			Unique:     hasTagOption(tag, "unique"),
-			Indexed:    hasTagOption(tag, "index"),
-			Editable:   !primaryKey,
-			ForeignKey: fk,
-			MaxLength:  maxLength,
-			JSON:       isJSON,
+			Name:         field.Name,
+			Type:         field.Type,
+			PrimaryKey:   primaryKey,
+			Unique:       hasTagOption(tag, "unique") || attrs.UniqueName != "",
+			Indexed:      hasTagOption(tag, "index") || attrs.IndexName != "",
+			Editable:     !primaryKey,
+			ForeignKey:   fk,
+			MaxLength:    maxLength,
+			JSON:         isJSON,
+			Int4:         attrs.Int4,
+			Naive:        attrs.Naive,
+			NotNull:      attrs.NotNull,
+			DefaultKind:  attrs.DefaultKind,
+			DefaultValue: attrs.DefaultValue,
+			UniqueName:   attrs.UniqueName,
+			IndexName:    attrs.IndexName,
 		})
 	}
 

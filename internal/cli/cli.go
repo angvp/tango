@@ -599,5 +599,29 @@ func writeColumnFields(builder *strings.Builder, c migration.Column) {
 	if c.Default != "" {
 		fmt.Fprintf(builder, ", Default: %q", c.Default)
 	}
+	writeExactColumnFields(builder, c)
 	builder.WriteString("},")
+}
+
+// writeExactColumnFields writes the exact-schema fields of c that are set,
+// so a column without them is written exactly as before they existed.
+func writeExactColumnFields(builder *strings.Builder, c migration.Column) {
+	if c.Width != 0 {
+		fmt.Fprintf(builder, ", Width: %d", c.Width)
+	}
+	if c.Naive {
+		builder.WriteString(", Naive: true")
+	}
+	if c.NotNull {
+		builder.WriteString(", NotNull: true")
+	}
+	if c.DefaultKind != "" {
+		fmt.Fprintf(builder, ", DefaultKind: %q, DefaultValue: %q", c.DefaultKind, c.DefaultValue)
+	}
+	if c.UniqueName != "" {
+		fmt.Fprintf(builder, ", UniqueName: %q", c.UniqueName)
+	}
+	if c.IndexName != "" {
+		fmt.Fprintf(builder, ", IndexName: %q", c.IndexName)
+	}
 }

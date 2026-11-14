@@ -17,6 +17,26 @@ type ColumnState struct {
 	// CreateTable never writes a default (see columnDefSQL), so replay
 	// never takes one from it.
 	Default string
+
+	// The exact-schema fields mirror the Column fields of the same names.
+	Width        int    `json:",omitempty"`
+	Naive        bool   `json:",omitempty"`
+	NotNull      bool   `json:",omitempty"`
+	DefaultKind  string `json:",omitempty"`
+	DefaultValue string `json:",omitempty"`
+	UniqueName   string `json:",omitempty"`
+	IndexName    string `json:",omitempty"`
+}
+
+// columnStateOf is the replayed state of a column created or added as c.
+func columnStateOf(c Column) ColumnState {
+	return ColumnState{
+		Name: c.Name, Type: c.Type, Length: c.Length, PrimaryKey: c.PrimaryKey,
+		Unique: c.Unique, Indexed: c.Indexed, References: c.References,
+		Width: c.Width, Naive: c.Naive, NotNull: c.NotNull,
+		DefaultKind: c.DefaultKind, DefaultValue: c.DefaultValue,
+		UniqueName: c.UniqueName, IndexName: c.IndexName,
+	}
 }
 
 // TableState is a table's shape as reconstructed by Replay. It is exported
@@ -62,7 +82,7 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 			if err := validateColumn(s.Table, c); err != nil {
 				return err
 			}
-			columns[i] = ColumnState{Name: c.Name, Type: c.Type, Length: c.Length, PrimaryKey: c.PrimaryKey, Unique: c.Unique, Indexed: c.Indexed, References: c.References}
+			columns[i] = columnStateOf(c)
 		}
 		state.Tables[s.Table] = TableState{Name: s.Table, App: app, Columns: columns}
 
@@ -83,11 +103,9 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		if err := validateColumn(s.Table, s.Column); err != nil {
 			return err
 		}
-		table.Columns = append(table.Columns, ColumnState{
-			Name: s.Column.Name, Type: s.Column.Type, Length: s.Column.Length, PrimaryKey: s.Column.PrimaryKey,
-			Unique: s.Column.Unique, Indexed: s.Column.Indexed, References: s.Column.References,
-			Default: s.Column.Default,
-		})
+		added := columnStateOf(s.Column)
+		added.Default = s.Column.Default
+		table.Columns = append(table.Columns, added)
 		state.Tables[s.Table] = table
 
 	case DropColumn:

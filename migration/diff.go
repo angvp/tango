@@ -81,14 +81,40 @@ func desiredColumn(field model.FieldMeta) Column {
 		columnType, length = "varchar", field.MaxLength
 	}
 	return Column{
-		Name:       db.ColumnName(field.Name),
-		Type:       columnType,
-		Length:     length,
-		PrimaryKey: field.PrimaryKey,
-		Unique:     field.Unique,
-		Indexed:    field.Indexed,
-		References: references,
+		Name:         db.ColumnName(field.Name),
+		Type:         columnType,
+		Length:       length,
+		PrimaryKey:   field.PrimaryKey,
+		Unique:       field.Unique,
+		Indexed:      field.Indexed,
+		References:   references,
+		Width:        int4WidthOf(field.Int4),
+		Naive:        field.Naive,
+		NotNull:      field.NotNull,
+		DefaultKind:  field.DefaultKind,
+		DefaultValue: field.DefaultValue,
+		UniqueName:   field.UniqueName,
+		IndexName:    field.IndexName,
 	}
+}
+
+func int4WidthOf(int4 bool) int {
+	if int4 {
+		return int4Width
+	}
+	return 0
+}
+
+// normalizeIndexNames clears an explicit index name equal to the derived
+// one, so declaring the default name changes nothing.
+func normalizeIndexNames(table string, c Column) Column {
+	if c.UniqueName == uniqueIndexName(table, c.Name) {
+		c.UniqueName = ""
+	}
+	if c.IndexName == indexName(table, c.Name) {
+		c.IndexName = ""
+	}
+	return c
 }
 
 // ModelsFromMeta converts registered model metadata into the dialect- and
@@ -98,9 +124,10 @@ func desiredColumn(field model.FieldMeta) Column {
 func ModelsFromMeta(models []model.ModelMeta) []Model {
 	migrationModels := make([]Model, len(models))
 	for i, meta := range models {
+		table := db.ColumnName(meta.Name)
 		columns := make([]Column, len(meta.Fields))
 		for j, field := range meta.Fields {
-			columns[j] = desiredColumn(field)
+			columns[j] = normalizeIndexNames(table, desiredColumn(field))
 		}
 		fields := make(map[string]string, len(meta.Fields))
 		for j, field := range meta.Fields {
@@ -251,6 +278,10 @@ func unsupportedChanges(model Model, existing []ColumnState) []string {
 			continue
 		}
 		name := model.fieldName(column.Name)
+		if exact := exactChanges(name, current, column); len(exact) > 0 {
+			changes = append(changes, exact...)
+			continue
+		}
 		if current.Type != column.Type || current.Length != column.Length {
 			changes = append(changes, typeChangeProblems(name, current, column)...)
 		}

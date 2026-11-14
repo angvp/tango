@@ -10,8 +10,13 @@ import (
 // needs a Length from 1 to model.MaxVarcharLength and no other type may carry
 // one. Unknown legacy type tokens keep their silent TEXT fallback, but a
 // varchar or length-bearing state is always a loud error.
+//
+// It also checks the exact-schema fields (see validateExact).
 func validateColumn(table string, c Column) error {
-	return validateLength(table, c.Name, c.Type, c.Length)
+	if err := validateLength(table, c.Name, c.Type, c.Length); err != nil {
+		return err
+	}
+	return validateExact(table, c)
 }
 
 func validateLength(table, column, columnType string, length int) error {

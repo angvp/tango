@@ -285,6 +285,10 @@ func Check(config Config) error {
 		return err
 	}
 
+	if err := migration.ValidateModels(migration.ModelsFromMeta(registry.Models().All())); err != nil {
+		return err
+	}
+
 	if _, err := registry.Routes().Handler(); err != nil {
 		return err
 	}
@@ -325,7 +329,11 @@ func DumpModels(config Config) ([]migration.Model, error) {
 		return nil, err
 	}
 
-	return migration.ModelsFromMeta(registry.Models().All()), nil
+	models := migration.ModelsFromMeta(registry.Models().All())
+	if err := migration.ValidateModels(models); err != nil {
+		return nil, err
+	}
+	return models, nil
 }
 
 // OpenAPIProvider is implemented by an installed app that can produce the

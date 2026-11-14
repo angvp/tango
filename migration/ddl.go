@@ -161,10 +161,10 @@ func createTableWith(dialect db.Dialect, s CreateTable, extraDefs []string) []st
 	for i, c := range s.Columns {
 		defs[i] = columnDefSQL(dialect, c)
 		if c.Unique {
-			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, true, uniqueIndexName(s.Table, c.Name), s.Table, c.Name))
+			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, true, columnUniqueName(s.Table, c), s.Table, c.Name))
 		}
 		if c.Indexed {
-			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, false, indexName(s.Table, c.Name), s.Table, c.Name))
+			uniqueIndexes = append(uniqueIndexes, createIndexSQL(dialect, false, columnIndexName(s.Table, c), s.Table, c.Name))
 		}
 	}
 
@@ -173,8 +173,9 @@ func createTableWith(dialect db.Dialect, s CreateTable, extraDefs []string) []st
 	return append(statements, uniqueIndexes...)
 }
 
-// columnDefSQL generates a column definition for CreateTable. It
-// deliberately ignores Column.Default: Default exists solely so AddColumn
+// columnDefSQL generates a column definition for CreateTable: the type, then
+// the typed default and NOT NULL (see exactClausesSQL). It deliberately
+// ignores the legacy raw Column.Default: Default exists solely so AddColumn
 // (see addColumnDefSQL) can backfill an existing table's pre-existing rows
 // — a table being freshly created has no rows to backfill, and its columns
 // already get whatever value the application writes on insert, so Default
@@ -184,6 +185,9 @@ func createTableWith(dialect db.Dialect, s CreateTable, extraDefs []string) []st
 func columnDefSQL(dialect db.Dialect, c Column) string {
 	name := quote(dialect, c.Name)
 	if c.PrimaryKey && c.Type == "integer" {
+		if c.Width == int4Width {
+			return name + " " + pick(dialect, "INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY", "INT AUTO_INCREMENT PRIMARY KEY") + referencesSQL(dialect, c)
+		}
 		return name + " " + pick(dialect, "INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY", "BIGINT AUTO_INCREMENT PRIMARY KEY") + referencesSQL(dialect, c)
 	}
 
@@ -191,7 +195,7 @@ func columnDefSQL(dialect db.Dialect, c Column) string {
 	if c.PrimaryKey {
 		typ += " PRIMARY KEY"
 	}
-	return name + " " + typ + referencesSQL(dialect, c)
+	return name + " " + typ + exactClausesSQL(dialect, typ, c) + referencesSQL(dialect, c)
 }
 
 // addColumnDefSQL generates a column definition for AddColumn, honoring
@@ -237,6 +241,12 @@ func referencesSQL(dialect db.Dialect, c Column) string {
 func columnTypeSQL(dialect db.Dialect, c Column) string {
 	if dialect == db.MySQL && mysqlUnboundedText(c.Type) && (c.PrimaryKey || c.Unique || c.Indexed) {
 		return mysqlIndexableText
+	}
+	switch {
+	case c.Type == "integer" && c.Width == int4Width:
+		return pick(dialect, "INTEGER", "INTEGER", "INT")
+	case c.Type == "timestamp" && c.Naive:
+		return pick(dialect, "TIMESTAMP", "TIMESTAMP", "DATETIME(6)")
 	}
 	return baseTypeSQL(dialect, c.Type, c.Length)
 }

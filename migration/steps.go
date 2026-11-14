@@ -33,6 +33,26 @@ type Column struct {
 	// struct-tag-driven way to set this — it is only ever hand-authored on a
 	// specific generated migration where an existing model needs it.
 	Default string
+
+	// The exact-schema fields below are additive: their zero values keep a
+	// column exactly as before they existed.
+
+	// Width is 32 for a 4-byte integer (INTEGER, SERIAL for a key) and 0 for
+	// the default 8-byte integer. Only an "integer" column may set it.
+	Width int `json:",omitempty"`
+	// Naive makes a "timestamp" column a timestamp without time zone.
+	Naive bool `json:",omitempty"`
+	// NotNull adds NOT NULL. A primary key is always NOT NULL already.
+	NotNull bool `json:",omitempty"`
+	// DefaultKind ("string", "boolean" or "integer") and DefaultValue are a
+	// typed column default, rendered and quoted by tango for each dialect.
+	// Unlike the legacy Default they apply on CreateTable too.
+	DefaultKind  string `json:",omitempty"`
+	DefaultValue string `json:",omitempty"`
+	// UniqueName and IndexName replace the derived uniq_<table>_<col> and
+	// idx_<table>_<col> index names. Empty means the derived name.
+	UniqueName string `json:",omitempty"`
+	IndexName  string `json:",omitempty"`
 }
 
 // CreateTable creates a table with the provided columns. It is exported for

@@ -329,6 +329,34 @@ func TestDumpModelsReturnsRegistrationError(t *testing.T) {
 	}
 }
 
+type exactAuthor struct {
+	ID int `tango:"pk,int4"`
+}
+
+type exactArticle struct {
+	ID       int `tango:"pk,int4"`
+	AuthorID int `tango:"fk=exactAuthor"`
+}
+
+// TestCheckAndDumpModelsRefuseForeignKeyWidthMismatch checks both entry
+// points run migration.ValidateModels: an int8 foreign key to an int4 key
+// is refused before makemigrations or MySQL ever sees it.
+func TestCheckAndDumpModelsRefuseForeignKeyWidthMismatch(t *testing.T) {
+	app := tango.NewApp("exact", func(registry *tango.Registry) error {
+		if err := registry.Models().Register(exactAuthor{}); err != nil {
+			return err
+		}
+		return registry.Models().Register(exactArticle{})
+	})
+	config := tango.Config{InstalledApps: []tango.App{app}}
+	if _, err := tango.DumpModels(config); err == nil || !strings.Contains(err.Error(), "declare both int4 or neither") {
+		t.Fatalf("DumpModels error = %v, want a foreign key width refusal", err)
+	}
+	if err := tango.Check(config); err == nil || !strings.Contains(err.Error(), "declare both int4 or neither") {
+		t.Fatalf("Check error = %v, want a foreign key width refusal", err)
+	}
+}
+
 func TestCheckReturnsRouteCompileError(t *testing.T) {
 	first := tango.NewApp("one", func(registry *tango.Registry) error {
 		return registry.Routes().Include("/users/", tango.URLs{
