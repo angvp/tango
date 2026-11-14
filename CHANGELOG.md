@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-14
+
 ### Added
 
 - **Exact-schema tag options.** `int4` (a 4-byte integer, `SERIAL` for a PostgreSQL key), `naive` (`timestamp without time zone`), `notnull`, `default=v` (a string, boolean or integer) and `unique=name` / `index=name` (explicit index names) let a migration describe an existing database exactly. They are opt-in: a model that uses none generates what it did before. A tag that uses any of them is parsed strictly. See [exact schema](docs/guides/models-and-tags.md#exact-schema).
@@ -541,7 +543,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/angvp/tango/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/angvp/tango/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/angvp/tango/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/angvp/tango/compare/v0.7.0...v0.8.0
