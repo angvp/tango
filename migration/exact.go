@@ -182,20 +182,6 @@ func widthLabel(width int) string {
 	return "int8"
 }
 
-func defaultLabel(kind, value string) string {
-	if kind == "" {
-		return "none"
-	}
-	return fmt.Sprintf("%s %q", kind, value)
-}
-
-func nameLabel(name string) string {
-	if name == "" {
-		return "the derived name"
-	}
-	return name
-}
-
 // validateAlterExact checks the width and time-zone fields at both ends of an
 // AlterColumnType, and its carried typed default.
 func validateAlterExact(s AlterColumnType) error {

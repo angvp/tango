@@ -84,6 +84,12 @@ func TestSchemaTagsRefused(t *testing.T) {
 		{"index and index=", "index,index=i_x", stringType, 0, "cannot be combined"},
 		{"name too long", "unique=" + strings.Repeat("a", 64), stringType, 0, "index name"},
 		{"misspelt option", "not_null,int4", intType, 0, `unrecognized part "not_null"`},
+		{"naive with value", "naive=1", timeType, 0, "naive takes no value"},
+		{"notnull with value", "notnull=1", stringType, 0, "notnull takes no value"},
+		{"bad index name", "index=9bad", stringType, 0, "index name"},
+		{"uint overflow", "default=300", reflect.TypeOf(uint8(0)), 0, "out of range"},
+		{"uint not a number", "default=-1", reflect.TypeOf(uint(0)), 0, "base-10 integer"},
+		{"nul in default", "default=a\x00b", stringType, 0, "backslash or NUL"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
