@@ -46,6 +46,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 			instancePtr := reflect.New(meta.Type)
 			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, sub.form, reflect.Value{}); err != nil {
 				sub.discard(ctx)
+				files.restore(instancePtr.Elem(), reflect.Value{})
 				var refused *formFieldErrors
 				if !errors.As(err, &refused) {
 					return err
@@ -59,6 +60,7 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 
 			if err := store.Create(ctx.Context(), meta, instancePtr.Interface()); err != nil {
 				sub.discard(ctx)
+				files.restore(instancePtr.Elem(), reflect.Value{})
 				fieldErrors, formError, refused := storeFailure(ctx.Context(), err, meta, registration.Options)
 				if !refused {
 					return err

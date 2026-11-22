@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -541,4 +542,68 @@ func TestAdminCheckIsQuietWhenEveryFileFieldHasAStore(t *testing.T) {
 			t.Fatalf("check %q failed: %v", check.Description, check.Err)
 		}
 	}
+}
+
+func TestAdminFileFieldAFailedSaveDoesNotShowTheDiscardedFileAsCurrent(t *testing.T) {
+	store := newRecordingStore()
+	handler, db, cookie := fileAdmin(t, logoField(store))
+	_, _ = createWithLogo(t, handler, db, cookie, "first")
+	path, old := createWithLogo(t, handler, db, cookie, "second")
+
+	response := submitFiles(t, handler, cookie, path, [][2]string{{"Name", "Acme"}, {"Code", "first"}}, upload{"Logo", "new.png", pngBytes})
+
+	body := response.Body.String()
+	if !strings.Contains(body, old) || strings.Count(body, "https://cdn.test/") != 1 {
+		t.Fatalf("the 422 form must show only the old file %q as current: %s", old, body)
+	}
+}
+
+func TestAdminFileFieldReadOnlyTakesNoUploadAndStillSaves(t *testing.T) {
+	store := newRecordingStore()
+	registry := tango.NewRegistry()
+	_ = registry.Models().Register(fileClient{})
+	_ = registry.Admin().Register(fileClient{}, admin.Options{
+		Widgets:  map[string]admin.Widget{"Logo": logoField(store)},
+		ReadOnly: []string{"Logo"},
+	})
+	sqlDB, st := migratedAdminDB(t, registry)
+	_ = admin.CreateAccount(context.Background(), st, "admin", "secret")
+	_ = registry.Register(admin.New(st))
+	if err := registry.RunRegistration(); err != nil {
+		t.Fatal(err)
+	}
+	handler, _ := registry.Routes().Handler()
+	cookie := loginAndGetSessionCookie(t, handler, "admin", "secret")
+	if _, err := sqlDB.Exec(`INSERT INTO file_client (name, code, logo) VALUES ('Acme', 'acme', 'kept-key')`); err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	_ = sqlDB.QueryRow(`SELECT id FROM file_client`).Scan(&id)
+	path := fmt.Sprintf("/admin/file_client/%d/", id)
+
+	form := performAdminRequest(handler, http.MethodGet, path, cookie).Body.String()
+	response := submitForm(t, handler, cookie, path, "Name", "Acme 2", "Code", "acme")
+
+	if strings.Contains(form, "multipart/form-data") || response.Code != http.StatusFound || rowLogo(t, sqlDB, "acme") != "kept-key" || len(store.deleted) != 0 {
+		t.Fatalf("status = %d, key = %q, deleted = %v, want a plain form that saves and keeps the key", response.Code, rowLogo(t, sqlDB, "acme"), store.deleted)
+	}
+}
+
+// submitForm posts an urlencoded form with the page's CSRF token.
+func submitForm(t *testing.T, handler http.Handler, cookie *http.Cookie, path string, pairs ...string) *httptest.ResponseRecorder {
+	t.Helper()
+	match := csrfInput.FindStringSubmatch(performAdminRequest(handler, http.MethodGet, path, cookie).Body.String())
+	if match == nil {
+		t.Fatal("no csrf token")
+	}
+	values := url.Values{"csrf_token": {match[1]}}
+	for i := 0; i+1 < len(pairs); i += 2 {
+		values.Set(pairs[i], pairs[i+1])
+	}
+	request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(values.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
 }
