@@ -166,6 +166,19 @@ The bytes and the row live in two systems, so one can outlive the other. Write i
 
 To remove a file, delete the row first, then the bytes best-effort. A failed byte deletion leaves an unreachable object, never a row that points at nothing. tanGO ships no sweeper and the `Store` has no listing, so keep your own records if you need to find and remove stray objects. Delete with a context that outlives the request (`context.WithoutCancel`), since a client that has gone away should not strand the object.
 
+## One store for the framework: `registry.SetStorage`
+
+Set the store the framework's own features use, such as an admin file field, once, in `main` or an app's `Register`:
+
+```go
+store, _ := s3.New(ctx, s3.Config{Bucket: "uploads", Region: "auto", Endpoint: endpoint, PublicURL: "https://files.example.com"})
+if err := registry.SetStorage(store); err != nil { … } // a second call fails with tango.ErrStorageAlreadySet
+```
+
+Without it, an admin file field falls back to a local directory (`./storage`, or `TANGO_STORAGE_DIR`) with a startup warning, and `tango check` fails: a local directory loses its files on an ephemeral disk and is per instance. `Registry.Storage()` returns the store, if one was set.
+
+`s3.Config.PublicURL` and `gcs.Config.PublicURL` are optional: an absolute `http` or `https` URL with no credentials, query or fragment, such as an R2 public bucket or a CDN host. When set, the store implements `storage.PublicURLer`: `PublicURL(key)` returns that base joined with the `Prefix` and the key, and reports false for an invalid key. It makes no request and does not check the object exists. `storage/local` and `storagetest.NewMemory` do not implement it.
+
 ## Delivering a file
 
 ```go
@@ -184,12 +197,12 @@ A download is an **attachment** by default. Inline display happens only for a ty
 
 ## What tanGO does not do
 
-- **No public URLs or signed URLs.** Every download goes through your View and `Serve`.
+- **No signed URLs, and public URLs only when you configure them.** Every download goes through your View and `Serve`. `storage/s3` and `storage/gcs` take an optional `Config.PublicURL` (a public bucket or a CDN host) and then implement `storage.PublicURLer`; `admin.FileOptions.URL` gives the admin form a link of your own. See [Admin file fields](admin-registration.md#file-fields).
 - **No virus scanning, thumbnails, image processing, quotas or CDN.**
 - **No listing and no sweeper** (see Orphans above).
 - **No resumable or direct-to-cloud uploads**, and no access to multipart-upload controls. The S3 adapter may use multipart transfer internally.
 - **No automatic logging.** `Upload`, `Serve` and the stores log nothing; request-level observability around your upload and download Views is yours, because only your View knows the authorization outcome and business context.
-- **No admin widget.** A metadata model registers with [admin](admin-registration.md) as ordinary fields.
+- **No several files per field and no drag-and-drop upload with progress.** The admin widget, `admin.File`, takes one file per `string` field from a plain file input. See [Admin file fields](admin-registration.md#file-fields).
 
 For more than one instance, see [running more than one instance](running-more-than-one-instance.md#uploaded-files).
 

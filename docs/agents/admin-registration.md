@@ -36,6 +36,12 @@ registry.Admin().Register(Book{}, admin.Options{
 })
 ```
 
+## Pages And File Fields
+
+- A page of your own: `admin.RegisterPage(registry, admin.Page{Path, Title, View, Nav})` before `admin.New` is installed. The view runs only for signed-in staff; a POST needs the session's token (`admin.CSRFToken(ctx)` in a `csrf_token` field, first in a multipart form). Wrap output with `admin.RenderPage(ctx, title, template.HTML(...))` and escape what you put in it; `admin.CurrentUser(ctx)` gives the username.
+- A file on a `string` field: `Widgets: {"Logo": admin.File(admin.FileOptions{Put: storage.PutOptions{MaxSize: …}})}`. The row holds the generated key. The store is `FileOptions.Store`, else `registry.SetStorage(store)`, else a local `./storage` that fails `tango check`. The link comes from `FileOptions.URL`, else the store's `PublicURL`.
+- Replace and Remove delete the old object after the row is saved; do not delete it yourself.
+
 ## Don't
 
 - Do not expect automatic admin registration from model registration.
@@ -47,6 +53,7 @@ registry.Admin().Register(Book{}, admin.Options{
 
 ## Check
 
+- File field: upload on create, then replace and remove on edit; assert the old object is gone only after the save, a refused file stores nothing, and `tango check` is clean once a store is set.
 - Compare with `examples/api-with-admin/apps/posts/app.go` and `examples/api-with-admin/apps/authors/app.go`.
 - For a foreign key, verify the related model is also admin-registered if editors should get the quick-create link.
 - For a change to admin visuals, responsive layout, widgets, dialogs, sidebar behavior or CSP-sensitive markup, do the [admin theme check](../../RELEASING.md#admin-theme-check) in both themes, at desktop and phone width. It is a manual complement to the automated tests and never a replacement for them. Never commit screenshots.

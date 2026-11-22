@@ -35,4 +35,12 @@ var Migrations = []migration.Migration{
 			migration.DropTable{Table: "admin_session"},
 		},
 	},
+	{App: "documents", Name: "0004_auto_20261122152633", Reversible: true,
+		Up: []migration.Step{
+			migration.CreateTable{Table: "folder", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true, Unique: false, Indexed: false}, {Name: "name", Type: "varchar", Length: 100, PrimaryKey: false, Unique: false, Indexed: false}, {Name: "cover", Type: "varchar", Length: 32, PrimaryKey: false, Unique: false, Indexed: false}}},
+		},
+		Down: []migration.Step{
+			migration.DropTable{Table: "folder"},
+		},
+	},
 }

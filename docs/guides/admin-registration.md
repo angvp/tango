@@ -343,6 +343,60 @@ The preview contract:
 
 Without JavaScript the field is a plain textarea and the preview is absent. `examples/spa-accounts` edits a profile's `Bio` this way and renders nothing on its public pages.
 
+## Admin pages
+
+A page of your own can live inside the admin, behind the same sign-in, with the same navigation and look. Register it before the admin app is installed, like a model:
+
+```go
+err := admin.RegisterPage(registry, admin.Page{
+	Path:  "logos",         // served at /admin/logos/
+	Title: "Client logos",  // the page title and the navigation label
+	Nav:   true,            // list it in the navigation, after the models
+	View: func(ctx *tango.Context) error {
+		user, _ := admin.CurrentUser(ctx)
+		body := template.HTML(`<form method="post"><input type="hidden" name="csrf_token" value="` +
+			template.HTMLEscapeString(admin.CSRFToken(ctx)) + `">…</form>`)
+		_ = user
+		return admin.RenderPage(ctx, "Client logos", body)
+	},
+})
+```
+
+- **Gate.** Every request to the page goes through the admin's own session check first: no session redirects to the login, a non-staff account gets the forbidden page. Your view never runs for either.
+- **Methods.** GET and POST reach your view. Any other method gets the admin's 405 page.
+- **CSRF.** A POST is refused with 403 unless it carries the session's token in `csrf_token`; your view does not run. For a multipart form the token must be the form's first part, so it is checked before any file is read. Render the token with `admin.CSRFToken(ctx)`.
+- **Who is signed in.** `admin.CurrentUser(ctx)` returns the username and whether there is one. It is the username only, not the account row.
+- **Look.** `admin.RenderPage(ctx, title, body)` wraps your HTML in the admin's chrome (sidebar, theme, density, flash message). `body` is `template.HTML`: you are responsible for escaping what you put in it. The admin's content security policy applies, so no inline script or style.
+- **Path.** One lowercase segment: a letter, then letters, digits, `-` or `_`. A path the admin serves itself (`login`, `logout`, `theme`, `messages`, `density`) is refused with `admin.ErrReservedPagePath`, a repeat with `admin.ErrDuplicatePage`, and an invalid path, the path of a registered model, or a view that is not a `tango.View` with `admin.ErrInvalidPage`. A page registered after the admin is installed is reported by `tango check`, like a late model.
+
+## File fields
+
+`admin.File` makes a `string` field take an uploaded file. The staff user picks a file in the create or edit form; it goes to a `storage.Store` and the field holds the object's generated key.
+
+```go
+registry.Admin().Register(Client{}, admin.Options{
+	Widgets: map[string]admin.Widget{
+		"Logo": admin.File(admin.FileOptions{
+			Put: storage.PutOptions{MaxSize: 2 << 20, AllowedTypes: []string{"image/png", "image/jpeg"}},
+			// Store: nil uses the registry's store (registry.SetStorage), else ./storage.
+			// URL:   nil uses the store's PublicURL (S3, GCS), else the key is shown unlinked.
+		}),
+	},
+})
+```
+
+- **The key and the URL are two things.** The row keeps the key. Where the file is served is the URL: `FileOptions.URL(key)` if you set it, else the store's `storage.PublicURLer` (the `PublicURL` option of `storage/s3` and `storage/gcs`), else the form shows the key with no link. `storage/local` has no public URL.
+- **The store.** `FileOptions.Store`, else the one set with `registry.SetStorage(store)` (once; a second call fails with `tango.ErrStorageAlreadySet`), else a local directory: `./storage`, or `TANGO_STORAGE_DIR`. That fallback logs `tango.admin.storage_local_fallback` at startup and **fails `tango check`**, because a local directory loses its files on an ephemeral disk and is per instance. Set a store before you deploy.
+- **Required.** The field must be a `string`, and `Put.MaxSize` must be positive. Either mistake, or an unusable fallback directory, fails at startup naming the field (`admin.ErrInvalidFile`).
+- **Editing.** No new file keeps the current one. A new file replaces it. The **Remove** checkbox clears the field. The old object is deleted only after the row is saved; a save that fails deletes the new object and keeps the old key.
+- **Refusals.** A file over its limit or of a type the field does not allow is shown beside the field in plain words (the limit in MiB), keeps what was typed, and stores nothing. Any other store error is logged and shown as a generic message.
+- **A form shown again after an error does not keep the file picked** for the refused save: the new object is deleted, so choose the file again.
+- **Orphans.** A failed delete of a replaced object is logged and the save still succeeds, which leaves an orphan object. The admin never lists or sweeps objects. Two staff users editing the same row at once is last-writer-wins on the key, and the other's object is left behind.
+- **Read-only.** A field in `Options.ReadOnly` shows its file and takes no upload.
+- **No JavaScript needed.** The widget is a plain file input and a checkbox, so it works under the strict content security policy.
+
+The form is sent as `multipart/form-data` only when a field has a file widget, and it is read with `storage.ReadForm`; every other widget still gets its values through `FieldValues`. A custom widget can take a file too by implementing `admin.FileWidget`.
+
 ## Branding
 
 `admin.WithBranding` replaces the sidebar's generic title and mark with your own name and logo — the only two customization slots outside per-field widgets; there is no broader template or theme override mechanism:
