@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
@@ -47,6 +48,8 @@ import (
 	"github.com/angvp/tango/model"
 	"github.com/angvp/tango/openapi"
 	"github.com/angvp/tango/openapi/swaggerui"
+	"github.com/angvp/tango/storage"
+	"github.com/angvp/tango/storagetest"
 	"github.com/angvp/tango/testdb"
 )
 
@@ -107,6 +110,13 @@ type smokeCode struct {
 	Label string
 }
 
+// smokeLogo has a file field, so its admin form is multipart.
+type smokeLogo struct {
+	ID   int64 `tango:"pk"`
+	Name string
+	Logo string
+}
+
 // shortCodeWidget is a host text widget whose Parse refuses a value longer
 // than three characters with a field message, so two such fields are two
 // problems on one save.
@@ -138,6 +148,21 @@ func previewNote(_ context.Context, source string) (template.HTML, error) {
 
 func notesApp() tango.App {
 	return tango.NewApp("notes", func(registry *tango.Registry) error {
+		if err := registry.Models().Register(smokeLogo{}); err != nil {
+			return err
+		}
+		if err := registry.Admin().Register(smokeLogo{}, admin.Options{
+			Widgets: map[string]admin.Widget{"Logo": admin.File(admin.FileOptions{
+				Put:   storage.PutOptions{MaxSize: 1 << 20, AllowedTypes: []string{"image/png"}},
+				Store: storagetest.NewMemory(),
+				URL:   func(key string) string { return "/files/" + key },
+			})},
+		}); err != nil {
+			return err
+		}
+		if err := admin.RegisterPage(registry, admin.Page{Path: "smoke-page", Title: "Smoke page", Nav: true, View: smokePage}); err != nil {
+			return err
+		}
 		if err := registry.Models().Register(smokeCode{}); err != nil {
 			return err
 		}
@@ -171,7 +196,7 @@ func composedSite(t *testing.T) http.Handler {
 	for _, value := range []any{
 		admin.AdminUser{}, admin.AdminSession{},
 		accounts.Account{}, accounts.AccountSession{}, accounts.AccountToken{},
-		smokeNote{}, smokeCode{},
+		smokeNote{}, smokeCode{}, smokeLogo{},
 	} {
 		if err := models.Register(value); err != nil {
 			t.Fatalf("register %T: %v", value, err)
@@ -1444,6 +1469,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.visit("admin create form", "/admin/smoke_code/new/")
 	s.adminFormSummary()
 	s.createFormKeyboard()
+	s.adminPageAndFileField()
 
 	s.visit("swagger ui", "/docs/")
 	rendered := s.waitUntil(swaggerTimeout, `!!document.querySelector('.swagger-ui')`)
@@ -1564,4 +1590,47 @@ func named(label string, a chromedp.Action[chromedp.Void]) chromedp.Action[chrom
 		}
 		return v, nil
 	}
+}
+
+// smokePage is a host page inside the admin: a form that posts back to itself
+// with the session's CSRF token, and a message after the post.
+func smokePage(ctx *tango.Context) error {
+	if ctx.Request().Method == http.MethodPost {
+		return admin.RenderPage(ctx, "Smoke page", template.HTML(`<p id="posted">posted</p>`))
+	}
+	body := `<form method="post"><input type="hidden" name="csrf_token" value="` + template.HTMLEscapeString(admin.CSRFToken(ctx)) +
+		`"><label for="note">Note</label><input id="note" name="note" class="input"><button type="submit" class="btn-primary">Send</button></form>`
+	return admin.RenderPage(ctx, "Smoke page", template.HTML(body))
+}
+
+// smokePNG is a minimal PNG the file field accepts.
+var smokePNG = append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...)
+
+// adminPageAndFileField loads a host page and a file field form in the real
+// browser under the admin's policy: the page posts with its token, and a file
+// chosen in the browser is uploaded and kept, with no CSP violation and no
+// script needed by the widget itself.
+func (s *smoke) adminPageAndFileField() {
+	s.t.Helper()
+	s.visit("admin host page", "/admin/smoke-page/", chromedp.WaitVisible("#note"))
+	s.check(s.eval(`!!document.querySelector('nav a[href="/admin/smoke-page/"]')`), "the host page is not in the admin navigation")
+	s.run("post the host page", chromedp.SendKeys("#note", "hello"), clickStable("form[method=post] button.btn-primary"), chromedp.WaitVisible("#posted"))
+
+	file := filepath.Join(s.t.TempDir(), "logo.png")
+	if err := os.WriteFile(file, smokePNG, 0o600); err != nil {
+		s.t.Fatal(err)
+	}
+	s.visit("admin file field form", "/admin/smoke_logo/new/", chromedp.WaitVisible("#field-Logo"))
+	s.check(s.eval(`document.getElementById('field-Logo').form.enctype === 'multipart/form-data'`), "the file field's form is not multipart")
+	s.check(s.eval(`document.getElementById('field-Logo').type === 'file'`), "the file field is not a file input")
+	s.run("choose a file and save",
+		chromedp.SendKeys("#field-Name", "Acme"),
+		chromedp.SetUploadFiles("#field-Logo", []string{file}),
+		clickStable("form[method=post] button.btn-primary"),
+	)
+	s.check(s.waitUntil(stepTimeout, `location.pathname === '/admin/smoke_logo/'`), "saving a file field form did not return to the changelist")
+
+	s.visit("admin file field edit", "/admin/smoke_logo/1/", chromedp.WaitVisible("#field-Logo"))
+	s.check(s.eval(`!!document.querySelector('a[href^="/files/"]')`), "the edit form does not link the stored file")
+	s.check(s.eval(`!!document.getElementById('field-Logo__remove')`), "the edit form offers no Remove box for the stored file")
 }
