@@ -15,6 +15,10 @@ type FormOptions struct {
 	// Files declares the file fields the form may carry, each with the rules
 	// its own Put applies.
 	Files map[string]PutOptions
+	// Stores overrides, per file field, the store ReadForm was given. A field
+	// with no entry uses that store. Every declared field's file is deleted
+	// from the store it was put in when the form fails.
+	Stores map[string]Store
 	// TokenField, when set, names a field that must be the first part of the
 	// body, and CheckToken must accept its value before any other part is
 	// read. A forged request then stores nothing. The token is not returned
@@ -35,6 +39,11 @@ var (
 	// ErrFieldTooLarge is returned for a text field, or a form's text fields
 	// together, past their bounds.
 	ErrFieldTooLarge = errors.New("storage: form text is too large")
+	// ErrFileRefused is returned, wrapping the store's reason (ErrTooLarge or
+	// ErrTypeNotAllowed), when a store refused a file. ReadForm then reads the
+	// rest of the form so the caller can show what was typed, returns the
+	// text fields and the reasons in Form.Refused, and leaves nothing stored.
+	ErrFileRefused = errors.New("storage: a form file was refused")
 )
 
 const (
@@ -52,6 +61,9 @@ type Form struct {
 	// Files are the files stored, keyed by field. A field where no file was
 	// chosen has no entry.
 	Files map[string]UploadedFile
+	// Refused holds, per field, why a store refused its file. It is set only
+	// together with ErrFileRefused, and then Files is empty.
+	Refused map[string]error
 }
 
 // ReadForm reads a multipart/form-data request that holds text fields and
@@ -64,7 +76,10 @@ type Form struct {
 // later part is refused. A field where no file was chosen is not an error and
 // has no entry in Form.Files; a part with no filename that carries bytes in a
 // file field is ErrUnexpectedFile. A second file in one field is
-// ErrMultipleFiles. Any failure after a file was stored deletes every object
+// ErrMultipleFiles. A store's refusal of a file (ErrTooLarge or
+// ErrTypeNotAllowed) does not stop the read: the call returns ErrFileRefused
+// with Form.Values and Form.Refused filled in, so a caller can show the form
+// again with what was typed. Any other failure after a file was stored deletes every object
 // this call stored, even when the request's context is done. A body cut off
 // by a body limit surfaces as ErrTooLarge. ReadForm writes no response and
 // logs nothing; the calling View maps the errors.
@@ -81,7 +96,8 @@ func ReadForm(store Store, r *http.Request, opts FormOptions) (Form, error) {
 	}
 	fr := &formReader{
 		store: store, request: r, opts: opts,
-		form: Form{Values: url.Values{}, Files: map[string]UploadedFile{}},
+		form:     Form{Values: url.Values{}, Files: map[string]UploadedFile{}, Refused: map[string]error{}},
+		storedIn: map[string]Store{},
 	}
 	if opts.TokenField != "" {
 		if err := checkFormToken(reader, opts); err != nil {
@@ -93,6 +109,12 @@ func ReadForm(store Store, r *http.Request, opts FormOptions) (Form, error) {
 		fr.rollBack()
 		return Form{}, err
 	}
+	if len(fr.refusedOrder) > 0 {
+		fr.rollBack()
+		fr.form.Files = map[string]UploadedFile{}
+		return fr.form, fmt.Errorf("%w: %w", ErrFileRefused, fr.form.Refused[fr.refusedOrder[0]])
+	}
+	fr.form.Refused = nil
 	return fr.form, nil
 }
 
@@ -104,13 +126,25 @@ type formReader struct {
 	form      Form
 	parts     int
 	textBytes int
+	// storedIn is the store each stored field's object went into.
+	storedIn map[string]Store
+	// refusedOrder lists the refused fields in the order they arrived.
+	refusedOrder []string
+}
+
+// storeFor returns the store a field's file goes into.
+func (fr *formReader) storeFor(field string) Store {
+	if s, ok := fr.opts.Stores[field]; ok && s != nil {
+		return s
+	}
+	return fr.store
 }
 
 // rollBack deletes every object this call stored. It outlives a canceled
 // request, which is often why the call failed.
 func (fr *formReader) rollBack() {
-	for _, file := range fr.form.Files {
-		_ = fr.store.Delete(context.WithoutCancel(fr.request.Context()), file.Key)
+	for field, file := range fr.form.Files {
+		_ = fr.storedIn[field].Delete(context.WithoutCancel(fr.request.Context()), file.Key)
 	}
 }
 
@@ -168,13 +202,24 @@ func (fr *formReader) storeFile(part *multipart.Part) error {
 	if !declared {
 		return ErrUnexpectedFile
 	}
-	if _, again := fr.form.Files[name]; again {
+	_, stored := fr.form.Files[name]
+	if _, refused := fr.form.Refused[name]; stored || refused {
 		return ErrMultipleFiles
 	}
-	object, err := fr.store.Put(fr.request.Context(), part, rules)
+	store := fr.storeFor(name)
+	object, err := store.Put(fr.request.Context(), part, rules)
 	if err != nil {
-		return mapBodyError(err)
+		err = mapBodyError(err)
+		if errors.Is(err, ErrTooLarge) || errors.Is(err, ErrTypeNotAllowed) {
+			// Keep reading: the caller shows the text the user typed. A body cut
+			// by a limit fails the next read, and that error is returned.
+			fr.form.Refused[name] = err
+			fr.refusedOrder = append(fr.refusedOrder, name)
+			return nil
+		}
+		return err
 	}
+	fr.storedIn[name] = store
 	fr.form.Files[name] = UploadedFile{
 		Object:       object,
 		Filename:     displayName(part.FileName()),
