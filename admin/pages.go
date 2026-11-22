@@ -70,30 +70,46 @@ func RegisterPage(registry *tango.Registry, page Page) error {
 // pagePath is the canonical URL of a page.
 func pagePath(path string) string { return "/admin/" + path + "/" }
 
-// installedPages returns the pages to mount, or an error naming a page whose
-// path is also a registered model's table, which would answer the same URL.
-func installedPages(entries []adminregistry.PageEntry, registrations []ModelRegistration) ([]adminregistry.PageEntry, error) {
+// mountedPage is a registered page whose View has been checked.
+type mountedPage struct {
+	entry adminregistry.PageEntry
+	view  tango.View
+}
+
+// pageNavKey is the sidebar key of a page, which the nav entry and the current
+// page's Active marker share.
+func pageNavKey(path string) string { return "page:" + path }
+
+// checkedPages returns the pages to mount. It refuses a page whose View is not
+// a tango.View (the registry holds it as an any) and a page whose path is also
+// a registered model's admin path, which would answer the same URL.
+func checkedPages(entries []adminregistry.PageEntry, registrations []ModelRegistration) ([]mountedPage, error) {
 	models := make(map[string]string, len(registrations))
 	for _, registration := range registrations {
 		models[modelAdminPath(registration.Model.Name)] = registration.Model.Name
 	}
+	mounted := make([]mountedPage, 0, len(entries))
 	for _, entry := range entries {
 		if name, clash := models[pagePath(entry.Path)]; clash {
 			return nil, fmt.Errorf("%w: %q is also the admin path of model %s", ErrInvalidPage, entry.Path, name)
 		}
+		view, ok := entry.View.(tango.View)
+		if !ok || view == nil {
+			return nil, fmt.Errorf("%w: %q has no tango.View (use admin.RegisterPage)", ErrInvalidPage, entry.Path)
+		}
+		mounted = append(mounted, mountedPage{entry: entry, view: view})
 	}
-	return entries, nil
+	return mounted, nil
 }
 
 // pageRoutes mounts one page for GET and POST behind the session gate; every
 // other method gets the admin's method-not-allowed page. A POST must carry the
 // admin's CSRF token, as the admin's own forms do.
-func pageRoutes(entry adminregistry.PageEntry, store *db.Store, page, brand chrome, branding Branding) tango.URLs {
-	view, _ := entry.View.(tango.View)
-	path := pagePath(entry.Path)
+func pageRoutes(mounted mountedPage, store *db.Store, page, brand chrome, branding Branding) tango.URLs {
+	path := pagePath(mounted.entry.Path)
 	current := page
-	current.Active = "page:" + entry.Path
-	gated := htmlPage(brand, requireSession(store, current, guardPagePost(view)))
+	current.Active = pageNavKey(mounted.entry.Path)
+	gated := htmlPage(brand, requireSession(store, current, guardPagePost(mounted.view)))
 	routes := tango.URLs{
 		tango.Path(http.MethodGet, path, gated, hiddenPage),
 		tango.Path(http.MethodPost, path, gated, hiddenPage),

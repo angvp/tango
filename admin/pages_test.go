@@ -1,22 +1,35 @@
 package admin_test
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"html/template"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
+	"github.com/angvp/tango/internal/adminregistry"
 )
 
 // pagesHandler builds an admin with the given pages registered before it is
 // installed, one model, and two accounts: "admin" (staff) and "guest" (not).
 func pagesHandler(t *testing.T, pages ...admin.Page) http.Handler {
+	t.Helper()
+	handler, _ := pagesHandlerWith(t, nil, pages...)
+	return handler
+}
+
+// pagesHandlerWith is pagesHandler with admin options, and the raw database
+// for tests that need to age or deactivate a session directly.
+func pagesHandlerWith(t *testing.T, options []admin.Option, pages ...admin.Page) (http.Handler, *sql.DB) {
 	t.Helper()
 	registry := tango.NewRegistry()
 	if err := registry.Models().Register(adminShellUser{}); err != nil {
@@ -30,7 +43,7 @@ func pagesHandler(t *testing.T, pages ...admin.Page) http.Handler {
 			t.Fatalf("RegisterPage(%q): %v", page.Path, err)
 		}
 	}
-	_, store := migratedAdminDB(t, registry)
+	sqlDB, store := migratedAdminDB(t, registry)
 	ctx := context.Background()
 	if err := admin.CreateAccount(ctx, store, "admin", "secret"); err != nil {
 		t.Fatalf("seed staff account: %v", err)
@@ -38,7 +51,7 @@ func pagesHandler(t *testing.T, pages ...admin.Page) http.Handler {
 	if err := admin.CreateAccount(ctx, store, "guest", "secret", admin.WithoutStaff()); err != nil {
 		t.Fatalf("seed non-staff account: %v", err)
 	}
-	if err := registry.Register(admin.New(store)); err != nil {
+	if err := registry.Register(admin.New(store, options...)); err != nil {
 		t.Fatalf("register admin app: %v", err)
 	}
 	if err := registry.RunRegistration(); err != nil {
@@ -48,7 +61,7 @@ func pagesHandler(t *testing.T, pages ...admin.Page) http.Handler {
 	if err != nil {
 		t.Fatalf("build handler: %v", err)
 	}
-	return handler
+	return handler, sqlDB
 }
 
 func textPage(path, title, body string, nav bool) admin.Page {
@@ -367,4 +380,116 @@ func TestAReusableAppContributesAnAdminPage(t *testing.T) {
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "from the app") {
 		t.Fatalf("status = %d, body = %q, want the app's page", response.Code, response.Body.String())
 	}
+}
+
+func TestAdminPageRedirectsAnExpiredOrDeactivatedSession(t *testing.T) {
+	page := textPage("logos", "Client logos", "<p>logo page body</p>", false)
+
+	t.Run("an expired session", func(t *testing.T) {
+		handler, sqlDB := pagesHandlerWith(t, nil, page)
+		cookie := loginAndGetSessionCookie(t, handler, "admin", "secret")
+		if _, err := sqlDB.Exec("UPDATE admin_session SET expires_at = $1", time.Now().Add(-time.Hour).UTC()); err != nil {
+			t.Fatalf("expire the session: %v", err)
+		}
+		response := performAdminRequest(handler, http.MethodGet, "/admin/logos/", cookie)
+		if response.Code != http.StatusFound || !strings.HasPrefix(response.Header().Get("Location"), "/admin/login/?next=") {
+			t.Fatalf("status = %d Location = %q, want a redirect to the login", response.Code, response.Header().Get("Location"))
+		}
+	})
+
+	t.Run("an account deactivated after login", func(t *testing.T) {
+		handler, sqlDB := pagesHandlerWith(t, nil, page)
+		cookie := loginAndGetSessionCookie(t, handler, "admin", "secret")
+		if _, err := sqlDB.Exec("UPDATE admin_user SET active = FALSE WHERE username = 'admin'"); err != nil {
+			t.Fatalf("deactivate the account: %v", err)
+		}
+		response := performAdminRequest(handler, http.MethodGet, "/admin/logos/", cookie)
+		if response.Code != http.StatusFound {
+			t.Fatalf("status = %d, want a redirect to the login, not 403", response.Code)
+		}
+	})
+}
+
+func TestAdminPageMultipartPostIsCheckedForTheCSRFToken(t *testing.T) {
+	var runs int
+	var token string
+	page := admin.Page{Path: "logos", View: func(ctx *tango.Context) error {
+		token = admin.CSRFToken(ctx)
+		if ctx.Request().Method == http.MethodPost {
+			runs++
+		}
+		return admin.RenderPage(ctx, "Logos", "<p>ok</p>")
+	}}
+	handler := pagesHandler(t, page)
+	cookie := loginAndGetSessionCookie(t, handler, "admin", "secret")
+	performAdminRequest(handler, http.MethodGet, "/admin/logos/", cookie)
+
+	post := func(csrf string) *httptest.ResponseRecorder {
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		if csrf != "" {
+			_ = writer.WriteField("csrf_token", csrf)
+		}
+		file, _ := writer.CreateFormFile("logo", "logo.png")
+		_, _ = file.Write([]byte("not really a png"))
+		_ = writer.Close()
+		request := httptest.NewRequest(http.MethodPost, "/admin/logos/", &body)
+		request.Header.Set("Content-Type", writer.FormDataContentType())
+		request.AddCookie(cookie)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+
+	if response := post(""); response.Code != http.StatusForbidden || runs != 0 {
+		t.Fatalf("multipart without a token: status = %d, view ran %d times, want 403 and 0", response.Code, runs)
+	}
+	if response := post("wrong"); response.Code != http.StatusForbidden || runs != 0 {
+		t.Fatalf("multipart with a wrong token: status = %d, view ran %d times, want 403 and 0", response.Code, runs)
+	}
+	if response := post(token); response.Code != http.StatusOK || runs != 1 {
+		t.Fatalf("multipart with the token: status = %d, view ran %d times, want 200 and 1", response.Code, runs)
+	}
+}
+
+func TestAdminRefusesAPageWhoseViewIsNotATangoView(t *testing.T) {
+	registry := tango.NewRegistry()
+	if err := registry.Admin().AddPage(adminregistryEntry("logos", "not a view")); err != nil {
+		t.Fatalf("AddPage: %v", err)
+	}
+	_, store := migratedAdminDB(t, registry)
+	if err := registry.Register(admin.New(store)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := registry.RunRegistration(); !errors.Is(err, admin.ErrInvalidPage) {
+		t.Fatalf("RunRegistration = %v, want ErrInvalidPage instead of a panic at request time", err)
+	}
+}
+
+func TestAdminPageRendersUnderTheComposedSecurityPolicy(t *testing.T) {
+	page := admin.Page{Path: "logos", Title: "Logos", Nav: true, View: func(ctx *tango.Context) error {
+		return admin.RenderPage(ctx, "Logos", "<p>inside the layout</p>")
+	}}
+	handler, _ := pagesHandlerWith(t, composedAdminOptions(), page)
+	cookie := loginAndGetSessionCookie(t, handler, "admin", "secret")
+
+	response := performAdminRequest(handler, http.MethodGet, "/admin/logos/", cookie)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	if values := response.Header().Values("Content-Security-Policy"); len(values) != 1 || values[0] != adminPolicyHeader {
+		t.Fatalf("Content-Security-Policy = %q, want exactly [%q]", values, adminPolicyHeader)
+	}
+	body := response.Body.String()
+	for _, banned := range []string{"style=", "onclick=", "<script>"} {
+		if strings.Contains(body, banned) {
+			t.Errorf("the page holds %q, which the strict policy blocks", banned)
+		}
+	}
+}
+
+func adminregistryEntry(path string, view any) adminregistry.PageEntry {
+	return adminregistry.PageEntry{Path: path, View: view}
 }
