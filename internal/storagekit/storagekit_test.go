@@ -253,3 +253,40 @@ func TestSpoolFileRefusesACancelledContext(t *testing.T) {
 		t.Fatalf("Fill = %v; want context.Canceled", err)
 	}
 }
+
+func TestNormalizePublicURL(t *testing.T) {
+	good := map[string]string{
+		"":                               "",
+		"https://cdn.example.com":        "https://cdn.example.com",
+		"https://cdn.example.com/":       "https://cdn.example.com",
+		"http://localhost:9000/files":    "http://localhost:9000/files",
+		"https://pub-1a2b.r2.dev/assets": "https://pub-1a2b.r2.dev/assets",
+	}
+	for in, want := range good {
+		got, err := storagekit.NormalizePublicURL(in)
+		if err != nil || got != want {
+			t.Errorf("NormalizePublicURL(%q) = %q, %v, want %q", in, got, err, want)
+		}
+	}
+	for _, in := range []string{
+		"cdn.example.com", "/static", "ftp://cdn.example.com", "https://", "https:///x",
+		"https://cdn.example.com?x=1", "https://cdn.example.com#top", "https://user:pw@cdn.example.com",
+		"https://cdn.example.com/a b", "javascript:alert(1)",
+	} {
+		if got, err := storagekit.NormalizePublicURL(in); err == nil {
+			t.Errorf("NormalizePublicURL(%q) = %q, want an error", in, got)
+		}
+	}
+}
+
+func TestPublicObjectURL(t *testing.T) {
+	if got, ok := storagekit.PublicObjectURL("https://cdn.example.com", "media/", "k_1.png"); !ok || got != "https://cdn.example.com/media/k_1.png" {
+		t.Fatalf("PublicObjectURL = %q, %v", got, ok)
+	}
+	if got, ok := storagekit.PublicObjectURL("https://cdn.example.com", "", "k_1.png"); !ok || got != "https://cdn.example.com/k_1.png" {
+		t.Fatalf("PublicObjectURL without a prefix = %q, %v", got, ok)
+	}
+	if got, ok := storagekit.PublicObjectURL("", "media/", "k_1.png"); ok || got != "" {
+		t.Fatalf("PublicObjectURL with no base = %q, %v, want \"\", false", got, ok)
+	}
+}

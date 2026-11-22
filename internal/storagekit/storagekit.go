@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 
 	"github.com/angvp/tango/storage"
@@ -92,4 +93,29 @@ func Range(size, offset, length int64) (end int64, err error) {
 		return size, nil
 	}
 	return offset + length, nil
+}
+
+// NormalizePublicURL checks an adapter's optional public URL base and returns
+// it without a trailing slash, or "" when none was given. The base must be an
+// absolute http or https URL with a host and no credentials, query or
+// fragment, so joining a key to it can only name an object under it.
+func NormalizePublicURL(base string) (string, error) {
+	if base == "" {
+		return "", nil
+	}
+	u, err := url.Parse(base)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+		u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(base, " \t\n") {
+		return "", fmt.Errorf("Config.PublicURL must be an absolute http(s) URL with a host and no credentials, query or fragment, got %q", base)
+	}
+	return strings.TrimSuffix(base, "/"), nil
+}
+
+// PublicObjectURL joins a normalized public base, an adapter's normalized
+// prefix ("" or "a/b/") and a key. It reports false when no base is set.
+func PublicObjectURL(base, prefix, key string) (string, bool) {
+	if base == "" {
+		return "", false
+	}
+	return base + "/" + prefix + key, true
 }

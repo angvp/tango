@@ -77,6 +77,11 @@ type Config struct {
 	// letters, digits, ".", "_" and "-" separated by "/", with no "." or ".."
 	// segment.
 	Prefix string
+	// PublicURL is the optional base URL where the bucket is served publicly,
+	// such as an R2 public bucket or a CDN host. It must be an absolute http(s)
+	// URL with no credentials, query or fragment. When set, PublicURL(key)
+	// returns it joined with Prefix and the key; empty means no public URL.
+	PublicURL string
 	// Credentials are static access keys; nil uses the SDK's standard chain.
 	Credentials *Credentials
 	// TempDir is where Put spools an upload; empty means os.TempDir().
@@ -88,12 +93,14 @@ type Config struct {
 
 // Store is an S3 storage.Store.
 type Store struct {
-	client   *awss3.Client
-	bucket   string
-	prefix   string
-	tempDir  string
-	partSize int64
-	nextKey  func() string
+	client *awss3.Client
+	bucket string
+	prefix string
+	// publicURL is the normalized Config.PublicURL, or "".
+	publicURL string
+	tempDir   string
+	partSize  int64
+	nextKey   func() string
 	// spoolOps are the spool's file operations; the zero value is the OS.
 	spoolOps storagekit.FileOps
 	// releaseSpool is how Put releases its spool; a test may wrap it.
@@ -106,6 +113,10 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 	prefix, err := cfg.validate()
 	if err != nil {
 		return nil, err
+	}
+	publicURL, err := storagekit.NormalizePublicURL(cfg.PublicURL)
+	if err != nil {
+		return nil, fmt.Errorf("storage/s3: %w", err)
 	}
 	var loaders []func(*config.LoadOptions) error
 	if cfg.Region != "" {
@@ -136,7 +147,7 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 	if partSize == 0 {
 		partSize = DefaultPartSize
 	}
-	return &Store{client: client, bucket: cfg.Bucket, prefix: prefix, tempDir: cfg.TempDir, partSize: partSize, nextKey: storage.NewKey, releaseSpool: releaseSpoolFile}, nil
+	return &Store{client: client, bucket: cfg.Bucket, prefix: prefix, publicURL: publicURL, tempDir: cfg.TempDir, partSize: partSize, nextKey: storage.NewKey, releaseSpool: releaseSpoolFile}, nil
 }
 
 // validate checks cfg and returns the normalized prefix ("" or "a/b/").
@@ -161,6 +172,15 @@ func (cfg Config) validate() (string, error) {
 }
 
 func (s *Store) objectName(key string) string { return s.prefix + key }
+
+// PublicURL implements storage.PublicURLer. It reports false when
+// Config.PublicURL was not set or key is not a valid key.
+func (s *Store) PublicURL(key string) (string, bool) {
+	if !storage.ValidKey(key) {
+		return "", false
+	}
+	return storagekit.PublicObjectURL(s.publicURL, s.prefix, key)
+}
 
 // Stat implements storage.Store. An object is present only when it carries
 // a valid SHA-256, which marks it as one this package wrote completely.

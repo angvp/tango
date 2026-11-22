@@ -373,3 +373,16 @@ func TestReadFormBoundsTheTextFieldsTogether(t *testing.T) {
 		t.Fatalf("ReadForm = %v, want ErrFieldTooLarge for 1.2 MiB of text in 20 fields", err)
 	}
 }
+
+func TestOnlyStoresThatKnowTheirPublicURLImplementPublicURLer(t *testing.T) {
+	localStore, err := local.New(filepath.Join(t.TempDir(), "plain"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := any(localStore).(storage.PublicURLer); ok {
+		t.Fatal("storage/local implements PublicURLer, but a directory has no public URL")
+	}
+	if _, ok := any(storagetest.NewMemory()).(storage.PublicURLer); ok {
+		t.Fatal("the memory store implements PublicURLer, but it has no public URL")
+	}
+}
