@@ -12,7 +12,7 @@ import (
 	"github.com/angvp/tango/model"
 )
 
-func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
+func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding, files *fileFields) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
 	pageChrome := chrome{Nav: nav, Active: meta.Name, Brand: brand}
@@ -43,7 +43,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			if err != nil {
 				return err
 			}
-			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOptionsFromRequest(ctx))
+			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOptionsFromRequest(ctx, files))
 			return render(ctx, http.StatusOK, formTemplate, formPage(ctx.Context(), rc, title, meta, registration.Options, fields, "", csrfTokenFromRequest(ctx.Request())))
 
 		case http.MethodPost:
@@ -55,10 +55,8 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				return err
 			}
 
-			if err := ctx.Request().ParseForm(); err != nil {
-				return err
-			}
-			if !verifySessionCSRF(ctx) {
+			sub, subErr := readSubmission(ctx, files)
+			if errors.Is(subErr, errSubmissionCSRF) {
 				return forbiddenCSRF(ctx)
 			}
 
@@ -66,24 +64,38 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			if err != nil {
 				return err
 			}
+			if subErr != nil {
+				fieldErrors, formError, handled := sub.problem(ctx.Context(), subErr)
+				if !handled {
+					return subErr
+				}
+				formOpts := formOptionsFromRequest(ctx, files)
+				formOpts.FieldErrors = fieldErrors
+				formOpts.Submitted = sub.values
+				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, existingPtr.Elem(), formOpts)
+				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), rc, title, meta, registration.Options, fields, formError, csrfTokenFromRequest(ctx.Request())))
+			}
 			instancePtr := reflect.New(meta.Type)
-			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, ctx.Request().PostForm, existingPtr.Elem()); err != nil {
+			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, sub.form, existingPtr.Elem()); err != nil {
+				sub.discard(ctx)
 				var refused *formFieldErrors
 				if !errors.As(err, &refused) {
 					return err
 				}
-				formOpts := formOptionsFromRequest(ctx)
+				formOpts := formOptionsFromRequest(ctx, files)
 				formOpts.FieldErrors = refused.messages
-				formOpts.Submitted = ctx.Request().PostForm
+				formOpts.Submitted = sub.values
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), rc, title, meta, registration.Options, fields, "", csrfTokenFromRequest(ctx.Request())))
 			}
 
 			if err := setPKField(instancePtr.Elem().FieldByName(pkField.Name), pkField, ctx.Param("pk")); err != nil {
+				sub.discard(ctx)
 				return err
 			}
 
 			if err := store.Update(ctx.Context(), meta, instancePtr.Interface()); err != nil {
+				sub.discard(ctx)
 				if errors.Is(err, db.ErrNotFound) {
 					return notFound(ctx)
 				}
@@ -91,12 +103,13 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 				if !refused {
 					return err
 				}
-				formOpts := formOptionsFromRequest(ctx)
+				formOpts := formOptionsFromRequest(ctx, files)
 				formOpts.FieldErrors = fieldErrors
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), rc, title, meta, registration.Options, fields, formError, csrfTokenFromRequest(ctx.Request())))
 			}
 
+			files.retire(ctx, existingPtr.Elem(), instancePtr.Elem())
 			setOutcome(ctx, "admin.outcome.saved", displayNoun(meta, registration.Options))
 			return ctx.Redirect(basePath)
 

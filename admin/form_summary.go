@@ -63,5 +63,6 @@ func formPage(ctx context.Context, page chrome, title string, meta model.ModelMe
 		Summary:   buildFormSummary(ctx, fields, formError, displayNoun(meta, opts)),
 		ListName:  pluralNoun(meta, opts),
 		CSRFToken: csrfToken,
+		Multipart: hasFileWidget(meta, opts),
 	}
 }

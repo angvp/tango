@@ -79,6 +79,18 @@ func New(store *db.Store, opts ...Option) tango.App {
 			}
 		}
 
+		fallback := newFallbackStore()
+		files := make(map[string]*fileFields, len(registrations))
+		for _, registration := range registrations {
+			fields, err := resolveFileFields(registry, registration, fallback)
+			if err != nil {
+				return err
+			}
+			files[registration.Model.Name] = fields
+		}
+		state.fallbackDir = fallback.dir
+		state.fallbackFields = fallback.fields
+
 		limiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 		clientKey := security.ClientKey(cfg.trustedProxies)
 		landing := indexView(nav, cfg.branding)
@@ -117,7 +129,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 		}
 		for _, registration := range registrations {
 			modelPath := modelAdminPath(registration.Model.Name)
-			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding)...)
+			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding, files[registration.Model.Name])...)
 		}
 
 		middleware := append([]tango.Middleware{withThemeState}, cfg.middleware...)
@@ -133,6 +145,10 @@ type installState struct {
 	installed map[string]struct{}
 	// pagePaths are the pages mounted when the admin was installed.
 	pagePaths map[string]struct{}
+	// fallbackFields names the file fields that use the local fallback
+	// directory, and fallbackDir is that directory.
+	fallbackFields []string
+	fallbackDir    string
 }
 
 // checkedApp is the admin app plus the install-order check.
@@ -160,21 +176,35 @@ func (a checkedApp) Checks() []tango.AppCheck {
 			late = append(late, "page "+entry.Path)
 		}
 	}
+	checks := a.fallbackChecks()
 	if len(late) == 0 {
-		return []tango.AppCheck{{Description: description}}
+		return append([]tango.AppCheck{{Description: description}}, checks...)
 	}
 	sort.Strings(late)
-	return []tango.AppCheck{{Description: description, Err: fmt.Errorf(
+	return append([]tango.AppCheck{{Description: description, Err: fmt.Errorf(
 		"%s registered after admin.New was installed and will not appear in the admin; list admin.New last in InstalledApps",
-		strings.Join(late, ", "))}}
+		strings.Join(late, ", "))}}, checks...)
 }
 
-func modelRoutes(modelPath string, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.URLs {
+// fallbackChecks reports the file fields that would write to the local
+// fallback directory, which a deployed site should not rely on.
+func (a checkedApp) fallbackChecks() []tango.AppCheck {
+	if len(a.state.fallbackFields) == 0 {
+		return nil
+	}
+	return []tango.AppCheck{{
+		Description: "admin file fields have an object store",
+		Err: fmt.Errorf("%s have no store and use the local directory %q; call Registry.SetStorage or set FileOptions.Store",
+			strings.Join(a.state.fallbackFields, ", "), a.state.fallbackDir),
+	}}
+}
+
+func modelRoutes(modelPath string, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding, files *fileFields) tango.URLs {
 	brandOnly := chrome{Brand: brand}
 	page := chrome{Nav: nav, Brand: brand}
 	list := htmlPage(brandOnly, requireSession(store, page, listView(store, models, adminReg, registration, nav, brand)))
-	create := htmlPage(brandOnly, requireSession(store, page, createView(store, models, adminReg, registration, nav, brand)))
-	edit := htmlPage(brandOnly, requireSession(store, page, editView(store, models, adminReg, registration, nav, brand)))
+	create := htmlPage(brandOnly, requireSession(store, page, createView(store, models, adminReg, registration, nav, brand, files)))
+	edit := htmlPage(brandOnly, requireSession(store, page, editView(store, models, adminReg, registration, nav, brand, files)))
 	del := htmlPage(brandOnly, requireSession(store, page, deleteView(store, models, adminReg, registration, nav, brand)))
 
 	urls := tango.URLs{

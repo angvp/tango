@@ -146,6 +146,8 @@ type formContextOptions struct {
 	// Submitted is the form a refused save was sent with. When set, each
 	// editable field shows what was typed rather than the stored value.
 	Submitted FieldValues
+	// Files are the model's file fields, for the link to a current file.
+	Files *fileFields
 }
 
 func buildFieldContext(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, opts adminregistry.Options, instance reflect.Value, formOpts formContextOptions) (FieldContext, bool) {
@@ -240,6 +242,9 @@ func buildFormFields(ctx context.Context, store *db.Store, models *model.Registr
 		widget := widgetForField(field, opts, fc, fkResolved)
 		if _, ok := widget.(PreviewWidget); ok {
 			fc.PreviewURL = previewPath(meta.Name, field.Name)
+		}
+		if _, ok := widget.(FileWidget); ok {
+			fc.FileURL = formOpts.Files.linkFor(field.Name, fc.Value)
 		}
 		// A built-in widget prints its help text under its label; any other
 		// widget leaves it to the form, which prints it beneath the control.

@@ -144,7 +144,7 @@ var formTemplate = cloneWithContent(`{{define "content"}}
         <h2 id="form-summary" class="font-semibold" tabindex="-1" autofocus>{{.Heading}}</h2>
         <ul class="mt-1 list-disc pl-5">{{range .Items}}<li>{{if .Href}}<a href="{{.Href}}" class="underline">{{.Text}}</a>{{else}}{{.Text}}{{end}}</li>{{end}}</ul>
       </div>{{end}}
-      <form method="post">
+      <form method="post"{{if .Multipart}} enctype="multipart/form-data"{{end}}>
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       {{range .Fields}}<div class="field-group">{{.HTML}}{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}{{if .Error}}<p class="field-error" id="field-{{.Name}}-error"{{if not $.Summary}} role="alert"{{end}}>{{.Error}}</p>{{end}}{{if .AddHref}}<a href="{{.AddHref}}" class="btn-secondary mt-2 inline-block whitespace-nowrap"><span aria-hidden="true">+</span> {{.AddLabel}}</a>{{end}}</div>
       {{end}}
@@ -258,6 +258,9 @@ type formPageData struct {
 	Summary   *formSummary
 	ListName  string
 	CSRFToken string
+	// Multipart is set when a field takes a file, so the form is sent as
+	// multipart/form-data.
+	Multipart bool
 }
 
 type deletePageData struct {

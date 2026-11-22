@@ -63,6 +63,9 @@ type FieldContext struct {
 	// RelatedCreateLabel is the accessible label for RelatedCreateURL.
 	// Empty means widgets may fall back to their own default.
 	RelatedCreateLabel string
+	// FileURL is where the field's current file is served, for a file widget
+	// that has the host's URL for it; empty when there is none.
+	FileURL string
 	// Error is the message the form shows beside this field after a failed
 	// save, or empty when the field has no error. The built-in widgets mark
 	// their control aria-invalid when it is set; a custom widget may do the
