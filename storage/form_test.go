@@ -386,3 +386,56 @@ func TestOnlyStoresThatKnowTheirPublicURLImplementPublicURLer(t *testing.T) {
 		t.Fatal("the memory store implements PublicURLer, but it has no public URL")
 	}
 }
+
+func TestReadFormKeepsReadingTheTextAfterAFileIsRefused(t *testing.T) {
+	store := newRecording()
+	options := storage.FormOptions{Files: map[string]storage.PutOptions{
+		"logo":   logoRules,
+		"banner": {MaxSize: 1 << 10, AllowedTypes: []string{"image/png"}},
+	}}
+	oversized := append(append([]byte{}, pngHeader...), make([]byte, 4<<10)...)
+	request := formRequest(t,
+		part{field: "name", body: []byte("Acme")},
+		part{field: "logo", filename: "a.png", body: png},
+		part{field: "banner", filename: "big.png", body: oversized},
+		part{field: "city", body: []byte("Lima")},
+	)
+
+	form, err := storage.ReadForm(store, request, options)
+
+	if !errors.Is(err, storage.ErrFileRefused) || !errors.Is(err, storage.ErrTooLarge) {
+		t.Fatalf("ReadForm = %v, want ErrFileRefused wrapping ErrTooLarge", err)
+	}
+	if form.Values.Get("name") != "Acme" || form.Values.Get("city") != "Lima" {
+		t.Fatalf("values = %v, want the text before and after the refused file", form.Values)
+	}
+	if !errors.Is(form.Refused["banner"], storage.ErrTooLarge) || len(form.Files) != 0 {
+		t.Fatalf("refused = %v, files = %v, want banner refused and no file kept", form.Refused, form.Files)
+	}
+	if len(store.deleted) != 1 {
+		t.Fatalf("deleted = %d, want the logo stored before the refusal deleted", len(store.deleted))
+	}
+}
+
+func TestReadFormUsesTheStoreOfEachField(t *testing.T) {
+	fallback, other := newRecording(), newRecording()
+	options := storage.FormOptions{Files: twoLogos, Stores: map[string]storage.Store{"banner": other}}
+	request := formRequest(t,
+		part{field: "logo", filename: "a.png", body: png},
+		part{field: "banner", filename: "b.png", body: png},
+	)
+
+	form, err := storage.ReadForm(fallback, request, options)
+
+	if err != nil || fallback.puts != 1 || other.puts != 1 || len(form.Files) != 2 {
+		t.Fatalf("err = %v, fallback puts = %d, other puts = %d, files = %d, want one Put in each store", err, fallback.puts, other.puts, len(form.Files))
+	}
+
+	failing := formRequest(t,
+		part{field: "banner", filename: "b.png", body: png},
+		part{field: "banner", filename: "c.png", body: png},
+	)
+	if _, err := storage.ReadForm(fallback, failing, options); !errors.Is(err, storage.ErrMultipleFiles) || len(other.deleted) != 1 || len(fallback.deleted) != 0 {
+		t.Fatalf("err = %v, other deletes = %d, fallback deletes = %d, want the banner deleted from its own store", err, len(other.deleted), len(fallback.deleted))
+	}
+}
