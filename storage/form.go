@@ -60,11 +60,14 @@ type Form struct {
 //
 // When opts.TokenField is set, the first part must be that field with a value
 // CheckToken accepts, and it is verified before any other part is read, so a
-// forged request stores nothing. A field where no file was chosen is not an
-// error and has no entry in Form.Files. Any failure after a file was stored
-// deletes every object this call stored, even when the request's context is
-// done. A body cut off by a body limit surfaces as ErrTooLarge. ReadForm
-// writes no response and logs nothing; the calling View maps the errors.
+// forged request stores nothing. The token is read once: the same name in a
+// later part is refused. A field where no file was chosen is not an error and
+// has no entry in Form.Files; a part with no filename that carries bytes in a
+// file field is ErrUnexpectedFile. A second file in one field is
+// ErrMultipleFiles. Any failure after a file was stored deletes every object
+// this call stored, even when the request's context is done. A body cut off
+// by a body limit surfaces as ErrTooLarge. ReadForm writes no response and
+// logs nothing; the calling View maps the errors.
 func ReadForm(store Store, r *http.Request, opts FormOptions) (Form, error) {
 	if opts.TokenField != "" && opts.CheckToken == nil {
 		return Form{}, fmt.Errorf("%w: TokenField needs CheckToken", ErrInvalidOptions)
@@ -76,68 +79,113 @@ func ReadForm(store Store, r *http.Request, opts FormOptions) (Form, error) {
 		}
 		return Form{}, mapBodyError(err)
 	}
-	parts := 0
+	fr := &formReader{
+		store: store, request: r, opts: opts,
+		form: Form{Values: url.Values{}, Files: map[string]UploadedFile{}},
+	}
 	if opts.TokenField != "" {
 		if err := checkFormToken(reader, opts); err != nil {
 			return Form{}, err
 		}
-		parts++
+		fr.parts++ // the token was the first part
 	}
-	form := Form{Values: url.Values{}, Files: map[string]UploadedFile{}}
-	textBytes := 0
-	fail := func(err error) (Form, error) {
-		for _, file := range form.Files {
-			_ = store.Delete(context.WithoutCancel(r.Context()), file.Key)
-		}
+	if err := fr.readParts(reader); err != nil {
+		fr.rollBack()
 		return Form{}, err
 	}
-	for ; ; parts++ {
+	return fr.form, nil
+}
+
+// formReader holds what one ReadForm call has read so far.
+type formReader struct {
+	store     Store
+	request   *http.Request
+	opts      FormOptions
+	form      Form
+	parts     int
+	textBytes int
+}
+
+// rollBack deletes every object this call stored. It outlives a canceled
+// request, which is often why the call failed.
+func (fr *formReader) rollBack() {
+	for _, file := range fr.form.Files {
+		_ = fr.store.Delete(context.WithoutCancel(fr.request.Context()), file.Key)
+	}
+}
+
+func (fr *formReader) readParts(reader *multipart.Reader) error {
+	for ; ; fr.parts++ {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
-			return form, nil
+			return nil
 		}
 		if err != nil {
-			return fail(mapBodyError(err))
+			return mapBodyError(err)
 		}
-		if parts >= maxFormParts {
-			return fail(ErrTooManyParts)
+		if fr.parts >= maxFormParts {
+			return ErrTooManyParts
 		}
-		name := part.FormName()
-		rules, declared := opts.Files[name]
+		if fr.opts.TokenField != "" && part.FormName() == fr.opts.TokenField {
+			return ErrFormToken
+		}
 		if part.FileName() == "" {
-			if declared {
-				continue // an empty file input: no file was chosen
-			}
-			value, err := io.ReadAll(io.LimitReader(part, maxFieldBytes+1))
-			if err != nil {
-				return fail(mapBodyError(err))
-			}
-			if textBytes += len(value); len(value) > maxFieldBytes || textBytes > maxFormTextBytes {
-				return fail(ErrFieldTooLarge)
-			}
-			form.Values.Add(name, string(value))
-			continue
+			err = fr.readText(part)
+		} else {
+			err = fr.storeFile(part)
 		}
-		if !declared {
-			return fail(ErrUnexpectedFile)
-		}
-		if _, again := form.Files[name]; again {
-			return fail(ErrMultipleFiles)
-		}
-		object, err := store.Put(r.Context(), part, rules)
 		if err != nil {
-			return fail(mapBodyError(err))
-		}
-		form.Files[name] = UploadedFile{
-			Object:       object,
-			Filename:     displayName(part.FileName()),
-			DeclaredType: part.Header.Get("Content-Type"),
+			return err
 		}
 	}
 }
 
+// readText reads a part with no filename: a text field, or the empty input a
+// browser sends for a file field where nothing was chosen.
+func (fr *formReader) readText(part *multipart.Part) error {
+	// One byte past the bound tells a field at the bound from one beyond it.
+	value, err := io.ReadAll(io.LimitReader(part, maxFieldBytes+1))
+	if err != nil {
+		return mapBodyError(err)
+	}
+	if _, isFile := fr.opts.Files[part.FormName()]; isFile {
+		if len(value) > 0 {
+			return ErrUnexpectedFile
+		}
+		return nil
+	}
+	if fr.textBytes += len(value); len(value) > maxFieldBytes || fr.textBytes > maxFormTextBytes {
+		return ErrFieldTooLarge
+	}
+	fr.form.Values.Add(part.FormName(), string(value))
+	return nil
+}
+
+// storeFile stores a part that carries a filename, under its field's rules.
+func (fr *formReader) storeFile(part *multipart.Part) error {
+	name := part.FormName()
+	rules, declared := fr.opts.Files[name]
+	if !declared {
+		return ErrUnexpectedFile
+	}
+	if _, again := fr.form.Files[name]; again {
+		return ErrMultipleFiles
+	}
+	object, err := fr.store.Put(fr.request.Context(), part, rules)
+	if err != nil {
+		return mapBodyError(err)
+	}
+	fr.form.Files[name] = UploadedFile{
+		Object:       object,
+		Filename:     displayName(part.FileName()),
+		DeclaredType: part.Header.Get("Content-Type"),
+	}
+	return nil
+}
+
 // checkFormToken reads the first part and verifies it is the token field with
-// an accepted value. A file part is never read here.
+// an accepted value. A file part is never read here, and a token past the
+// field bound is refused, not truncated and compared.
 func checkFormToken(reader *multipart.Reader, opts FormOptions) error {
 	part, err := reader.NextPart()
 	if err != nil {
@@ -149,11 +197,11 @@ func checkFormToken(reader *multipart.Reader, opts FormOptions) error {
 	if part.FormName() != opts.TokenField || part.FileName() != "" {
 		return ErrFormToken
 	}
-	value, err := io.ReadAll(io.LimitReader(part, maxFieldBytes))
+	value, err := io.ReadAll(io.LimitReader(part, maxFieldBytes+1))
 	if err != nil {
 		return mapBodyError(err)
 	}
-	if !opts.CheckToken(string(value)) {
+	if len(value) > maxFieldBytes || !opts.CheckToken(string(value)) {
 		return ErrFormToken
 	}
 	return nil
