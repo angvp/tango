@@ -13,6 +13,12 @@ It demonstrates:
   handshake cannot set a custom `Authorization` header the way an ordinary
   HTTP client can — this is the concrete transport `QueryToken` exists for
   (see the `docs/limitations.md` note on query-token logging exposure);
+- sequenced frames: `chatLogic` also implements `realtime.Framer`, so every
+  message a member receives starts with its per-connection sequence as a
+  decimal line (`1\nwelcome alice`, then 2, 3 and so on). A client that sees
+  a gap knows it missed a frame, and a reconnect restarts at 1. tanGO fixes
+  no wire format; `Frame` in `main.go` is this example's choice (see the
+  [realtime guide](../../docs/guides/realtime-websockets.md));
 - reconnecting within the room's reconnect window restores membership and
   delivers a fresh `Logic.Snapshot`;
 - graceful shutdown: `hub.Close` is registered as a `tango.Lifecycle`
@@ -34,6 +40,7 @@ go run . -issue-token alice
 go run .
 # in another terminal, using any WebSocket client:
 #   connect to ws://localhost:8000/rooms/demo/ws?token=<token>
+#   (each message begins with its sequence number and a newline)
 ```
 
 The address is `TANGO_ADDR`, else the `PORT` hosting platforms set, else `:8000`.

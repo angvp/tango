@@ -24,9 +24,27 @@ func New(store *db.Store) tango.App {
 
 		meta, _ := registry.Models().Get("Post")
 		return registry.Routes().Include("/posts/", tango.URLs{
-			tango.Path("GET", "/", listPosts(store, meta), tango.Name("list")),
-			tango.Path("GET", "/{id}/", getPost(store, meta), tango.Name("detail")),
-			tango.Path("POST", "/", createPost(store, meta), tango.Name("create")),
+			tango.Path("GET", "/", listPosts(store, meta), tango.Name("list"), tango.Doc(tango.RouteDoc{
+				Summary:   "List posts, newest first",
+				Query:     listFilter{},
+				Responses: map[int]any{200: []Post{}},
+			})),
+			tango.Path("GET", "/{id}/", getPost(store, meta), tango.Name("detail"), tango.Doc(tango.RouteDoc{
+				Summary:   "Get one post",
+				Responses: map[int]any{200: Post{}},
+			})),
+			tango.Path("POST", "/", createPost(store, meta), tango.Name("create"), tango.Doc(tango.RouteDoc{
+				Summary:   "Create a post for an author",
+				Body:      Post{},
+				Responses: map[int]any{201: Post{}},
+			})),
 		})
 	})
+}
+
+// listFilter names the list route's query parameters for the OpenAPI
+// document. Only its type is read; the view parses the request itself.
+type listFilter struct {
+	AuthorID int64  `query:"author_id"`
+	Search   string `query:"q"`
 }
