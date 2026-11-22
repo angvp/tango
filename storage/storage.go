@@ -16,6 +16,17 @@ import (
 	"time"
 )
 
+// PublicURLer is an optional capability of a Store: it reports the public URL
+// of an object, for a bucket that is served publicly or through a CDN. A Store
+// that cannot know such a URL, like storage/local, does not implement it.
+// Callers find it with a type assertion.
+type PublicURLer interface {
+	// PublicURL returns the URL where the object at key is served, and false
+	// when the store was given no public base or key is not a valid key. It
+	// makes no request and does not check that the object exists.
+	PublicURL(key string) (string, bool)
+}
+
 // Store is an object store. Implementations are safe for concurrent use and
 // pass the conformance suite in package storagetest.
 type Store interface {

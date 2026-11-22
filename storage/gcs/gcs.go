@@ -65,6 +65,11 @@ type Config struct {
 	// letters, digits, ".", "_" and "-" separated by "/", with no "." or ".."
 	// segment.
 	Prefix string
+	// PublicURL is the optional base URL where the bucket is served publicly,
+	// such as a CDN host. It must be an absolute http(s) URL with no
+	// credentials, query or fragment. When set, PublicURL(key) returns it
+	// joined with Prefix and the key; empty means no public URL.
+	PublicURL string
 	// Endpoint is the base URL of a non-Google server, such as an emulator or
 	// a test server. Empty means Google Cloud Storage with application-default
 	// credentials. A non-empty Endpoint never authenticates.
@@ -83,8 +88,10 @@ type Config struct {
 
 // Store is a GCS storage.Store.
 type Store struct {
-	bucket    string
-	prefix    string
+	bucket string
+	prefix string
+	// publicURL is the normalized Config.PublicURL, or "".
+	publicURL string
 	tempDir   string
 	chunkSize int64
 	nextKey   func() string
@@ -151,7 +158,8 @@ func newBase(cfg Config, prefix string) *Store {
 	if chunk == 0 {
 		chunk = DefaultChunkSize
 	}
-	return &Store{bucket: cfg.Bucket, prefix: prefix, tempDir: cfg.TempDir, chunkSize: chunk, nextKey: storage.NewKey, newToken: randomToken, releaseSpool: releaseSpoolFile}
+	publicURL, _ := storagekit.NormalizePublicURL(cfg.PublicURL) // validated by cfg.validate
+	return &Store{bucket: cfg.Bucket, prefix: prefix, publicURL: publicURL, tempDir: cfg.TempDir, chunkSize: chunk, nextKey: storage.NewKey, newToken: randomToken, releaseSpool: releaseSpoolFile}
 }
 
 // dial builds the adapter's client. The SDK reads STORAGE_EMULATOR_HOST
@@ -337,6 +345,9 @@ func (cfg Config) validate() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("storage/gcs: %w", err)
 	}
+	if _, err := storagekit.NormalizePublicURL(cfg.PublicURL); err != nil {
+		return "", fmt.Errorf("storage/gcs: %w", err)
+	}
 	return prefix, nil
 }
 
@@ -401,6 +412,15 @@ func (s *Store) publish(c *gcsstorage.Client, err error) buildResult {
 }
 
 func (s *Store) objectName(key string) string { return s.prefix + key }
+
+// PublicURL implements storage.PublicURLer. It reports false when
+// Config.PublicURL was not set or key is not a valid key.
+func (s *Store) PublicURL(key string) (string, bool) {
+	if !storage.ValidKey(key) {
+		return "", false
+	}
+	return storagekit.PublicObjectURL(s.publicURL, s.prefix, key)
+}
 
 // object returns an error only because the SDK client is built lazily, on
 // first use; the handle itself needs no request.
