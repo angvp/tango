@@ -416,6 +416,12 @@ The console behind `tango shell`. A project's `shell/main.go` calls `Run`; every
 
 Inside a session the helpers are `Models`, `Describe`, `Get`, `List`, `Count`, `Create`, `Update`, `Delete` and `Context`, plus `help()`, `exit()` and `quit()`; the [shell guide](guides/shell.md#the-helpers) lists their arguments.
 
+## `lifecycletest` (`github.com/angvp/tango/lifecycletest`)
+
+| Symbol | What it's for |
+|---|---|
+| `func Start(t T, registry *tango.Registry)`, `type T interface{ Helper(); Cleanup(func()); Fatalf(string, ...any) }` | Runs the `Start` hooks of the lifecycles a host registered, in registration order, the way `ServeContext` does before it listens. The first error stops the lifecycles that started, in reverse, and fails the test naming the lifecycle. When the test finishes it cancels the hooks' context and runs the `Stop` hooks in reverse. It never starts the internal scheduler lifecycle. Call it after `RunRegistration` and `SetStore`. |
+
 ## `testdb` (`github.com/angvp/tango/testdb`)
 
 For tests only. The run's Test dialect comes from `TANGO_TEST_DSN`, with the same grammar as `TANGO_DB_DSN`: unset or `sqlite://:memory:` is in-memory SQLite, any other `sqlite://` path is a fresh SQLite file per test (the path itself is not used), `postgres://…`/`postgresql://…` is a fresh schema per test, and `mysql://…` is a fresh database per test (the account needs the `CREATE` and `DROP` privileges), each dropped when the test ends. On MySQL, raw SQL written with `$1, $2, …` placeholders is rewritten to `?`. 
