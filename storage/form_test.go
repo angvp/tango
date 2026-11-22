@@ -317,3 +317,59 @@ func TestReadFormOnTheLocalStore(t *testing.T) {
 		t.Fatalf("ReadForm = %v, want ErrMultipleFiles", err)
 	}
 }
+
+func TestReadFormRefusesDataThatHidesBehindNoFilename(t *testing.T) {
+	store := newRecording()
+	request := formRequest(t, part{field: "logo", filename: "", body: []byte("bytes with no filename")})
+
+	_, err := storage.ReadForm(store, request, storage.FormOptions{Files: twoLogos})
+
+	if !errors.Is(err, storage.ErrUnexpectedFile) || store.puts != 0 {
+		t.Fatalf("ReadForm = %v, puts = %d, want ErrUnexpectedFile and no Put", err, store.puts)
+	}
+}
+
+func TestReadFormNeverReturnsATokenFieldAfterTheFirstPart(t *testing.T) {
+	for name, later := range map[string]part{
+		"a repeated text token":  {field: "csrf_token", body: []byte("good")},
+		"a token sent as a file": {field: "csrf_token", filename: "t.png", body: png},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := newRecording()
+			options := tokenRules("good")
+			options.Files["csrf_token"] = logoRules
+			request := formRequest(t, part{field: "csrf_token", body: []byte("good")}, later)
+
+			form, err := storage.ReadForm(store, request, options)
+
+			if !errors.Is(err, storage.ErrFormToken) || len(form.Values) != 0 || store.puts != 0 {
+				t.Fatalf("ReadForm = %v, values = %v, puts = %d, want ErrFormToken and nothing returned or stored", err, form.Values, store.puts)
+			}
+		})
+	}
+}
+
+func TestReadFormRefusesAnOversizedToken(t *testing.T) {
+	store := newRecording()
+	options := tokenRules(string(make([]byte, 64<<10)))
+	request := formRequest(t, part{field: "csrf_token", body: make([]byte, 64<<10+1)}, part{field: "logo", filename: "a.png", body: png})
+
+	_, err := storage.ReadForm(store, request, options)
+
+	if !errors.Is(err, storage.ErrFormToken) || store.puts != 0 {
+		t.Fatalf("ReadForm = %v, puts = %d, want ErrFormToken: a truncated token must not be accepted", err, store.puts)
+	}
+}
+
+func TestReadFormBoundsTheTextFieldsTogether(t *testing.T) {
+	var parts []part
+	for i := 0; i < 20; i++ {
+		parts = append(parts, part{field: "bio", body: make([]byte, 60<<10)})
+	}
+
+	_, err := storage.ReadForm(newRecording(), formRequest(t, parts...), storage.FormOptions{})
+
+	if !errors.Is(err, storage.ErrFieldTooLarge) {
+		t.Fatalf("ReadForm = %v, want ErrFieldTooLarge for 1.2 MiB of text in 20 fields", err)
+	}
+}
