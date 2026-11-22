@@ -86,10 +86,10 @@ curl http://localhost:8000/greetings/World/
 - **[API reference](docs/reference.md)** — the supported public surface, linked to runnable examples. Generated package docs are also available via `go doc` or [pkg.go.dev](https://pkg.go.dev/github.com/angvp/tango).
 - **[Examples](examples/)**, each with a README giving its purpose and commands:
   - [`jsonapi`](examples/jsonapi): the smallest JSON application, one hand-written app;
-  - [`api-with-admin`](examples/api-with-admin): a JSON API and the HTML admin over one set of models, linked by a foreign key;
+  - [`api-with-admin`](examples/api-with-admin): a JSON API and the HTML admin over one set of models, linked by a foreign key, with a dev-only OpenAPI document and Swagger UI;
   - [`notes-starter`](examples/notes-starter): a keepable starter with generated migrations, the admin and rate limiting;
   - [`jwt-api`](examples/jwt-api): a JSON route behind stateless bearer JWTs;
-  - [`realtime-chat`](examples/realtime-chat): WebSocket rooms with JWT auth and graceful shutdown;
+  - [`realtime-chat`](examples/realtime-chat): WebSocket rooms with JWT auth, sequenced frames and graceful shutdown;
   - [`accounts-mail`](examples/accounts-mail): the `accounts` app's password reset and email verification, with emails printed to the terminal;
   - [`spa-accounts`](examples/spa-accounts): the backend of a single-page app: `accounts`' JSON mode with bearer tokens, a host profile written in the registration transaction, a JSON field edited in the admin, and bounded `varchar` fields;
   - [`uploads`](examples/uploads): a document locker: `storage.Upload` reads one multipart file, the host keeps the generated key in its own model, and `storage.Serve` delivers it to its owner, on the local disk;

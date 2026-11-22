@@ -16,6 +16,8 @@ import (
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/i18n"
 	"github.com/angvp/tango/observability"
+	"github.com/angvp/tango/openapi"
+	"github.com/angvp/tango/openapi/swaggerui"
 
 	"api-with-admin/apps/authors"
 	"api-with-admin/apps/home"
@@ -82,8 +84,9 @@ func appConfig(store *db.Store, sqlDB *sql.DB, dialect db.Dialect, window *obser
 	// Every response carries the strict baseline policy. Its nonce is what
 	// the home page's template uses. The admin composes its own policy into
 	// its tier, which replaces this one for /admin/ pages.
+	strict := tango.StrictCSP()
 	config.Middleware = []tango.Middleware{
-		tango.SecurityHeaders(tango.WithContentSecurityPolicy(tango.StrictCSP())),
+		tango.SecurityHeaders(tango.WithContentSecurityPolicy(strict)),
 		i18n.MiddlewareResolver(locale.Resolver()),
 	}
 	config.InstalledApps = []tango.App{
@@ -91,6 +94,16 @@ func appConfig(store *db.Store, sqlDB *sql.DB, dialect db.Dialect, window *obser
 		authors.New(),
 		locale.New(),
 		home.New(),
+		// The API's OpenAPI document at /openapi.json and Swagger UI at
+		// /docs/, built from the routes above. Dev serves them only when
+		// TANGO_OPENAPI=1, so a production process answers 404. The UI sits
+		// under the strict policy with the few relaxations it needs.
+		openapi.Dev(openapi.Options{
+			Title:   "Posts API",
+			Version: "1.0.0",
+			UI:      swaggerui.New(swaggerui.WithContentSecurityPolicy(strict)),
+		}),
+		// admin.New stays last.
 		admin.New(store,
 			admin.WithDashboard(dashboard),
 			admin.WithMiddleware(tango.SecurityHeaders(tango.WithContentSecurityPolicy(admin.ContentSecurityPolicy()))),

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -178,4 +179,17 @@ func (chatLogic) Handle(rc *realtime.RoomContext, ev realtime.Event) error {
 
 func (chatLogic) Snapshot(_ *realtime.RoomContext, p realtime.Principal) ([]byte, error) {
 	return []byte("welcome " + p.UserID), nil
+}
+
+// Frame makes the room framed: every payload a member receives, the join
+// snapshot first, starts with its per-connection sequence as a decimal line
+// ("1\nwelcome alice"). A client that sees 3 after 1 knows it missed a frame,
+// and a reconnect restarts at 1. tanGO defines no wire format; this envelope
+// is the host's choice. See the sequenced frames section of the
+// [realtime guide](../../docs/guides/realtime-websockets.md).
+func (chatLogic) Frame(_ realtime.Principal, seq uint64, payload []byte) ([]byte, error) {
+	framed := make([]byte, 0, len(payload)+21)
+	framed = strconv.AppendUint(framed, seq, 10)
+	framed = append(framed, '\n')
+	return append(framed, payload...), nil
 }
