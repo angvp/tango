@@ -56,8 +56,8 @@ func resolveFileFields(registry *tango.Registry, registration ModelRegistration,
 	var found *fileFields
 	for _, field := range registration.Model.Fields {
 		widget, ok := registration.Options.Widgets[field.Name].(FileWidget)
-		if !ok {
-			continue
+		if !ok || contains(registration.Options.ReadOnly, field.Name) {
+			continue // a read-only field shows its value and takes no upload
 		}
 		name := registration.Model.Name + "." + field.Name
 		rules := widget.FileRules()
@@ -284,6 +284,22 @@ func (ff *fileFields) retire(ctx *tango.Context, before, after reflect.Value) {
 func deleteObject(ctx *tango.Context, store storage.Store, key, field, which string) {
 	if err := store.Delete(context.WithoutCancel(ctx.Context()), key); err != nil {
 		ctx.Logger().Warn("admin could not delete a file object", "field", field, "which", which, "key", key, "error", err)
+	}
+}
+
+// restore puts a file field's stored key back to what the row held before the
+// request, in an instance whose save failed. The new object was deleted, so the
+// form must not show it as the current file. before is invalid on create.
+func (ff *fileFields) restore(instance, before reflect.Value) {
+	if !ff.has() {
+		return
+	}
+	for _, name := range ff.names {
+		old := ""
+		if before.IsValid() {
+			old = before.FieldByName(name).String()
+		}
+		instance.FieldByName(name).SetString(old)
 	}
 }
 

@@ -78,6 +78,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			instancePtr := reflect.New(meta.Type)
 			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, sub.form, existingPtr.Elem()); err != nil {
 				sub.discard(ctx)
+				files.restore(instancePtr.Elem(), existingPtr.Elem())
 				var refused *formFieldErrors
 				if !errors.As(err, &refused) {
 					return err
@@ -96,6 +97,7 @@ func editView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 
 			if err := store.Update(ctx.Context(), meta, instancePtr.Interface()); err != nil {
 				sub.discard(ctx)
+				files.restore(instancePtr.Elem(), existingPtr.Elem())
 				if errors.Is(err, db.ErrNotFound) {
 					return notFound(ctx)
 				}
