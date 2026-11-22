@@ -27,6 +27,8 @@ curl -b cookies.txt -OJ localhost:8000/documents/1/download/
 curl -b cookies.txt -X DELETE localhost:8000/documents/1/
 ```
 
+The admin also holds a **Folder** model whose Cover is a file field (`apps/documents/folders.go`): `admin.File` stores the image in the same object store and the row keeps its key. A **Storage** page of the host's own sits in the admin navigation (`admin.RegisterPage`) and reports how many documents are stored. Both are staff-only and need no extra setup beyond the admin account below.
+
 The admin is at `/admin/`. Create a staff account with the admin CLI, then sign in at `/admin/login/` to see the Documents changelist:
 
 ```sh

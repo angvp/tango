@@ -49,6 +49,16 @@ tanGO is still early. This page is the honest summary of where it stops, so you 
 
 See the [SQLite, PostgreSQL and MySQL setup guide](guides/sqlite-and-postgresql-setup.md) for the full list. In short: placeholder syntax, `ALTER TABLE` behavior (SQLite rebuilds a table to drop a column, keeping everything else about it; Postgres and MySQL alter directly), and timestamp column types differ. None of this should be visible in your model or migration code — only in what DDL actually runs, and in raw SQL you write yourself.
 
+## Admin pages and file fields
+
+- One file per field. `admin.File` takes a single file from a plain file input; there is no several-files field, no drag-and-drop and no upload progress.
+- No signed URLs. A file's link comes from the store's `PublicURL` (a public bucket or CDN) or from `FileOptions.URL`.
+- No cleanup of existing orphan objects, and no listing. A failed delete of a replaced object is logged and leaves an orphan.
+- Two staff users editing one row at once is last-writer-wins on the file key; the other's object is left behind.
+- A form shown again after an error does not keep the file that was picked.
+- No per-page permissions: every admin page is open to any staff account, and no `robots.txt` is added.
+- The local fallback store is for development: it loses files on an ephemeral disk and is per instance, so `tango check` fails while a file field uses it.
+
 ## Exact-schema limits
 
 - An `int4` column widens only to `integer` (bigint). To reach `text` or `real`, drop a typed default if it has one, remove the `int4` tag and run `tango makemigrations`, then change the Go type and run it again.
