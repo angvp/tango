@@ -13,7 +13,7 @@ import (
 	"github.com/angvp/tango/model"
 )
 
-func createView(store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding) tango.View {
+func createView(store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding, files *fileFields) tango.View {
 	meta := registration.Model
 	basePath := "/admin/" + db.ColumnName(meta.Name) + "/"
 	pageChrome := chrome{Nav: nav, Active: meta.Name, Brand: brand}
@@ -23,36 +23,47 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 		createChrome := pageChrome.withContext(ctx.Context()).withCrumbs(crumb{Label: sectionName(meta, registration.Options), Href: basePath}, crumb{Label: title})
 		switch ctx.Request().Method {
 		case http.MethodGet:
-			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, reflect.Value{}, formOptionsFromRequest(ctx))
+			fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, reflect.Value{}, formOptionsFromRequest(ctx, files))
 			return render(ctx, http.StatusOK, formTemplate, formPage(ctx.Context(), createChrome, title, meta, registration.Options, fields, "", csrfTokenFromRequest(ctx.Request())))
 
 		case http.MethodPost:
-			if err := ctx.Request().ParseForm(); err != nil {
-				return err
-			}
-			if !verifySessionCSRF(ctx) {
-				return forbiddenCSRF(ctx)
+			sub, err := readSubmission(ctx, files)
+			if err != nil {
+				if errors.Is(err, errSubmissionCSRF) {
+					return forbiddenCSRF(ctx)
+				}
+				fieldErrors, formError, handled := sub.problem(ctx.Context(), err)
+				if !handled {
+					return err
+				}
+				formOpts := formOptionsFromRequest(ctx, files)
+				formOpts.FieldErrors = fieldErrors
+				formOpts.Submitted = sub.values
+				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, reflect.Value{}, formOpts)
+				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), createChrome, title, meta, registration.Options, fields, formError, csrfTokenFromRequest(ctx.Request())))
 			}
 
 			instancePtr := reflect.New(meta.Type)
-			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, ctx.Request().PostForm, reflect.Value{}); err != nil {
+			if err := populateFromForm(ctx.Context(), store, models, adminReg, instancePtr.Elem(), meta, registration.Options, sub.form, reflect.Value{}); err != nil {
+				sub.discard(ctx)
 				var refused *formFieldErrors
 				if !errors.As(err, &refused) {
 					return err
 				}
-				formOpts := formOptionsFromRequest(ctx)
+				formOpts := formOptionsFromRequest(ctx, files)
 				formOpts.FieldErrors = refused.messages
-				formOpts.Submitted = ctx.Request().PostForm
+				formOpts.Submitted = sub.values
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), createChrome, title, meta, registration.Options, fields, "", csrfTokenFromRequest(ctx.Request())))
 			}
 
 			if err := store.Create(ctx.Context(), meta, instancePtr.Interface()); err != nil {
+				sub.discard(ctx)
 				fieldErrors, formError, refused := storeFailure(ctx.Context(), err, meta, registration.Options)
 				if !refused {
 					return err
 				}
-				formOpts := formOptionsFromRequest(ctx)
+				formOpts := formOptionsFromRequest(ctx, files)
 				formOpts.FieldErrors = fieldErrors
 				fields := buildFormFields(ctx.Context(), store, models, adminReg, meta, registration.Options, instancePtr.Elem(), formOpts)
 				return render(ctx, http.StatusUnprocessableEntity, formTemplate, formPage(ctx.Context(), createChrome, title, meta, registration.Options, fields, formError, csrfTokenFromRequest(ctx.Request())))
@@ -74,8 +85,9 @@ func createView(store *db.Store, models *model.Registry, adminReg *adminregistry
 	}
 }
 
-func formOptionsFromRequest(ctx *tango.Context) formContextOptions {
+func formOptionsFromRequest(ctx *tango.Context, files *fileFields) formContextOptions {
 	return formContextOptions{
+		Files:          files,
 		CurrentURL:     ctx.Request().URL.RequestURI(),
 		PreselectField: ctx.Query(adminPreselectFieldParam),
 		PreselectValue: ctx.Query(adminPreselectValueParam),
