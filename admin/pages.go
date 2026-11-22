@@ -16,7 +16,7 @@ import (
 // /admin/<Path>/ for GET and POST, behind the same session gate as the admin's
 // own pages, inside the admin's route group.
 type Page struct {
-	// Path is one URL segment: lowercase letters, digits, "-" and "_", starting
+	// Path is one URL segment: lower-case letters, digits, "-" and "_", starting
 	// with a letter. It must not name a model's table or an admin route.
 	Path string
 	// Title is the sidebar text when Nav is set.
