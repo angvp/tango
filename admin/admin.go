@@ -67,15 +67,15 @@ func New(store *db.Store, opts ...Option) tango.App {
 			}
 		}
 
-		pages, err := installedPages(registry.Admin().Pages(), registrations)
+		pages, err := checkedPages(registry.Admin().Pages(), registrations)
 		if err != nil {
 			return err
 		}
 		state.pagePaths = make(map[string]struct{}, len(pages))
-		for _, entry := range pages {
-			state.pagePaths[entry.Path] = struct{}{}
-			if entry.Nav {
-				nav = append(nav, navItem{Name: "page:" + entry.Path, Label: entry.Title, Path: pagePath(entry.Path)})
+		for _, mounted := range pages {
+			state.pagePaths[mounted.entry.Path] = struct{}{}
+			if mounted.entry.Nav {
+				nav = append(nav, navItem{Name: pageNavKey(mounted.entry.Path), Label: mounted.entry.Title, Path: pagePath(mounted.entry.Path)})
 			}
 		}
 
@@ -112,8 +112,8 @@ func New(store *db.Store, opts ...Option) tango.App {
 		routes = append(routes, unhandledMethodRoutes("/admin/messages/dismiss/", cfg.branding, http.MethodPost)...)
 		routes = append(routes, unhandledMethodRoutes(densityBasePath, cfg.branding, http.MethodPost)...)
 		routes = append(routes, assetRoutes()...)
-		for _, entry := range pages {
-			routes = append(routes, pageRoutes(entry, store, page, brand, cfg.branding)...)
+		for _, mounted := range pages {
+			routes = append(routes, pageRoutes(mounted, store, page, brand, cfg.branding)...)
 		}
 		for _, registration := range registrations {
 			modelPath := modelAdminPath(registration.Model.Name)

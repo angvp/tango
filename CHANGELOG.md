@@ -4,6 +4,11 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- **Staff-only admin pages.** `admin.RegisterPage(registry, admin.Page{Path, Title, View, Nav})` serves a host's own page at `/admin/<path>/` behind the admin's session gate: a visitor who is not signed in is sent to the login and brought back, and an account without staff access gets the admin's 403 page. A reusable app registers a page from its own registration function, as it registers a model, and registers it before the admin is installed. `Nav: true` lists the page in the sidebar after the models. Inside the View, `admin.CurrentUser(ctx)` returns the signed-in username, `admin.CSRFToken(ctx)` the token a form posts as `csrf_token`, and `admin.RenderPage(ctx, title, body)` wraps the body in the admin layout. A POST to a page needs that token, as the admin's own forms do. A path that is empty, not one lowercase segment, reserved by the admin, repeated, or also a model's admin path is refused with `admin.ErrInvalidPage`, `admin.ErrReservedPagePath` or `admin.ErrDuplicatePage`.
+- **`tango check` reports a page registered after the admin was installed**, as it does for a model. The check's description now reads "admin lists every model and page registered with it".
+
 ## [0.10.0] - 2026-11-14
 
 ### Added
