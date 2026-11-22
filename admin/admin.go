@@ -67,6 +67,18 @@ func New(store *db.Store, opts ...Option) tango.App {
 			}
 		}
 
+		pages, err := installedPages(registry.Admin().Pages(), registrations)
+		if err != nil {
+			return err
+		}
+		state.pagePaths = make(map[string]struct{}, len(pages))
+		for _, entry := range pages {
+			state.pagePaths[entry.Path] = struct{}{}
+			if entry.Nav {
+				nav = append(nav, navItem{Name: "page:" + entry.Path, Label: entry.Title, Path: pagePath(entry.Path)})
+			}
+		}
+
 		limiter := security.NewRateLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 		clientKey := security.ClientKey(cfg.trustedProxies)
 		landing := indexView(nav, cfg.branding)
@@ -100,6 +112,9 @@ func New(store *db.Store, opts ...Option) tango.App {
 		routes = append(routes, unhandledMethodRoutes("/admin/messages/dismiss/", cfg.branding, http.MethodPost)...)
 		routes = append(routes, unhandledMethodRoutes(densityBasePath, cfg.branding, http.MethodPost)...)
 		routes = append(routes, assetRoutes()...)
+		for _, entry := range pages {
+			routes = append(routes, pageRoutes(entry, store, page, brand, cfg.branding)...)
+		}
 		for _, registration := range registrations {
 			modelPath := modelAdminPath(registration.Model.Name)
 			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding)...)
@@ -116,6 +131,8 @@ func New(store *db.Store, opts ...Option) tango.App {
 type installState struct {
 	registry  *tango.Registry
 	installed map[string]struct{}
+	// pagePaths are the pages mounted when the admin was installed.
+	pagePaths map[string]struct{}
 }
 
 // checkedApp is the admin app plus the install-order check.
@@ -128,7 +145,7 @@ type checkedApp struct {
 // installed. The admin builds its routes and navigation when installed, so
 // those models would be missing from it without any error.
 func (a checkedApp) Checks() []tango.AppCheck {
-	const description = "admin lists every model registered with it"
+	const description = "admin lists every model and page registered with it"
 	if a.state.registry == nil {
 		return nil
 	}
@@ -136,6 +153,11 @@ func (a checkedApp) Checks() []tango.AppCheck {
 	for _, registration := range a.state.registry.Admin().Registrations() {
 		if _, ok := a.state.installed[registration.Model.Name]; !ok {
 			late = append(late, registration.Model.Name)
+		}
+	}
+	for _, entry := range a.state.registry.Admin().Pages() {
+		if _, ok := a.state.pagePaths[entry.Path]; !ok {
+			late = append(late, "page "+entry.Path)
 		}
 	}
 	if len(late) == 0 {
