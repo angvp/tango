@@ -66,6 +66,7 @@ type ModelRegistration struct {
 type Registry struct {
 	models        *model.Registry
 	registrations map[string]ModelRegistration
+	pages         []PageEntry
 }
 
 // NewRegistry returns an empty, ready-to-use admin Registry.
