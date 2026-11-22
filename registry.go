@@ -7,11 +7,16 @@ import (
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/internal/adminregistry"
 	"github.com/angvp/tango/model"
+	"github.com/angvp/tango/storage"
 )
 
 // ErrDuplicateApp is returned by Registry.Register when an app with the same
 // Name() has already been registered.
 var ErrDuplicateApp = errors.New("tango: duplicate app name")
+
+// ErrStorageAlreadySet is returned by Registry.SetStorage when a store was
+// already set. The first one is kept; a second is never chosen in silence.
+var ErrStorageAlreadySet = errors.New("tango: object store already set")
 
 // Registry is the shared structure apps register into during boot.
 type Registry struct {
@@ -22,6 +27,7 @@ type Registry struct {
 	routes           *RouteRegistry
 	registrationDone bool
 	store            *db.Store
+	storage          storage.Store
 	lifecycles       []Lifecycle
 	lifecycleNames   map[string]struct{}
 	jobs             []Job
@@ -91,6 +97,29 @@ func (r *Registry) Store() (*db.Store, bool) {
 		return nil, false
 	}
 	return r.store, true
+}
+
+// SetStorage sets the object store the framework's own features use, such as
+// an admin file field. It is set once: a second call fails with
+// ErrStorageAlreadySet and keeps the first store, as a duplicate app name
+// does. A nil store is refused.
+func (r *Registry) SetStorage(store storage.Store) error {
+	if store == nil {
+		return errors.New("tango: SetStorage needs a store")
+	}
+	if r.storage != nil {
+		return ErrStorageAlreadySet
+	}
+	r.storage = store
+	return nil
+}
+
+// Storage returns the object store set with SetStorage, if one has been set.
+func (r *Registry) Storage() (storage.Store, bool) {
+	if r.storage == nil {
+		return nil, false
+	}
+	return r.storage, true
 }
 
 // Admin returns the admin sub-registry, creating it on first use.
