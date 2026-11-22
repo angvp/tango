@@ -18,6 +18,12 @@ Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/applicati
 - Wrapping an already-constructed component (e.g. `hub.Close`) needs only `Stop`; a component you construct as part of starting needs `Start` too.
 - Keep `Serve` (not `ServeContext`) for a host with no `Lifecycle` components and no need for graceful shutdown — it's still the simplest path and stays fully compatible.
 
+## Seed Rows On First Start
+
+- Seed in a `Lifecycle.Start`, never in a migration: a migration is schema, runs once and cannot tell a seed row the host deleted from one it must restore.
+- One `store.InTx`: `Count` the model, return when it is above zero, else `Create` the rows. Get the store with `registry.Store()` inside `Start`; `ServeContext` sets it before any `Start` runs.
+- Test it with `lifecycletest.Start(t, registry)` after `RunRegistration` and `SetStore`; call it twice to prove the seed is idempotent. It runs only the hooks you registered and never the internal scheduler lifecycle.
+
 ## Don't
 
 - Do not assume the context passed to `Start` is a child of the caller's `ctx` — it's the decoupled Application context (`context.WithoutCancel(ctx)` plus `ServeContext`'s own cancellation). During startup it *is* canceled promptly the moment the caller cancels `ctx` (so a cooperative `Start` watching it can return); once every component has started, it stays live through HTTP draining and is canceled only afterward, not the instant the caller cancels.
@@ -30,6 +36,7 @@ Canonical example: `examples/realtime-chat`. Human guide: `docs/guides/applicati
 
 ## Check
 
+- Seed: run `lifecycletest.Start` twice against a test database and assert the row count does not change; assert a failing `Start` stops the earlier lifecycles in reverse.
 - Exercise: `Start` failure rolls back already-started components in reverse order; caller cancellation mid-startup does the same, including a `Start` that's actually blocked on its received context (not one that just calls cancel and returns) — assert no leaked startup goroutine.
 - Exercise: normal shutdown drains, then cancels the Application context, then stops components in reverse order — assert ordering via a log across at least two components.
 - Exercise: multiple `Stop` hooks prove they share one deadline (a slow earlier `Stop` measurably reduces the remaining budget seen by a later one), not a fresh timeout each.

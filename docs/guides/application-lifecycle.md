@@ -68,6 +68,52 @@ if err := tango.ServeContext(ctx, config, sqlDB, dialect); err != nil {
 
 `examples/realtime-chat/main.go` does exactly this — Ctrl-C or `SIGTERM` now drains in-flight WebSocket connections and calls `hub.Close` before the process exits, instead of the connection just vanishing.
 
+## Seed rows on first start
+
+A site often needs a few rows to exist before anyone uses it: a first set of categories, a default settings row. Put that in a `Lifecycle.Start`, not in a migration. A migration changes the schema and runs once, in order, on every database, including a test one; seed rows are data the host owns and may change or delete afterwards, and a migration cannot tell that apart from a row it must restore.
+
+The pattern is one transaction that counts, then creates, and does nothing when the rows are already there, so every start after the first leaves them alone:
+
+```go
+func seedCategories(registry *tango.Registry) func(context.Context) error {
+	return func(ctx context.Context) error {
+		store, ok := registry.Store()
+		if !ok {
+			return errors.New("seed categories: the registry has no store")
+		}
+		meta, _ := registry.Models().Get("Category")
+		return store.InTx(ctx, func(tx *db.Store) error {
+			n, err := tx.Count(ctx, meta, db.Query{})
+			if err != nil || n > 0 {
+				return err
+			}
+			for _, name := range []string{"News", "Notes"} {
+				if err := tx.Create(ctx, meta, &Category{Name: name}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+}
+
+// in an App.Register callback:
+registry.RegisterLifecycle(tango.Lifecycle{Name: "seed-categories", Start: seedCategories(registry)})
+```
+
+`ServeContext` has already set the registry's store when it runs `Start`. To test the seed, run the same hook against a test database with `lifecycletest.Start`:
+
+```go
+func TestSeedIsIdempotent(t *testing.T) {
+	registry, store := newTestRegistry(t) // RunRegistration and SetStore done
+	lifecycletest.Start(t, registry)
+	lifecycletest.Start(t, registry) // a second start must not add rows
+	// count the rows with store.Count
+}
+```
+
+`lifecycletest.Start` runs the `Start` hooks you registered in registration order, stops at the first error after stopping the ones that already started, and runs their `Stop` hooks in reverse when the test finishes. It never starts the scheduler `ServeContext` adds for itself.
+
 ## What this isn't
 
 No process supervisor or restart policy — that's your process manager's or container orchestrator's job, not tanGO's. No lifecycle status surfaced in `-tango-status`. See [limitations](../limitations.md) for the full list.
