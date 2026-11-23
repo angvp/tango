@@ -59,8 +59,24 @@ func (w lookupWidget) LookupRules() LookupRules {
 	return LookupRules{Search: append([]string(nil), w.options.Search...)}
 }
 
+var lookupWidgetTemplate = template.Must(template.New("lookupWidget").Parse(
+	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
+{{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
+<input id="field-{{.Name}}" type="text" name="{{.Name}}" value="{{.Value}}" class="input" data-tango-widget="lookup"` + ariaAttrs + `>
+{{if .RelatedLabel}}<p class="hint-small" id="field-{{.Name}}-current">{{.CurrentLabel}} {{.RelatedLabel}}</p>{{end}}`))
+
+type lookupWidgetData struct {
+	FieldContext
+	CurrentLabel string
+}
+
+// Render is the control that works without JavaScript: a text input holding
+// the related row's primary key, with the row's label beside it.
 func (lookupWidget) Render(ctx context.Context, f FieldContext) template.HTML {
-	return foreignKeySelectWidget{}.Render(ctx, f)
+	return renderWidgetTemplate(lookupWidgetTemplate, lookupWidgetData{
+		FieldContext: f,
+		CurrentLabel: newWidgetText(ctx).T("admin.lookup.current", "Selected:"),
+	})
 }
 
 func (lookupWidget) Parse(ctx context.Context, f FieldContext, form FieldValues, dest reflect.Value) error {
@@ -249,4 +265,56 @@ func integerKey(typ reflect.Type, q string) (any, bool) {
 		return nil, false
 	}
 	return key, true
+}
+
+// withLookupCurrentRow fills the lookup field's context from the one row it
+// points at, read by primary key. An unset key (empty or zero) shows an empty
+// control. A read-only field shows "label (key)" in place of the key.
+func withLookupCurrentRow(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, target string, fc FieldContext) FieldContext {
+	if fc.Value == "0" {
+		fc.Value = ""
+	}
+	if fc.Value == "" {
+		return fc
+	}
+	label := currentRowLabel(ctx, store, models, adminReg, target, fc.Value)
+	switch {
+	case label == "":
+	case fc.ReadOnly:
+		fc.Value = label + " (" + fc.Value + ")"
+	default:
+		fc.RelatedLabel = label
+	}
+	return fc
+}
+
+// currentRowLabel is the label of the related row with primary key raw, read
+// once by key. It is empty when the target has no Label, the key is malformed
+// or names no row, or the read fails; the key itself is then all that is
+// shown.
+func currentRowLabel(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, target, raw string) string {
+	labelField := labelFieldFor(adminReg, target)
+	if labelField == "" {
+		return ""
+	}
+	meta, ok := models.Get(target)
+	if !ok {
+		return ""
+	}
+	pk, err := primaryKeyField(meta)
+	if err != nil {
+		return ""
+	}
+	key, err := keyValue(pk.Type, pk.Name, raw)
+	if err != nil {
+		return "" // malformed: the field's own error reports it on save
+	}
+	row := reflect.New(meta.Type)
+	if err := store.Get(ctx, meta, key, row.Interface()); err != nil {
+		if !errors.Is(err, db.ErrNotFound) {
+			slog.ErrorContext(ctx, "admin: reading the current row of a lookup field failed", "model", target, "error", err)
+		}
+		return ""
+	}
+	return formatFieldValue(row.Elem().FieldByName(labelField))
 }

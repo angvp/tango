@@ -190,8 +190,16 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 	if opts.Labels[field.Name] == "" {
 		fc.Label = capitalizeFirst(humanizeFieldName(field.ForeignKey))
 	}
-	options, ok := relatedSelectOptions(ctx, store, models, adminReg, field.ForeignKey, fc.Value)
-	fc.SelectOptions = options
+	ok := true
+	if _, isLookup := opts.Widgets[field.Name].(LookupWidget); isLookup {
+		// A lookup never lists its target: it reads the one row the field
+		// points at, so the form costs one read however large the target is.
+		fc = withLookupCurrentRow(ctx, store, models, adminReg, field.ForeignKey, fc)
+	} else {
+		var options []SelectOption
+		options, ok = relatedSelectOptions(ctx, store, models, adminReg, field.ForeignKey, fc.Value)
+		fc.SelectOptions = options
+	}
 	if registration, adminRegistered := adminReg.Get(field.ForeignKey); adminRegistered && formOpts.CurrentURL != "" {
 		fc.RelatedCreateURL = relatedCreateURL(field.ForeignKey, adminReg, formOpts.CurrentURL, field.Name)
 		fc.RelatedCreateLabel = i18n.T(ctx, "admin.fk.add_new", "Add new %s", targetNoun(adminReg, field.ForeignKey, registration.Model))

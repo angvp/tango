@@ -63,6 +63,10 @@ type FieldContext struct {
 	// RelatedCreateLabel is the accessible label for RelatedCreateURL.
 	// Empty means widgets may fall back to their own default.
 	RelatedCreateLabel string
+	// RelatedLabel is the display label of the row a lookup field currently
+	// points at, or empty when the field is unset or the row has no label
+	// other than its key.
+	RelatedLabel string
 	// FileURL is where the field's current file is served, for a file widget
 	// that has the host's URL for it; empty when there is none.
 	FileURL string
