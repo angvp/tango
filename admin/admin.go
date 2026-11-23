@@ -88,6 +88,14 @@ func New(store *db.Store, opts ...Option) tango.App {
 			}
 			files[registration.Model.Name] = fields
 		}
+		lookups := make(map[string]lookupFields, len(registrations))
+		for _, registration := range registrations {
+			fields, err := resolveLookups(registry.Admin(), registration)
+			if err != nil {
+				return err
+			}
+			lookups[registration.Model.Name] = fields
+		}
 		state.fallbackDir = fallback.dir
 		state.fallbackFields = fallback.fields
 
@@ -129,7 +137,7 @@ func New(store *db.Store, opts ...Option) tango.App {
 		}
 		for _, registration := range registrations {
 			modelPath := modelAdminPath(registration.Model.Name)
-			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding, files[registration.Model.Name])...)
+			routes = append(routes, modelRoutes(modelPath, store, registry.Models(), registry.Admin(), registration, nav, cfg.branding, files[registration.Model.Name], lookups[registration.Model.Name])...)
 		}
 
 		middleware := append([]tango.Middleware{withThemeState}, cfg.middleware...)
@@ -199,7 +207,7 @@ func (a checkedApp) fallbackChecks() []tango.AppCheck {
 	}}
 }
 
-func modelRoutes(modelPath string, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding, files *fileFields) tango.URLs {
+func modelRoutes(modelPath string, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, registration ModelRegistration, nav []navItem, brand Branding, files *fileFields, lookups lookupFields) tango.URLs {
 	brandOnly := chrome{Brand: brand}
 	page := chrome{Nav: nav, Brand: brand}
 	list := htmlPage(brandOnly, requireSession(store, page, listView(store, models, adminReg, registration, nav, brand)))
@@ -225,5 +233,6 @@ func modelRoutes(modelPath string, store *db.Store, models *model.Registry, admi
 	urls = append(urls, unhandledMethodRoutes(modelPath+"new/", brand, http.MethodGet, http.MethodPost)...)
 	urls = append(urls, unhandledMethodRoutes(modelPath+"{pk}/", brand, http.MethodGet, http.MethodPost)...)
 	urls = append(urls, unhandledMethodRoutes(modelPath+"{pk}/delete/", brand, http.MethodGet, http.MethodPost)...)
-	return append(urls, previewRoutes(modelPath, store, registration)...)
+	urls = append(urls, previewRoutes(modelPath, store, registration)...)
+	return append(urls, lookupRoutes(modelPath, store, brand, lookups)...)
 }
