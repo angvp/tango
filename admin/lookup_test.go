@@ -91,7 +91,7 @@ func TestLookupSearchesTheSearchFieldsAndReturnsValueAndLabel(t *testing.T) {
 	seedAuthor(t, sqlDB, "John Roe")
 	seedAuthor(t, sqlDB, "Janet Poe")
 
-	answer := decodeLookup(t, doRequest(t, handler, http.MethodGet, lookupPath+"?q=jan", nil))
+	answer := decodeLookup(t, doRequest(t, handler, http.MethodGet, lookupPath+"?q=Jan", nil))
 	if len(answer.Items) != 2 || answer.Items[0].Text != "Jane Doe" || answer.Items[1].Text != "Janet Poe" {
 		t.Fatalf("items = %+v, want Jane Doe and Janet Poe in primary key order", answer.Items)
 	}
@@ -215,8 +215,11 @@ func TestLookupFailsAtStartupWhenItCannotWork(t *testing.T) {
 
 func TestLookupAnswers500WhenTheSearchFails(t *testing.T) {
 	handler, sqlDB := mustBuildLookupAdmin(t, admin.Options{Label: "Name", Search: []string{"Name"}}, admin.Lookup(admin.LookupOptions{}))
-	if _, err := sqlDB.Exec(`DROP TABLE fk_author`); err != nil {
-		t.Fatalf("drop table: %v", err)
+	// The posts reference the authors, so they go first on every dialect.
+	for _, drop := range []string{`DROP TABLE fk_post`, `DROP TABLE fk_author`} {
+		if _, err := sqlDB.Exec(drop); err != nil {
+			t.Fatalf("%s: %v", drop, err)
+		}
 	}
 
 	response := doRequest(t, handler, http.MethodGet, lookupPath+"?q=a", nil)
