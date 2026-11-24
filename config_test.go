@@ -12,11 +12,13 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angvp/tango"
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/migration"
+	"github.com/angvp/tango/model"
 
 	"github.com/angvp/tango/testdb"
 )
@@ -395,6 +397,72 @@ func TestDumpModelsGivesExactSchemaModelsOnlyToACLIThatKnowsThem(t *testing.T) {
 			t.Fatalf("DumpModels with the token: %v", err)
 		}
 	})
+}
+
+type compositeComment struct {
+	ID        int64 `tango:"pk"`
+	PostID    int64
+	CreatedAt time.Time
+}
+
+func compositeConfig() tango.Config {
+	return tango.Config{InstalledApps: []tango.App{tango.NewApp("board", func(registry *tango.Registry) error {
+		return registry.Models().Register(compositeComment{}, model.Index("PostID", "CreatedAt"))
+	})}}
+}
+
+// TestDumpModelsGivesCompositeIndexesOnlyToACLIThatKnowsThem checks the second
+// handshake: a v0.10 CLI sends the exact-schema token but would drop the
+// declarations silently, so the dump needs the composite token.
+func TestDumpModelsGivesCompositeIndexesOnlyToACLIThatKnowsThem(t *testing.T) {
+	config := compositeConfig()
+	plain := tango.Config{InstalledApps: []tango.App{tango.NewApp("widgets", func(registry *tango.Registry) error {
+		return registry.Models().Register(dumpModelsWidget{})
+	})}}
+	for _, args := range [][]string{
+		{"app", "-tango-dump-models"},
+		{"app", "-tango-dump-models", "tango-exact-schema-v1"},
+	} {
+		withArgs(t, args, func() {
+			_, err := tango.DumpModels(config)
+			if err == nil || !strings.Contains(err.Error(), "board.compositeComment (PostID, CreatedAt)") ||
+				!strings.Contains(err.Error(), "a tanGO CLI version that supports composite indexes") {
+				t.Fatalf("DumpModels under %q = %v, want a refusal naming the declaration and the capability", args, err)
+			}
+			if strings.Contains(err.Error(), "v0.") {
+				t.Fatalf("DumpModels refusal %q names a release", err)
+			}
+			if _, err := tango.DumpModels(plain); err != nil {
+				t.Fatalf("DumpModels of models without declarations under %q: %v", args, err)
+			}
+		})
+	}
+	withArgs(t, []string{"app", "-tango-dump-models", "tango-exact-schema-v1", "tango-composite-index-v1"}, func() {
+		models, err := tango.DumpModels(config)
+		if err != nil || len(models[0].Indexes) != 1 {
+			t.Fatalf("DumpModels with both tokens = %v, %v; want the declaration", models, err)
+		}
+	})
+	withArgs(t, []string{"app", "-check"}, func() {
+		if _, err := tango.DumpModels(config); err != nil {
+			t.Fatalf("DumpModels without the dump flag: %v", err)
+		}
+	})
+}
+
+// TestCheckAndDumpModelsRefuseAnInvalidCompositeIndex checks both entry points
+// run the schema validation of composite declarations.
+func TestCheckAndDumpModelsRefuseAnInvalidCompositeIndex(t *testing.T) {
+	config := tango.Config{InstalledApps: []tango.App{tango.NewApp("board", func(registry *tango.Registry) error {
+		return registry.Models().Register(compositeComment{},
+			model.Index("PostID", "CreatedAt"), model.Unique("PostID", "CreatedAt"))
+	})}}
+	if _, err := tango.DumpModels(config); !errors.Is(err, model.ErrInvalidIndex) {
+		t.Fatalf("DumpModels error = %v, want model.ErrInvalidIndex", err)
+	}
+	if err := tango.Check(config); err == nil || !strings.Contains(err.Error(), "repeats the unique tuple") {
+		t.Fatalf("Check error = %v, want the repeated tuple refusal", err)
+	}
 }
 
 func TestCheckReturnsRouteCompileError(t *testing.T) {

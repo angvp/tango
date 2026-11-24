@@ -87,7 +87,7 @@ func TestMakemigrationsSendsTheHandshakeToken(t *testing.T) {
 	if code := Run(context.Background(), []string{"makemigrations"}, dir, io.Discard, io.Discard, runner); code != 0 {
 		t.Fatalf("Run = %d", code)
 	}
-	want := []string{"go", "run", ".", "-tango-dump-models", "tango-exact-schema-v1"}
+	want := []string{"go", "run", ".", "-tango-dump-models", "tango-exact-schema-v1", "tango-composite-index-v1"}
 	if !reflect.DeepEqual(runner.args, want) {
 		t.Fatalf("argv = %q, want %q", runner.args, want)
 	}

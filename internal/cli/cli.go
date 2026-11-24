@@ -310,7 +310,7 @@ func makeMigrations(ctx context.Context, runner Runner, dir string, args []strin
 
 func dumpModels(ctx context.Context, runner Runner, dir string, stderr io.Writer) ([]migration.Model, error) {
 	var stdout bytes.Buffer
-	if err := runner.Run(ctx, dir, "go", []string{"run", ".", "-tango-dump-models", schemaattr.HandshakeArg}, &stdout, stderr); err != nil {
+	if err := runner.Run(ctx, dir, "go", []string{"run", ".", "-tango-dump-models", schemaattr.HandshakeArg, schemaattr.CompositeHandshakeArg}, &stdout, stderr); err != nil {
 		return nil, err
 	}
 
