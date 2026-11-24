@@ -62,6 +62,12 @@ unreleased | v0.[1-9][0-9].*) exact=true ;;
 *) exact=false ;;
 esac
 
+# Composite indexes (model.Index, model.Unique) come after v0.10.0.
+case $version in
+unreleased) composite=true ;;
+*) composite=false ;;
+esac
+
 cat >main.go <<'EOF'
 package main
 
@@ -82,7 +88,7 @@ func main() {
 	}
 	app := tango.NewApp("blog", func(r *tango.Registry) error {
 		for _, m := range models() {
-			if err := r.Models().Register(m); err != nil {
+			if err := r.Models().Register(m, optionsFor(m)...); err != nil {
 				return err
 			}
 		}
@@ -100,6 +106,15 @@ func main() {
 }
 EOF
 
+# Releases without composite indexes register a model with no options.
+if ! $composite; then
+	perl -pi -e 's/, optionsFor\(m\)\.\.\.//' main.go
+fi
+
+# index_cases is the body of a type switch returning each model's composite
+# index options; a stage sets it before calling stage and it is cleared after.
+index_cases=""
+
 # stage writes models.go from its arguments (Go type declarations) and
 # runs makemigrations with the stage's name and any extra flags after --.
 stage() {
@@ -115,6 +130,21 @@ stage() {
 		echo
 		echo "$decls"
 	} >models.go
+	if $composite; then
+		{
+			echo 'package main'
+			echo
+			echo 'import "github.com/angvp/tango/model"'
+			echo
+			echo 'func optionsFor(m any) []model.RegisterOption {'
+			echo '	switch m.(type) {'
+			echo "$index_cases"
+			echo '	}'
+			echo '	return nil'
+			echo '}'
+		} >options.go
+	fi
+	index_cases=""
 	echo "== $version: $name" >&2
 	go mod tidy
 	"${tango[@]}" makemigrations --name "$name" "$@"
@@ -785,10 +815,172 @@ type Ledger struct {
 }
 
 func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	if $composite; then
+	index_cases='	case Comment:
+		return []model.RegisterOption{model.Index("Text", "PostID")}
+	case Post:
+		return []model.RegisterOption{model.Unique("Slug", "AuthorID")}
+	case Ledger:
+		return []model.RegisterOption{model.Index("Code", "Qty")}'
+	stage add_composite '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk"`
+	Code string `tango:"varchar=20,unique"`
+	Note string `tango:"varchar=40"`
+	At   time.Time `tango:"notnull"`
+	Qty  int
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	index_cases='	case Comment:
+		return []model.RegisterOption{model.Index("Text", "PostID").Named("ix_comment_post_text")}
+	case Post:
+		return []model.RegisterOption{model.Unique("Slug", "AuthorID")}
+	case Ledger:
+		return []model.RegisterOption{model.Index("Code", "Qty")}'
+	stage rename_composite '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk"`
+	Code string `tango:"varchar=20,unique"`
+	Note string `tango:"varchar=40"`
+	At   time.Time `tango:"notnull"`
+	Qty  int
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	index_cases='	case Comment:
+		return []model.RegisterOption{model.Index("Text", "PostID").Named("ix_comment_post_text")}
+	case Ledger:
+		return []model.RegisterOption{model.Index("Code", "Qty")}'
+	stage drop_composite '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk"`
+	Code string `tango:"varchar=20,unique"`
+	Note string `tango:"varchar=40"`
+	At   time.Time `tango:"notnull"`
+	Qty  int
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }'
+
+	index_cases='	case Comment:
+		return []model.RegisterOption{model.Index("Text", "PostID").Named("ix_comment_post_text")}
+	case Ledger:
+		return []model.RegisterOption{model.Index("Code", "Quantity")}'
+	stage rename_column_of_composite '
+type Writer struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type Post struct {
+	ID        int64  `tango:"pk"`
+	Heading   string `tango:"unique"`
+	Body      string
+	Score     float64
+	Rating    float64
+	Slug      string
+	AuthorID  int64 `tango:"fk=Writer"`
+	CreatedAt time.Time
+}
+
+type Comment struct {
+	ID     int64 `tango:"pk"`
+	PostID int64 `tango:"fk=Post"`
+	Text   string `tango:"varchar=500"`
+}
+
+type Ledger struct {
+	ID   int  `tango:"pk"`
+	Code string `tango:"varchar=20,unique"`
+	Note string `tango:"varchar=40"`
+	At   time.Time `tango:"notnull"`
+	Quantity int
+	Tag  string `tango:"varchar=20,notnull,default=x"`
+}
+
+func models() []any { return []any{Writer{}, Post{}, Comment{}, Ledger{}} }' -- --rename blog.Ledger.Qty=Quantity
+	fi
 fi
 
 command rm -rf "$out"
 mkdir -p "$out"
 cp -R migrations "$out/migrations"
-go run . -tango-dump-models tango-exact-schema-v1 >"$out/models.json"
+dump_tokens=(tango-exact-schema-v1)
+if $composite; then
+	dump_tokens+=(tango-composite-index-v1)
+fi
+go run . -tango-dump-models "${dump_tokens[@]}" >"$out/models.json"
 echo "wrote $out" >&2

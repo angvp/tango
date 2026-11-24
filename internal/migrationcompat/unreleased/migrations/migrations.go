@@ -180,4 +180,42 @@ var Migrations = []migration.Migration{
 		},
 		Down: []migration.Step{},
 	},
+	{App: "blog", Name: "0023_add_composite", Reversible: true,
+		Up: []migration.Step{
+			migration.CreateCompositeIndex{Table: "ledger", Columns: []string{"code", "qty"}},
+			migration.CreateCompositeIndex{Table: "post", Columns: []string{"slug", "author_id"}, Unique: true},
+			migration.CreateCompositeIndex{Table: "comment", Columns: []string{"text", "post_id"}},
+		},
+		Down: []migration.Step{
+			migration.DropCompositeIndex{Table: "comment", Columns: []string{"text", "post_id"}},
+			migration.DropCompositeIndex{Table: "post", Columns: []string{"slug", "author_id"}, Unique: true},
+			migration.DropCompositeIndex{Table: "ledger", Columns: []string{"code", "qty"}},
+		},
+	},
+	{App: "blog", Name: "0024_rename_composite", Reversible: true,
+		Up: []migration.Step{
+			migration.RenameCompositeIndex{Table: "comment", Columns: []string{"text", "post_id"}, From: "idx_comment_text_post_id", To: "ix_comment_post_text"},
+		},
+		Down: []migration.Step{
+			migration.RenameCompositeIndex{Table: "comment", Columns: []string{"text", "post_id"}, From: "ix_comment_post_text", To: "idx_comment_text_post_id"},
+		},
+	},
+	{App: "blog", Name: "0025_drop_composite", Reversible: true,
+		Up: []migration.Step{
+			migration.DropCompositeIndex{Table: "post", Columns: []string{"slug", "author_id"}, Unique: true},
+		},
+		Down: []migration.Step{
+			migration.CreateCompositeIndex{Table: "post", Columns: []string{"slug", "author_id"}, Unique: true},
+		},
+	},
+	{App: "blog", Name: "0026_rename_column_of_composite", Reversible: true,
+		Up: []migration.Step{
+			migration.RenameColumn{Table: "ledger", From: "qty", To: "quantity"},
+			migration.RenameCompositeIndex{Table: "ledger", Columns: []string{"code", "quantity"}, From: "idx_ledger_code_qty", To: "idx_ledger_code_quantity"},
+		},
+		Down: []migration.Step{
+			migration.RenameCompositeIndex{Table: "ledger", Columns: []string{"code", "quantity"}, From: "idx_ledger_code_quantity", To: "idx_ledger_code_qty"},
+			migration.RenameColumn{Table: "ledger", From: "quantity", To: "qty"},
+		},
+	},
 }

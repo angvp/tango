@@ -126,3 +126,27 @@ func TestMakemigrationsRenamesADerivedCompositeIndexAfterAColumnRename(t *testin
 		t.Fatalf("want the index rename after the column rename in:\n%s", content)
 	}
 }
+
+// TestCompositeStepKindsAreNewKindsAnOlderReaderRefusesByName pins the header
+// vocabulary: the three composite steps are kinds of their own, never a V2
+// suffix on an older kind, so a reader that predates them fails with
+// "unknown migration step kind" instead of reading half a step.
+func TestCompositeStepKindsAreNewKindsAnOlderReaderRefusesByName(t *testing.T) {
+	for _, step := range []migration.Step{
+		migration.CreateCompositeIndex{Table: "t", Columns: []string{"a", "b"}},
+		migration.DropCompositeIndex{Table: "t", Columns: []string{"a", "b"}},
+		migration.RenameCompositeIndex{Table: "t", Columns: []string{"a", "b"}, From: "x", To: "y"},
+	} {
+		encoded, err := encodeSteps([]migration.Step{step})
+		if err != nil {
+			t.Fatal(err)
+		}
+		kind := encoded[0].Kind
+		if !isNewStepKind(kind) || strings.HasSuffix(kind, v2Suffix) {
+			t.Fatalf("kind %q must be a new kind without a %s suffix", kind, v2Suffix)
+		}
+	}
+	if _, err := decodeStep(encodedStep{Kind: "CreateTupleIndex"}); err == nil || !strings.Contains(err.Error(), "unknown migration step kind") {
+		t.Fatalf("decode of a kind no reader knows = %v, want the unknown-kind refusal", err)
+	}
+}
