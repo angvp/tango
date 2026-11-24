@@ -62,12 +62,13 @@ func (w lookupWidget) LookupRules() LookupRules {
 var lookupWidgetTemplate = template.Must(template.New("lookupWidget").Parse(
 	`<label for="field-{{.Name}}" class="field-label">{{.Label}}</label>
 {{if .HelpText}}<p class="field-help" id="field-{{.Name}}-help">{{.HelpText}}</p>{{end}}
-<input id="field-{{.Name}}" type="text" name="{{.Name}}" value="{{.Value}}" class="input" data-tango-widget="lookup"` + ariaAttrs + `>
+<input id="field-{{.Name}}" type="text" name="{{.Name}}" value="{{.Value}}" class="input" data-tango-widget="lookup" data-lookup-url="{{.LookupURL}}"{{if .RelatedLabel}} data-lookup-label="{{.RelatedLabel}}"{{end}}{{if not .Required}} data-lookup-optional{{end}}{{if .Text.Active}} data-msg-remove="{{.Text.T "admin.lookup.remove" "Remove"}}" data-msg-results="{{.Text.T "admin.lookup.results" "{count} results. Use the up and down arrow keys to choose."}}" data-msg-none="{{.Text.T "admin.lookup.none" "No results."}}" data-msg-more="{{.Text.T "admin.lookup.more" "More results. Type to narrow."}}" data-msg-error="{{.Text.T "admin.lookup.error" "Could not load results."}}" data-msg-selected="{{.Text.T "admin.lookup.chosen" "{label} selected."}}" data-msg-cleared="{{.Text.T "admin.lookup.cleared" "Selection removed."}}"{{end}}` + ariaAttrs + `>
 {{if .RelatedLabel}}<p class="hint-small" id="field-{{.Name}}-current">{{.CurrentLabel}} {{.RelatedLabel}}</p>{{end}}`))
 
 type lookupWidgetData struct {
 	FieldContext
 	CurrentLabel string
+	Text         widgetText
 }
 
 // Render is the control that works without JavaScript: a text input holding
@@ -76,6 +77,7 @@ func (lookupWidget) Render(ctx context.Context, f FieldContext) template.HTML {
 	return renderWidgetTemplate(lookupWidgetTemplate, lookupWidgetData{
 		FieldContext: f,
 		CurrentLabel: newWidgetText(ctx).T("admin.lookup.current", "Selected:"),
+		Text:         newWidgetText(ctx),
 	})
 }
 
@@ -173,6 +175,12 @@ func lookupOrder(ordering []string, pk string) []string {
 		}
 	}
 	return append(order, pk)
+}
+
+// lookupPath is the canonical URL of a model field's search route. The form
+// hands it to the widget, and lookupRoutes registers exactly it.
+func lookupPath(modelName, field string) string {
+	return modelAdminPath(modelName) + "_lookup/" + field + "/"
 }
 
 // lookupRoutes returns the one search route a model needs: a GET to

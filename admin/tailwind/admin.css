@@ -73,6 +73,15 @@
   .json-formatted { @apply block w-full overflow-auto rounded-md border border-control-line bg-surface-sunken px-3 py-2 font-mono text-xs text-ink whitespace-pre; min-height: 10rem; }
   .json-formatted:empty { display: none; }
   .markdown-preview-frame:not([srcdoc]) { display: none; }
+  .combobox { @apply relative; }
+  .combobox-row { @apply flex items-center gap-2; }
+  .combobox-list { @apply absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-control-line bg-surface py-1 text-sm shadow-lg; }
+  .combobox-row [hidden] { display: none; }
+  .combobox-list[hidden] { display: none; }
+  .combobox-option { @apply cursor-pointer px-3 py-2 text-ink; }
+  .combobox-option:hover, .combobox-option-active { @apply bg-surface-hover; }
+  .combobox-option[aria-selected="true"] { @apply font-semibold; }
+  .combobox-note { @apply px-3 py-2 text-xs text-ink-faint; }
   .field-label { @apply block text-sm font-medium text-ink-muted mb-1.5; }
   .field-group { @apply mb-4 last:mb-0; }
   .checkbox-row { @apply flex items-center gap-2.5; }
