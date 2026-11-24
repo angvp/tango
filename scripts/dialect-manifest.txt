@@ -44,6 +44,7 @@ sensitive ./internal/migrationcompat/v0_8_0/migrations
 sensitive ./internal/migrationcompat/v0_8_1/migrations
 sensitive ./internal/migrationcompat/v0_9_0/migrations
 sensitive ./internal/migrationcompat/v0_10_0/migrations
+sensitive ./internal/migrationcompat/v0_11_0/migrations
 sensitive ./internal/migrationtest
 sensitive ./internal/preflight
 sensitive ./internal/querycount
