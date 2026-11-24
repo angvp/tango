@@ -26,6 +26,12 @@ The list embeds each post's `author` object, loaded in the same request by `Quer
 
 `go test .` runs the same flow against a fresh database.
 
+## Choosing an author without listing them all
+
+A post's author is a foreign key, and a select that lists every author stops working once there are thousands. `apps/posts/app.go` gives the field `admin.Lookup`, so the post form and the Author filter search the authors instead: the person types, the admin answers with at most ten matches of the authors' `Name` and `Email` (the `Search` the authors app already sets), and the form reads only the one author a post names. Without JavaScript the field is a text input for the author's ID, with the name beside it.
+
+`lookup_test.go` seeds 5 and then 3,000 authors and asserts that the post form, the edit form, the filtered changelist and a search each cost the same number of statements for both, that the edit form shows an author far down the table, and that a search answers with only a key and a name. `catalog_es.go` carries the Spanish for the lookup's texts. The search is a case-insensitive match on SQLite and a case-sensitive one on PostgreSQL and, with the tables tanGO creates, on MySQL. See [admin registration](../../docs/guides/admin-registration.md).
+
 ## The operator dashboard
 
 Logging in to `/admin/` lands on a dashboard: the database's reachability, dialect and migration state, and the last hour of request and job activity. Both come from sources `main.go` hands to `admin.WithDashboard`: a status function built from `tango.Status` (see `dashboard.go`), and an `observability.Window` that `tango.WithRecorder` feeds on every request. The activity is labelled "this instance only" and starts again from zero when the process restarts; use an external monitoring system for history or several instances. See the [admin dashboard guide](../../docs/guides/admin-dashboard.md).
