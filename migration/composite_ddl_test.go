@@ -3,9 +3,12 @@ package migration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/go-sql-driver/mysql"
 
 	"github.com/angvp/tango/db"
 	"github.com/angvp/tango/testdb"
@@ -181,6 +184,49 @@ func TestCreateCompositeIndexSQLGoldens(t *testing.T) {
 		}
 		if got := createCompositeIndexSQL(dialect, true, "uniq_t_post_id_created_at", "t", cols); got != want[1] {
 			t.Errorf("%v unique: %s, want %s", dialect, got, want[1])
+		}
+	}
+}
+
+func TestWrapKeyTooLongWrapsOnlyTheTwoMySQLKeyErrors(t *testing.T) {
+	testdb.SQLiteOnly(t, "pure error wrapping test")
+	for _, number := range []uint16{1071, 1170} {
+		cause := &mysql.MySQLError{Number: number, Message: "key"}
+		err := wrapKeyTooLong(cause, "t", "idx_t_a_b", []string{"a", "b"})
+		if !errors.Is(err, cause) {
+			t.Fatalf("%d: wrapped error does not keep the driver error", number)
+		}
+		for _, want := range []string{`"t"`, `"idx_t_a_b"`, "a, b", "varchar=n"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("%d: error %q lacks %q", number, err, want)
+			}
+		}
+	}
+	other := &mysql.MySQLError{Number: 1062, Message: "dup"}
+	if got := wrapKeyTooLong(other, "t", "i", []string{"a", "b"}); got != error(other) {
+		t.Fatalf("another MySQL error was changed: %v", got)
+	}
+	if wrapKeyTooLong(nil, "t", "i", nil) != nil {
+		t.Fatal("nil was wrapped")
+	}
+	plain := errors.New("boom")
+	if got := wrapKeyTooLong(plain, "t", "i", nil); got != plain {
+		t.Fatalf("a non-MySQL error was changed: %v", got)
+	}
+}
+
+func TestCompositeStepsRefuseBadShapeBeforeTouchingTheDatabase(t *testing.T) {
+	testdb.SQLiteOnly(t, "the checks run before any SQL")
+	sqlDB, dialect := testdb.Open(t)
+	ctx := context.Background()
+	for name, step := range map[string]Step{
+		"create one column": CreateCompositeIndex{Table: "t", Columns: []string{"a"}},
+		"create bad name":   CreateCompositeIndex{Table: "t", Columns: []string{"a", "b"}, Name: "bad-name"},
+		"drop one column":   DropCompositeIndex{Table: "t", Columns: []string{"a"}},
+		"drop bad name":     DropCompositeIndex{Table: "t", Columns: []string{"a", "b"}, Name: "bad-name"},
+	} {
+		if err := ApplyStep(ctx, sqlDB, dialect, step); err == nil {
+			t.Errorf("%s: no error", name)
 		}
 	}
 }
