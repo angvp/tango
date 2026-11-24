@@ -202,13 +202,19 @@ func DiffModels(models []Model, state SchemaState, renames ...Rename) ([]Migrati
 			m := appMigration(meta.App)
 			m.Up = append(m.Up, CreateTable{Table: table, Columns: meta.Columns})
 			m.Down = append(m.Down, DropTable{Table: table})
+			m.Up = append(m.Up, newTableComposite(table, meta.Indexes)...)
 			continue
 		}
 
 		m := appMigration(meta.App)
 		columns := applyRenames(m, table, existing.Columns, columnRenames)
 		unsupported = append(unsupported, unsupportedChanges(meta, columns, referenced)...)
+		plan, problems := planComposite(table, meta.Indexes, renameIndexColumns(table, existing.Indexes, columnRenames))
+		unsupported = append(unsupported, problems...)
+		plan.emitDrops(m)
 		diffColumns(m, table, meta.Columns, columns)
+		plan.emitRenames(m)
+		plan.emitCreates(m)
 	}
 	if len(unsupported) > 0 {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedChange, strings.Join(unsupported, "; "))

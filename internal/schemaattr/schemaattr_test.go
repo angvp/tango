@@ -61,6 +61,9 @@ func TestStepUses(t *testing.T) {
 		{"not null", migration.AlterColumnNotNull{Table: "t", Column: "c"}, true},
 		{"default", migration.AlterColumnDefault{Table: "t", Column: "c"}, true},
 		{"rename index", migration.RenameIndex{Table: "t", Column: "c", From: "a", To: "b"}, true},
+		{"create composite index", migration.CreateCompositeIndex{Table: "t", Columns: []string{"a", "b"}}, true},
+		{"drop composite index", migration.DropCompositeIndex{Table: "t", Columns: []string{"a", "b"}}, true},
+		{"rename composite index", migration.RenameCompositeIndex{Table: "t", Columns: []string{"a", "b"}, From: "x", To: "y"}, true},
 	}
 	for _, tc := range cases {
 		if got := StepUses(tc.step); got != tc.want {

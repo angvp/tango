@@ -45,6 +45,10 @@ type encodedStep struct {
 	ToWidth      int    `json:"toWidth,omitempty"`
 	FromNaive    bool   `json:"fromNaive,omitempty"`
 	ToNaive      bool   `json:"toNaive,omitempty"`
+
+	// IndexColumns is the ordered tuple of a composite index step. Those
+	// steps have kinds of their own, which an older reader refuses by name.
+	IndexColumns []string `json:"indexColumns,omitempty"`
 }
 
 func encodeMigrations(migrations []migration.Migration) ([]encodedMigration, error) {
@@ -111,11 +115,12 @@ func encodeSteps(steps []migration.Step) ([]encodedStep, error) {
 	return encoded, nil
 }
 
-// isNewStepKind reports whether kind exists only from v0.10.0, so it needs no
-// V2 suffix to be refused by an older reader.
+// isNewStepKind reports whether kind is a step type of its own that an older
+// reader does not know, so it needs no V2 suffix to be refused by name.
 func isNewStepKind(kind string) bool {
 	switch kind {
-	case "AlterColumnNotNull", "AlterColumnDefault", "RenameIndex":
+	case "AlterColumnNotNull", "AlterColumnDefault", "RenameIndex",
+		"CreateCompositeIndex", "DropCompositeIndex", "RenameCompositeIndex":
 		return true
 	}
 	return false
@@ -154,6 +159,12 @@ func encodeStep(step migration.Step) (encodedStep, error) {
 		return encodedStep{Kind: "AlterColumnDefault", Table: s.Table, Column: s.Column, DefaultKind: s.DefaultKind, DefaultValue: s.DefaultValue}, nil
 	case migration.RenameIndex:
 		return encodedStep{Kind: "RenameIndex", Table: s.Table, Column: s.Column, Unique: s.Unique, From: s.From, To: s.To}, nil
+	case migration.CreateCompositeIndex:
+		return encodedStep{Kind: "CreateCompositeIndex", Table: s.Table, IndexColumns: s.Columns, Unique: s.Unique, Name: s.Name}, nil
+	case migration.DropCompositeIndex:
+		return encodedStep{Kind: "DropCompositeIndex", Table: s.Table, IndexColumns: s.Columns, Unique: s.Unique, Name: s.Name}, nil
+	case migration.RenameCompositeIndex:
+		return encodedStep{Kind: "RenameCompositeIndex", Table: s.Table, IndexColumns: s.Columns, Unique: s.Unique, From: s.From, To: s.To}, nil
 	}
 	return encodedStep{}, fmt.Errorf("unsupported migration step type %T", step)
 }
@@ -203,6 +214,12 @@ func decodeStep(step encodedStep) (migration.Step, error) {
 		return migration.AlterColumnDefault{Table: step.Table, Column: step.Column, DefaultKind: step.DefaultKind, DefaultValue: step.DefaultValue}, nil
 	case "RenameIndex":
 		return migration.RenameIndex{Table: step.Table, Column: step.Column, Unique: step.Unique, From: step.From, To: step.To}, nil
+	case "CreateCompositeIndex":
+		return migration.CreateCompositeIndex{Table: step.Table, Columns: step.IndexColumns, Unique: step.Unique, Name: step.Name}, nil
+	case "DropCompositeIndex":
+		return migration.DropCompositeIndex{Table: step.Table, Columns: step.IndexColumns, Unique: step.Unique, Name: step.Name}, nil
+	case "RenameCompositeIndex":
+		return migration.RenameCompositeIndex{Table: step.Table, Columns: step.IndexColumns, Unique: step.Unique, From: step.From, To: step.To}, nil
 	}
 	return nil, fmt.Errorf("unknown migration step kind %q", step.Kind)
 }
