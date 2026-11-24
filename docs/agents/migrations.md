@@ -23,6 +23,8 @@ go run . -migrate
 
 Use the actual project workflow if it wraps these commands differently.
 
+- A composite index or unique tuple makes `CreateCompositeIndex`, `DropCompositeIndex` and `RenameCompositeIndex` steps. Never hand-write a `DropColumn` on a column a multi-column index holds: it is refused; drop the index first. A new unique tuple is checked against existing rows before any DDL.
+
 ## Don't
 
 - Do not hand-edit generated migration files unless the change is intentional and reviewed.

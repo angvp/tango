@@ -68,6 +68,15 @@ See the [SQLite, PostgreSQL and MySQL setup guide](guides/sqlite-and-postgresql-
 - A `--rename` of a field or model with an explicitly named index is refused, because the rename would rename that index wrongly.
 - Giving a `naive` timestamp its time zone reads the stored values as UTC.
 
+## Composite-index limits
+
+- Only plain ordered columns: no partial (`WHERE`), expression, included (`INCLUDE`) or descending parts, and no `NULLS NOT DISTINCT`.
+- No query API: an index is chosen by the database's planner, and tanGO offers no hint.
+- A unique tuple is not "unique with `NULL`": rows with a `NULL` member never collide, on SQLite, PostgreSQL and MySQL alike.
+- MySQL limits an index key to 3072 bytes and cannot index unbounded text (a text member becomes `VARCHAR(255)`); the error says which index and columns and suggests `varchar=n`.
+- On MySQL, a foreign key with no index of its own is served by a composite index that starts with its column. Dropping that composite fails (error 1553) until the foreign key has its own index: put `index` on the foreign key field, or start the composite with another field.
+- Dropping a field that a multi-column index holds is refused in a hand-written step; the generated migration drops the index first.
+
 ## Irreversible migrations
 
 A migration containing `DropColumn`, `DropTable` or a widening `AlterColumnType` (including an `int4` or `naive` widening) is marked irreversible; one whose only type changes are string narrowings is reversible. `tango migrate down` on one fails explicitly with a clear error rather than attempting to restore data it has no way to recover. If you need to test a rollback path, do it in a disposable database before applying the same migration to data you care about.
