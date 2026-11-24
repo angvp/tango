@@ -42,9 +42,17 @@ registry.Admin().Register(Book{}, admin.Options{
 - A file on a `string` field: `Widgets: {"Logo": admin.File(admin.FileOptions{Put: storage.PutOptions{MaxSize: …}})}`. The row holds the generated key. The store is `FileOptions.Store`, else `registry.SetStorage(store)`, else a local `./storage` that fails `tango check`. The link comes from `FileOptions.URL`, else the store's `PublicURL`.
 - Replace and Remove delete the old object after the row is saved; do not delete it yourself.
 
+## Large Foreign Keys
+
+- A foreign key to a table with thousands of rows: `Widgets: {"AuthorID": admin.Lookup(admin.LookupOptions{})}` on the model that has the key. Give the *related* model `Label` and `Search` (string fields), or pass `LookupOptions{Search: …}`. The related model must be registered with the admin; otherwise `admin.New` fails with `admin.ErrInvalidLookup`.
+- It replaces the select in the form and, when the field is also in `Filters`, in the changelist filter. A foreign key without it is unchanged.
+- The search is `LIKE '%text%'` over the search fields, ten results, no pagination, and case-sensitive on PostgreSQL and on MySQL's `utf8mb4_bin` but not on SQLite. Do not promise one behaviour across the three.
+- Test it with statement counts: the form should read the one related row and never list the table (see `examples/api-with-admin/lookup_test.go`), and a request for `/admin/<model>/_lookup/<Field>/?q=` should return only `value` and `text`.
+
 ## Don't
 
 - Do not expect automatic admin registration from model registration.
+- Do not use `admin.Lookup` to expose a model that is not in the admin, or to return more columns: the route answers only the key and the label.
 - Do not expose or edit password hashes through generic admin forms unless a guide explicitly says it is safe.
 - Do not reach into admin internals for custom behavior.
 - Do not treat `ReadOnly` as an authorization system; it only controls the admin form.

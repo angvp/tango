@@ -72,7 +72,7 @@ err := store.List(ctx, meta, db.Query{Filter: &published, OrderBy: []string{"-Cr
 - **`NOT`.** `db.Not` renders a literal `NOT (...)`, and a comparison with `NULL` is never true, so `Not(Cond("OwnerID", OpEq, 7))` leaves rows with an unset owner out. To include them: `db.Or(db.Not(db.Cond("OwnerID", db.OpEq, 7)), db.IsNull("OwnerID"))`. `Not(In(field, emptyList))` matches every row.
 - **Shape.** A filter holds at most `db.MaxFilterNodes` (100) nodes and nests at most `db.MaxFilterDepth` (8) levels. An empty `And()` or `Or()`, a `Not` without exactly one child, and a malformed node are errors; no filter at all is a nil `Filter`.
 - **Errors.** Every malformed query matches `errors.Is(err, db.ErrInvalidQuery)` (`errors.As` with `*db.QueryError` for the model and field); a query over a limit also matches `db.ErrQueryLimit` (`*db.QueryLimitError`). Nothing reaches the database first. `Query`, `Filter` and the lists in it are never modified.
-- **`LIKE` and case.** `OpLike` is case-insensitive on SQLite and MySQL with default collations and case-sensitive on PostgreSQL.
+- **`LIKE` and case.** `OpLike` is case-insensitive on SQLite and MySQL with default collations and case-sensitive on PostgreSQL. The admin's search and its [foreign key lookup](admin-registration.md#foreign-keys-chosen-by-search) use it unchanged, so they match case the same way.
 
 This API does not support automatic wildcard escaping, joins, cross-model filtering, or filtering `Store.Get`. Related rows come only from `Query.Preload`, `Store.Related` and `Store.RelatedMany`, never from a filter on another model. Use raw SQL below for queries outside this scope.
 
