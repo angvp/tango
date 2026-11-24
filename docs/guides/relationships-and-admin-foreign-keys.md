@@ -149,7 +149,7 @@ Joins, aggregates through relations, many-to-many, has-one, polymorphic relation
 
 ## Admin: the FK select and related labels
 
-An `fk=`-tagged field renders as a `<select>` in the admin create/edit form, populated from every row of the related model, instead of a plain numeric input. What each option shows is controlled by `admin.Options.Label` on the *related* model's own registration — not the model with the foreign key:
+An `fk=`-tagged field renders as a `<select>` in the admin create/edit form, populated from every row of the related model, instead of a plain numeric input. For a related model too large to list, declare the field with `admin.Lookup` and the form searches it instead; see [foreign keys chosen by search](admin-registration.md#foreign-keys-chosen-by-search). What each option shows is controlled by `admin.Options.Label` on the *related* model's own registration — not the model with the foreign key:
 
 ```go
 registry.Admin().Register(Author{}, admin.Options{

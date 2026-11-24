@@ -137,9 +137,38 @@ For a field tagged as a foreign key, the admin renders a `<select>` populated fr
 
 The select starts with a "No author selected" choice, because a foreign key at its zero value is unset (stored as NULL). The choice is the English text of `admin.fk.none_selected` ("No %s selected", filled with the related model's singular display name), so a host catalog can word it. A row whose foreign key is unset shows the choice selected on edit, and an em dash in the changelist rather than `0`. The built-in select has no required-foreign-key mode: tanGO has no required/optional distinction for foreign keys, so every one offers that choice.
 
-For example, if `Book.AuthorID` is tagged `tango:"fk=Author"` and both `Book` and `Author` are admin-registered, the `Book` form gets an "Add new author" link beside the `Author` select. This is intentionally create-only: there is no edit link for the selected related object, no delete/remove action, no autocomplete, no many-to-many editing, and no inline formset support.
+For example, if `Book.AuthorID` is tagged `tango:"fk=Author"` and both `Book` and `Author` are admin-registered, the `Book` form gets an "Add new author" link beside the `Author` select. This is intentionally create-only: there is no edit link for the selected related object, no delete/remove action, no many-to-many editing, and no inline formset support. The select lists every row of the related model; for a large one, [search it instead](#foreign-keys-chosen-by-search).
 
 This is a full-page navigation, not a popup. Any unsaved changes in the parent form are lost when you click `+`; save the parent object first if you need to preserve those values. That trade-off is deliberate so the feature stays small and predictable.
+
+## Foreign keys chosen by search
+
+The select above lists every row of the related model, which stops working once that table has thousands of rows. `admin.Lookup` replaces it, for one field at a time, with a search the staff user types into. Nothing changes for a foreign key that does not opt in.
+
+```go
+// authors: the model that is searched
+registry.Admin().Register(Author{}, admin.Options{
+	Label:  "Name",
+	Search: []string{"Name", "Email"},
+})
+
+// posts: the model with the foreign key
+registry.Admin().Register(Post{}, admin.Options{
+	Filters: []string{"AuthorID"},
+	Widgets: map[string]admin.Widget{"AuthorID": admin.Lookup(admin.LookupOptions{})},
+})
+```
+
+- **What is searched.** `LookupOptions.Search` names string fields of the *related* model. Left empty, the related model's own `Options.Search` is used, and `Label` supplies the text of each result. `Register` fails at startup, with an error that matches `admin.ErrInvalidLookup` and names the model and field, when the field is not a foreign key, its related model is not registered with the admin, or there is no search field, or one that is not a string field of the related model. A related model that is not registered with the admin cannot be searched, so the staff user never sees more than its own changelist shows.
+- **The control.** With JavaScript it is an editable combobox: it opens with the first rows, narrows as you type, and is driven with Up and Down, Enter to choose, Escape to close and Tab to leave without changing the value. The submitted key is held apart from the text, so emptying the text clears only the search. A field that is not `notnull` has a **Remove** button; a `notnull` field has none. A failed search shows a message beside the field and leaves the value, and the save, alone. Without JavaScript the field is a plain text input holding the related primary key, with the row's label shown beside it, and the database still checks the key as it does for the select.
+- **The search route.** Each lookup field adds one staff-only route, `GET /admin/<model>/_lookup/<Field>/?q=…`, answered with JSON of at most ten `{value, text}` pairs and whether more exist. It carries `Cache-Control: no-store`, runs one query on the related model with a limit, and returns only the primary key and the label, never another column. The page size and the route are the framework's, not the host's. The route, the page size and the JSON shape are presentation details, not a stable interface.
+- **Matching.** A search is "contains": `LIKE '%text%'` on each search field, joined with OR, plus an exact match on the primary key when the key is an integer and the text is a whole number. Rows come in the related model's `Ordering`, then primary key. `%` and `_` in the text are wildcards, as in the changelist search, and nothing is lower-cased. Case follows the database: SQLite ignores ASCII case, PostgreSQL does not, and MySQL follows the column collation, which for the tables tanGO creates is `utf8mb4_bin` and so is case-sensitive. See [`LIKE` and case](persistence-crud-and-raw-sql.md#grouped-filters-in-and-null).
+- **No pagination.** When more than ten rows match, the list ends with "More results. Type to narrow." and the staff user types more. There is no "load more" and no total.
+- **The current row.** The form reads the one row the field points at, by primary key, and never lists the related model, so a form costs one read however large the table is. That holds on create, on edit, and on the form shown again after a refused save. A key that names no row keeps the typed value and the usual "no longer exists" message. A foreign key left unset shows an empty control. A field in `Options.ReadOnly` shows `label (key)`, or the key when the related model has no `Label`.
+- **In the changelist filter.** A foreign key with `admin.Lookup` that is also in `Options.Filters` uses the same combobox in the filter, so it is not limited to 100 related rows. It still submits `filter_<column>=<key>` by GET; a key in the URL is read once and applied when the row exists, and is ignored when it is malformed or names no row. A foreign key filter without `admin.Lookup` keeps its select and its cap.
+- **Texts.** The control's messages are the keys `admin.lookup.remove`, `admin.lookup.results` (with `{count}`), `admin.lookup.none`, `admin.lookup.more`, `admin.lookup.error`, `admin.lookup.chosen` (with `{label}`), `admin.lookup.cleared` and `admin.lookup.current`, so a host catalog can word them. The script is the shared [widget script](#the-shared-widget-script) and runs under the admin's Content-Security-Policy.
+
+Canonical example: `examples/api-with-admin/apps/posts/app.go`, with `lookup_test.go` showing that the post pages cost the same number of statements for 5 authors and for 3,000.
 
 ## List page display
 
@@ -189,7 +218,7 @@ if err := registry.Admin().Register(Post{}, admin.Options{
 ```
 
 - A boolean filter applies `yes` or `no`; `any` (or no parameter) applies nothing.
-- A foreign key filter applies one related primary key. Its choices come from one query on the related model, in primary key order, capped at 100. The cap limits what is listed, not what can be filtered. Above it the filter shows "too many values to list" and offers no select, but a value in the URL (a bookmark, say) is looked up as that one related row and applied when it exists, with its label shown and kept when the form is resubmitted. A value that is malformed or names no row is ignored. The extra lookup happens only when a value is supplied.
+- A foreign key filter applies one related primary key. Its choices come from one query on the related model, in primary key order, capped at 100. For a larger related model, declare the field with [`admin.Lookup`](#foreign-keys-chosen-by-search) and the filter searches instead of listing. The cap limits what is listed, not what can be filtered. Above it the filter shows "too many values to list" and offers no select, but a value in the URL (a bookmark, say) is looked up as that one related row and applied when it exists, with its label shown and kept when the form is resubmitted. A value that is malformed or names no row is ignored. The extra lookup happens only when a value is supplied.
 - Filters combine with search and ordering using AND. The row count, the pagination and the pagination links all use the filtered set, and each link carries the search and the applied filters, encoded.
 - Unknown field names, malformed values and foreign key IDs that the related model does not have are ignored. Only applied filters appear in the page state.
 
