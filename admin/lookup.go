@@ -103,8 +103,11 @@ func resolveLookups(adminReg *adminregistry.Registry, registration ModelRegistra
 	var found lookupFields
 	for _, field := range registration.Model.Fields {
 		widget, ok := registration.Options.Widgets[field.Name].(LookupWidget)
-		if !ok || contains(registration.Options.ReadOnly, field.Name) {
-			continue // a read-only field shows its value and is never searched
+		if !ok {
+			continue
+		}
+		if contains(registration.Options.ReadOnly, field.Name) && !contains(registration.Options.Filters, field.Name) {
+			continue // a read-only field shows its value and is searched only as a filter
 		}
 		resolved, err := resolveLookup(adminReg, registration, field, widget.LookupRules())
 		if err != nil {

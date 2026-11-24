@@ -90,6 +90,7 @@ func listView(store *db.Store, models *model.Registry, adminReg *adminregistry.R
 			SearchQuery:      q,
 			ClearSearchHref:  changelistHref(basePath, filters.Params),
 			Filters:          filters.Controls,
+			HasLookupFilter:  hasLookupFilter(filters.Controls),
 			AppliedFilters:   appliedFilterSummary(filters.Controls),
 			ClearFiltersHref: changelistHref(basePath, listParams(q, nil)),
 			ResultFirst:      pageStart + 1,

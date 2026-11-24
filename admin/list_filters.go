@@ -40,6 +40,13 @@ type filterControl struct {
 	// the page can show and keep it although it offers no select.
 	Applied      string
 	AppliedValue string
+	// Lookup marks a foreign key filter chosen by searching the related
+	// model: LookupURL is the search route, LookupValue the applied key and
+	// LookupLabel the text of its row. It lists no related rows.
+	Lookup      bool
+	LookupURL   string
+	LookupValue string
+	LookupLabel string
 }
 
 // appliedFilter is one filter the request actually applied: the condition
@@ -72,7 +79,11 @@ func resolveListFilters(ctx context.Context, store *db.Store, models *model.Regi
 		if custom, ok := opts.Labels[name]; ok {
 			label = custom
 		}
-		control, applied, err := resolveListFilter(ctx, store, models, adminReg, field, label, query(filterKey(name)))
+		lookupURL := ""
+		if _, isLookup := opts.Widgets[name].(LookupWidget); isLookup && field.ForeignKey != "" {
+			lookupURL = lookupPath(meta.Name, name)
+		}
+		control, applied, err := resolveListFilter(ctx, store, models, adminReg, field, label, query(filterKey(name)), lookupURL)
 		if err != nil {
 			return listFilters{}, err
 		}
@@ -98,11 +109,14 @@ func filterLabel(field model.FieldMeta, name string) string {
 }
 
 // resolveListFilter dispatches one filter to its kind's resolver.
-func resolveListFilter(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, label, raw string) (filterControl, *appliedFilter, error) {
+func resolveListFilter(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, label, raw, lookupURL string) (filterControl, *appliedFilter, error) {
 	control := filterControl{
 		Key:   filterKey(field.Name),
 		ID:    "filter-" + db.ColumnName(field.Name),
 		Label: label,
+	}
+	if lookupURL != "" {
+		return lookupFilter(ctx, store, models, adminReg, field, control, raw, lookupURL)
 	}
 	if field.ForeignKey != "" {
 		return foreignKeyFilter(ctx, store, models, adminReg, field, control, raw)
@@ -162,6 +176,34 @@ func foreignKeyFilter(ctx context.Context, store *db.Store, models *model.Regist
 	}
 	control.Options = markSelected(options, selected)
 	return control, applied, nil
+}
+
+// lookupFilter is a foreign key filter chosen by searching the related model,
+// so it never lists the related rows. A value in the URL is read on its own by
+// primary key and applied when the row exists; a malformed or missing one is
+// ignored, so a stale URL still renders.
+func lookupFilter(ctx context.Context, store *db.Store, models *model.Registry, adminReg *adminregistry.Registry, field model.FieldMeta, control filterControl, raw, lookupURL string) (filterControl, *appliedFilter, error) {
+	control.Lookup = true
+	control.LookupURL = lookupURL
+	if raw == "" {
+		return control, nil, nil
+	}
+	choice, found, err := loadFilterChoice(ctx, store, models, adminReg, field.ForeignKey, raw)
+	if err != nil || !found {
+		return control, nil, err
+	}
+	value, err := foreignKeyValue(field, choice.Value)
+	if err != nil {
+		return filterControl{}, nil, err
+	}
+	control.LookupValue = choice.Value
+	control.LookupLabel = choice.Text
+	control.Applied = choice.Text
+	control.AppliedValue = choice.Value
+	return control, &appliedFilter{
+		Condition: db.Condition{Field: field.Name, Op: db.OpEq, Value: value},
+		Value:     choice.Value,
+	}, nil
 }
 
 // overCapFilter handles a foreign key filter whose related model is too
@@ -252,4 +294,14 @@ func findFieldMeta(meta model.ModelMeta, name string) (model.FieldMeta, bool) {
 // hasCriteria reports whether the request narrows the list by search or filter.
 func hasCriteria(search string, filters listFilters) bool {
 	return search != "" || len(filters.Params) > 0
+}
+
+// hasLookupFilter reports whether any filter is chosen by a lookup.
+func hasLookupFilter(controls []filterControl) bool {
+	for _, control := range controls {
+		if control.Lookup {
+			return true
+		}
+	}
+	return false
 }
