@@ -17,7 +17,12 @@ func New(store *db.Store) tango.App {
 			ListDisplay: []string{"Title", "AuthorID", "CreatedAt"},
 			Search:      []string{"Title"},
 			Ordering:    []string{"CreatedAt"},
+			Filters:     []string{"AuthorID"},
 			BulkDelete:  true,
+			// Search the authors instead of listing every one of them in a
+			// select: the form and the filter read one author, and the
+			// search matches the Name and Email that the authors app sets.
+			Widgets: map[string]admin.Widget{"AuthorID": admin.Lookup(admin.LookupOptions{})},
 		}); err != nil {
 			return err
 		}
