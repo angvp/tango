@@ -111,6 +111,9 @@ func describeKey(column string, key any) string {
 // the physical names; a narrowing of a table or column the migration itself
 // creates has no existing data and is skipped.
 func preflightMigration(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, steps []Step) error {
+	if err := preflightUnique(ctx, sqlDB, dialect, steps); err != nil {
+		return err
+	}
 	for i, step := range steps {
 		switch s := step.(type) {
 		case AlterColumnType:
