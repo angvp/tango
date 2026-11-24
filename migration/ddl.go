@@ -77,6 +77,10 @@ func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 			return err
 		}
 		return exec(ctx, sqlDB, dropIndexSQL(dialect, explicitOr(s.Name, indexName(s.Table, s.Column)), s.Table))
+	case CreateCompositeIndex:
+		return createCompositeIndex(ctx, sqlDB, dialect, s)
+	case DropCompositeIndex:
+		return dropCompositeIndex(ctx, sqlDB, dialect, s)
 	case AlterColumnNotNull:
 		return alterColumnNotNull(ctx, sqlDB, dialect, s, dataChecked)
 	case AlterColumnDefault:
