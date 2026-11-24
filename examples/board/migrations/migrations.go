@@ -59,4 +59,12 @@ var Migrations = []migration.Migration{
 			migration.DropColumn{Table: "account", Column: "email_verified_at"},
 		},
 	},
+	{App: "posts", Name: "0007_auto_20261124033520", Reversible: true,
+		Up: []migration.Step{
+			migration.CreateCompositeIndex{Table: "comment", Columns: []string{"post_id", "created_at"}},
+		},
+		Down: []migration.Step{
+			migration.DropCompositeIndex{Table: "comment", Columns: []string{"post_id", "created_at"}},
+		},
+	},
 }

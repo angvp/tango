@@ -7,6 +7,7 @@ import (
 	"github.com/angvp/tango/admin"
 	"github.com/angvp/tango/auth/jwt"
 	"github.com/angvp/tango/db"
+	"github.com/angvp/tango/model"
 	"github.com/angvp/tango/ratelimit"
 
 	"board/apps/live"
@@ -17,7 +18,7 @@ func New(store *db.Store, tokens *jwt.Service, feed *live.Feed) tango.App {
 		if err := registry.Models().Register(Post{}); err != nil {
 			return err
 		}
-		if err := registry.Models().Register(Comment{}); err != nil {
+		if err := registry.Models().Register(Comment{}, model.Index("PostID", "CreatedAt")); err != nil {
 			return err
 		}
 		if err := registry.Admin().Register(Post{}, admin.Options{
