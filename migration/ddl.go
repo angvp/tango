@@ -50,6 +50,9 @@ func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		}
 		return exec(ctx, sqlDB, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", quote(dialect, s.Table), addColumnDefSQL(dialect, s.Column)))
 	case DropColumn:
+		if err := refuseDropOfIndexedColumn(ctx, sqlDB, dialect, s.Table, s.Column); err != nil {
+			return err
+		}
 		switch dialect {
 		case db.MySQL:
 			return mysqlDropColumn(ctx, sqlDB, s)
@@ -81,6 +84,8 @@ func applyStep(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, step Step
 		return createCompositeIndex(ctx, sqlDB, dialect, s)
 	case DropCompositeIndex:
 		return dropCompositeIndex(ctx, sqlDB, dialect, s)
+	case RenameCompositeIndex:
+		return renameCompositeIndex(ctx, sqlDB, dialect, s)
 	case AlterColumnNotNull:
 		return alterColumnNotNull(ctx, sqlDB, dialect, s, dataChecked)
 	case AlterColumnDefault:

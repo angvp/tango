@@ -72,7 +72,7 @@ func renameTable(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s Renam
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s RENAME TO %s", quote(dialect, s.From), quote(dialect, s.To))); err != nil {
 			return err
 		}
-		names, err := tableIndexNames(ctx, tx, dialect, s.To)
+		names, err := tableSingleColumnIndexNames(ctx, tx, dialect, s.To)
 		if err != nil {
 			return err
 		}
@@ -92,6 +92,44 @@ func renameTable(ctx context.Context, sqlDB *sql.DB, dialect db.Dialect, s Renam
 		}
 		return nil
 	})
+}
+
+// tableSingleColumnIndexNames lists the indexes created on table that cover
+// one column. A multi-column index is named from its columns, not a column, and
+// its own RenameCompositeIndex step renames it.
+func tableSingleColumnIndexNames(ctx context.Context, tx *sql.Tx, dialect db.Dialect, table string) ([]string, error) {
+	names, err := tableIndexNames(ctx, tx, dialect, table)
+	if err != nil {
+		return nil, err
+	}
+	single := names[:0:0]
+	for _, name := range names {
+		columns, err := indexColumnCount(ctx, tx, dialect, table, name)
+		if err != nil {
+			return nil, err
+		}
+		if columns == 1 {
+			single = append(single, name)
+		}
+	}
+	return single, nil
+}
+
+// indexColumnCount is the number of columns the named index covers.
+func indexColumnCount(ctx context.Context, tx *sql.Tx, dialect db.Dialect, table, index string) (int, error) {
+	var n int
+	var err error
+	switch dialect {
+	case db.Postgres:
+		err = tx.QueryRowContext(ctx, `SELECT i.indnatts FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+			WHERE c.relname = $1 AND n.nspname = current_schema()`, index).Scan(&n)
+	case db.MySQL:
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`, table, index).Scan(&n)
+	default:
+		columns, cerr := sqliteIndexColumns(ctx, tx, index)
+		return len(columns), cerr
+	}
+	return n, err
 }
 
 // tableIndexNames lists the indexes created on table.
