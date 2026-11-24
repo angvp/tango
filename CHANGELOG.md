@@ -4,6 +4,8 @@ All notable changes to tanGO are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-24
+
 ### Added
 
 - **`admin.Lookup`**, an admin widget for a foreign key whose related model is too large to list in a `<select>`. Declared per field in `Options.Widgets` (`admin.LookupOptions{Search}`, else the related model's `Options.Search`, with its `Label` for the text), it replaces the select with an editable combobox that searches as the staff user types: ten results with a "more results" note, Up, Down, Enter and Escape, a **Remove** button for a field that is not `notnull`, and a message that leaves the value alone when a search fails. Without JavaScript the field is a text input holding the related key with the row's label beside it. The form reads the one row the field points at, by primary key, and no longer lists the related model, on create, edit, a refused save and a read-only field (which shows `label (key)`). Each lookup field adds one staff-only route, `GET /admin/<model>/_lookup/<Field>/?q=`, answered with JSON of at most ten `{value, text}` pairs and `Cache-Control: no-store`, from one limited query that returns only the key and the label. Matching is the changelist search's `LIKE '%text%'` plus an exact match on an integer primary key, so `%` and `_` are wildcards and case follows the database. A foreign key that is also in `Options.Filters` uses the same combobox in the changelist filter, past the select's 100-row cap. `Register` fails with `admin.ErrInvalidLookup` for a field that is not a foreign key, a related model not registered with the admin, or missing or non-string search fields. `FieldContext` gains `RelatedLabel`, `LookupURL` and `Required`, and `admin.LookupWidget` is the optional interface. New translation keys: `admin.lookup.remove`, `.results`, `.none`, `.more`, `.error`, `.chosen`, `.cleared` and `.current`. A foreign key without `admin.Lookup` renders and queries as before. The `api-with-admin` example uses it for `Post.AuthorID`. See [foreign keys chosen by search](docs/guides/admin-registration.md#foreign-keys-chosen-by-search).
@@ -555,7 +557,8 @@ The `v0.0.2` tag on GitHub was later moved to a commit adding `realtime/websocke
 - The `i18n` package.
 - The `realtime` package, with single-owner rooms and generation-safe timers, and its `realtime/websocket` adapter.
 
-[Unreleased]: https://github.com/angvp/tango/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/angvp/tango/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/angvp/tango/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/angvp/tango/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/angvp/tango/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/angvp/tango/compare/v0.8.0...v0.8.1

@@ -62,9 +62,9 @@ unreleased | v0.[1-9][0-9].*) exact=true ;;
 *) exact=false ;;
 esac
 
-# Composite indexes (model.Index, model.Unique) come after v0.10.0.
+# Composite indexes (model.Index, model.Unique) arrive in v0.11.0.
 case $version in
-unreleased) composite=true ;;
+unreleased | v0.1[1-9].* | v0.[2-9][0-9].*) composite=true ;;
 *) composite=false ;;
 esac
 
