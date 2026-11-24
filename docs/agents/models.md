@@ -9,6 +9,7 @@ Canonical examples: `examples/api-with-admin/apps/posts/models.go` and `examples
 - Define models as plain Go structs.
 - Use exactly one primary key field tagged `tango:"pk"`.
 - Use tags only for model metadata tanGO understands: `pk`, `unique`, `index`, `fk=ModelName`, `belongs_to=FK` and `has_many=FK` (relation fields, which are not columns and stand alone on their field; see `docs/agents/relationships.md`), and on a `string` field `varchar=n` (at most `n` characters, counted as runes) `text` (unbounded, the same as a bare `string`) or `json` (JSON text, validated when the model is written). Reach for `varchar=n` only when the field has a real maximum; a bare `string` stays unbounded.
+- For an index or unique constraint over several fields, pass `model.Index("A", "B")` or `model.Unique("A", "B")` (Go field names, in the order you want) as extra `Register` arguments; `.Named("name")` sets the name. Check the result with `tango makemigrations`.
 - Register each model explicitly from the app's `Register(*tango.Registry)` path with `registry.Models().Register(Model{})`.
 - Keep app-specific methods, validation, and services in ordinary Go code around the model.
 
@@ -26,6 +27,7 @@ type Book struct {
 - Do not expect SQLite or raw SQL to enforce `varchar=n`; `Store.Create` and `Store.Update` do, and return `db.ErrValueTooLong`.
 - A `tango:"json"` field is plain text that `Store.Create` and `Store.Update` check with `db.ErrInvalidJSON`; reads are not checked, `""` is unset, and adding the tag to an existing field generates no migration. Do not combine `json` with `varchar`, `text`, `pk`, `fk`, `unique` or `index`, and do not expect to query inside it. The [models guide](../guides/models-and-tags.md#json-fields) has the model and the audit loop for existing rows; both run as tests in `json_field_guide_test.go`.
 
+- Do not use a tag for a multi-field index, expect a unique tuple to stop repeated rows with a `NULL` member, or add a `model.Unique` that is not a real rule of the application.
 - Do not create YAML/JSON schemas for models.
 - Do not rely on filesystem scanning.
 - Do not register from `init`.

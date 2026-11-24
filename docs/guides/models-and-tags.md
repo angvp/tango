@@ -43,6 +43,40 @@ A tag that uses any of them is parsed strictly: an unrecognized part, a doubled 
 
 A migration made with them needs tango v0.10.0 or later to apply. See the [migrations guide](migrations.md#exact-schema-changes) for changing them on a table that exists.
 
+## Composite indexes and unique tuples
+
+An index or a unique constraint over two or more fields is declared when the model is registered, not in a tag, because a tag describes one field:
+
+```go
+registry.Models().Register(Comment{},
+    model.Index("PostID", "CreatedAt"),             // an ordinary index
+    model.Unique("PostID", "Author").Named("uniq_comment_once"), // illustrative only
+)
+```
+
+The unique line is a syntax illustration: whether a pair of columns must be unique is your application's rule, and tanGO adds none to its own models.
+
+- **Fields are Go field names**, at least two, in the order you list them. The order is the index's column order, so `("PostID", "CreatedAt")` serves queries on `PostID` alone and on both, and `("CreatedAt", "PostID")` is a different index. A foreign key may be a member; a relation field, an unknown field, a repeated field and the primary key may not.
+- **Names.** Without `Named`, the index is `idx_<table>_<columns>` (`uniq_<table>_<columns>` for a unique tuple), joined by `_`. A derived name longer than 63 bytes is refused, never shortened: give the index a name with `Named`, which must match `[A-Za-z_][A-Za-z0-9_]*` and be at most 63 bytes. A name that another index in the schema already uses, derived or explicit, in any letter case, is refused.
+- **Refusals.** `Register` fails with `model.ErrInvalidIndex` for fewer than two fields, a repeated, unknown, relation or primary-key field, a bad name, a nil option, or the same ordered tuple declared twice. `tango check` and `tango makemigrations` also refuse, with the same error, a name that collides across the schema, and an ordinary index declared over a tuple that is already unique. A tuple in the reverse order, or a prefix of another index, is a different index and is allowed.
+- **Metadata.** `ModelMeta.Indexes` lists them in declaration order as `IndexMeta{Fields, Unique, Name}`; `Name` is empty when the name is derived.
+- **No query API.** An index changes how fast a query runs, not what you can ask: there is no hint and no `Query` field for it.
+- **Text columns.** MySQL cannot index an unbounded `TEXT` column, so a text member is changed to `VARCHAR(255)` first, as for a single-column `index`. A key over several long columns can still exceed MySQL's 3072-byte key limit; the error names the table, the index and the columns and suggests `varchar=n` on the text fields.
+
+### NULL in a unique tuple
+
+A unique tuple does not compare `NULL` as a value, so rows with a `NULL` in any member never collide, on every database tanGO supports:
+
+| Database | Two rows `(1, NULL)` and `(1, NULL)` | Notes |
+|---|---|---|
+| SQLite | both accepted | |
+| PostgreSQL | both accepted | PostgreSQL 15 has `NULLS NOT DISTINCT`; tanGO does not use it |
+| MySQL | both accepted | |
+
+If a member can be `NULL` and you need "at most one", make the field `notnull` or give it a default, so the database sees a value.
+
+Applying a migration that adds a unique tuple to a table that already has rows first counts the groups of rows that repeat the tuple (rows with a `NULL` member are not counted). If there are any, the migration stops before any change and says how many groups and one row's primary key, never the repeated values. See [composite indexes in migrations](migrations.md#composite-indexes).
+
 ## Bounded strings
 
 A bare `string` field is `text`: any length, today and in every later release. Add `varchar=n` when the field has a real maximum, such as a title or a slug:

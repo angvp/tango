@@ -126,6 +126,23 @@ Applying `AlterColumnNotNull` checks first, before any DDL, that no row holds `N
 - a `notnull` or default change on a column that carries a raw `Default` from a hand-written step;
 - a `--rename` of a field or model whose index has an explicit name: drop the explicit name, rename, then add it back.
 
+## Composite indexes
+
+Adding or removing a `model.Index` or `model.Unique` declaration generates a step; reordering the declarations generates nothing.
+
+| Model change | Step | Reversible |
+|---|---|---|
+| a declaration added | `CreateCompositeIndex` | yes |
+| a declaration removed | `DropCompositeIndex` | yes |
+| the name changed, or a table or field rename changed a derived name | `RenameCompositeIndex` | yes |
+| an index becomes a unique tuple, or back | a drop and a create | yes |
+
+- **A new table** gets its indexes after the `CreateTable`; rolling it back just drops the table.
+- **Dropping a field** that a declaration uses: when the same change removes the declaration, the migration drops the index first. A `DropColumn` you write by hand on a column that a multi-column index still holds is refused on every database, saying which index holds it. Drop the index first.
+- **Renames.** An index with a derived name is renamed after the table and field renames of the same migration. An explicit name never changes when a field or table is renamed. Two renames that would swap names between indexes are refused: do it in two migrations.
+- **Unique on rows that exist.** Before any change in the migration, each new unique tuple is checked against the table's rows, and a repeat stops the migration with the number of groups and one primary key (omitted when the table has no single primary key). Rows with a `NULL` member are not repeats. `tango migrate down` runs the same check for a unique index its rollback would recreate, resolving renames first, so a rollback is refused before it changes anything. Tables and columns the same migration creates hold no rows and are skipped.
+- **Dumping.** A project that declares a composite index needs a `tango` CLI that supports them: an older one refuses at `makemigrations` instead of generating a migration without the index. A file that uses the new steps is refused by an older reader by name.
+
 ## Dropping a model or field
 
 A migration that drops a model's table or a field's column destroys its data, so `tango makemigrations` never writes one on its own. If your models no longer have a model or field that migration history does, the run fails, lists each one, and writes nothing:
