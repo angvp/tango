@@ -185,7 +185,9 @@ func notesApp() tango.App {
 			return err
 		}
 		if err := registry.Admin().Register(smokeBook{}, admin.Options{
-			Widgets: map[string]admin.Widget{"AuthorID": admin.Lookup(admin.LookupOptions{})},
+			ListDisplay: []string{"Title", "AuthorID"},
+			Filters:     []string{"AuthorID"},
+			Widgets:     map[string]admin.Widget{"AuthorID": admin.Lookup(admin.LookupOptions{})},
 		}); err != nil {
 			return err
 		}
@@ -1505,6 +1507,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.createFormKeyboard()
 	s.adminPageAndFileField()
 	s.lookupCombobox()
+	s.lookupFilter()
 
 	s.visit("swagger ui", "/docs/")
 	rendered := s.waitUntil(swaggerTimeout, `!!document.querySelector('.swagger-ui')`)
@@ -1731,4 +1734,28 @@ func (s *smoke) lookupCombobox() {
 	s.check(s.waitUntil(stepTimeout, `document.querySelectorAll('`+options+`').length === 10`), "the list did not open at phone width")
 	s.check(s.eval(`document.getElementById('field-AuthorID-listbox').getBoundingClientRect().right <= window.innerWidth`), "the list overflows the phone screen")
 	s.setWidth(1280, 900)
+}
+
+// lookupFilter uses the same combobox as the changelist filter: it chooses an
+// author with the keyboard without submitting the search form, applies the
+// filter, shows the applied author after the reload, and removes it again.
+func (s *smoke) lookupFilter() {
+	s.t.Helper()
+	s.setWidth(1280, 900)
+	const (
+		box     = "#filter-author_id"
+		options = "#filter-author_id-listbox li[role=option]"
+	)
+	s.visit("lookup filter", "/admin/smoke_book/", chromedp.WaitVisible(box))
+	s.check(s.eval(`document.querySelector('input[name=filter_author_id]').type === 'hidden'`), "the filter's key input is not hidden")
+	s.run("type an author into the filter", chromedp.Click(box), chromedp.SendKeys(box, "Author 29"))
+	s.check(s.waitUntil(stepTimeout, `document.querySelectorAll('`+options+`').length === 1`), "typing did not narrow the filter's list to Author 29")
+	s.press(kb.ArrowDown)
+	s.press(kb.Enter)
+	s.check(s.evalString(`document.querySelector('input[name=filter_author_id]').value`) == "29", "Enter did not choose author 29 in the filter")
+	s.check(s.eval(`location.search === ''`), "choosing with Enter submitted the search form")
+	s.run("apply the filter", clickStable(`form[method=get] button[type=submit]`))
+	s.check(s.waitUntil(stepTimeout, `new URLSearchParams(location.search).get('filter_author_id') === '29'`), "the filter did not apply author 29")
+	s.check(s.evalString(`document.getElementById('filter-author_id').value`) == "Author 29", "the filter does not show the applied author after the reload")
+	s.check(s.eval(`document.body.innerText.indexOf('A book') >= 0`), "the filtered list does not show the author's book")
 }

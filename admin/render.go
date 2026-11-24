@@ -31,10 +31,13 @@ var listTemplate = cloneWithContent(`{{define "content"}}
         {{range .Filters}}<div class="flex flex-col gap-1">
           {{if .Options}}<label for="{{.ID}}" class="field-caption">{{.Label}}</label>
           <select id="{{.ID}}" name="{{.Key}}" class="input">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Text}}</option>{{end}}</select>{{end}}
-          {{if .AppliedValue}}<input type="hidden" name="{{.Key}}" value="{{.AppliedValue}}">{{end}}
+          {{if .Lookup}}<label for="{{.ID}}" class="field-caption">{{.Label}}</label>
+          <input id="{{.ID}}" type="text" name="{{.Key}}" value="{{.LookupValue}}" class="input" data-tango-widget="lookup" data-lookup-url="{{.LookupURL}}"{{if .LookupLabel}} data-lookup-label="{{.LookupLabel}}"{{end}} data-lookup-optional data-msg-remove="{{$.T "admin.lookup.remove" "Remove"}}" data-msg-results="{{$.T "admin.lookup.results" "{count} results. Use the up and down arrow keys to choose."}}" data-msg-none="{{$.T "admin.lookup.none" "No results."}}" data-msg-more="{{$.T "admin.lookup.more" "More results. Type to narrow."}}" data-msg-error="{{$.T "admin.lookup.error" "Could not load results."}}" data-msg-selected="{{$.T "admin.lookup.chosen" "{label} selected."}}" data-msg-cleared="{{$.T "admin.lookup.cleared" "Selection removed."}}">{{end}}
+          {{if and .AppliedValue (not .Lookup)}}<input type="hidden" name="{{.Key}}" value="{{.AppliedValue}}">{{end}}
           {{if .Message}}<p class="hint-small">{{.Message}}</p>{{end}}
         </div>{{end}}
         <button type="submit" class="btn-secondary shrink-0">{{.T "admin.button.search" "Search"}}</button>
+        {{if .HasLookupFilter}}` + widgetScriptTag + `{{end}}
         {{if and .SearchQuery (not .Empty)}}<a href="{{.ClearSearchHref}}" class="btn-ghost mb-1">{{.T "admin.list.clear_search" "Clear search"}}</a>{{end}}
       </form>
       {{if .AppliedFilters}}<p class="mt-3 text-sm text-ink-muted">{{.T "admin.list.filters_applied" "Filters applied:"}} {{range $i, $f := .AppliedFilters}}{{if $i}}, {{end}}{{$.T "admin.list.filter_pair" "%s: %s" $f.Label $f.Value}}{{end}}{{if not .Empty}} <a href="{{.ClearFiltersHref}}" class="btn-ghost">{{.T "admin.list.clear_filters" "Clear filters"}}</a>{{end}}</p>{{end}}
@@ -212,6 +215,9 @@ type listPageData struct {
 	// ClearSearchHref keeps the applied filters and drops the search.
 	ClearSearchHref string
 	Filters         []filterControl
+	// HasLookupFilter reports that a filter is a lookup, which needs the
+	// shared widget script.
+	HasLookupFilter bool
 	// AppliedFilters names each applied filter in the summary above the table.
 	AppliedFilters []filterSummary
 	// ClearFiltersHref keeps the search and drops the applied filters.
