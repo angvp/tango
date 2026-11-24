@@ -1,6 +1,20 @@
 # Upgrading
 
-This page lists what a host application changes when it upgrades from v0.9.x to v0.10.0, from v0.8.x to v0.9.0, and, after those, from v0.7.0 to v0.8.0. Each section names a change, what it affects and what to do about it. The full list of changes is in each version's section of the [changelog](../CHANGELOG.md).
+This page lists what a host application changes when it upgrades from v0.10.x to v0.11.0, from v0.9.x to v0.10.0, from v0.8.x to v0.9.0, and, after those, from v0.7.0 to v0.8.0. Each section names a change, what it affects and what to do about it. The full list of changes is in each version's section of the [changelog](../CHANGELOG.md).
+
+## v0.10.x to v0.11.0
+
+### Nothing to migrate
+
+Every v0.11.0 addition is opt-in: `admin.Lookup`, `admin.File`, `admin.RegisterPage`, `storage.ReadForm`, `Registry.SetStorage`, `lifecycletest.Start`, and `model.Index` and `model.Unique`. A registration with no composite options generates what it did before, and no migration file you already have changes.
+
+### Composite indexes need the new library and CLI together
+
+`tango makemigrations` writes the steps `CreateCompositeIndex`, `DropCompositeIndex` and `RenameCompositeIndex` only when a model declares `model.Index` or `model.Unique`. A reader older than v0.11.0 refuses those files by name ("unknown migration step kind"), so upgrade the library before you declare one. The CLI passes `tango-composite-index-v1` when it asks the app for its models, and an app that declares a composite index refuses to dump without it. See [composite indexes](guides/models-and-tags.md#composite-indexes-and-unique-tuples).
+
+### `tango check` reports a page registered after the admin
+
+A page registered with `admin.RegisterPage` after the admin was installed is now a failure of `tango check`, as a model registered late already was. Register pages from your registration function, before the admin is installed.
 
 ## v0.9.x to v0.10.0
 
