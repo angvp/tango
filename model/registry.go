@@ -67,6 +67,9 @@ type ModelMeta struct {
 	// Relations are the fields declared with tango:"belongs_to=…" or
 	// tango:"has_many=…". They are not columns and never appear in Fields.
 	Relations []RelationMeta
+	// Indexes are the composite unique constraints and indexes declared with
+	// Index and Unique when the model was registered, in declaration order.
+	Indexes []IndexMeta
 }
 
 // RelationMeta describes a relation field: a pointer to a struct tagged
@@ -143,8 +146,18 @@ func (r *Registry) SetCurrentApp(name string) {
 // Register introspects a struct value and stores its model metadata. It
 // returns an error, and registers nothing, if the struct's derived name is
 // already registered, if it has zero or multiple primary key fields, if it
-// has an embedded field, or if any field's kind is unsupported.
-func (r *Registry) Register(value any) error {
+// has an embedded field, or if any field's kind is unsupported. Index and
+// Unique options declare composite indexes; one that is invalid, or a nil
+// option, fails with ErrInvalidIndex and registers nothing.
+func (r *Registry) Register(value any, opts ...RegisterOption) error {
+	var declared registration
+	for _, opt := range opts {
+		if opt == nil {
+			return fmt.Errorf("%w: a nil option was passed to Register", ErrInvalidIndex)
+		}
+		opt.applyRegister(&declared)
+	}
+
 	modelType := reflect.TypeOf(value)
 	if modelType.Kind() == reflect.Pointer {
 		modelType = modelType.Elem()
@@ -240,6 +253,12 @@ func (r *Registry) Register(value any) error {
 	default:
 		return fmt.Errorf("%w: %q has fields %s", ErrMultiplePrimaryKeys, name, strings.Join(primaryKeyFields, ", "))
 	}
+
+	indexes, err := indexesFor(meta, declared.indexes)
+	if err != nil {
+		return err
+	}
+	meta.Indexes = indexes
 
 	r.models[meta.Name] = meta
 

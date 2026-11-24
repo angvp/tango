@@ -31,6 +31,10 @@ type Model struct {
 	// model or field the way the developer wrote it.
 	Struct string
 	Fields map[string]string
+	// Indexes are the composite unique constraints and indexes the model
+	// declares, sorted by effective name. It is empty, and absent from the
+	// dump, for a model without any.
+	Indexes []CompositeIndex `json:",omitempty"`
 }
 
 // ErrUnsupportedChange is returned by Diff when the models changed in a way
@@ -139,6 +143,7 @@ func ModelsFromMeta(models []model.ModelMeta) []Model {
 			Columns: columns,
 			Struct:  meta.Name,
 			Fields:  fields,
+			Indexes: compositeIndexesOf(db.ColumnName(meta.Name), meta),
 		}
 	}
 	return migrationModels

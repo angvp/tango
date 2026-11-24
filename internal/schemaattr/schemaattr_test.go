@@ -87,3 +87,29 @@ func TestModelField(t *testing.T) {
 		t.Fatalf("ModelField without a Fields entry = %q, want a.S.x", field)
 	}
 }
+
+func TestCompositeHandshakeArgWireValue(t *testing.T) {
+	if CompositeHandshakeArg != "tango-composite-index-v1" {
+		t.Fatalf("CompositeHandshakeArg = %q, want the fixed wire value", CompositeHandshakeArg)
+	}
+	if CompositeHandshakeArg == HandshakeArg {
+		t.Fatalf("the composite token must differ from the exact-schema one, which a v0.10 CLI also sends")
+	}
+}
+
+func TestModelIndex(t *testing.T) {
+	plain := migration.Model{App: "a", Struct: "Old", Columns: []migration.Column{{Name: "id", Type: "integer", PrimaryKey: true}}}
+	if declaration, ok := ModelIndex([]migration.Model{plain}); ok {
+		t.Fatalf("ModelIndex on models without declarations = %q, true; want not found", declaration)
+	}
+	declared := migration.Model{App: "blog", Struct: "Comment", Columns: []migration.Column{
+		{Name: "id", Type: "integer", PrimaryKey: true},
+		{Name: "post_id", Type: "integer"},
+		{Name: "created_at", Type: "timestamp"},
+	}, Fields: map[string]string{"post_id": "PostID", "created_at": "CreatedAt"},
+		Indexes: []migration.CompositeIndex{{Columns: []string{"post_id", "created_at"}}}}
+	got, ok := ModelIndex([]migration.Model{plain, declared})
+	if !ok || got != "blog.Comment (PostID, CreatedAt)" {
+		t.Fatalf("ModelIndex = %q, %v; want blog.Comment (PostID, CreatedAt)", got, ok)
+	}
+}

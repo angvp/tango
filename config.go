@@ -341,6 +341,11 @@ func DumpModels(config Config) ([]migration.Model, error) {
 	if field, ok := schemaattr.ModelField(models); ok && dumpFlagGiven(os.Args[1:]) && !slices.Contains(os.Args[1:], schemaattr.HandshakeArg) {
 		return nil, fmt.Errorf("tango: %s uses an exact-schema attribute (int4, naive, notnull, default=, unique= or index= with a name) that this tango CLI cannot read; install tango CLI v0.10.0 or later and run tango makemigrations again", field)
 	}
+	// The exact-schema token is not enough for a composite declaration: a
+	// v0.10 CLI sends it and would still drop the declarations silently.
+	if declaration, ok := schemaattr.ModelIndex(models); ok && dumpFlagGiven(os.Args[1:]) && !slices.Contains(os.Args[1:], schemaattr.CompositeHandshakeArg) {
+		return nil, fmt.Errorf("tango: %s declares a composite index or unique constraint that this tango CLI cannot read; use a tanGO CLI version that supports composite indexes and run tango makemigrations again", declaration)
+	}
 	return models, nil
 }
 

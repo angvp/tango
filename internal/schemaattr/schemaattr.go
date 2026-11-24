@@ -5,7 +5,11 @@
 // package uses it for the dump handshake. It imports only migration.
 package schemaattr
 
-import "github.com/angvp/tango/migration"
+import (
+	"strings"
+
+	"github.com/angvp/tango/migration"
+)
 
 // HandshakeArg is the positional argument `tango makemigrations` passes after
 // -tango-dump-models. An app whose models use an exact-schema attribute
@@ -13,6 +17,13 @@ import "github.com/angvp/tango/migration"
 // would drop those attributes silently, cannot read the dump. The wire value
 // is fixed.
 const HandshakeArg = "tango-exact-schema-v1"
+
+// CompositeHandshakeArg is the positional argument `tango makemigrations`
+// passes, after HandshakeArg, from the release that supports composite unique
+// constraints and indexes. An app that declares one refuses to dump unless it
+// is present: a CLI without it, even one that sends HandshakeArg, would drop
+// the declarations silently. The wire value is fixed.
+const CompositeHandshakeArg = "tango-composite-index-v1"
 
 // ColumnUses reports whether c carries any exact-schema attribute.
 func ColumnUses(c migration.Column) bool {
@@ -61,6 +72,26 @@ func ModelField(models []migration.Model) (string, bool) {
 			}
 			return m.App + "." + m.Struct + "." + field, true
 		}
+	}
+	return "", false
+}
+
+// ModelIndex returns the first composite declaration of the models as
+// "App.Struct (Field, Field)", with the Go field names the developer wrote, or
+// false when no model declares one.
+func ModelIndex(models []migration.Model) (string, bool) {
+	for _, m := range models {
+		if len(m.Indexes) == 0 {
+			continue
+		}
+		fields := make([]string, len(m.Indexes[0].Columns))
+		for i, column := range m.Indexes[0].Columns {
+			fields[i] = column
+			if name, ok := m.Fields[column]; ok {
+				fields[i] = name
+			}
+		}
+		return m.App + "." + m.Struct + " (" + strings.Join(fields, ", ") + ")", true
 	}
 	return "", false
 }
