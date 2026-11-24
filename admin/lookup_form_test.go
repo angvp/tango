@@ -128,3 +128,23 @@ func TestLookupReadOnlyFieldWithoutALabelShowsTheKey(t *testing.T) {
 		t.Fatalf("a read-only lookup without a label does not show the key:\n%s", body)
 	}
 }
+
+func TestLookupMarkupCarriesWhatTheScriptNeeds(t *testing.T) {
+	handler, sqlDB, _ := lookupFormAdmin(t, admin.Options{Label: "Name", Search: []string{"Name"}}, lookupPostWidget())
+	author := seedAuthor(t, sqlDB, "Jane Doe")
+	postID := seedPost(t, sqlDB, "Hello", author)
+
+	body := getForm(t, handler, fmt.Sprintf("/admin/fk_post/%d/", postID))
+
+	for _, want := range []string{
+		`data-tango-widget="lookup"`,
+		`data-lookup-url="/admin/fk_post/_lookup/AuthorID/"`,
+		`data-lookup-label="Jane Doe"`,
+		`data-lookup-optional`,
+		`/admin/_assets/`, // the shared widget script is on the page
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("the form lacks %q:\n%s", want, body)
+		}
+	}
+}

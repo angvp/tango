@@ -110,6 +110,19 @@ type smokeCode struct {
 	Label string
 }
 
+// smokeAuthor and smokeBook exercise the foreign key lookup: the authors are
+// more than one result page, and the book's author is a lookup field.
+type smokeAuthor struct {
+	ID   int64 `tango:"pk"`
+	Name string
+}
+
+type smokeBook struct {
+	ID       int64 `tango:"pk"`
+	Title    string
+	AuthorID int64 `tango:"fk=smokeAuthor"`
+}
+
 // smokeLogo has a file field, so its admin form is multipart.
 type smokeLogo struct {
 	ID   int64 `tango:"pk"`
@@ -163,6 +176,19 @@ func notesApp() tango.App {
 		if err := admin.RegisterPage(registry, admin.Page{Path: "smoke-page", Title: "Smoke page", Nav: true, View: smokePage}); err != nil {
 			return err
 		}
+		for _, value := range []any{smokeAuthor{}, smokeBook{}} {
+			if err := registry.Models().Register(value); err != nil {
+				return err
+			}
+		}
+		if err := registry.Admin().Register(smokeAuthor{}, admin.Options{Label: "Name", Search: []string{"Name"}}); err != nil {
+			return err
+		}
+		if err := registry.Admin().Register(smokeBook{}, admin.Options{
+			Widgets: map[string]admin.Widget{"AuthorID": admin.Lookup(admin.LookupOptions{})},
+		}); err != nil {
+			return err
+		}
 		if err := registry.Models().Register(smokeCode{}); err != nil {
 			return err
 		}
@@ -196,7 +222,7 @@ func composedSite(t *testing.T) http.Handler {
 	for _, value := range []any{
 		admin.AdminUser{}, admin.AdminSession{},
 		accounts.Account{}, accounts.AccountSession{}, accounts.AccountToken{},
-		smokeNote{}, smokeCode{}, smokeLogo{},
+		smokeNote{}, smokeCode{}, smokeLogo{}, smokeAuthor{}, smokeBook{},
 	} {
 		if err := models.Register(value); err != nil {
 			t.Fatalf("register %T: %v", value, err)
@@ -218,6 +244,14 @@ func composedSite(t *testing.T) http.Handler {
 	for id := 3; id <= 28; id++ {
 		if _, err := sqlDB.Exec(`INSERT INTO smoke_note (id, title, body, pinned, payload) VALUES ($1, $2, 'Body', FALSE, '')`, id, fmt.Sprintf("Note %02d", id)); err != nil {
 			t.Fatalf("seed note %d: %v", id, err)
+		}
+	}
+
+	// More authors than one lookup page, so the list ends with its "more" note
+	// and a late author is reachable only by searching.
+	for id := 1; id <= 30; id++ {
+		if _, err := sqlDB.Exec(`INSERT INTO smoke_author (id, name) VALUES ($1, $2)`, id, fmt.Sprintf("Author %02d", id)); err != nil {
+			t.Fatalf("seed author %d: %v", id, err)
 		}
 	}
 
@@ -1470,6 +1504,7 @@ func TestHeadlessBrowserReadsNoUnexpectedCSPViolations(t *testing.T) {
 	s.adminFormSummary()
 	s.createFormKeyboard()
 	s.adminPageAndFileField()
+	s.lookupCombobox()
 
 	s.visit("swagger ui", "/docs/")
 	rendered := s.waitUntil(swaggerTimeout, `!!document.querySelector('.swagger-ui')`)
@@ -1633,4 +1668,67 @@ func (s *smoke) adminPageAndFileField() {
 	s.visit("admin file field edit", "/admin/smoke_logo/1/", chromedp.WaitVisible("#field-Logo"))
 	s.check(s.eval(`!!document.querySelector('a[href^="/files/"]')`), "the edit form does not link the stored file")
 	s.check(s.eval(`!!document.getElementById('field-Logo__remove')`), "the edit form offers no Remove box for the stored file")
+}
+
+// lookupCombobox walks the foreign key lookup with the keyboard and the
+// mouse: it opens on focus with the first page and a "more" note, narrows by
+// typing, chooses with the arrow keys and Enter, restores on Escape, removes an
+// optional value, saves, and shows a stored author that the first page does not
+// contain. It also checks the list stays inside a phone screen.
+func (s *smoke) lookupCombobox() {
+	s.t.Helper()
+	s.setWidth(1280, 900)
+	const (
+		box     = "#field-AuthorID"
+		options = "#field-AuthorID-listbox li[role=option]"
+	)
+	s.visit("lookup create form", "/admin/smoke_book/new/", chromedp.WaitVisible(box))
+	s.check(s.eval(`document.querySelector('input[name=AuthorID]').type === 'hidden'`), "the lookup's key input is not hidden")
+	s.check(s.eval(`document.getElementById('field-AuthorID').getAttribute('role') === 'combobox'`), "the lookup input is not a combobox")
+
+	s.run("open the lookup", chromedp.Click(box))
+	s.check(s.waitUntil(stepTimeout, `document.querySelectorAll('`+options+`').length === 10`), "focusing the lookup did not list the first ten authors: %s", s.evalString(`document.querySelector('.combobox') ? document.querySelector('.combobox').outerHTML.slice(0, 600) : 'no combobox: ' + document.body.innerText.slice(0,200)`))
+	s.check(s.eval(`document.getElementById('field-AuthorID').getAttribute('aria-expanded') === 'true'`), "the open lookup is not aria-expanded")
+	s.check(s.eval(`!!document.querySelector('#field-AuthorID-listbox .combobox-note')`), "the first page has no 'more results' note")
+	s.press(kb.Escape)
+	s.check(s.eval(`document.getElementById('field-AuthorID-listbox').hidden`), "Escape did not close the list")
+
+	s.run("type to narrow the search", chromedp.SendKeys(box, "Author 17"))
+	s.check(s.waitUntil(stepTimeout, `document.querySelectorAll('`+options+`').length === 1 && document.querySelector('`+options+`').textContent === 'Author 17'`), "typing did not narrow the list to Author 17")
+	s.press(kb.ArrowDown)
+	s.check(s.eval(`document.getElementById('field-AuthorID').getAttribute('aria-activedescendant') === 'field-AuthorID-option-0'`), "ArrowDown did not make the first option active")
+	s.press(kb.Enter)
+	s.check(s.evalString(`document.querySelector('input[name=AuthorID]').value`) == "17", "Enter did not choose author 17")
+	s.check(s.evalString(`document.getElementById('field-AuthorID').value`) == "Author 17", "the chosen label is not shown")
+	s.check(s.eval(`!!document.querySelector('.combobox-row button') && !document.querySelector('.combobox-row button').hidden`), "an optional lookup with a value offers no Remove button")
+
+	s.run("type, then Escape restores the chosen label", chromedp.SendKeys(box, "zzz"))
+	s.press(kb.Escape)
+	s.check(s.evalString(`document.getElementById('field-AuthorID').value`) == "Author 17", "Escape did not restore the chosen label")
+	s.check(s.evalString(`document.querySelector('input[name=AuthorID]').value`) == "17", "Escape changed the stored key")
+
+	s.run("remove the value", chromedp.Click(".combobox-row button"))
+	s.check(s.evalString(`document.querySelector('input[name=AuthorID]').value`) == "", "Remove did not clear the key")
+	s.check(s.eval(`document.activeElement === document.getElementById('field-AuthorID')`), "Remove did not return focus to the lookup input")
+
+	s.run("choose again and save",
+		chromedp.SendKeys("#field-Title", "A book"),
+		chromedp.SendKeys(box, "Author 29"),
+	)
+	s.check(s.waitUntil(stepTimeout, `document.querySelectorAll('`+options+`').length === 1`), "typing did not narrow the list to Author 29")
+	s.press(kb.ArrowDown)
+	s.press(kb.Enter)
+	s.run("submit", clickStable("form[method=post] button.btn-primary"))
+	s.check(s.waitUntil(stepTimeout, `location.pathname === '/admin/smoke_book/'`), "saving the lookup form did not return to the changelist")
+
+	s.visit("lookup edit form", "/admin/smoke_book/1/", chromedp.WaitVisible(box))
+	s.check(s.evalString(`document.getElementById('field-AuthorID').value`) == "Author 29", "the edit form does not show the stored author, which is outside the first page")
+	s.check(s.evalString(`document.querySelector('input[name=AuthorID]').value`) == "29", "the edit form lost the stored key")
+
+	s.setWidth(390, 800)
+	s.visit("lookup at phone width", "/admin/smoke_book/new/", chromedp.WaitVisible(box))
+	s.run("open the list at phone width", chromedp.Click(box))
+	s.check(s.waitUntil(stepTimeout, `document.querySelectorAll('`+options+`').length === 10`), "the list did not open at phone width")
+	s.check(s.eval(`document.getElementById('field-AuthorID-listbox').getBoundingClientRect().right <= window.innerWidth`), "the list overflows the phone screen")
+	s.setWidth(1280, 900)
 }

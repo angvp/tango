@@ -156,6 +156,7 @@ func buildFieldContext(ctx context.Context, store *db.Store, models *model.Regis
 		Label:     humanizeFieldName(field.Name),
 		MaxLength: field.MaxLength,
 		ReadOnly:  contains(opts.ReadOnly, field.Name),
+		Required:  field.NotNull,
 	}
 	if label, ok := opts.Labels[field.Name]; ok {
 		fc.Label = label
@@ -250,6 +251,9 @@ func buildFormFields(ctx context.Context, store *db.Store, models *model.Registr
 		widget := widgetForField(field, opts, fc, fkResolved)
 		if _, ok := widget.(PreviewWidget); ok {
 			fc.PreviewURL = previewPath(meta.Name, field.Name)
+		}
+		if _, ok := widget.(LookupWidget); ok {
+			fc.LookupURL = lookupPath(meta.Name, field.Name)
 		}
 		if _, ok := widget.(FileWidget); ok {
 			fc.FileURL = formOpts.Files.linkFor(field.Name, fc.Value)

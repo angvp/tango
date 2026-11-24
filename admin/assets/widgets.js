@@ -297,6 +297,313 @@
     }
   }
 
+
+  // lookupDebounce is how long typing pauses before a search is sent.
+  var lookupDebounce = 250;
+
+  // setupLookup upgrades a lookup field's primary key input to an editable
+  // combobox (ARIA 1.2, list autocomplete). The server's input becomes the
+  // hidden field that is submitted; a visible text input takes its place and
+  // searches as the person types. Without this script the key input stays a
+  // plain text input that takes the key itself.
+  function setupLookup(keyInput) {
+    var url = keyInput.getAttribute("data-lookup-url");
+    if (!url || !window.fetch || !window.AbortController) {
+      return;
+    }
+    var id = keyInput.id;
+    var optional = keyInput.hasAttribute("data-lookup-optional");
+    var selectedLabel = keyInput.value === "" ? "" : (keyInput.getAttribute("data-lookup-label") || keyInput.value);
+    var fieldLabel = document.querySelector('label[for="' + id + '"]');
+
+    var input = document.createElement("input");
+    input.type = "text";
+    input.id = id;
+    input.className = "input";
+    input.value = selectedLabel;
+    input.autocomplete = "off";
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-expanded", "false");
+    input.setAttribute("aria-controls", id + "-listbox");
+    ["aria-invalid", "aria-describedby"].forEach(function (name) {
+      if (keyInput.hasAttribute(name)) {
+        input.setAttribute(name, keyInput.getAttribute(name));
+      }
+    });
+
+    var list = document.createElement("ul");
+    list.id = id + "-listbox";
+    list.className = "combobox-list";
+    list.setAttribute("role", "listbox");
+    if (fieldLabel) {
+      list.setAttribute("aria-label", fieldLabel.textContent);
+    }
+    list.hidden = true;
+
+    var remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn-ghost";
+    remove.textContent = msg(keyInput, "remove", "Remove");
+
+    var status = document.createElement("div");
+    status.className = "sr-only";
+    status.setAttribute("role", "status");
+    var alertBox = document.createElement("p");
+    alertBox.className = "field-error";
+    alertBox.setAttribute("role", "alert");
+    alertBox.hidden = true;
+
+    var row = document.createElement("div");
+    row.className = "combobox-row";
+    row.appendChild(input);
+    if (optional) {
+      row.appendChild(remove);
+    }
+    var box = document.createElement("div");
+    box.className = "combobox";
+    box.appendChild(row);
+    box.appendChild(list);
+    box.appendChild(status);
+    box.appendChild(alertBox);
+
+    keyInput.type = "hidden";
+    keyInput.removeAttribute("id");
+    keyInput.removeAttribute("class");
+    keyInput.removeAttribute("aria-invalid");
+    keyInput.removeAttribute("aria-describedby");
+    var current = document.getElementById(id + "-current");
+    if (current) {
+      current.remove();
+    }
+    keyInput.parentNode.insertBefore(box, keyInput.nextSibling);
+
+    var items = [];
+    var active = -1;
+    var dirty = false;
+    var controller = null;
+    var timer = null;
+    var counter = requestCounter();
+    var choosing = false;
+
+    function announce(text) {
+      status.textContent = "";
+      status.textContent = text;
+    }
+
+    function showError(message) {
+      alertBox.textContent = message;
+      alertBox.hidden = message === "";
+    }
+
+    function updateRemove() {
+      remove.hidden = keyInput.value === "";
+    }
+
+    function setActive(index) {
+      var options = list.querySelectorAll('[role="option"]');
+      options.forEach(function (option, i) {
+        option.classList.toggle("combobox-option-active", i === index);
+      });
+      active = index;
+      if (index >= 0 && options[index]) {
+        input.setAttribute("aria-activedescendant", options[index].id);
+        options[index].scrollIntoView({ block: "nearest" });
+      } else {
+        input.removeAttribute("aria-activedescendant");
+      }
+    }
+
+    function close() {
+      list.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      setActive(-1);
+    }
+
+    function cancelSearch() {
+      clearTimeout(timer);
+      counter.next();
+      if (controller) {
+        controller.abort();
+        controller = null;
+      }
+    }
+
+    function choose(item) {
+      cancelSearch();
+      keyInput.value = item.value;
+      selectedLabel = item.text;
+      input.value = item.text;
+      dirty = false;
+      close();
+      showError("");
+      updateRemove();
+      announce(msg(keyInput, "selected", "{label} selected.", { label: item.text }));
+      keyInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function clearSelection() {
+      cancelSearch();
+      keyInput.value = "";
+      selectedLabel = "";
+      input.value = "";
+      dirty = false;
+      close();
+      showError("");
+      updateRemove();
+      announce(msg(keyInput, "cleared", "Selection removed."));
+      keyInput.dispatchEvent(new Event("change", { bubbles: true }));
+      input.focus();
+    }
+
+    function restore() {
+      cancelSearch();
+      input.value = selectedLabel;
+      dirty = false;
+      close();
+    }
+
+    function addNote(text) {
+      var note = document.createElement("li");
+      note.className = "combobox-note";
+      note.setAttribute("role", "presentation");
+      note.textContent = text;
+      list.appendChild(note);
+    }
+
+    function render(answer, activateFirst) {
+      items = answer.items || [];
+      list.textContent = "";
+      items.forEach(function (item, i) {
+        var option = document.createElement("li");
+        option.id = id + "-option-" + i;
+        option.className = "combobox-option";
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", item.value === keyInput.value ? "true" : "false");
+        option.textContent = item.text;
+        option.addEventListener("mousedown", function (event) {
+          event.preventDefault();
+        });
+        option.addEventListener("click", function () {
+          choose(item);
+          input.focus();
+        });
+        list.appendChild(option);
+      });
+      if (items.length === 0) {
+        addNote(msg(keyInput, "none", "No results."));
+        announce(msg(keyInput, "none", "No results."));
+      } else {
+        announce(msg(keyInput, "results", "{count} results. Use the up and down arrow keys to choose.", { count: items.length }));
+      }
+      if (answer.more) {
+        addNote(msg(keyInput, "more", "More results. Type to narrow."));
+      }
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      setActive(activateFirst && items.length > 0 ? 0 : -1);
+    }
+
+    function search(activateFirst) {
+      cancelSearch();
+      var ticket = counter.next();
+      controller = new AbortController();
+      var query = dirty ? input.value : "";
+      fetch(url + "?q=" + encodeURIComponent(query), {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "Accept": "application/json" },
+        signal: controller.signal
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error("lookup failed");
+          }
+          return response.json();
+        })
+        .then(function (answer) {
+          if (counter.is(ticket)) {
+            showError("");
+            render(answer, activateFirst);
+          }
+        })
+        .catch(function (err) {
+          if (err && err.name === "AbortError") {
+            return;
+          }
+          if (counter.is(ticket)) {
+            close();
+            showError(msg(keyInput, "error", "Could not load results."));
+          }
+        });
+    }
+
+    function move(step) {
+      if (items.length === 0) {
+        return;
+      }
+      setActive((active + step + items.length) % items.length);
+    }
+
+    input.addEventListener("input", function () {
+      dirty = true;
+      showError("");
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        search(false);
+      }, lookupDebounce);
+    });
+    function openList() {
+      if (list.hidden) {
+        search(false);
+      }
+    }
+    input.addEventListener("focus", openList);
+    input.addEventListener("click", openList);
+    input.addEventListener("blur", restore);
+    input.addEventListener("keydown", function (event) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (list.hidden) {
+          search(true);
+        } else {
+          move(1);
+        }
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        if (!list.hidden) {
+          move(-1);
+        }
+      } else if (event.key === "Enter") {
+        if (!list.hidden && active >= 0 && items[active]) {
+          event.preventDefault();
+          choosing = true;
+          choose(items[active]);
+        }
+      } else if (event.key === "Escape") {
+        if (!list.hidden) {
+          event.preventDefault();
+          event.stopPropagation();
+          restore();
+        }
+      }
+    });
+    // Choosing with Enter must not also submit the form, whatever order the
+    // browser reports the key's events in.
+    input.addEventListener("keypress", function (event) {
+      if (event.key === "Enter" && choosing) {
+        event.preventDefault();
+      }
+    });
+    input.addEventListener("keyup", function (event) {
+      if (event.key === "Enter") {
+        choosing = false;
+      }
+    });
+    remove.addEventListener("click", clearSelection);
+    updateRemove();
+  }
+
   // A failed save with one field problem has no summary to take focus, so the
   // invalid control takes it. The server marks the control aria-invalid.
   function focusInvalidControl() {
@@ -311,5 +618,6 @@
 
   register("json", setupJSON);
   register("markdown", setupMarkdown);
+  register("lookup", setupLookup);
   focusInvalidControl();
 })();

@@ -67,6 +67,12 @@ type FieldContext struct {
 	// points at, or empty when the field is unset or the row has no label
 	// other than its key.
 	RelatedLabel string
+	// LookupURL is the absolute admin URL a lookup widget searches the
+	// related model at; empty for a widget that is not a lookup.
+	LookupURL string
+	// Required reports whether the field is declared notnull, so a lookup
+	// offers no way to clear it.
+	Required bool
 	// FileURL is where the field's current file is served, for a file widget
 	// that has the host's URL for it; empty when there is none.
 	FileURL string
