@@ -50,6 +50,7 @@ func (c sqliteColumn) definition() string {
 // sqliteIndex is an index created on the table by CREATE INDEX, recreated
 // from its own SQL after the rebuild unless it covers a removed column.
 type sqliteIndex struct {
+	name    string
 	sql     string
 	columns []string
 }
@@ -116,6 +117,12 @@ func rebuildInTx(ctx context.Context, tx *sql.Tx, table string, reshape func([]s
 		return err
 	}
 
+	for _, index := range indexes {
+		if len(index.columns) > 1 && !coversOnly(index.columns, namesOf(reshaped)) {
+			return errColumnInIndex(table, firstMissing(index.columns, namesOf(reshaped)), index.name)
+		}
+	}
+
 	tempTable := table + "_tango_rebuild"
 	defs := make([]string, len(reshaped))
 	names := make([]string, len(reshaped))
@@ -159,6 +166,24 @@ func rebuildInTx(ctx context.Context, tx *sql.Tx, table string, reshape func([]s
 		}
 	}
 	return checkSQLiteForeignKeys(ctx, tx)
+}
+
+func namesOf(columns []sqliteColumn) []string {
+	names := make([]string, len(columns))
+	for i, c := range columns {
+		names[i] = c.name
+	}
+	return names
+}
+
+// firstMissing is the first of wanted that is not in have.
+func firstMissing(wanted, have []string) string {
+	for _, c := range wanted {
+		if !slices.Contains(have, c) {
+			return c
+		}
+	}
+	return ""
 }
 
 func coversOnly(indexColumns, tableColumns []string) bool {
@@ -262,7 +287,7 @@ func readSQLiteIndexes(ctx context.Context, tx *sql.Tx, table string) ([]sqliteI
 		if err != nil {
 			return nil, err
 		}
-		indexes[i] = sqliteIndex{sql: n.sql, columns: columns}
+		indexes[i] = sqliteIndex{name: n.name, sql: n.sql, columns: columns}
 	}
 	return indexes, nil
 }
