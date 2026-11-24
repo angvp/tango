@@ -45,6 +45,9 @@ type TableState struct {
 	Name    string
 	App     string
 	Columns []ColumnState
+	// Indexes are the table's composite indexes, sorted by effective name. A
+	// Name is the index's physical name: empty while it is the derived one.
+	Indexes []CompositeIndex `json:",omitempty"`
 }
 
 // SchemaState is the reconstructed shape of every table after replaying a
@@ -116,6 +119,10 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		index := columnIndex(table.Columns, s.Column)
 		if index == -1 {
 			return fmt.Errorf("tango migration: column %q does not exist on table %q", s.Column, s.Table)
+		}
+		if i := compositeContaining(table.Indexes, s.Column); i != -1 {
+			return fmt.Errorf("tango migration: cannot drop column %q of table %q: index %q still contains it; drop the index first",
+				s.Column, s.Table, compositeIndexName(s.Table, table.Indexes[i]))
 		}
 		table.Columns = append(table.Columns[:index], table.Columns[index+1:]...)
 		state.Tables[s.Table] = table
@@ -219,7 +226,17 @@ func applyStepToState(state *SchemaState, step Step, app string) error {
 		columns := append([]ColumnState(nil), table.Columns...)
 		columns[index].Name = s.To
 		table.Columns = columns
+		table.Indexes = renameIndexColumn(s.Table, table.Indexes, s.From, s.To)
 		state.Tables[s.Table] = table
+
+	case CreateCompositeIndex:
+		return applyCompositeCreate(state, s)
+
+	case DropCompositeIndex:
+		return applyCompositeDrop(state, s)
+
+	case RenameCompositeIndex:
+		return applyCompositeRename(state, s)
 
 	default:
 		return fmt.Errorf("tango migration: unknown step type %T", step)

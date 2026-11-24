@@ -589,7 +589,30 @@ func writeStepLiteral(builder *strings.Builder, step migration.Step) {
 		fmt.Fprintf(builder, "migration.AlterColumnDefault{Table: %q, Column: %q%s},\n", s.Table, s.Column, defaultFields(s.DefaultKind, s.DefaultValue))
 	case migration.RenameIndex:
 		fmt.Fprintf(builder, "migration.RenameIndex{Table: %q, Column: %q, Unique: %t, From: %q, To: %q},\n", s.Table, s.Column, s.Unique, s.From, s.To)
+	case migration.CreateCompositeIndex:
+		fmt.Fprintf(builder, "migration.CreateCompositeIndex{Table: %q, Columns: %s%s%s},\n", s.Table, stringSlice(s.Columns), uniqueField(s.Unique), nameField(s.Name))
+	case migration.DropCompositeIndex:
+		fmt.Fprintf(builder, "migration.DropCompositeIndex{Table: %q, Columns: %s%s%s},\n", s.Table, stringSlice(s.Columns), uniqueField(s.Unique), nameField(s.Name))
+	case migration.RenameCompositeIndex:
+		fmt.Fprintf(builder, "migration.RenameCompositeIndex{Table: %q, Columns: %s%s, From: %q, To: %q},\n", s.Table, stringSlice(s.Columns), uniqueField(s.Unique), s.From, s.To)
 	}
+}
+
+// stringSlice is a Go []string literal.
+func stringSlice(values []string) string {
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = fmt.Sprintf("%q", v)
+	}
+	return "[]string{" + strings.Join(quoted, ", ") + "}"
+}
+
+// uniqueField is ", Unique: true" for a unique index and nothing otherwise.
+func uniqueField(unique bool) string {
+	if !unique {
+		return ""
+	}
+	return ", Unique: true"
 }
 
 // nameField is ", Name: ..." for an explicit index name and nothing otherwise.

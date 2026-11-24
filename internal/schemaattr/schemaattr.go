@@ -52,7 +52,8 @@ func StepUses(step migration.Step) bool {
 	case migration.AlterColumnType:
 		return s.FromWidth != 0 || s.ToWidth != 0 || s.FromNaive || s.ToNaive ||
 			s.DefaultKind != "" || s.DefaultValue != ""
-	case migration.AlterColumnNotNull, migration.AlterColumnDefault, migration.RenameIndex:
+	case migration.AlterColumnNotNull, migration.AlterColumnDefault, migration.RenameIndex,
+		migration.CreateCompositeIndex, migration.DropCompositeIndex, migration.RenameCompositeIndex:
 		return true
 	}
 	return false

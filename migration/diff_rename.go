@@ -283,6 +283,7 @@ func renameTableInState(state *SchemaState, from, to string) {
 	table := state.Tables[from]
 	delete(state.Tables, from)
 	table.Name = to
+	table.Indexes = pinDerivedNames(from, table.Indexes)
 	state.Tables[to] = table
 	for name, t := range state.Tables {
 		var columns []ColumnState
